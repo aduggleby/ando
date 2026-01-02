@@ -1,0 +1,16 @@
+// 0001-Simple: Hello World Example
+// Demonstrates basic project build and publish
+
+var App = Project.From("./src/HelloWorld.csproj");
+
+// Output directory
+var output = Root / "dist";
+
+// Use Release configuration
+Options.UseConfiguration(c => c.Release);
+
+Dotnet.Restore(App);
+Dotnet.Build(App);
+Dotnet.Publish(App, o => o
+    .Output(output)
+    .WithConfiguration(Configuration.Release));

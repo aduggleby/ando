@@ -1,0 +1,12 @@
+# Test environment for ANDO examples
+# This is a minimal image - the test runner mounts ando and examples at runtime
+FROM mcr.microsoft.com/dotnet/sdk:9.0-alpine
+
+# Install bash for test scripts
+RUN apk add --no-cache bash
+
+# Create working directory
+WORKDIR /workspace
+
+# Default command runs the test script
+CMD ["bash", "/workspace/test.sh"]

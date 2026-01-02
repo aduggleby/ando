@@ -1,0 +1,56 @@
+# Build outputs
+bin/
+obj/
+dist/
+artifacts/
+out/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.swp
+*~
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Test results and coverage
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+coverage.cobertura.xml
+coverage.lcov
+
+# ANDO temp files
+.ando/
+
+# Package caches
+packages/
+*.nupkg
+
+# Node.js
+**/node_modules/
+npm-debug.log
+yarn-error.log
+.pnpm-debug.log
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build caches
+.cache/
+.parcel-cache/
+**/.vite/
+**/.astro/

@@ -1,0 +1,106 @@
+// =============================================================================
+// ScriptHost.cs
+//
+// Summary: Roslyn-based script host for loading and executing build.ando files.
+//
+// ScriptHost uses Microsoft.CodeAnalysis.CSharp.Scripting (Roslyn) to compile
+// and execute build scripts at runtime. Scripts are real C# code with access
+// to the ANDO API via global variables.
+//
+// Architecture:
+// - Creates a BuildContext with all operations and step registry
+// - Creates ScriptGlobals which exposes ANDO API as global variables
+// - Configures Roslyn with required assemblies and namespace imports
+// - Executes script which registers steps (doesn't run them yet)
+// - Returns the context for WorkflowRunner to execute registered steps
+//
+// Design Decisions:
+// - Roslyn scripting allows real C# with IntelliSense in compatible editors
+// - Pre-imported namespaces reduce boilerplate in build scripts
+// - Script execution registers steps but doesn't run them (lazy evaluation)
+// - Compilation errors are caught and reported with helpful diagnostics
+// =============================================================================
+
+using Microsoft.CodeAnalysis.CSharp.Scripting;
+using Microsoft.CodeAnalysis.Scripting;
+using Ando.Logging;
+
+namespace Ando.Scripting;
+
+/// <summary>
+/// Roslyn-based script host for loading and executing build.ando files.
+/// Scripts are C# code that registers build steps for later execution.
+/// </summary>
+public class ScriptHost
+{
+    private readonly IBuildLogger _logger;
+
+    public ScriptHost(IBuildLogger logger)
+    {
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Loads and executes a build script, returning the configured build context.
+    /// The script registers steps in the StepRegistry but doesn't execute them.
+    /// </summary>
+    /// <param name="scriptPath">Path to the build.ando file.</param>
+    /// <param name="rootPath">Project root directory.</param>
+    /// <returns>BuildContext with registered steps ready for execution.</returns>
+    public async Task<BuildContext> LoadScriptAsync(string scriptPath, string rootPath)
+    {
+        if (!File.Exists(scriptPath))
+        {
+            throw new FileNotFoundException($"Build script not found: {scriptPath}", scriptPath);
+        }
+
+        // Create the build context that holds all state and operations.
+        var context = new BuildContext(rootPath, _logger);
+
+        // ScriptGlobals exposes ANDO API as global variables in the script.
+        var globals = new ScriptGlobals(context);
+        var scriptContent = await File.ReadAllTextAsync(scriptPath);
+
+        // Configure Roslyn with required assemblies and namespace imports.
+        // This allows scripts to use ANDO types without explicit using statements.
+        var options = ScriptOptions.Default
+            .WithReferences(
+                typeof(BuildContext).Assembly,  // ANDO types
+                typeof(object).Assembly,        // mscorlib/System.Private.CoreLib
+                typeof(Console).Assembly,       // System.Console
+                typeof(File).Assembly,          // System.IO
+                typeof(Task).Assembly,          // System.Threading.Tasks
+                typeof(Enumerable).Assembly)    // System.Linq
+            .WithImports(
+                "System",
+                "System.IO",
+                "System.Linq",
+                "System.Threading.Tasks",
+                "System.Collections.Generic",
+                "Ando.Context",
+                "Ando.References",
+                "Ando.Operations",
+                "Ando.Workflow",
+                "Ando.Steps");
+
+        try
+        {
+            // Execute the script. This runs the C# code which registers steps
+            // in the StepRegistry. Steps are not executed yet - that happens
+            // in WorkflowRunner after script loading completes.
+            await CSharpScript.RunAsync(scriptContent, options, globals, typeof(ScriptGlobals));
+        }
+        catch (CompilationErrorException ex)
+        {
+            // Report compilation errors with helpful diagnostics.
+            _logger.Error("Script compilation failed:");
+            foreach (var diagnostic in ex.Diagnostics)
+            {
+                _logger.Error($"  {diagnostic}");
+            }
+            throw;
+        }
+
+        return context;
+    }
+}

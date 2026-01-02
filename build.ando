@@ -1,0 +1,42 @@
+// ANDO Build Script
+// Builds the ANDO CLI tool as single-file self-contained executables
+
+var project = Project.From("./src/Ando/Ando.csproj");
+var testProject = Project.From("./tests/Ando.Tests/Ando.Tests.csproj");
+
+// Base output directory
+var distPath = Root / "dist";
+
+// Use Release configuration
+Options.UseConfiguration(c => c.Release);
+
+// Restore dependencies
+Dotnet.Restore(project);
+
+// Build the project
+Dotnet.Build(project, o => o.Configuration = Configuration.Release);
+
+// Run unit tests only (integration tests require Docker-in-Docker)
+Dotnet.Test(testProject, o => {
+    o.Configuration = Configuration.Release;
+    o.NoBuild = false;
+    o.Filter = "Category=Unit";
+});
+
+// Publish for multiple platforms
+var runtimes = new[] { "win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64" };
+
+foreach (var runtime in runtimes)
+{
+    var outputDir = distPath / runtime;
+
+    Dotnet.Publish(project, o => o
+        .WithConfiguration(Configuration.Release)
+        .WithRuntime(runtime)
+        .Output(outputDir)
+        .AsSelfContained()
+        .AsSingleFile());
+}
+
+// Copy the dist folder from container to host after build
+Artifacts.CopyToHost("dist", "./dist");

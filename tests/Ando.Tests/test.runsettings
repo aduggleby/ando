@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <RunConfiguration>
+    <!-- Timeout for each test in milliseconds -->
+    <TestSessionTimeout>300000</TestSessionTimeout>
+  </RunConfiguration>
+
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <Format>cobertura,lcov</Format>
+          <Exclude>
+            [*.Tests]*
+            [*]*.TestFixtures.*
+          </Exclude>
+          <Include>
+            [Ando]*
+          </Include>
+          <ExcludeByAttribute>
+            Obsolete
+            GeneratedCodeAttribute
+            CompilerGeneratedAttribute
+          </ExcludeByAttribute>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+
+  <!-- Filter tests by category -->
+  <TestRunParameters>
+    <!-- Run only unit tests: dotnet test --filter "Category=Unit" -->
+    <!-- Run only integration tests: dotnet test --filter "Category=Integration" -->
+    <!-- Run only E2E tests: dotnet test --filter "Category=E2E" -->
+    <!-- Exclude Docker tests: dotnet test --filter "Category!=Docker" -->
+  </TestRunParameters>
+</RunSettings>

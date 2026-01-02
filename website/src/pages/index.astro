@@ -1,0 +1,271 @@
+---
+import "../styles/global.css";
+
+const commands = [
+  { cmd: "ando run", desc: "Run the default workflow." },
+  { cmd: "ando list", desc: "List workflows and steps." },
+  { cmd: "ando init", desc: "Create a starter build.ando." },
+  { cmd: "ando doctor", desc: "Diagnose prerequisites." },
+  { cmd: "ando clean", desc: "Remove artifacts, temp, cache, container." },
+  { cmd: "ando env", desc: "Print resolved paths/vars/env." },
+  { cmd: "ando version", desc: "Print CLI and runtime info." }
+];
+
+const operations = [
+  {
+    group: "Dotnet",
+    name: "Dotnet.Restore",
+    desc: "Restore NuGet packages for a project.",
+    examples: [
+      "Dotnet.Restore(WebApi);",
+      "Dotnet.Restore(WebApi, o => o.NoCache());"
+    ]
+  },
+  {
+    group: "Dotnet",
+    name: "Dotnet.Build",
+    desc: "Build a project with configuration/verbosity.",
+    examples: [
+      "Dotnet.Build(WebApi);",
+      "Dotnet.Build(WebApi, o => o.Configuration(Configuration.Release));"
+    ]
+  },
+  {
+    group: "Dotnet",
+    name: "Dotnet.Test",
+    desc: "Run tests for a project.",
+    examples: [
+      "Dotnet.Test(WebApi);",
+      "Dotnet.Test(WebApi, o => o.Configuration(Configuration.Release));"
+    ]
+  },
+  {
+    group: "Dotnet",
+    name: "Dotnet.Publish",
+    desc: "Publish build outputs to a target directory.",
+    examples: [
+      "Dotnet.Publish(WebApi);",
+      "Dotnet.Publish(WebApi, o => o.Output(Context.Paths.Artifacts / \"publish\"));"
+    ]
+  },
+  {
+    group: "Ef",
+    name: "Ef.DatabaseUpdate",
+    desc: "Apply EF Core migrations for a context.",
+    examples: [
+      "Ef.DatabaseUpdate(MainDb);",
+      "Ef.DatabaseUpdate(ReportingDb);"
+    ]
+  },
+  {
+    group: "Ef",
+    name: "Ef.AddMigration",
+    desc: "Create a new EF Core migration.",
+    examples: [
+      "Ef.AddMigration(MainDb, \"Init\");",
+      "Ef.AddMigration(ReportingDb, \"AddReports\");"
+    ]
+  },
+  {
+    group: "Ef",
+    name: "Ef.Script",
+    desc: "Generate a migration SQL script.",
+    examples: [
+      "Ef.Script(MainDb, Context.Paths.Artifacts / \"db.sql\");",
+      "Ef.Script(ReportingDb, Context.Paths.Artifacts / \"reporting.sql\");"
+    ]
+  },
+  {
+    group: "Node & Npm",
+    name: "Npm.Install",
+    desc: "Install npm dependencies.",
+    examples: [
+      "Npm.Install();",
+      "Npm.Install(); // after Node.UseLatestLts()"
+    ]
+  },
+  {
+    group: "Node & Npm",
+    name: "Npm.Ci",
+    desc: "Clean install npm dependencies for CI.",
+    examples: [
+      "Npm.Ci();",
+      "Npm.Ci(); // reproducible installs"
+    ]
+  },
+  {
+    group: "Node & Npm",
+    name: "Npm.Run",
+    desc: "Run an npm script by name.",
+    examples: [
+      "Npm.Run(\"build\");",
+      "Npm.Run(\"test\");"
+    ]
+  },
+  {
+    group: "Dotnet",
+    name: "Dotnet.Tool",
+    desc: "Install a .NET CLI tool inside the container.",
+    examples: [
+      "Dotnet.Tool(\"dotnet-ef\", version: \"8.0.0\");",
+      "Dotnet.Tool(\"dotnet-format\");"
+    ]
+  },
+  {
+    group: "Node & Npm",
+    name: "Node.Use",
+    desc: "Install/use a Node.js version inside the container.",
+    examples: [
+      "Node.Use(version: \"20.11.0\");",
+      "Node.UseLatestLts();"
+    ]
+  },
+  {
+    group: "Azure",
+    name: "Azure.WebAppDeploy",
+    desc: "Deploy to an Azure Web App (future).",
+    examples: [
+      "Azure.WebAppDeploy(ProdWebApp);",
+      "Azure.WebAppDeploy(ProdWebApp, o => o.PackageDir(Context.Paths.Artifacts / \"publish\").Slot(Azure.Slots.Production));"
+    ]
+  }
+];
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ANDO - Typed C# Build System</title>
+    <link rel="preconnect" href="https://rsms.me/" />
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+    <meta
+      name="description"
+      content="ANDO is a strongly typed, C#-native build system for build, test, and deploy workflows without YAML or DSLs."
+    />
+  </head>
+  <body>
+    <main>
+      <nav>
+        <a href="#top">ANDO</a>
+        <div class="links">
+          <a href="#docker">Docker</a>
+          <a href="#build">build.ando</a>
+          <a href="#cli">Commands</a>
+          <a href="#ops">Operations</a>
+        </div>
+      </nav>
+
+      <section id="top">
+        <h1>Typed builds that feel like real C#.</h1>
+        <p class="lede">
+          ANDO executes a single <strong>build.ando</strong> file with top-level statements and typed
+          operations. No YAML, no DSLs, no ceremony.
+        </p>
+        <p class="section-subtitle" id="docker">
+          ANDO runs every workflow inside a Docker container for clean, reproducible builds. Your
+          repo is mounted into <strong>/workspace</strong>, and the CLI manages container lifecycle.
+        </p>
+        <div class="code-block">
+          <span class="label">shell</span>
+          <pre><code>ando run
+ando run --cold
+ando run --image my-custom-image</code></pre>
+        </div>
+      </section>
+
+      <section id="build">
+        <h2 class="section-title">Example build.ando</h2>
+        <p class="section-subtitle">
+          A single C# file defines projects, tools, workflow settings, and operations.
+        </p>
+        <div class="code-block">
+          <span class="label">build.ando</span>
+          <pre><code><span class="tok-comment">// Project references</span>
+<span class="tok-keyword">var</span> <span class="tok-type">WebApi</span> <span class="tok-op">=</span> <span class="tok-namespace">Project</span>.<span class="tok-func">From</span>(<span class="tok-string">"./src/WebApi/WebApi.csproj"</span>);
+<span class="tok-keyword">var</span> <span class="tok-type">Frontend</span> <span class="tok-op">=</span> <span class="tok-namespace">Project</span>.<span class="tok-func">From</span>(<span class="tok-string">"./src/Frontend"</span>);
+
+<span class="tok-comment">// Tools</span>
+<span class="tok-keyword">var</span> <span class="tok-type">EfTool</span> <span class="tok-op">=</span> <span class="tok-namespace">Dotnet</span>.<span class="tok-func">Tool</span>(<span class="tok-string">"dotnet-ef"</span>, <span class="tok-prop">version</span>: <span class="tok-string">"8.0.0"</span>);
+<span class="tok-keyword">var</span> <span class="tok-type">NodeTool</span> <span class="tok-op">=</span> <span class="tok-namespace">Node</span>.<span class="tok-func">Use</span>(<span class="tok-prop">version</span>: <span class="tok-string">"20.11.0"</span>);
+
+<span class="tok-comment">// Workflow</span>
+<span class="tok-func">Workflow</span>(<span class="tok-string">"ci"</span>, <span class="tok-type">w</span> <span class="tok-op">=&gt;</span>
+&#123;
+  <span class="tok-type">w</span>.<span class="tok-prop">Configuration</span> <span class="tok-op">=</span> <span class="tok-type">Configuration</span>.<span class="tok-type">Release</span>;
+  <span class="tok-type">w</span>.<span class="tok-prop">Verbosity</span> <span class="tok-op">=</span> <span class="tok-type">Verbosity</span>.<span class="tok-type">Minimal</span>;
+&#125;);
+
+<span class="tok-comment">// Backend build</span>
+<span class="tok-namespace">Dotnet</span>.<span class="tok-func">Restore</span>(<span class="tok-type">WebApi</span>);
+<span class="tok-namespace">Dotnet</span>.<span class="tok-func">Build</span>(<span class="tok-type">WebApi</span>);
+<span class="tok-namespace">Dotnet</span>.<span class="tok-func">Test</span>(<span class="tok-type">WebApi</span>);
+
+<span class="tok-comment">// Frontend build</span>
+<span class="tok-namespace">Npm</span>.<span class="tok-func">Ci</span>();
+<span class="tok-namespace">Npm</span>.<span class="tok-func">Run</span>(<span class="tok-string">"build"</span>);
+
+<span class="tok-comment">// Publish</span>
+<span class="tok-namespace">Dotnet</span>.<span class="tok-func">Publish</span>(<span class="tok-type">WebApi</span>, <span class="tok-type">o</span> <span class="tok-op">=&gt;</span> <span class="tok-type">o</span>
+  .<span class="tok-func">Output</span>(<span class="tok-type">Context</span>.<span class="tok-type">Paths</span>.<span class="tok-type">Artifacts</span> <span class="tok-op">/</span> <span class="tok-string">"publish"</span> <span class="tok-op">/</span> <span class="tok-string">"api"</span>));</code></pre>
+        </div>
+      </section>
+
+      <section id="cli">
+        <h2 class="section-title">ANDO commands</h2>
+        <p class="section-subtitle">The CLI provides a small, focused surface area.</p>
+        <table class="dir-table">
+          <thead>
+            <tr>
+              <th>Command</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            {commands.map((item) => (
+              <tr>
+                <td><code>{item.cmd}</code></td>
+                <td>{item.desc}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <section id="ops">
+        <h2 class="section-title">Operations directory</h2>
+        <p class="section-subtitle">
+          Each operation registers a deterministic step and runs inside the container.
+        </p>
+        {["Dotnet", "Node & Npm", "Ef", "Azure"].map((group) => (
+          <div class="op-group">
+            <h3 class="op-title">{group}</h3>
+            <table class="dir-table">
+              <thead>
+                <tr>
+                  <th>Operation</th>
+                  <th>Description</th>
+                  <th>Examples</th>
+                </tr>
+              </thead>
+              <tbody>
+                {operations
+                  .filter((item) => item.group === group)
+                  .map((item) => (
+                    <tr>
+                      <td><code>{item.name}</code></td>
+                      <td>{item.desc}</td>
+                      <td>
+                        <pre class="mini-code"><code>{item.examples.join("\n")}</code></pre>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </section>
+
+    </main>
+  </body>
+</html>

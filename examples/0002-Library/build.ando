@@ -1,0 +1,22 @@
+// 0002-Library: Multi-Project Example
+// Demonstrates building a console app that depends on a library
+
+var Library = Project.From("./src/Greeter.Lib/Greeter.Lib.csproj");
+var Console = Project.From("./src/Greeter.Console/Greeter.Console.csproj");
+
+// Output directory
+var output = Root / "dist";
+
+// Use Release configuration
+Options.UseConfiguration(c => c.Release);
+
+// Build library first
+Dotnet.Restore(Library);
+Dotnet.Build(Library);
+
+// Build and publish console app (automatically includes library)
+Dotnet.Restore(Console);
+Dotnet.Build(Console);
+Dotnet.Publish(Console, o => o
+    .Output(output)
+    .WithConfiguration(Configuration.Release));
