@@ -8,13 +8,10 @@
 // subsequent build operations.
 //
 // Example usage:
-//   Options.UseConfiguration(c => c.Release);
-//   // or
 //   Options.UseConfiguration(Configuration.Release);
 //
 // Design Decisions:
 // - Fluent API allows chaining and readable configuration
-// - Selector pattern provides IntelliSense-friendly syntax: c => c.Release
 // - Private setter prevents modification after configuration
 // - Default is Debug for development convenience
 // =============================================================================
@@ -44,18 +41,7 @@ public class BuildOptions
     public Configuration Configuration { get; private set; } = Configuration.Debug;
 
     /// <summary>
-    /// Sets the build configuration using a fluent selector.
-    /// Usage: Options.UseConfiguration(c => c.Release);
-    /// </summary>
-    /// <param name="selector">Lambda that selects Debug or Release.</param>
-    public BuildOptions UseConfiguration(Func<ConfigurationSelector, Configuration> selector)
-    {
-        Configuration = selector(new ConfigurationSelector());
-        return this;
-    }
-
-    /// <summary>
-    /// Sets the build configuration directly.
+    /// Sets the build configuration.
     /// </summary>
     /// <param name="configuration">The configuration to use.</param>
     public BuildOptions UseConfiguration(Configuration configuration)
@@ -63,17 +49,4 @@ public class BuildOptions
         Configuration = configuration;
         return this;
     }
-}
-
-/// <summary>
-/// Selector for configuration values used in fluent API.
-/// Provides IntelliSense-friendly syntax: c => c.Release
-/// </summary>
-public class ConfigurationSelector
-{
-    /// <summary>Select Debug configuration.</summary>
-    public Configuration Debug => Configuration.Debug;
-
-    /// <summary>Select Release configuration.</summary>
-    public Configuration Release => Configuration.Release;
 }

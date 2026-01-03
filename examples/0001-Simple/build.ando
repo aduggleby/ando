@@ -7,7 +7,7 @@ var App = Project.From("./src/HelloWorld.csproj");
 var output = Root / "dist";
 
 // Use Release configuration
-Options.UseConfiguration(c => c.Release);
+Options.UseConfiguration(Configuration.Release);
 
 Dotnet.Restore(App);
 Dotnet.Build(App);

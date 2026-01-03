@@ -29,19 +29,10 @@ namespace Ando.Operations;
 /// npm CLI operations for Node.js projects.
 /// Use InDirectory() or InProject() to set the working directory before calling commands.
 /// </summary>
-public class NpmOperations
+public class NpmOperations(StepRegistry registry, IBuildLogger logger, Func<ICommandExecutor> executorFactory)
+    : OperationsBase(registry, logger, executorFactory)
 {
-    private readonly StepRegistry _registry;
-    private readonly IBuildLogger _logger;
-    private readonly Func<ICommandExecutor> _executorFactory;
     private string? _workingDirectory;
-
-    public NpmOperations(StepRegistry registry, IBuildLogger logger, Func<ICommandExecutor> executorFactory)
-    {
-        _registry = registry;
-        _logger = logger;
-        _executorFactory = executorFactory;
-    }
 
     /// <summary>
     /// Sets the working directory for npm commands.
@@ -66,12 +57,7 @@ public class NpmOperations
     /// </summary>
     public void Install()
     {
-        _registry.Register("Npm.Install", async () =>
-        {
-            var options = new CommandOptions { WorkingDirectory = _workingDirectory };
-            var result = await _executorFactory().ExecuteAsync("npm", new[] { "install" }, options);
-            return result.Success;
-        }, _workingDirectory);
+        RegisterCommand("Npm.Install", "npm", ["install"], _workingDirectory, _workingDirectory);
     }
 
     /// <summary>
@@ -79,12 +65,7 @@ public class NpmOperations
     /// </summary>
     public void Ci()
     {
-        _registry.Register("Npm.Ci", async () =>
-        {
-            var options = new CommandOptions { WorkingDirectory = _workingDirectory };
-            var result = await _executorFactory().ExecuteAsync("npm", new[] { "ci" }, options);
-            return result.Success;
-        }, _workingDirectory);
+        RegisterCommand("Npm.Ci", "npm", ["ci"], _workingDirectory, _workingDirectory);
     }
 
     /// <summary>
@@ -92,12 +73,7 @@ public class NpmOperations
     /// </summary>
     public void Run(string scriptName)
     {
-        _registry.Register($"Npm.Run({scriptName})", async () =>
-        {
-            var options = new CommandOptions { WorkingDirectory = _workingDirectory };
-            var result = await _executorFactory().ExecuteAsync("npm", new[] { "run", scriptName }, options);
-            return result.Success;
-        }, _workingDirectory);
+        RegisterCommand($"Npm.Run({scriptName})", "npm", ["run", scriptName], _workingDirectory, _workingDirectory);
     }
 
     /// <summary>
@@ -105,12 +81,7 @@ public class NpmOperations
     /// </summary>
     public void Test()
     {
-        _registry.Register("Npm.Test", async () =>
-        {
-            var options = new CommandOptions { WorkingDirectory = _workingDirectory };
-            var result = await _executorFactory().ExecuteAsync("npm", new[] { "test" }, options);
-            return result.Success;
-        }, _workingDirectory);
+        RegisterCommand("Npm.Test", "npm", ["test"], _workingDirectory, _workingDirectory);
     }
 
     /// <summary>
@@ -118,12 +89,7 @@ public class NpmOperations
     /// </summary>
     public void Build()
     {
-        _registry.Register("Npm.Build", async () =>
-        {
-            var options = new CommandOptions { WorkingDirectory = _workingDirectory };
-            var result = await _executorFactory().ExecuteAsync("npm", new[] { "run", "build" }, options);
-            return result.Success;
-        }, _workingDirectory);
+        RegisterCommand("Npm.Build", "npm", ["run", "build"], _workingDirectory, _workingDirectory);
     }
 }
 
@@ -136,29 +102,18 @@ public static class NodeToolExtensions
     /// Ensures a specific Node.js version is available.
     /// In container execution, this downloads and installs Node.js.
     /// </summary>
-    public static NodeTool Use(string version)
-    {
-        return new NodeTool(version);
-    }
+    public static NodeTool Use(string version) => new(version);
 
     /// <summary>
     /// Uses the latest LTS version of Node.js.
     /// </summary>
-    public static NodeTool UseLatestLts()
-    {
-        return new NodeTool("lts");
-    }
+    public static NodeTool UseLatestLts() => new("lts");
 }
 
 /// <summary>
 /// Represents a Node.js installation with a specific version.
 /// </summary>
-public class NodeTool
+public class NodeTool(string version)
 {
-    public string Version { get; }
-
-    public NodeTool(string version)
-    {
-        Version = version;
-    }
+    public string Version => version;
 }

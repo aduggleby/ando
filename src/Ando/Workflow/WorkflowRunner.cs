@@ -31,17 +31,8 @@ namespace Ando.Workflow;
 /// Executes registered build steps in sequence with timing and logging.
 /// Implements fail-fast behavior: stops on first step failure.
 /// </summary>
-public class WorkflowRunner
+public class WorkflowRunner(StepRegistry registry, IBuildLogger logger)
 {
-    private readonly StepRegistry _registry;
-    private readonly IBuildLogger _logger;
-
-    public WorkflowRunner(StepRegistry registry, IBuildLogger logger)
-    {
-        _registry = registry;
-        _logger = logger;
-    }
-
     /// <summary>
     /// Executes all registered steps in order.
     /// </summary>
@@ -55,13 +46,13 @@ public class WorkflowRunner
         var overallSuccess = true;
 
         // Log workflow start with total step count for progress tracking.
-        _logger.WorkflowStarted("build", scriptPath, _registry.Steps.Count);
+        logger.WorkflowStarted("build", scriptPath, registry.Steps.Count);
 
         // Execute each step sequentially.
-        foreach (var step in _registry.Steps)
+        foreach (var step in registry.Steps)
         {
             var stepStopwatch = Stopwatch.StartNew();
-            _logger.StepStarted(step.Name, step.Context);
+            logger.StepStarted(step.Name, step.Context);
 
             try
             {
@@ -71,7 +62,7 @@ public class WorkflowRunner
 
                 if (success)
                 {
-                    _logger.StepCompleted(step.Name, stepStopwatch.Elapsed, step.Context);
+                    logger.StepCompleted(step.Name, stepStopwatch.Elapsed, step.Context);
                     stepResults.Add(new StepResult
                     {
                         StepName = step.Name,
@@ -83,7 +74,7 @@ public class WorkflowRunner
                 else
                 {
                     // Step returned false - explicit failure.
-                    _logger.StepFailed(step.Name, stepStopwatch.Elapsed, "Step returned false");
+                    logger.StepFailed(step.Name, stepStopwatch.Elapsed, "Step returned false");
                     stepResults.Add(new StepResult
                     {
                         StepName = step.Name,
@@ -100,7 +91,7 @@ public class WorkflowRunner
             {
                 // Step threw an exception - wrap in result.
                 stepStopwatch.Stop();
-                _logger.StepFailed(step.Name, stepStopwatch.Elapsed, ex.Message);
+                logger.StepFailed(step.Name, stepStopwatch.Elapsed, ex.Message);
                 stepResults.Add(new StepResult
                 {
                     StepName = step.Name,
@@ -117,7 +108,7 @@ public class WorkflowRunner
         workflowStopwatch.Stop();
 
         // Log workflow completion with summary.
-        _logger.WorkflowCompleted(
+        logger.WorkflowCompleted(
             "build",
             workflowStopwatch.Elapsed,
             stepResults.Count,

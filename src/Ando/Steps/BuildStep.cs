@@ -25,23 +25,19 @@ namespace Ando.Steps;
 /// Represents a single executable step in the build workflow.
 /// Steps are registered during script execution and run by WorkflowRunner.
 /// </summary>
-public class BuildStep
+/// <param name="Name">Step type name (e.g., "Dotnet.Build", "Npm.Install").</param>
+/// <param name="Execute">Async function that executes the step and returns success/failure.</param>
+/// <param name="Context">Additional context (e.g., project name) shown in logs.</param>
+public class BuildStep(string Name, Func<Task<bool>> Execute, string? Context = null)
 {
     /// <summary>Step type name (e.g., "Dotnet.Build", "Npm.Install").</summary>
-    public string Name { get; }
+    public string Name { get; } = Name;
 
     /// <summary>Additional context (e.g., project name) shown in logs.</summary>
-    public string? Context { get; }
+    public string? Context { get; } = Context;
 
     /// <summary>Async function that executes the step and returns success/failure.</summary>
-    public Func<Task<bool>> Execute { get; }
-
-    public BuildStep(string name, Func<Task<bool>> execute, string? context = null)
-    {
-        Name = name;
-        Context = context;
-        Execute = execute;
-    }
+    public Func<Task<bool>> Execute { get; } = Execute;
 
     /// <summary>
     /// Human-readable name for logging.

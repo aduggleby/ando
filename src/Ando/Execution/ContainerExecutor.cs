@@ -30,10 +30,9 @@ namespace Ando.Execution;
 /// Provides real-time output streaming and working directory management.
 /// Implements ICommandExecutor for seamless switching between local and container execution.
 /// </summary>
-public class ContainerExecutor : ICommandExecutor
+public class ContainerExecutor : CommandExecutorBase
 {
     private readonly string _containerId;
-    private readonly IBuildLogger _logger;
     private readonly string _containerWorkDir;
 
     /// <summary>
@@ -43,31 +42,26 @@ public class ContainerExecutor : ICommandExecutor
     /// <param name="logger">Logger for output streaming</param>
     /// <param name="containerWorkDir">Working directory inside the container (default: /workspace)</param>
     public ContainerExecutor(string containerId, IBuildLogger logger, string containerWorkDir = "/workspace")
+        : base(logger)
     {
         _containerId = containerId;
-        _logger = logger;
         _containerWorkDir = containerWorkDir;
     }
 
-    /// <summary>
-    /// Executes a command inside the Docker container via 'docker exec'.
-    /// </summary>
-    public async Task<CommandResult> ExecuteAsync(string command, string[] args, CommandOptions? options = null)
+    protected override ProcessStartInfo PrepareProcessStartInfo(string command, string[] args, CommandOptions options)
     {
-        options ??= new CommandOptions();
-
         // Build the 'docker exec' command with appropriate flags.
         var dockerArgs = new List<string> { "exec" };
 
         // Set working directory using -w flag.
         // Container paths use /workspace as the project root.
         var workDir = options.WorkingDirectory ?? _containerWorkDir;
-        dockerArgs.AddRange(new[] { "-w", ConvertToContainerPath(workDir) });
+        dockerArgs.AddRange(["-w", ConvertToContainerPath(workDir)]);
 
         // Pass environment variables using -e flags.
         foreach (var (key, value) in options.Environment)
         {
-            dockerArgs.AddRange(new[] { "-e", $"{key}={value}" });
+            dockerArgs.AddRange(["-e", $"{key}={value}"]);
         }
 
         // Append container ID and the actual command to execute.
@@ -75,92 +69,21 @@ public class ContainerExecutor : ICommandExecutor
         dockerArgs.Add(command);
         dockerArgs.AddRange(args);
 
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "docker",
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true,
-        };
+        var startInfo = new ProcessStartInfo { FileName = "docker" };
 
         foreach (var arg in dockerArgs)
         {
             startInfo.ArgumentList.Add(arg);
         }
 
-        using var process = new Process { StartInfo = startInfo };
-        var outputComplete = new TaskCompletionSource<bool>();
-        var errorComplete = new TaskCompletionSource<bool>();
-
-        process.OutputDataReceived += (sender, e) =>
-        {
-            if (e.Data == null)
-            {
-                outputComplete.TrySetResult(true);
-            }
-            else
-            {
-                _logger.Info(e.Data);
-            }
-        };
-
-        process.ErrorDataReceived += (sender, e) =>
-        {
-            if (e.Data == null)
-            {
-                errorComplete.TrySetResult(true);
-            }
-            else
-            {
-                // Log stderr as regular output (many tools use stderr for progress)
-                _logger.Info(e.Data);
-            }
-        };
-
-        try
-        {
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-
-            if (options.TimeoutMs.HasValue)
-            {
-                var completed = await Task.WhenAny(
-                    process.WaitForExitAsync(),
-                    Task.Delay(options.TimeoutMs.Value)
-                );
-
-                if (!process.HasExited)
-                {
-                    // Kill the docker exec process
-                    process.Kill(entireProcessTree: true);
-                    return CommandResult.Failed(-1, "Command timed out");
-                }
-            }
-            else
-            {
-                await process.WaitForExitAsync();
-            }
-
-            // Wait for all output to be captured
-            await Task.WhenAll(outputComplete.Task, errorComplete.Task);
-
-            return process.ExitCode == 0
-                ? CommandResult.Ok()
-                : CommandResult.Failed(process.ExitCode);
-        }
-        catch (Exception ex)
-        {
-            return CommandResult.Failed(-1, ex.Message);
-        }
+        return startInfo;
     }
 
     /// <summary>
     /// Checks if a command is available inside the container.
     /// Uses 'which' command to locate the binary.
     /// </summary>
-    public bool IsAvailable(string command)
+    public override bool IsAvailable(string command)
     {
         var startInfo = new ProcessStartInfo
         {

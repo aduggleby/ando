@@ -52,7 +52,7 @@ public class WorkflowResult
     public TimeSpan Duration { get; init; }
 
     /// <summary>Individual results for each step that was executed.</summary>
-    public List<StepResult> StepResults { get; init; } = new();
+    public List<StepResult> StepResults { get; init; } = [];
 
     /// <summary>Number of steps that were executed (may be less than registered if fail-fast triggered).</summary>
     public int StepsRun => StepResults.Count;

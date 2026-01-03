@@ -8,7 +8,7 @@ var testProject = Project.From("./tests/Ando.Tests/Ando.Tests.csproj");
 var distPath = Root / "dist";
 
 // Use Release configuration
-Options.UseConfiguration(c => c.Release);
+Options.UseConfiguration(Configuration.Release);
 
 // Restore dependencies
 Dotnet.Restore(project);

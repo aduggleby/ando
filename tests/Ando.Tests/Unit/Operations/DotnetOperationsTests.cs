@@ -210,4 +210,105 @@ public class DotnetOperationsTests
         Assert.Contains("linux-x64", args);
         Assert.Contains("--self-contained", args);
     }
+
+    // DotnetTool tests
+
+    [Fact]
+    public void Tool_CreatesToolWithPackageId()
+    {
+        var dotnet = CreateDotnet();
+
+        var tool = dotnet.Tool("dotnet-ef");
+
+        tool.PackageId.ShouldBe("dotnet-ef");
+    }
+
+    [Fact]
+    public void Tool_CreatesToolWithVersion()
+    {
+        var dotnet = CreateDotnet();
+
+        var tool = dotnet.Tool("dotnet-ef", "8.0.0");
+
+        tool.PackageId.ShouldBe("dotnet-ef");
+        tool.Version.ShouldBe("8.0.0");
+    }
+
+    [Fact]
+    public void Tool_WithoutVersion_HasNullVersion()
+    {
+        var dotnet = CreateDotnet();
+
+        var tool = dotnet.Tool("dotnet-ef");
+
+        tool.Version.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Tool_EnsureInstalledAsync_ExecutesDotnetToolInstall()
+    {
+        var dotnet = CreateDotnet();
+        var tool = dotnet.Tool("dotnet-ef");
+
+        await tool.EnsureInstalledAsync();
+
+        _executor.ExecutedCommands.ShouldHaveSingleItem();
+        var cmd = _executor.ExecutedCommands[0];
+        cmd.Command.ShouldBe("dotnet");
+        cmd.HasArg("tool").ShouldBeTrue();
+        cmd.HasArg("install").ShouldBeTrue();
+        cmd.HasArg("dotnet-ef").ShouldBeTrue();
+        cmd.HasArg("--global").ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Tool_EnsureInstalledAsync_IncludesVersionWhenSpecified()
+    {
+        var dotnet = CreateDotnet();
+        var tool = dotnet.Tool("dotnet-ef", "8.0.0");
+
+        await tool.EnsureInstalledAsync();
+
+        var cmd = _executor.ExecutedCommands[0];
+        cmd.HasArg("--version").ShouldBeTrue();
+        cmd.HasArg("8.0.0").ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Tool_EnsureInstalledAsync_OnlyInstallsOnce()
+    {
+        var dotnet = CreateDotnet();
+        var tool = dotnet.Tool("dotnet-ef");
+
+        await tool.EnsureInstalledAsync();
+        await tool.EnsureInstalledAsync();
+        await tool.EnsureInstalledAsync();
+
+        // Should only execute once
+        _executor.ExecutedCommands.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Tool_EnsureInstalledAsync_LogsInstallation()
+    {
+        var dotnet = CreateDotnet();
+        var tool = dotnet.Tool("dotnet-ef", "8.0.0");
+
+        await tool.EnsureInstalledAsync();
+
+        _logger.InfoMessages.ShouldContain(m => m.Contains("dotnet-ef") && m.Contains("v8.0.0"));
+    }
+
+    [Fact]
+    public async Task Tool_EnsureInstalledAsync_OnFailure_LogsWarning()
+    {
+        var dotnet = CreateDotnet();
+        _executor.SimulateFailure = true;
+        _executor.FailureMessage = "Installation failed";
+        var tool = dotnet.Tool("dotnet-ef");
+
+        await tool.EnsureInstalledAsync();
+
+        _logger.WarningMessages.ShouldContain(m => m.Contains("dotnet-ef"));
+    }
 }

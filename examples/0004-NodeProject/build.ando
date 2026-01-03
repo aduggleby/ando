@@ -1,0 +1,24 @@
+// 0004-NodeProject: npm Operations Example
+// Demonstrates NpmOperations for Node.js projects
+//
+// This example shows:
+// - Npm.InDirectory() for setting working directory
+// - Npm.Install() / Npm.Ci() for dependency installation
+// - Npm.Run("script") for custom scripts
+// - Npm.Test() for running tests
+// - Npm.Build() for building
+
+// Set npm working directory to project root
+Npm.InDirectory(".");
+
+// Install dependencies
+Npm.Install();
+
+// Run linting
+Npm.Run("lint");
+
+// Run tests
+Npm.Test();
+
+// Build the project
+Npm.Build();

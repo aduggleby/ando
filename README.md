@@ -30,7 +30,7 @@ var project = Project.From("./src/MyApp/MyApp.csproj");
 var output = Root / "dist";
 
 // Use Release configuration
-Options.UseConfiguration(c => c.Release);
+Options.UseConfiguration(Configuration.Release);
 
 Dotnet.Restore(project);
 Dotnet.Build(project);
@@ -68,7 +68,7 @@ Configure build options with a fluent API:
 
 ```csharp
 // Set configuration (Debug or Release)
-Options.UseConfiguration(c => c.Release);
+Options.UseConfiguration(Configuration.Release);
 
 // Root is a shorthand for Context.Paths.Root
 var distPath = Root / "dist";
@@ -241,7 +241,7 @@ To add a new example project:
    var output = Root / "dist";
 
    // Use Release configuration
-   Options.UseConfiguration(c => c.Release);
+   Options.UseConfiguration(Configuration.Release);
 
    Dotnet.Restore(App);
    Dotnet.Build(App);

@@ -163,6 +163,106 @@ public class ConsoleLoggerTests
         output.ShouldContain("Info message");
     }
 
+    [Fact]
+    public void StepSkipped_WritesToConsole()
+    {
+        var output = CaptureOutput(() =>
+        {
+            var logger = new ConsoleLogger(useColor: false);
+            logger.StepSkipped("Test.Step", "already up to date");
+        });
+
+        output.ShouldContain("Test.Step");
+        output.ShouldContain("skipped");
+        output.ShouldContain("already up to date");
+    }
+
+    [Fact]
+    public void StepSkipped_WithoutReason_OmitsReason()
+    {
+        var output = CaptureOutput(() =>
+        {
+            var logger = new ConsoleLogger(useColor: false);
+            logger.StepSkipped("Test.Step");
+        });
+
+        output.ShouldContain("Test.Step");
+        output.ShouldContain("skipped");
+    }
+
+    [Fact]
+    public void WorkflowStarted_WritesToConsole()
+    {
+        var output = CaptureOutput(() =>
+        {
+            var logger = new ConsoleLogger(useColor: false);
+            logger.WorkflowStarted("ci", "build.ando", totalSteps: 5);
+        });
+
+        // Should write separator line
+        output.ShouldContain("────");
+    }
+
+    [Fact]
+    public void WorkflowStarted_SuppressedInQuietMode()
+    {
+        var output = CaptureOutput(() =>
+        {
+            var logger = new ConsoleLogger(useColor: false);
+            logger.Verbosity = LogLevel.Quiet;
+            logger.WorkflowStarted("ci", "build.ando", totalSteps: 5);
+        });
+
+        output.Trim().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void StepCompleted_SuppressedInQuietMode()
+    {
+        var output = CaptureOutput(() =>
+        {
+            var logger = new ConsoleLogger(useColor: false);
+            logger.Verbosity = LogLevel.Quiet;
+            logger.StepCompleted("Test.Step", TimeSpan.FromSeconds(1));
+        });
+
+        output.Trim().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void FormatDuration_SubMinute_FormatsAsSeconds()
+    {
+        var output = CaptureOutput(() =>
+        {
+            var logger = new ConsoleLogger(useColor: false);
+            logger.StepCompleted("Test", TimeSpan.FromSeconds(45.123));
+        });
+
+        output.ShouldContain("45.123s");
+    }
+
+    [Fact]
+    public void FormatDuration_OverMinute_FormatsAsMinutesSeconds()
+    {
+        var output = CaptureOutput(() =>
+        {
+            var logger = new ConsoleLogger(useColor: false);
+            logger.StepCompleted("Test", TimeSpan.FromMinutes(2) + TimeSpan.FromSeconds(30));
+        });
+
+        output.ShouldContain("02:30");
+    }
+
+    [Fact]
+    public void Dispose_CanBeCalledTwice()
+    {
+        var logger = new ConsoleLogger(useColor: false);
+
+        // Should not throw
+        logger.Dispose();
+        logger.Dispose();
+    }
+
     private static string CaptureOutput(Action action)
     {
         var originalOut = Console.Out;

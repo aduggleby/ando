@@ -1,0 +1,28 @@
+// 0006-Artifacts: Artifact Copying Example
+// Demonstrates ArtifactOperations for copying files from container to host
+//
+// NOTE: This example requires Docker and only works in container mode.
+//
+// This example shows:
+// - Artifacts.CopyToHost() for copying build outputs
+// - Container-to-host file transfer after build completion
+
+var App = Project.From("./src/App/App.csproj");
+var output = Root / "dist";
+
+// Use Release configuration
+Options.UseConfiguration(Configuration.Release);
+
+// Build the application
+Dotnet.Restore(App);
+Dotnet.Build(App);
+Dotnet.Publish(App, o => o
+    .Output(output)
+    .WithConfiguration(Configuration.Release)
+    .WithRuntime("linux-x64")
+    .AsSelfContained()
+    .AsSingleFile());
+
+// Copy artifacts from container to host
+// The first path is inside the container, the second is on the host
+Artifacts.CopyToHost("/workspace/dist", "./dist");

@@ -8,7 +8,7 @@ var Console = Project.From("./src/Greeter.Console/Greeter.Console.csproj");
 var output = Root / "dist";
 
 // Use Release configuration
-Options.UseConfiguration(c => c.Release);
+Options.UseConfiguration(Configuration.Release);
 
 // Build library first
 Dotnet.Restore(Library);

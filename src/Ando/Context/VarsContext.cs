@@ -24,10 +24,10 @@ namespace Ando.Context;
 public class VarsContext
 {
     // Build variables set during script execution.
-    private readonly Dictionary<string, string> _vars = new();
+    private readonly Dictionary<string, string> _vars = [];
 
     // Tracks which environment variables are secrets (for log redaction).
-    private readonly HashSet<string> _secrets = new();
+    private readonly HashSet<string> _secrets = [];
 
     /// <summary>
     /// Gets or sets a build variable. Setting to null removes the variable.

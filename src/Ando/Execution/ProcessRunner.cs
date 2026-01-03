@@ -11,7 +11,6 @@
 // - Uses ProcessStartInfo.ArgumentList instead of Arguments string for safe escaping
 // - Streams output in real-time rather than buffering to completion
 // - Treats stderr as regular output since many tools (npm, cargo) use it for progress
-// - Uses TaskCompletionSource to properly await async output completion
 // - Kills entire process tree on timeout to prevent orphaned child processes
 // =============================================================================
 
@@ -24,29 +23,11 @@ namespace Ando.Execution;
 /// Executes commands locally as child processes with real-time output streaming.
 /// This is the default executor used in --local mode and for Docker CLI commands.
 /// </summary>
-public class ProcessRunner : ICommandExecutor
+public class ProcessRunner(IBuildLogger logger) : CommandExecutorBase(logger)
 {
-    private readonly IBuildLogger _logger;
-
-    public ProcessRunner(IBuildLogger logger)
+    protected override ProcessStartInfo PrepareProcessStartInfo(string command, string[] args, CommandOptions options)
     {
-        _logger = logger;
-    }
-
-    public async Task<CommandResult> ExecuteAsync(string command, string[] args, CommandOptions? options = null)
-    {
-        options ??= new CommandOptions();
-
-        // Configure the process for captured output and no shell involvement.
-        // UseShellExecute=false is required for output redirection.
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = command,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true,
-        };
+        var startInfo = new ProcessStartInfo { FileName = command };
 
         // Using ArgumentList instead of Arguments string ensures proper escaping
         // of special characters and spaces in arguments.
@@ -66,87 +47,14 @@ public class ProcessRunner : ICommandExecutor
             startInfo.EnvironmentVariables[key] = value;
         }
 
-        using var process = new Process { StartInfo = startInfo };
-
-        // TaskCompletionSource ensures we wait for all output before returning.
-        // Output handlers are called on thread pool threads, so we need this
-        // synchronization to know when all output has been received.
-        var outputComplete = new TaskCompletionSource<bool>();
-        var errorComplete = new TaskCompletionSource<bool>();
-
-        // Stream stdout lines to the logger as they arrive.
-        process.OutputDataReceived += (sender, e) =>
-        {
-            if (e.Data == null)
-            {
-                // Null data indicates end of stream.
-                outputComplete.TrySetResult(true);
-            }
-            else
-            {
-                _logger.Info(e.Data);
-            }
-        };
-
-        // Stream stderr to the logger as well.
-        // Many tools use stderr for progress output, so we treat it as info.
-        process.ErrorDataReceived += (sender, e) =>
-        {
-            if (e.Data == null)
-            {
-                errorComplete.TrySetResult(true);
-            }
-            else
-            {
-                _logger.Info(e.Data);
-            }
-        };
-
-        try
-        {
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-
-            // Handle timeout if specified.
-            if (options.TimeoutMs.HasValue)
-            {
-                var completed = await Task.WhenAny(
-                    process.WaitForExitAsync(),
-                    Task.Delay(options.TimeoutMs.Value)
-                );
-
-                if (!process.HasExited)
-                {
-                    // Kill entire process tree to prevent orphaned child processes.
-                    process.Kill(entireProcessTree: true);
-                    return CommandResult.Failed(-1, "Command timed out");
-                }
-            }
-            else
-            {
-                await process.WaitForExitAsync();
-            }
-
-            // Wait for all output to be captured before returning.
-            // The process can exit before all output is flushed.
-            await Task.WhenAll(outputComplete.Task, errorComplete.Task);
-
-            return process.ExitCode == 0
-                ? CommandResult.Ok()
-                : CommandResult.Failed(process.ExitCode);
-        }
-        catch (Exception ex)
-        {
-            return CommandResult.Failed(-1, ex.Message);
-        }
+        return startInfo;
     }
 
     /// <summary>
     /// Checks if a command is available by running it with --version.
     /// Most CLI tools support --version and exit with code 0.
     /// </summary>
-    public bool IsAvailable(string command)
+    public override bool IsAvailable(string command)
     {
         try
         {

@@ -78,7 +78,7 @@ public class ScriptHostTests
         try
         {
             await File.WriteAllTextAsync(scriptPath, """
-                Options.UseConfiguration(c => c.Release);
+                Options.UseConfiguration(Configuration.Release);
                 """);
 
             var host = new ScriptHost(_logger);

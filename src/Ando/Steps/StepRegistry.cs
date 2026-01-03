@@ -27,7 +27,7 @@ namespace Ando.Steps;
 /// </summary>
 public class StepRegistry
 {
-    private readonly List<BuildStep> _steps = new();
+    private readonly List<BuildStep> _steps = [];
 
     /// <summary>
     /// All registered steps in order of registration.

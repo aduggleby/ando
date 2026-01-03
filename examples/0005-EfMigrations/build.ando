@@ -1,0 +1,36 @@
+// 0005-EfMigrations: Entity Framework Operations Example
+// Demonstrates EfOperations for database migrations
+//
+// NOTE: This example requires the EF Core tools to be installed.
+// Run: dotnet tool install --global dotnet-ef
+//
+// This example shows:
+// - Ef.DbContextFrom() for referencing DbContexts
+// - Ef.AddMigration() for creating migrations
+// - Ef.DatabaseUpdate() for applying migrations
+// - Ef.Script() for generating SQL scripts
+// - Ef.RemoveMigration() for removing migrations
+
+// Reference the data project and DbContext
+var DataProject = Project.From("./src/DataProject/DataProject.csproj");
+var DbContext = Ef.DbContextFrom(DataProject, "AppDbContext");
+
+// Ensure EF tools are installed
+var efTool = Dotnet.Tool("dotnet-ef", "9.0.0");
+
+// Build the project first
+Dotnet.Restore(DataProject);
+Dotnet.Build(DataProject);
+
+// Add a new migration
+// Ef.AddMigration(DbContext, "InitialCreate", outputDir: "Migrations");
+
+// Apply migrations to the database
+// Ef.DatabaseUpdate(DbContext);
+
+// Generate SQL script for migrations
+// var scriptOutput = Root / "migrations.sql";
+// Ef.Script(DbContext, scriptOutput);
+
+// To remove the last migration:
+// Ef.RemoveMigration(DbContext, force: true);

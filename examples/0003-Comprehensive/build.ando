@@ -1,0 +1,47 @@
+// 0003-Comprehensive: Full Dotnet Workflow Example
+// Demonstrates ALL Dotnet operations with advanced options
+//
+// This example shows:
+// - Project.From() for multiple projects
+// - Root / "path" syntax for BuildPath
+// - Context.Paths.Artifacts usage
+// - Context.Vars["key"] usage
+// - Dotnet.Restore() with options
+// - Dotnet.Build() with configuration
+// - Dotnet.Test()
+// - Dotnet.Publish() with all options (runtime, self-contained, single-file)
+
+// Define projects
+var App = Project.From("./src/WebApp/WebApp.csproj");
+var Tests = Project.From("./tests/WebApp.Tests/WebApp.Tests.csproj");
+
+// Output paths using BuildPath syntax
+var output = Root / "dist";
+var artifacts = Context.Paths.Artifacts;
+
+// Use Release configuration globally
+Options.UseConfiguration(Configuration.Release);
+
+// Set a custom variable for demonstration
+Context.Vars["BUILD_NUMBER"] = "123";
+Context.Vars["ENVIRONMENT"] = "production";
+
+// Step 1: Restore all dependencies
+Dotnet.Restore(App);
+Dotnet.Restore(Tests);
+
+// Step 2: Build with Release configuration
+Dotnet.Build(App, o => o.Configuration = Configuration.Release);
+Dotnet.Build(Tests);
+
+// Step 3: Run tests
+Dotnet.Test(Tests);
+
+// Step 4: Publish with comprehensive options
+Dotnet.Publish(App, o => o
+    .Output(output)
+    .WithConfiguration(Configuration.Release)
+    .WithRuntime("linux-x64")
+    .AsSelfContained()
+    .AsSingleFile()
+    .SkipRestore());

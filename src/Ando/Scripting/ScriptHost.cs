@@ -31,15 +31,8 @@ namespace Ando.Scripting;
 /// Roslyn-based script host for loading and executing build.ando files.
 /// Scripts are C# code that registers build steps for later execution.
 /// </summary>
-public class ScriptHost
+public class ScriptHost(IBuildLogger logger)
 {
-    private readonly IBuildLogger _logger;
-
-    public ScriptHost(IBuildLogger logger)
-    {
-        _logger = logger;
-    }
-
     /// <summary>
     /// Loads and executes a build script, returning the configured build context.
     /// The script registers steps in the StepRegistry but doesn't execute them.
@@ -55,7 +48,7 @@ public class ScriptHost
         }
 
         // Create the build context that holds all state and operations.
-        var context = new BuildContext(rootPath, _logger);
+        var context = new BuildContext(rootPath, logger);
 
         // ScriptGlobals exposes ANDO API as global variables in the script.
         var globals = new ScriptGlobals(context);
@@ -93,10 +86,10 @@ public class ScriptHost
         catch (CompilationErrorException ex)
         {
             // Report compilation errors with helpful diagnostics.
-            _logger.Error("Script compilation failed:");
+            logger.Error("Script compilation failed:");
             foreach (var diagnostic in ex.Diagnostics)
             {
-                _logger.Error($"  {diagnostic}");
+                logger.Error($"  {diagnostic}");
             }
             throw;
         }

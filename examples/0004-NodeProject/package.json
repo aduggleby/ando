@@ -1,0 +1,15 @@
+{
+  "name": "ando-node-example",
+  "version": "1.0.0",
+  "description": "Example Node.js project for ANDO npm operations",
+  "main": "src/index.js",
+  "scripts": {
+    "build": "echo 'Building project...'",
+    "test": "echo 'Running tests...' && exit 0",
+    "lint": "echo 'Linting code...'",
+    "start": "node src/index.js"
+  },
+  "keywords": ["ando", "example"],
+  "author": "",
+  "license": "MIT"
+}

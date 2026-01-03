@@ -30,19 +30,9 @@ namespace Ando.Operations;
 /// Provides Entity Framework Core CLI operations for database management.
 /// Uses 'dotnet ef' tool for migrations and database updates.
 /// </summary>
-public class EfOperations
+public class EfOperations(StepRegistry registry, IBuildLogger logger, Func<ICommandExecutor> executorFactory)
+    : OperationsBase(registry, logger, executorFactory)
 {
-    private readonly StepRegistry _registry;
-    private readonly IBuildLogger _logger;
-    private readonly Func<ICommandExecutor> _executorFactory;
-
-    public EfOperations(StepRegistry registry, IBuildLogger logger, Func<ICommandExecutor> executorFactory)
-    {
-        _registry = registry;
-        _logger = logger;
-        _executorFactory = executorFactory;
-    }
-
     /// <summary>
     /// Creates a reference to a DbContext in a project.
     /// Does not register a step - just creates a reference for use with other methods.
@@ -61,29 +51,12 @@ public class EfOperations
     /// <param name="connectionString">Optional connection string override.</param>
     public void DatabaseUpdate(EfContextRef context, string? connectionString = null)
     {
-        _registry.Register("Ef.DatabaseUpdate", async () =>
-        {
-            var args = new List<string>
-            {
-                "ef", "database", "update",
-                "--project", context.Project.Path
-            };
-
-            // Specify context when project has multiple DbContexts.
-            if (context.ContextName != "default")
-            {
-                args.AddRange(new[] { "--context", context.ContextName });
-            }
-
-            // Override connection string for different environments.
-            if (connectionString != null)
-            {
-                args.AddRange(new[] { "--connection", connectionString });
-            }
-
-            var result = await _executorFactory().ExecuteAsync("dotnet", args.ToArray());
-            return result.Success;
-        }, context.ToString());
+        RegisterCommand("Ef.DatabaseUpdate", "dotnet",
+            () => new ArgumentBuilder()
+                .Add("ef", "database", "update", "--project", context.Project.Path)
+                .AddIf(context.ContextName != "default", "--context", context.ContextName)
+                .AddIfNotNull("--connection", connectionString),
+            context.ToString());
     }
 
     /// <summary>
@@ -94,27 +67,12 @@ public class EfOperations
     /// <param name="outputDir">Optional output directory for migration files.</param>
     public void AddMigration(EfContextRef context, string migrationName, string? outputDir = null)
     {
-        _registry.Register("Ef.AddMigration", async () =>
-        {
-            var args = new List<string>
-            {
-                "ef", "migrations", "add", migrationName,
-                "--project", context.Project.Path
-            };
-
-            if (context.ContextName != "default")
-            {
-                args.AddRange(new[] { "--context", context.ContextName });
-            }
-
-            if (outputDir != null)
-            {
-                args.AddRange(new[] { "-o", outputDir });
-            }
-
-            var result = await _executorFactory().ExecuteAsync("dotnet", args.ToArray());
-            return result.Success;
-        }, context.ToString());
+        RegisterCommand("Ef.AddMigration", "dotnet",
+            () => new ArgumentBuilder()
+                .Add("ef", "migrations", "add", migrationName, "--project", context.Project.Path)
+                .AddIf(context.ContextName != "default", "--context", context.ContextName)
+                .AddIfNotNull("-o", outputDir),
+            context.ToString());
     }
 
     /// <summary>
@@ -126,29 +84,12 @@ public class EfOperations
     /// <param name="fromMigration">Optional starting migration (for partial scripts).</param>
     public void Script(EfContextRef context, BuildPath outputFile, string? fromMigration = null)
     {
-        _registry.Register("Ef.Script", async () =>
-        {
-            var args = new List<string>
-            {
-                "ef", "migrations", "script",
-                "--project", context.Project.Path,
-                "-o", outputFile.Value,
-                "--idempotent"  // Safe to re-run
-            };
-
-            if (context.ContextName != "default")
-            {
-                args.AddRange(new[] { "--context", context.ContextName });
-            }
-
-            if (fromMigration != null)
-            {
-                args.Add(fromMigration);
-            }
-
-            var result = await _executorFactory().ExecuteAsync("dotnet", args.ToArray());
-            return result.Success;
-        }, context.ToString());
+        RegisterCommand("Ef.Script", "dotnet",
+            () => new ArgumentBuilder()
+                .Add("ef", "migrations", "script", "--project", context.Project.Path, "-o", outputFile.Value, "--idempotent")
+                .AddIf(context.ContextName != "default", "--context", context.ContextName)
+                .AddIfNotNull(fromMigration),
+            context.ToString());
     }
 
     /// <summary>
@@ -158,27 +99,11 @@ public class EfOperations
     /// <param name="force">Force removal even if migration has been applied.</param>
     public void RemoveMigration(EfContextRef context, bool force = false)
     {
-        _registry.Register("Ef.RemoveMigration", async () =>
-        {
-            var args = new List<string>
-            {
-                "ef", "migrations", "remove",
-                "--project", context.Project.Path
-            };
-
-            if (context.ContextName != "default")
-            {
-                args.AddRange(new[] { "--context", context.ContextName });
-            }
-
-            // Force removes even if migration was applied to database.
-            if (force)
-            {
-                args.Add("--force");
-            }
-
-            var result = await _executorFactory().ExecuteAsync("dotnet", args.ToArray());
-            return result.Success;
-        }, context.ToString());
+        RegisterCommand("Ef.RemoveMigration", "dotnet",
+            () => new ArgumentBuilder()
+                .Add("ef", "migrations", "remove", "--project", context.Project.Path)
+                .AddIf(context.ContextName != "default", "--context", context.ContextName)
+                .AddFlag(force, "--force"),
+            context.ToString());
     }
 }
