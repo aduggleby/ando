@@ -1,0 +1,68 @@
+// 0008-AzureFullStack: Full Stack Azure Deployment with EF Migrations
+// Demonstrates complete deployment workflow: infrastructure + database + application
+//
+// PREREQUISITES:
+// - Azure CLI installed (az --version)
+// - Logged in to Azure (az login)
+// - .NET SDK installed
+//
+// This example shows:
+// - Building a .NET web application
+// - Deploying Azure infrastructure (App Service + SQL Database)
+// - Running EF Core migrations against Azure SQL
+// - Publishing the application for deployment
+
+// Define projects
+var WebApp = Project.From("./src/WebApp/WebApp.csproj");
+var DbContext = Ef.DbContextFrom(WebApp, "AppDbContext");
+
+// Ensure EF tools are available
+var efTool = Dotnet.Tool("dotnet-ef", "9.0.0");
+
+// Step 1: Build the application first
+Dotnet.Restore(WebApp);
+Dotnet.Build(WebApp, o => o.Configuration = Configuration.Release);
+
+// Step 2: Verify Azure authentication
+Azure.EnsureLoggedIn();
+
+// Configuration from environment or defaults
+var subscriptionId = Context.Vars.Env("AZURE_SUBSCRIPTION_ID");
+if (subscriptionId != null)
+{
+    Azure.SetSubscription(subscriptionId);
+}
+
+var resourceGroup = Context.Vars.Env("AZURE_RESOURCE_GROUP") ?? "ando-fullstack-rg";
+var location = Context.Vars.Env("AZURE_LOCATION") ?? "eastus";
+var sqlAdminPassword = Context.Vars.EnvRequired("SQL_ADMIN_PASSWORD");
+
+// Step 3: Create resource group
+Azure.CreateResourceGroup(resourceGroup, location);
+
+// Step 4: Deploy infrastructure (App Service + SQL Database)
+// Outputs are captured with "azure_" prefix to Context.Vars
+Bicep.DeployToResourceGroup(resourceGroup, "./infra/main.bicep", o => o
+    .WithName("ando-fullstack-deployment")
+    .WithParameter("location", location)
+    .WithParameter("sqlAdminPassword", sqlAdminPassword)
+    .CaptureOutputs("azure_"));
+
+// After deployment, we have:
+// - Context.Vars["azure_sqlConnectionString"] - SQL Server connection string
+// - Context.Vars["azure_webAppName"] - App Service name
+// - Context.Vars["azure_webAppUrl"] - App Service URL
+
+// Step 5: Run EF migrations against Azure SQL
+// The connection string from Bicep deployment is used automatically
+Ef.DatabaseUpdate(DbContext, Context.Vars["azure_sqlConnectionString"]);
+
+// Step 6: Publish the application
+var output = Root / "dist";
+Dotnet.Publish(WebApp, o => o
+    .WithConfiguration(Configuration.Release)
+    .Output(output)
+    .SkipRestore());
+
+// The published app is now in ./dist and ready for deployment to Azure App Service
+// You could add: az webapp deploy --resource-group $RG --name $WEBAPP --src-path ./dist

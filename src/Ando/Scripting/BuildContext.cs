@@ -52,6 +52,12 @@ public class BuildContext
     /// <summary>npm operations.</summary>
     public NpmOperations Npm { get; }
 
+    /// <summary>Azure CLI authentication and account operations.</summary>
+    public AzureOperations Azure { get; }
+
+    /// <summary>Azure Bicep deployment operations.</summary>
+    public BicepOperations Bicep { get; }
+
     /// <summary>Artifact operations for copying files to host.</summary>
     public ArtifactOperations Artifacts { get; }
 
@@ -86,6 +92,8 @@ public class BuildContext
         Dotnet = new DotnetOperations(StepRegistry, logger, () => Executor);
         Ef = new EfOperations(StepRegistry, logger, () => Executor);
         Npm = new NpmOperations(StepRegistry, logger, () => Executor);
+        Azure = new AzureOperations(StepRegistry, logger, () => Executor);
+        Bicep = new BicepOperations(StepRegistry, logger, () => Executor, Context.Vars);
         Artifacts = new ArtifactOperations(logger);
     }
 

@@ -102,13 +102,14 @@ public class CommandResultTests
     [Fact]
     public void Record_Deconstruction_Works()
     {
-        var result = new CommandResult(42, false, "error");
+        var result = new CommandResult(42, false, "error", "output");
 
-        var (exitCode, success, error) = result;
+        var (exitCode, success, error, output) = result;
 
         exitCode.ShouldBe(42);
         success.ShouldBeFalse();
         error.ShouldBe("error");
+        output.ShouldBe("output");
     }
 
     [Fact]

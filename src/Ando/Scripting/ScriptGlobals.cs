@@ -66,6 +66,18 @@ public class ScriptGlobals
     public NpmOperations Npm { get; }
 
     /// <summary>
+    /// Azure CLI authentication and account operations.
+    /// Usage: Azure.EnsureLoggedIn(), Azure.SetSubscription("...")
+    /// </summary>
+    public AzureOperations Azure { get; }
+
+    /// <summary>
+    /// Azure Bicep deployment operations.
+    /// Usage: Bicep.DeployToResourceGroup("rg", "./main.bicep", o => o.CaptureOutputs())
+    /// </summary>
+    public BicepOperations Bicep { get; }
+
+    /// <summary>
     /// Artifact operations for specifying which files to copy back to host.
     /// Usage: Artifacts.CopyToHost("/workspace/dist", "./dist")
     /// </summary>
@@ -90,6 +102,8 @@ public class ScriptGlobals
         Dotnet = buildContext.Dotnet;
         Ef = buildContext.Ef;
         Npm = buildContext.Npm;
+        Azure = buildContext.Azure;
+        Bicep = buildContext.Bicep;
         Artifacts = buildContext.Artifacts;
         Project = new ProjectHelper();
     }

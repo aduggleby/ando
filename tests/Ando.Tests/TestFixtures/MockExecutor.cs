@@ -77,6 +77,18 @@ public class MockExecutor : ICommandExecutor
     /// </summary>
     public TimeSpan ExecutionDelay { get; set; } = TimeSpan.Zero;
 
+    /// <summary>
+    /// Output to return from successful commands.
+    /// Used for testing output capture (e.g., Azure deployment outputs).
+    /// </summary>
+    public string? SimulatedOutput { get; set; }
+
+    /// <summary>
+    /// Command-specific outputs.
+    /// Key is the command name, value is the output to return.
+    /// </summary>
+    public Dictionary<string, string> CommandOutputs { get; } = new();
+
     public async Task<CommandResult> ExecuteAsync(string command, string[] args, CommandOptions? options = null)
     {
         var executed = new ExecutedCommand(command, args, options);
@@ -107,7 +119,9 @@ public class MockExecutor : ICommandExecutor
             return CommandResult.Failed(FailureExitCode, $"Command '{command}' with args matched failure condition");
         }
 
-        return CommandResult.Ok();
+        // Return command-specific output if configured, otherwise use global SimulatedOutput.
+        var output = CommandOutputs.GetValueOrDefault(command) ?? SimulatedOutput;
+        return CommandResult.Ok(output);
     }
 
     public bool IsAvailable(string command)
@@ -141,6 +155,8 @@ public class MockExecutor : ICommandExecutor
         AvailableCommands.Clear();
         SimulateTimeout = false;
         ExecutionDelay = TimeSpan.Zero;
+        SimulatedOutput = null;
+        CommandOutputs.Clear();
     }
 
     /// <summary>

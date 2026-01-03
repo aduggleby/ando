@@ -44,6 +44,9 @@ public abstract class CommandExecutorBase : ICommandExecutor
         var outputComplete = new TaskCompletionSource<bool>();
         var errorComplete = new TaskCompletionSource<bool>();
 
+        // Capture stdout for commands that need to process output (e.g., Azure deployments).
+        var outputBuilder = new System.Text.StringBuilder();
+
         // Stream stdout lines to the logger as they arrive.
         process.OutputDataReceived += (sender, e) =>
         {
@@ -54,6 +57,7 @@ public abstract class CommandExecutorBase : ICommandExecutor
             else
             {
                 Logger.Info(e.Data);
+                outputBuilder.AppendLine(e.Data);
             }
         };
 
@@ -101,8 +105,9 @@ public abstract class CommandExecutorBase : ICommandExecutor
             // The process can exit before all output is flushed.
             await Task.WhenAll(outputComplete.Task, errorComplete.Task);
 
+            var output = outputBuilder.ToString().TrimEnd();
             return process.ExitCode == 0
-                ? CommandResult.Ok()
+                ? CommandResult.Ok(output)
                 : CommandResult.Failed(process.ExitCode);
         }
         catch (Exception ex)

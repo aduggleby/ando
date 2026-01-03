@@ -1,0 +1,42 @@
+// 0007-AzureBicep: Azure Bicep Deployment Example
+// Demonstrates Azure and Bicep operations for infrastructure deployment
+//
+// PREREQUISITES:
+// - Azure CLI installed (az --version)
+// - Logged in to Azure (az login)
+// - Resource group exists or will be created
+//
+// This example shows:
+// - Azure.EnsureLoggedIn() to verify authentication
+// - Azure.SetSubscription() to select the target subscription
+// - Azure.CreateResourceGroup() to create a resource group
+// - Bicep.DeployToResourceGroup() to deploy infrastructure
+// - CaptureOutputs() to store deployment outputs in Context.Vars
+
+// Verify we're logged in to Azure
+Azure.EnsureLoggedIn();
+
+// Set subscription (optional - uses default if not specified)
+var subscriptionId = Context.Vars.Env("AZURE_SUBSCRIPTION_ID");
+if (subscriptionId != null)
+{
+    Azure.SetSubscription(subscriptionId);
+}
+
+// Configuration from environment or defaults
+var resourceGroup = Context.Vars.Env("AZURE_RESOURCE_GROUP") ?? "ando-demo-rg";
+var location = Context.Vars.Env("AZURE_LOCATION") ?? "eastus";
+
+// Create resource group if needed
+Azure.CreateResourceGroup(resourceGroup, location);
+
+// Deploy the storage account using Bicep
+Bicep.DeployToResourceGroup(resourceGroup, "./infra/main.bicep", o => o
+    .WithName("ando-storage-deployment")
+    .WithParameter("location", location)
+    .WithParameter("storageAccountNamePrefix", "andodemo")
+    .CaptureOutputs());
+
+// After deployment, Context.Vars["storageAccountName"] contains the storage account name
+// Context.Vars["storageAccountId"] contains the resource ID
+// Context.Vars["blobEndpoint"] contains the blob endpoint URL

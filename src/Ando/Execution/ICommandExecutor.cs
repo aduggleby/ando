@@ -25,11 +25,12 @@ namespace Ando.Execution;
 public record CommandResult(
     int ExitCode,
     bool Success,
-    string? Error = null
+    string? Error = null,
+    string? Output = null
 )
 {
     // Factory methods for common result cases.
-    public static CommandResult Ok() => new(0, true);
+    public static CommandResult Ok(string? output = null) => new(0, true, null, output);
     public static CommandResult Failed(int exitCode, string? error = null) => new(exitCode, false, error);
 }
 
