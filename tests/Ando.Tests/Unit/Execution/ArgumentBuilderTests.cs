@@ -1,3 +1,12 @@
+// =============================================================================
+// ArgumentBuilderTests.cs
+//
+// Summary: Unit tests for ArgumentBuilder fluent class.
+//
+// Tests verify argument addition, conditional addition, flag handling,
+// method chaining, and array building behavior.
+// =============================================================================
+
 using Ando.Execution;
 using Shouldly;
 

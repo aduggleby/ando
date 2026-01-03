@@ -1,3 +1,12 @@
+// =============================================================================
+// PathsContextTests.cs
+//
+// Summary: Unit tests for PathsContext class.
+//
+// Tests verify root path initialization, artifacts path derivation,
+// and path combination behavior.
+// =============================================================================
+
 using Ando.Context;
 
 namespace Ando.Tests.Unit.Context;

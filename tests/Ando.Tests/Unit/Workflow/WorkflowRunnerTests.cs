@@ -1,3 +1,12 @@
+// =============================================================================
+// WorkflowRunnerTests.cs
+//
+// Summary: Unit tests for WorkflowRunner class.
+//
+// Tests verify step execution order, success/failure handling,
+// logging behavior, and workflow result generation.
+// =============================================================================
+
 using Ando.Steps;
 using Ando.Tests.TestFixtures;
 using Ando.Workflow;

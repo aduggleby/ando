@@ -1,12 +1,16 @@
+// =============================================================================
+// DockerManagerTests.cs
+//
+// Summary: Integration tests for DockerManager class.
+//
+// Tests verify Docker container lifecycle management including creation,
+// file copying, and cleanup. Requires Docker to be available on the system.
+// =============================================================================
+
 using Ando.Execution;
 using Ando.Tests.TestFixtures;
 
 namespace Ando.Tests.Integration;
-
-/// <summary>
-/// Integration tests for DockerManager.
-/// These tests require Docker to be available on the system.
-/// </summary>
 [Trait("Category", "Integration")]
 [Trait("Category", "Docker")]
 public class DockerManagerTests : IDisposable

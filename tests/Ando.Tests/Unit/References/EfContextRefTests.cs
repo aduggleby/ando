@@ -1,3 +1,12 @@
+// =============================================================================
+// EfContextRefTests.cs
+//
+// Summary: Unit tests for EfContextRef class.
+//
+// Tests verify DbContext reference creation, project association,
+// and context name handling.
+// =============================================================================
+
 using Ando.Operations;
 using Ando.References;
 using Ando.Steps;

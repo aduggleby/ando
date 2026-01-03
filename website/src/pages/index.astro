@@ -2,13 +2,26 @@
 import "../styles/global.css";
 
 const commands = [
-  { cmd: "ando run", desc: "Run the default workflow." },
-  { cmd: "ando list", desc: "List workflows and steps." },
-  { cmd: "ando init", desc: "Create a starter build.ando." },
-  { cmd: "ando doctor", desc: "Diagnose prerequisites." },
-  { cmd: "ando clean", desc: "Remove artifacts, temp, cache, container." },
-  { cmd: "ando env", desc: "Print resolved paths/vars/env." },
-  { cmd: "ando version", desc: "Print CLI and runtime info." }
+  { cmd: "ando", desc: "Run the build script (same as 'ando run')." },
+  { cmd: "ando run", desc: "Run the build script in a Docker container." },
+  { cmd: "ando clean", desc: "Remove artifacts, temp files, and containers." },
+  { cmd: "ando help", desc: "Show available commands and options." }
+];
+
+const runOptions = [
+  { flag: "--verbosity <level>", desc: "Set output verbosity (quiet|minimal|normal|detailed)." },
+  { flag: "--no-color", desc: "Disable colored output." },
+  { flag: "--cold", desc: "Always create a fresh container (ignore warm cache)." },
+  { flag: "--image <image>", desc: "Use a custom Docker image." },
+  { flag: "--dind", desc: "Mount Docker socket for Docker-in-Docker builds." }
+];
+
+const cleanOptions = [
+  { flag: "--artifacts", desc: "Remove the artifacts directory." },
+  { flag: "--temp", desc: "Remove temp directory." },
+  { flag: "--cache", desc: "Remove NuGet and npm caches." },
+  { flag: "--container", desc: "Remove the project's warm container." },
+  { flag: "--all", desc: "Remove all of the above." }
 ];
 
 const operations = [
@@ -17,44 +30,62 @@ const operations = [
     name: "Dotnet.Restore",
     desc: "Restore NuGet packages for a project.",
     examples: [
-      "Dotnet.Restore(WebApi);",
-      "Dotnet.Restore(WebApi, o => o.NoCache());"
+      "Dotnet.Restore(App);",
+      "Dotnet.Restore(App, o => o.NoCache = true);"
     ]
   },
   {
     group: "Dotnet",
     name: "Dotnet.Build",
-    desc: "Build a project with configuration/verbosity.",
+    desc: "Compile a project with optional configuration.",
     examples: [
-      "Dotnet.Build(WebApi);",
-      "Dotnet.Build(WebApi, o => o.Configuration(Configuration.Release));"
+      "Dotnet.Build(App);",
+      "Dotnet.Build(App, o => o.Configuration = Configuration.Release);"
     ]
   },
   {
     group: "Dotnet",
     name: "Dotnet.Test",
-    desc: "Run tests for a project.",
+    desc: "Run unit tests for a project.",
     examples: [
-      "Dotnet.Test(WebApi);",
-      "Dotnet.Test(WebApi, o => o.Configuration(Configuration.Release));"
+      "Dotnet.Test(Tests);",
+      "Dotnet.Test(Tests, o => o.Filter = \"Category=Unit\");"
     ]
   },
   {
     group: "Dotnet",
     name: "Dotnet.Publish",
-    desc: "Publish build outputs to a target directory.",
+    desc: "Create deployment artifacts with full publish options.",
     examples: [
-      "Dotnet.Publish(WebApi);",
-      "Dotnet.Publish(WebApi, o => o.Output(Context.Paths.Artifacts / \"publish\"));"
+      "Dotnet.Publish(App);",
+      "Dotnet.Publish(App, o => o\n  .Output(Root / \"dist\")\n  .WithConfiguration(Configuration.Release)\n  .WithRuntime(\"linux-x64\")\n  .AsSelfContained()\n  .AsSingleFile());"
+    ]
+  },
+  {
+    group: "Dotnet",
+    name: "Dotnet.Tool",
+    desc: "Create a reference to a .NET CLI tool for installation.",
+    examples: [
+      "var efTool = Dotnet.Tool(\"dotnet-ef\");",
+      "var efTool = Dotnet.Tool(\"dotnet-ef\", \"9.0.0\");"
+    ]
+  },
+  {
+    group: "Ef",
+    name: "Ef.DbContextFrom",
+    desc: "Create a reference to a DbContext in a project.",
+    examples: [
+      "var db = Ef.DbContextFrom(DataProject);",
+      "var db = Ef.DbContextFrom(DataProject, \"AppDbContext\");"
     ]
   },
   {
     group: "Ef",
     name: "Ef.DatabaseUpdate",
-    desc: "Apply EF Core migrations for a context.",
+    desc: "Apply pending EF Core migrations to the database.",
     examples: [
-      "Ef.DatabaseUpdate(MainDb);",
-      "Ef.DatabaseUpdate(ReportingDb);"
+      "Ef.DatabaseUpdate(db);",
+      "Ef.DatabaseUpdate(db, connectionString: \"Server=...\");"
     ]
   },
   {
@@ -62,71 +93,78 @@ const operations = [
     name: "Ef.AddMigration",
     desc: "Create a new EF Core migration.",
     examples: [
-      "Ef.AddMigration(MainDb, \"Init\");",
-      "Ef.AddMigration(ReportingDb, \"AddReports\");"
+      "Ef.AddMigration(db, \"InitialCreate\");",
+      "Ef.AddMigration(db, \"AddUsers\", outputDir: \"Migrations\");"
     ]
   },
   {
     group: "Ef",
     name: "Ef.Script",
-    desc: "Generate a migration SQL script.",
+    desc: "Generate an idempotent SQL migration script.",
     examples: [
-      "Ef.Script(MainDb, Context.Paths.Artifacts / \"db.sql\");",
-      "Ef.Script(ReportingDb, Context.Paths.Artifacts / \"reporting.sql\");"
+      "Ef.Script(db, Root / \"migration.sql\");",
+      "Ef.Script(db, Root / \"migration.sql\", fromMigration: \"Init\");"
     ]
   },
   {
-    group: "Node & Npm",
+    group: "Ef",
+    name: "Ef.RemoveMigration",
+    desc: "Remove the last migration.",
+    examples: [
+      "Ef.RemoveMigration(db);",
+      "Ef.RemoveMigration(db, force: true);"
+    ]
+  },
+  {
+    group: "Npm",
+    name: "Npm.InDirectory",
+    desc: "Set the working directory for npm commands.",
+    examples: [
+      "Npm.InDirectory(\"./frontend\");",
+      "Npm.InDirectory(\"./frontend\").Install();"
+    ]
+  },
+  {
+    group: "Npm",
     name: "Npm.Install",
-    desc: "Install npm dependencies.",
+    desc: "Run 'npm install' to install dependencies.",
     examples: [
       "Npm.Install();",
-      "Npm.Install(); // after Node.UseLatestLts()"
+      "Npm.InDirectory(\"./app\").Install();"
     ]
   },
   {
-    group: "Node & Npm",
+    group: "Npm",
     name: "Npm.Ci",
-    desc: "Clean install npm dependencies for CI.",
+    desc: "Run 'npm ci' for clean, reproducible installs (preferred for CI).",
     examples: [
       "Npm.Ci();",
-      "Npm.Ci(); // reproducible installs"
+      "Npm.InDirectory(\"./app\").Ci();"
     ]
   },
   {
-    group: "Node & Npm",
+    group: "Npm",
     name: "Npm.Run",
-    desc: "Run an npm script by name.",
+    desc: "Run an npm script from package.json.",
     examples: [
       "Npm.Run(\"build\");",
-      "Npm.Run(\"test\");"
+      "Npm.Run(\"lint\");"
     ]
   },
   {
-    group: "Dotnet",
-    name: "Dotnet.Tool",
-    desc: "Install a .NET CLI tool inside the container.",
+    group: "Npm",
+    name: "Npm.Test",
+    desc: "Run 'npm test'.",
     examples: [
-      "Dotnet.Tool(\"dotnet-ef\", version: \"8.0.0\");",
-      "Dotnet.Tool(\"dotnet-format\");"
+      "Npm.Test();"
     ]
   },
   {
-    group: "Node & Npm",
-    name: "Node.Use",
-    desc: "Install/use a Node.js version inside the container.",
+    group: "Npm",
+    name: "Npm.Build",
+    desc: "Run 'npm run build'.",
     examples: [
-      "Node.Use(version: \"20.11.0\");",
-      "Node.UseLatestLts();"
-    ]
-  },
-  {
-    group: "Azure",
-    name: "Azure.WebAppDeploy",
-    desc: "Deploy to an Azure Web App (future).",
-    examples: [
-      "Azure.WebAppDeploy(ProdWebApp);",
-      "Azure.WebAppDeploy(ProdWebApp, o => o.PackageDir(Context.Paths.Artifacts / \"publish\").Slot(Azure.Slots.Production));"
+      "Npm.Build();"
     ]
   }
 ];
@@ -230,6 +268,42 @@ ando run --image my-custom-image</code></pre>
             ))}
           </tbody>
         </table>
+
+        <h3 class="op-title">Run options</h3>
+        <table class="dir-table">
+          <thead>
+            <tr>
+              <th>Flag</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            {runOptions.map((item) => (
+              <tr>
+                <td><code>{item.flag}</code></td>
+                <td>{item.desc}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <h3 class="op-title">Clean options</h3>
+        <table class="dir-table">
+          <thead>
+            <tr>
+              <th>Flag</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cleanOptions.map((item) => (
+              <tr>
+                <td><code>{item.flag}</code></td>
+                <td>{item.desc}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </section>
 
       <section id="ops">
@@ -237,7 +311,7 @@ ando run --image my-custom-image</code></pre>
         <p class="section-subtitle">
           Each operation registers a deterministic step and runs inside the container.
         </p>
-        {["Dotnet", "Node & Npm", "Ef", "Azure"].map((group) => (
+        {["Dotnet", "Npm", "Ef"].map((group) => (
           <div class="op-group">
             <h3 class="op-title">{group}</h3>
             <table class="dir-table">

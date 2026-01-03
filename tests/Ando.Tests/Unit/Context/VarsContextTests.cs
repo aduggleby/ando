@@ -1,3 +1,12 @@
+// =============================================================================
+// VarsContextTests.cs
+//
+// Summary: Unit tests for VarsContext class.
+//
+// Tests verify variable storage, retrieval, default value handling,
+// and dictionary-like behavior.
+// =============================================================================
+
 using Ando.Context;
 
 namespace Ando.Tests.Unit.Context;

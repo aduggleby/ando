@@ -1,11 +1,16 @@
+// =============================================================================
+// ConsoleLoggerTests.cs
+//
+// Summary: Unit tests for ConsoleLogger class.
+//
+// Tests verify logging output, verbosity levels, step status formatting,
+// and workflow completion messages. Tests run sequentially due to
+// Console.Out redirection.
+// =============================================================================
+
 using Ando.Logging;
 
 namespace Ando.Tests.Unit.Logging;
-
-/// <summary>
-/// Tests for ConsoleLogger.
-/// These tests must run sequentially due to Console.Out redirection.
-/// </summary>
 [Trait("Category", "Unit")]
 [Collection("ConsoleOutput")]
 public class ConsoleLoggerTests

@@ -1,13 +1,16 @@
+// =============================================================================
+// ExampleProjectTests.cs
+//
+// Summary: End-to-end tests that run example projects.
+//
+// Tests execute actual build.ando scripts using --local mode.
+// Dynamically discovers and runs all examples in the examples/ directory.
+// =============================================================================
+
 using Ando.Cli;
 using System.Collections;
 
 namespace Ando.Tests.E2E;
-
-/// <summary>
-/// End-to-end tests that run example projects.
-/// These tests execute actual build.ando scripts using --local mode.
-/// Tests dynamically discover and run all examples in the examples/ directory.
-/// </summary>
 [Trait("Category", "E2E")]
 public class ExampleProjectTests : IDisposable
 {

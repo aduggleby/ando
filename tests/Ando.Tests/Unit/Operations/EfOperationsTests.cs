@@ -1,3 +1,12 @@
+// =============================================================================
+// EfOperationsTests.cs
+//
+// Summary: Unit tests for EfOperations class.
+//
+// Tests verify Entity Framework CLI operations including migrations,
+// database updates, script generation, and DbContext reference handling.
+// =============================================================================
+
 using Ando.Context;
 using Ando.Operations;
 using Ando.References;

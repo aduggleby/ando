@@ -1,12 +1,17 @@
+// =============================================================================
+// ProjectRefPropertyTests.cs
+//
+// Summary: Property-based tests for ProjectRef using FsCheck.
+//
+// Tests verify invariants for project reference creation and name extraction
+// across randomly generated inputs.
+// =============================================================================
+
 using Ando.References;
 using FsCheck;
 using FsCheck.Xunit;
 
 namespace Ando.Tests.Unit.PropertyBased;
-
-/// <summary>
-/// Property-based tests for ProjectRef using FsCheck.
-/// </summary>
 [Trait("Category", "Unit")]
 [Trait("Category", "PropertyBased")]
 public class ProjectRefPropertyTests

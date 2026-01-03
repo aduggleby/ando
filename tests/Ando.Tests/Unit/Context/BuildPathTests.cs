@@ -1,3 +1,12 @@
+// =============================================================================
+// BuildPathTests.cs
+//
+// Summary: Unit tests for BuildPath struct.
+//
+// Tests verify path normalization, division operator for combining paths,
+// implicit string conversion, and equality behavior.
+// =============================================================================
+
 using Ando.Context;
 
 namespace Ando.Tests.Unit.Context;

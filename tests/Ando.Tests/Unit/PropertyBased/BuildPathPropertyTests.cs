@@ -1,13 +1,17 @@
+// =============================================================================
+// BuildPathPropertyTests.cs
+//
+// Summary: Property-based tests for BuildPath using FsCheck.
+//
+// Tests verify invariants hold across randomly generated inputs including
+// path division, implicit conversion, equality, and associativity.
+// =============================================================================
+
 using Ando.Context;
 using FsCheck;
 using FsCheck.Xunit;
 
 namespace Ando.Tests.Unit.PropertyBased;
-
-/// <summary>
-/// Property-based tests for BuildPath using FsCheck.
-/// These tests verify invariants hold across many randomly generated inputs.
-/// </summary>
 [Trait("Category", "Unit")]
 [Trait("Category", "PropertyBased")]
 public class BuildPathPropertyTests

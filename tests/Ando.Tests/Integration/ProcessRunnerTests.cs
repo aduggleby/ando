@@ -1,12 +1,16 @@
+// =============================================================================
+// ProcessRunnerTests.cs
+//
+// Summary: Integration tests for ProcessRunner class.
+//
+// Tests execute actual system commands to verify process execution,
+// output streaming, exit code handling, and command availability checking.
+// =============================================================================
+
 using Ando.Execution;
 using Ando.Tests.TestFixtures;
 
 namespace Ando.Tests.Integration;
-
-/// <summary>
-/// Integration tests for ProcessRunner.
-/// These tests execute actual system commands.
-/// </summary>
 [Trait("Category", "Integration")]
 public class ProcessRunnerTests
 {

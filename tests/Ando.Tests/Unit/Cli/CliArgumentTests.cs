@@ -1,11 +1,15 @@
+// =============================================================================
+// CliArgumentTests.cs
+//
+// Summary: Unit tests for CLI argument parsing logic.
+//
+// Tests verify argument handling, flag parsing, and configuration options
+// without executing full builds.
+// =============================================================================
+
 using Ando.Cli;
 
 namespace Ando.Tests.Unit.Cli;
-
-/// <summary>
-/// Tests for CLI argument parsing logic.
-/// These tests verify argument handling without executing full builds.
-/// </summary>
 [Trait("Category", "Unit")]
 [Collection("ConsoleOutput")]
 public class CliArgumentTests

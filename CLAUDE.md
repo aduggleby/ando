@@ -30,6 +30,7 @@ tests/Ando.Tests/   # Test project
   E2E/              # End-to-end tests (Category=E2E)
   TestFixtures/     # Shared MockExecutor, TestLogger
 examples/           # Example projects with build.ando files
+website/            # Documentation website (see website/CLAUDE.md)
 ```
 
 ## Testing
@@ -77,6 +78,7 @@ dotnet publish src/Ando/Ando.csproj -c Release -r linux-x64 --self-contained -o 
 
 ## Code Style
 
+- **Every file must have a header summary comment** (see Documentation Standards below)
 - Use records for immutable data
 - Prefer async/await for I/O operations
 - Operations register steps; they don't execute immediately
@@ -135,3 +137,11 @@ foreach (var batch in items.Chunk(100))
 - Document design decisions and tradeoffs
 - Comment on non-obvious logic or edge case handling
 - Keep comments up to date when code changes
+
+### Finding Files Without Headers
+Use this command to find C# files missing the required header summary:
+
+```bash
+# Find .cs files without the header pattern (excludes obj/bin directories)
+find src tests -name "*.cs" -not -path "*/obj/*" -not -path "*/bin/*" | xargs grep -L "^// =\+$" 2>/dev/null
+```

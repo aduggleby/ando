@@ -1,3 +1,12 @@
+// =============================================================================
+// BuildStepTests.cs
+//
+// Summary: Unit tests for BuildStep class.
+//
+// Tests verify step name handling, context formatting, display name generation,
+// and execution behavior.
+// =============================================================================
+
 using Ando.Steps;
 
 namespace Ando.Tests.Unit.Steps;

@@ -1,3 +1,12 @@
+// =============================================================================
+// ScriptHostTests.cs
+//
+// Summary: Unit tests for ScriptHost class.
+//
+// Tests verify Roslyn script loading, build context creation,
+// and script execution behavior.
+// =============================================================================
+
 using Ando.Scripting;
 using Ando.Tests.TestFixtures;
 using Ando.Workflow;

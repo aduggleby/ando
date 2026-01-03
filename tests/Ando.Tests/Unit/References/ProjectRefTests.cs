@@ -1,3 +1,12 @@
+// =============================================================================
+// ProjectRefTests.cs
+//
+// Summary: Unit tests for ProjectRef class.
+//
+// Tests verify project reference creation, path handling, and name extraction
+// from .csproj file paths.
+// =============================================================================
+
 using Ando.References;
 
 namespace Ando.Tests.Unit.References;
