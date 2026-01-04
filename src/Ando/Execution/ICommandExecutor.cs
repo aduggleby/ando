@@ -41,6 +41,17 @@ public record CommandResult(
 public class CommandOptions
 {
     /// <summary>
+    /// Default timeout for commands in milliseconds (5 minutes).
+    /// Prevents commands from hanging indefinitely.
+    /// </summary>
+    public const int DefaultTimeoutMs = 300_000;
+
+    /// <summary>
+    /// No timeout value - use with caution as commands may hang indefinitely.
+    /// </summary>
+    public const int NoTimeout = -1;
+
+    /// <summary>
     /// Working directory for the command.
     /// If null, uses the current working directory (or container default).
     /// </summary>
@@ -53,10 +64,12 @@ public class CommandOptions
     public Dictionary<string, string> Environment { get; } = new();
 
     /// <summary>
-    /// Timeout for the command in milliseconds. Null means no timeout.
+    /// Timeout for the command in milliseconds.
+    /// Defaults to <see cref="DefaultTimeoutMs"/> (5 minutes).
+    /// Set to <see cref="NoTimeout"/> (-1) to disable timeout.
     /// Commands exceeding this timeout are forcefully terminated.
     /// </summary>
-    public int? TimeoutMs { get; set; }
+    public int TimeoutMs { get; set; } = DefaultTimeoutMs;
 }
 
 /// <summary>

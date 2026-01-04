@@ -308,4 +308,34 @@ public class BicepOperationsTests
         Assert.Contains("@./params.json", cmd.Args);
         Assert.Contains("env=prod", cmd.Args);
     }
+
+    [Fact]
+    public async Task DeployToResourceGroup_WithDeploymentSlot_IncludesSlotParameter()
+    {
+        var bicep = CreateBicep();
+        bicep.DeployToResourceGroup("test-rg", "./main.bicep",
+            o => o.WithDeploymentSlot("staging"));
+
+        await _registry.Steps[0].Execute();
+
+        var cmd = _executor.LastCommand!;
+        Assert.Contains("deploymentSlot=staging", cmd.Args);
+    }
+
+    [Fact]
+    public async Task DeployToResourceGroup_WithDeploymentSlotAndOtherParams_IncludesAllParameters()
+    {
+        var bicep = CreateBicep();
+        bicep.DeployToResourceGroup("test-rg", "./main.bicep", o => o
+            .WithParameter("location", "eastus")
+            .WithDeploymentSlot("preview")
+            .WithParameter("sku", "Standard"));
+
+        await _registry.Steps[0].Execute();
+
+        var cmd = _executor.LastCommand!;
+        Assert.Contains("location=eastus", cmd.Args);
+        Assert.Contains("deploymentSlot=preview", cmd.Args);
+        Assert.Contains("sku=Standard", cmd.Args);
+    }
 }

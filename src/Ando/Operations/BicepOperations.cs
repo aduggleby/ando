@@ -142,6 +142,12 @@ public class BicepOperations : OperationsBase
             args.Add("--parameters", $"{param.Key}={param.Value}");
         }
 
+        // Add deployment slot if specified
+        if (!string.IsNullOrEmpty(options.DeploymentSlot))
+        {
+            args.Add("--parameters", $"deploymentSlot={options.DeploymentSlot}");
+        }
+
         // Add deployment mode if not incremental (the default)
         if (options.Mode == DeploymentMode.Complete)
         {

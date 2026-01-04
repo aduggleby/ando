@@ -84,6 +84,18 @@ public class ScriptGlobals
     public CloudflareOperations Cloudflare { get; }
 
     /// <summary>
+    /// Azure Functions deployment operations.
+    /// Usage: Functions.DeployZip("my-func", "./publish.zip", o => o.WithDeploymentSlot("staging"))
+    /// </summary>
+    public FunctionsOperations Functions { get; }
+
+    /// <summary>
+    /// Azure App Service deployment operations.
+    /// Usage: AppService.DeployZip("my-app", "./publish.zip", o => o.WithDeploymentSlot("staging"))
+    /// </summary>
+    public AppServiceOperations AppService { get; }
+
+    /// <summary>
     /// Artifact operations for specifying which files to copy back to host.
     /// Usage: Artifacts.CopyToHost("/workspace/dist", "./dist")
     /// </summary>
@@ -111,6 +123,8 @@ public class ScriptGlobals
         Azure = buildContext.Azure;
         Bicep = buildContext.Bicep;
         Cloudflare = buildContext.Cloudflare;
+        Functions = buildContext.Functions;
+        AppService = buildContext.AppService;
         Artifacts = buildContext.Artifacts;
         Project = new ProjectHelper();
     }

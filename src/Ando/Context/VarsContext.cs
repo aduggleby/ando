@@ -29,6 +29,9 @@ public class VarsContext
     // Tracks which environment variables are secrets (for log redaction).
     private readonly HashSet<string> _secrets = [];
 
+    // Tracks the actual secret values (for log redaction).
+    private readonly HashSet<string> _secretValues = [];
+
     /// <summary>
     /// Gets or sets a build variable. Setting to null removes the variable.
     /// </summary>
@@ -75,6 +78,7 @@ public class VarsContext
         // Mark as secret - typically used for tokens, passwords, etc.
         // The logger can use this to redact values from output.
         _secrets.Add(name);
+        _secretValues.Add(value);
         return value;
     }
 
@@ -93,4 +97,23 @@ public class VarsContext
     /// Used by the logger to determine if values should be redacted.
     /// </summary>
     public bool IsSecret(string name) => _secrets.Contains(name);
+
+    /// <summary>
+    /// Gets all secret values for redaction purposes.
+    /// Used by the logger to redact sensitive values from output.
+    /// </summary>
+    public IReadOnlySet<string> GetSecretValues() => _secretValues;
+
+    /// <summary>
+    /// Manually registers a value as a secret for redaction.
+    /// Use this for secrets obtained from sources other than environment variables.
+    /// </summary>
+    /// <param name="value">The secret value to redact from logs.</param>
+    public void RegisterSecret(string value)
+    {
+        if (!string.IsNullOrEmpty(value))
+        {
+            _secretValues.Add(value);
+        }
+    }
 }

@@ -23,7 +23,6 @@
 
 using System.Diagnostics;
 using Ando.Logging;
-using Ando.Operations;
 using Ando.Steps;
 
 namespace Ando.Workflow;
@@ -94,7 +93,7 @@ public class WorkflowRunner(StepRegistry registry, IBuildLogger logger)
             }
             catch (Exception ex)
             {
-                // Step threw an exception - wrap in result.
+                // Step threw an exception - wrap in result with full exception details.
                 stepStopwatch.Stop();
                 logger.StepFailed(step.Name, stepStopwatch.Elapsed, ex.Message);
                 stepResults.Add(new StepResult
@@ -103,7 +102,8 @@ public class WorkflowRunner(StepRegistry registry, IBuildLogger logger)
                     Context = step.Context,
                     Success = false,
                     Duration = stepStopwatch.Elapsed,
-                    ErrorMessage = ex.Message
+                    ErrorMessage = ex.Message,
+                    Exception = ex
                 });
 
                 // Check if this is an Azure-related step and provide helpful instructions
@@ -134,21 +134,18 @@ public class WorkflowRunner(StepRegistry registry, IBuildLogger logger)
 
     /// <summary>
     /// Checks if a failed step requires a tool that isn't installed and logs helpful instructions.
+    /// Uses the ToolAvailabilityRegistry to find the appropriate checker for the step.
     /// </summary>
     private void CheckAndLogToolAvailability(string stepName)
     {
-        // Check for Azure CLI availability when Azure steps fail
-        if (stepName.StartsWith("Azure.", StringComparison.OrdinalIgnoreCase) ||
-            stepName.StartsWith("Bicep.", StringComparison.OrdinalIgnoreCase))
+        var checker = ToolAvailabilityRegistry.FindChecker(stepName);
+        if (checker != null && !checker.IsAvailable())
         {
-            if (!AzureOperations.IsAzureCliAvailable())
-            {
-                logger.Error("");
-                logger.Error("Azure CLI is not installed. To install:");
-                logger.Error(AzureOperations.GetAzureCliInstallInstructions());
-                logger.Error("");
-                logger.Error("Or visit: https://docs.microsoft.com/cli/azure/install-azure-cli");
-            }
+            logger.Error("");
+            logger.Error($"Required tool is not installed. To install:");
+            logger.Error(checker.GetInstallInstructions());
+            logger.Error("");
+            logger.Error($"Or visit: {checker.GetDocumentationUrl()}");
         }
     }
 }

@@ -22,6 +22,7 @@ using System.Diagnostics;
 using Ando.Execution;
 using Ando.Logging;
 using Ando.Steps;
+using Ando.Utilities;
 
 namespace Ando.Operations;
 
@@ -72,9 +73,9 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
     {
         // Resolve credentials from parameters or environment variables.
         // This is done at registration time so we fail fast if credentials are missing.
-        var resolvedClientId = clientId ?? GetRequiredEnv(EnvClientId);
-        var resolvedClientSecret = clientSecret ?? GetRequiredEnv(EnvClientSecret);
-        var resolvedTenantId = tenantId ?? GetRequiredEnv(EnvTenantId);
+        var resolvedClientId = clientId ?? EnvironmentHelper.GetRequired(EnvClientId, "Azure Client ID");
+        var resolvedClientSecret = clientSecret ?? EnvironmentHelper.GetRequired(EnvClientSecret, "Azure Client Secret");
+        var resolvedTenantId = tenantId ?? EnvironmentHelper.GetRequired(EnvTenantId, "Azure Tenant ID");
 
         RegisterCommand("Azure.Login.ServicePrincipal", "az",
             () => new ArgumentBuilder()
@@ -107,7 +108,7 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
     /// If null, uses AZURE_SUBSCRIPTION_ID env var.</param>
     public void SetSubscription(string? subscriptionId = null)
     {
-        var resolvedSubscriptionId = subscriptionId ?? GetRequiredEnv(EnvSubscriptionId);
+        var resolvedSubscriptionId = subscriptionId ?? EnvironmentHelper.GetRequired(EnvSubscriptionId, "Azure Subscription ID");
 
         RegisterCommand("Azure.SetSubscription", "az",
             () => new ArgumentBuilder()
@@ -148,19 +149,6 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
                 .AddFlag(noWait, "--no-wait")
                 .Add("--output", "none"),
             name);
-    }
-
-    /// <summary>
-    /// Gets a required environment variable, throwing if not set.
-    /// </summary>
-    private static string GetRequiredEnv(string name)
-    {
-        var value = Environment.GetEnvironmentVariable(name);
-        if (string.IsNullOrEmpty(value))
-        {
-            throw new InvalidOperationException($"Required environment variable '{name}' is not set.");
-        }
-        return value;
     }
 
     /// <summary>

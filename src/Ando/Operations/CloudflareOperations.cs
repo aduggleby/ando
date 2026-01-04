@@ -23,6 +23,7 @@ using System.Diagnostics;
 using Ando.Execution;
 using Ando.Logging;
 using Ando.Steps;
+using Ando.Utilities;
 
 namespace Ando.Operations;
 
@@ -61,8 +62,8 @@ public class CloudflareOperations : OperationsBase
     public void EnsureAuthenticated()
     {
         // Validate at registration time (fail-fast).
-        GetRequiredEnv(EnvApiToken);
-        GetRequiredEnv(EnvAccountId);
+        EnvironmentHelper.GetRequired(EnvApiToken, "Cloudflare API Token");
+        EnvironmentHelper.GetRequired(EnvAccountId, "Cloudflare Account ID");
 
         // Register a step that verifies authentication by calling wrangler whoami.
         RegisterCommand("Cloudflare.EnsureAuthenticated", "npx",
@@ -90,8 +91,8 @@ public class CloudflareOperations : OperationsBase
         }
 
         // Validate auth env vars at registration time.
-        GetRequiredEnv(EnvApiToken);
-        GetRequiredEnv(EnvAccountId);
+        EnvironmentHelper.GetRequired(EnvApiToken, "Cloudflare API Token");
+        EnvironmentHelper.GetRequired(EnvAccountId, "Cloudflare Account ID");
 
         RegisterCommand("Cloudflare.Pages.Deploy", "npx",
             () => BuildPagesDeployArgs(directory, projectName, options),
@@ -114,8 +115,8 @@ public class CloudflareOperations : OperationsBase
     /// </summary>
     public void PagesListProjects()
     {
-        GetRequiredEnv(EnvApiToken);
-        GetRequiredEnv(EnvAccountId);
+        EnvironmentHelper.GetRequired(EnvApiToken, "Cloudflare API Token");
+        EnvironmentHelper.GetRequired(EnvAccountId, "Cloudflare Account ID");
 
         RegisterCommand("Cloudflare.Pages.ListProjects", "npx",
             () => new ArgumentBuilder()
@@ -130,8 +131,8 @@ public class CloudflareOperations : OperationsBase
     /// <param name="productionBranch">Production branch name (defaults to "main").</param>
     public void PagesCreateProject(string projectName, string productionBranch = "main")
     {
-        GetRequiredEnv(EnvApiToken);
-        GetRequiredEnv(EnvAccountId);
+        EnvironmentHelper.GetRequired(EnvApiToken, "Cloudflare API Token");
+        EnvironmentHelper.GetRequired(EnvAccountId, "Cloudflare Account ID");
 
         RegisterCommand("Cloudflare.Pages.CreateProject", "npx",
             () => new ArgumentBuilder()
@@ -147,7 +148,7 @@ public class CloudflareOperations : OperationsBase
     /// <param name="projectName">Project name. If null, uses CLOUDFLARE_PROJECT_NAME env var.</param>
     public void PagesListDeployments(string? projectName = null)
     {
-        var resolvedProjectName = projectName ?? GetRequiredEnv(EnvProjectName);
+        var resolvedProjectName = projectName ?? EnvironmentHelper.GetRequired(EnvProjectName, "Cloudflare Project Name");
 
         RegisterCommand("Cloudflare.Pages.ListDeployments", "npx",
             () => new ArgumentBuilder()
@@ -171,19 +172,6 @@ public class CloudflareOperations : OperationsBase
             .AddIfNotNull("--branch", options.Branch)
             .AddIfNotNull("--commit-hash", options.CommitHash)
             .AddIfNotNull("--commit-message", options.CommitMessage);
-    }
-
-    /// <summary>
-    /// Gets a required environment variable, throwing if not set.
-    /// </summary>
-    private static string GetRequiredEnv(string name)
-    {
-        var value = Environment.GetEnvironmentVariable(name);
-        if (string.IsNullOrEmpty(value))
-        {
-            throw new InvalidOperationException($"Required environment variable '{name}' is not set.");
-        }
-        return value;
     }
 
     /// <summary>

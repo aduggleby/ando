@@ -34,6 +34,8 @@ public class ContainerExecutor : CommandExecutorBase
 {
     private readonly string _containerId;
     private readonly string _containerWorkDir;
+    private readonly string _containerRootPath;
+    private string? _hostRootPath;
 
     /// <summary>
     /// Creates a new ContainerExecutor.
@@ -46,6 +48,17 @@ public class ContainerExecutor : CommandExecutorBase
     {
         _containerId = containerId;
         _containerWorkDir = containerWorkDir;
+        _containerRootPath = containerWorkDir; // Container root is the workspace mount point
+    }
+
+    /// <summary>
+    /// Sets the host root path for path translation.
+    /// Call this after construction when the host project path is known.
+    /// </summary>
+    /// <param name="hostRootPath">Absolute path to project root on the host.</param>
+    public void SetHostRootPath(string hostRootPath)
+    {
+        _hostRootPath = Path.GetFullPath(hostRootPath);
     }
 
     protected override ProcessStartInfo PrepareProcessStartInfo(string command, string[] args, CommandOptions options)
@@ -115,7 +128,7 @@ public class ContainerExecutor : CommandExecutorBase
     private string ConvertToContainerPath(string path)
     {
         // Already a container path - no conversion needed.
-        if (path.StartsWith("/workspace"))
+        if (path.StartsWith(_containerRootPath))
         {
             return path;
         }
@@ -126,9 +139,25 @@ public class ContainerExecutor : CommandExecutorBase
             return $"{_containerWorkDir}/{path}";
         }
 
-        // For host absolute paths, we pass them through unchanged.
-        // This is a simplification - proper path mapping would require
-        // knowing the host project root to translate correctly.
+        // For host absolute paths, translate to container path if possible.
+        if (_hostRootPath != null)
+        {
+            var fullPath = Path.GetFullPath(path);
+
+            // Check if the path is within the host project root
+            if (fullPath.StartsWith(_hostRootPath, StringComparison.OrdinalIgnoreCase))
+            {
+                var relativePath = Path.GetRelativePath(_hostRootPath, fullPath);
+                // Convert Windows separators to Unix if needed
+                relativePath = relativePath.Replace('\\', '/');
+                return $"{_containerRootPath}/{relativePath}";
+            }
+
+            // Path is outside the project root - this will fail in the container
+            Logger.Warning($"Path '{path}' is outside the project root and may not be accessible in the container.");
+        }
+
+        // Pass through unchanged as fallback (may fail if path doesn't exist in container)
         return path;
     }
 }

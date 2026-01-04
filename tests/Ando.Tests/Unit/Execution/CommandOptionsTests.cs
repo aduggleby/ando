@@ -33,11 +33,24 @@ public class CommandOptionsTests
     }
 
     [Fact]
-    public void Default_HasNullTimeout()
+    public void Default_HasDefaultTimeout()
     {
         var options = new CommandOptions();
 
-        options.TimeoutMs.ShouldBeNull();
+        options.TimeoutMs.ShouldBe(CommandOptions.DefaultTimeoutMs);
+    }
+
+    [Fact]
+    public void Default_TimeoutIs5Minutes()
+    {
+        // Verify the constant value is 5 minutes in milliseconds
+        CommandOptions.DefaultTimeoutMs.ShouldBe(300_000);
+    }
+
+    [Fact]
+    public void NoTimeout_ConstantIsNegativeOne()
+    {
+        CommandOptions.NoTimeout.ShouldBe(-1);
     }
 
     [Fact]
@@ -58,6 +71,16 @@ public class CommandOptionsTests
         options.TimeoutMs = 30000;
 
         options.TimeoutMs.ShouldBe(30000);
+    }
+
+    [Fact]
+    public void TimeoutMs_CanBeSetToNoTimeout()
+    {
+        var options = new CommandOptions();
+
+        options.TimeoutMs = CommandOptions.NoTimeout;
+
+        options.TimeoutMs.ShouldBe(CommandOptions.NoTimeout);
     }
 
     [Fact]

@@ -30,6 +30,9 @@ public abstract class CommandExecutorBase : ICommandExecutor
     {
         options ??= new CommandOptions();
 
+        // Log the command before execution for debugging visibility.
+        LogCommand(command, args, options);
+
         var startInfo = PrepareProcessStartInfo(command, args, options);
         startInfo.UseShellExecute = false;
         startInfo.RedirectStandardOutput = true;
@@ -81,19 +84,19 @@ public abstract class CommandExecutorBase : ICommandExecutor
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
-            // Handle timeout if specified.
-            if (options.TimeoutMs.HasValue)
+            // Handle timeout. NoTimeout (-1) means wait indefinitely.
+            if (options.TimeoutMs != CommandOptions.NoTimeout)
             {
                 await Task.WhenAny(
                     process.WaitForExitAsync(),
-                    Task.Delay(options.TimeoutMs.Value)
+                    Task.Delay(options.TimeoutMs)
                 );
 
                 if (!process.HasExited)
                 {
                     // Kill entire process tree to prevent orphaned child processes.
                     process.Kill(entireProcessTree: true);
-                    return CommandResult.Failed(-1, "Command timed out");
+                    return CommandResult.Failed(-1, $"Command timed out after {options.TimeoutMs}ms");
                 }
             }
             else
@@ -123,4 +126,32 @@ public abstract class CommandExecutorBase : ICommandExecutor
     protected abstract ProcessStartInfo PrepareProcessStartInfo(string command, string[] args, CommandOptions options);
 
     public abstract bool IsAvailable(string command);
+
+    /// <summary>
+    /// Logs the command being executed for debugging and troubleshooting.
+    /// This helps users see exactly what commands are run and reproduce issues.
+    /// </summary>
+    protected virtual void LogCommand(string command, string[] args, CommandOptions options)
+    {
+        // Build the full command string for logging
+        var escapedArgs = args.Select(a => a.Contains(' ') ? $"\"{a}\"" : a);
+        var fullCommand = $"{command} {string.Join(" ", escapedArgs)}";
+
+        Logger.Debug($"Executing: {fullCommand}");
+
+        if (options.WorkingDirectory != null)
+        {
+            Logger.Debug($"  Working directory: {options.WorkingDirectory}");
+        }
+
+        if (options.Environment.Count > 0)
+        {
+            Logger.Debug($"  Environment: {string.Join(", ", options.Environment.Keys)}");
+        }
+
+        if (options.TimeoutMs != CommandOptions.NoTimeout)
+        {
+            Logger.Debug($"  Timeout: {options.TimeoutMs}ms");
+        }
+    }
 }

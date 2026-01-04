@@ -56,6 +56,9 @@ public class BicepDeployOptions
     /// <summary>Prefix for captured output variable names.</summary>
     internal string? OutputPrefix { get; private set; }
 
+    /// <summary>Azure App Service deployment slot name (e.g., "staging", "preview").</summary>
+    internal string? DeploymentSlot { get; private set; }
+
     /// <summary>
     /// Sets a custom deployment name.
     /// If not specified, Azure generates a name based on the template file.
@@ -111,6 +114,18 @@ public class BicepDeployOptions
     {
         ShouldCaptureOutputs = true;
         OutputPrefix = prefix;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the deployment slot for Azure App Service or Functions deployments.
+    /// The slot name is passed as a "deploymentSlot" parameter to the Bicep template.
+    /// </summary>
+    /// <param name="slot">Deployment slot name (e.g., "staging", "preview").
+    /// Use "production" or omit to deploy to the production slot.</param>
+    public BicepDeployOptions WithDeploymentSlot(string slot)
+    {
+        DeploymentSlot = slot;
         return this;
     }
 }

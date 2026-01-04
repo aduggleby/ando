@@ -43,26 +43,8 @@ public class BuildContext
     /// <summary>Build configuration options.</summary>
     public BuildOptions Options { get; }
 
-    /// <summary>.NET CLI operations.</summary>
-    public DotnetOperations Dotnet { get; }
-
-    /// <summary>Entity Framework operations.</summary>
-    public EfOperations Ef { get; }
-
-    /// <summary>npm operations.</summary>
-    public NpmOperations Npm { get; }
-
-    /// <summary>Azure CLI authentication and account operations.</summary>
-    public AzureOperations Azure { get; }
-
-    /// <summary>Azure Bicep deployment operations.</summary>
-    public BicepOperations Bicep { get; }
-
-    /// <summary>Cloudflare operations (Pages deployment, etc.).</summary>
-    public CloudflareOperations Cloudflare { get; }
-
-    /// <summary>Artifact operations for copying files to host.</summary>
-    public ArtifactOperations Artifacts { get; }
+    /// <summary>Container for all build operations.</summary>
+    public BuildOperations Operations { get; }
 
     /// <summary>Registry of steps to execute.</summary>
     public StepRegistry StepRegistry { get; }
@@ -72,6 +54,36 @@ public class BuildContext
 
     /// <summary>Current command executor (local or container).</summary>
     public ICommandExecutor Executor { get; private set; }
+
+    // Convenience accessors for operations (backward compatibility).
+    // These delegate to the Operations container.
+
+    /// <summary>.NET CLI operations.</summary>
+    public DotnetOperations Dotnet => Operations.Dotnet;
+
+    /// <summary>Entity Framework operations.</summary>
+    public EfOperations Ef => Operations.Ef;
+
+    /// <summary>npm operations.</summary>
+    public NpmOperations Npm => Operations.Npm;
+
+    /// <summary>Azure CLI authentication and account operations.</summary>
+    public AzureOperations Azure => Operations.Azure;
+
+    /// <summary>Azure Bicep deployment operations.</summary>
+    public BicepOperations Bicep => Operations.Bicep;
+
+    /// <summary>Cloudflare operations (Pages deployment, etc.).</summary>
+    public CloudflareOperations Cloudflare => Operations.Cloudflare;
+
+    /// <summary>Azure Functions deployment operations.</summary>
+    public FunctionsOperations Functions => Operations.Functions;
+
+    /// <summary>Azure App Service deployment operations.</summary>
+    public AppServiceOperations AppService => Operations.AppService;
+
+    /// <summary>Artifact operations for copying files to host.</summary>
+    public ArtifactOperations Artifacts => Operations.Artifacts;
 
     // Docker manager, container ID, and host root path for artifact copying.
     // Set after container is created via SetDockerManager().
@@ -90,15 +102,10 @@ public class BuildContext
         // Will be replaced with ContainerExecutor when Docker mode is active.
         Executor = new ProcessRunner(logger);
 
-        // Operations receive an executor factory lambda so they always get
-        // the current executor, even if it's changed after script loading.
-        Dotnet = new DotnetOperations(StepRegistry, logger, () => Executor);
-        Ef = new EfOperations(StepRegistry, logger, () => Executor);
-        Npm = new NpmOperations(StepRegistry, logger, () => Executor);
-        Azure = new AzureOperations(StepRegistry, logger, () => Executor);
-        Bicep = new BicepOperations(StepRegistry, logger, () => Executor, Context.Vars);
-        Cloudflare = new CloudflareOperations(StepRegistry, logger, () => Executor);
-        Artifacts = new ArtifactOperations(logger);
+        // Create operations container with an executor factory lambda.
+        // The factory ensures operations always get the current executor,
+        // even if it's changed after script loading.
+        Operations = new BuildOperations(StepRegistry, Logger, () => Executor, Context.Vars);
     }
 
     /// <summary>

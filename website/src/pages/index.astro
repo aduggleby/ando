@@ -234,7 +234,7 @@ const operations = [
     desc: "Deploy a Bicep template to a resource group.",
     examples: [
       "Bicep.DeployToResourceGroup(\"my-rg\", \"./infra/main.bicep\");",
-      "Bicep.DeployToResourceGroup(\"my-rg\", \"./main.bicep\", o => o\n  .WithParameterFile(\"./params.json\")\n  .CaptureOutputs());"
+      "Bicep.DeployToResourceGroup(\"my-rg\", \"./main.bicep\", o => o\n  .WithParameterFile(\"./params.json\")\n  .WithDeploymentSlot(\"staging\")\n  .CaptureOutputs());"
     ]
   },
   {
@@ -323,6 +323,150 @@ const operations = [
     examples: [
       "Cloudflare.PagesListDeployments(\"my-site\");",
       "Cloudflare.PagesListDeployments(); // Uses CLOUDFLARE_PROJECT_NAME env var"
+    ]
+  },
+  {
+    group: "Functions",
+    name: "Functions.DeployZip",
+    desc: "Deploy a function app using zip deploy.",
+    examples: [
+      "Functions.DeployZip(\"my-func\", \"./publish.zip\");",
+      "Functions.DeployZip(\"my-func\", \"./publish.zip\", \"my-rg\", o => o\n  .WithDeploymentSlot(\"staging\"));"
+    ]
+  },
+  {
+    group: "Functions",
+    name: "Functions.Publish",
+    desc: "Publish using Azure Functions Core Tools.",
+    examples: [
+      "Functions.Publish(\"my-func\");",
+      "Functions.Publish(\"my-func\", \"./src/MyFunc\", o => o\n  .WithDeploymentSlot(\"staging\")\n  .WithConfiguration(\"Release\"));"
+    ]
+  },
+  {
+    group: "Functions",
+    name: "Functions.DeployWithSwap",
+    desc: "Deploy to a slot then swap to production (zero-downtime).",
+    examples: [
+      "Functions.DeployWithSwap(\"my-func\", \"./publish.zip\");",
+      "Functions.DeployWithSwap(\"my-func\", \"./publish.zip\", \"staging\", \"my-rg\");"
+    ]
+  },
+  {
+    group: "Functions",
+    name: "Functions.SwapSlots",
+    desc: "Swap deployment slots.",
+    examples: [
+      "Functions.SwapSlots(\"my-func\", \"staging\");",
+      "Functions.SwapSlots(\"my-func\", \"staging\", \"my-rg\", \"production\");"
+    ]
+  },
+  {
+    group: "Functions",
+    name: "Functions.Restart",
+    desc: "Restart a function app.",
+    examples: [
+      "Functions.Restart(\"my-func\");",
+      "Functions.Restart(\"my-func\", \"my-rg\", \"staging\");"
+    ]
+  },
+  {
+    group: "Functions",
+    name: "Functions.Start",
+    desc: "Start a function app.",
+    examples: [
+      "Functions.Start(\"my-func\");",
+      "Functions.Start(\"my-func\", slot: \"staging\");"
+    ]
+  },
+  {
+    group: "Functions",
+    name: "Functions.Stop",
+    desc: "Stop a function app.",
+    examples: [
+      "Functions.Stop(\"my-func\");",
+      "Functions.Stop(\"my-func\", slot: \"staging\");"
+    ]
+  },
+  {
+    group: "AppService",
+    name: "AppService.DeployZip",
+    desc: "Deploy an app service using zip deploy.",
+    examples: [
+      "AppService.DeployZip(\"my-app\", \"./publish.zip\");",
+      "AppService.DeployZip(\"my-app\", \"./publish.zip\", \"my-rg\", o => o\n  .WithDeploymentSlot(\"staging\"));"
+    ]
+  },
+  {
+    group: "AppService",
+    name: "AppService.DeployWithSwap",
+    desc: "Deploy to a slot then swap to production (zero-downtime).",
+    examples: [
+      "AppService.DeployWithSwap(\"my-app\", \"./publish.zip\");",
+      "AppService.DeployWithSwap(\"my-app\", \"./publish.zip\", \"staging\", \"my-rg\");"
+    ]
+  },
+  {
+    group: "AppService",
+    name: "AppService.SwapSlots",
+    desc: "Swap deployment slots.",
+    examples: [
+      "AppService.SwapSlots(\"my-app\", \"staging\");",
+      "AppService.SwapSlots(\"my-app\", \"staging\", \"my-rg\", \"production\");"
+    ]
+  },
+  {
+    group: "AppService",
+    name: "AppService.CreateSlot",
+    desc: "Create a new deployment slot.",
+    examples: [
+      "AppService.CreateSlot(\"my-app\", \"staging\");",
+      "AppService.CreateSlot(\"my-app\", \"staging\", \"my-rg\", \"production\");"
+    ]
+  },
+  {
+    group: "AppService",
+    name: "AppService.DeleteSlot",
+    desc: "Delete a deployment slot.",
+    examples: [
+      "AppService.DeleteSlot(\"my-app\", \"staging\");",
+      "AppService.DeleteSlot(\"my-app\", \"staging\", \"my-rg\");"
+    ]
+  },
+  {
+    group: "AppService",
+    name: "AppService.ListSlots",
+    desc: "List deployment slots for an app service.",
+    examples: [
+      "AppService.ListSlots(\"my-app\");",
+      "AppService.ListSlots(\"my-app\", \"my-rg\");"
+    ]
+  },
+  {
+    group: "AppService",
+    name: "AppService.Restart",
+    desc: "Restart an app service.",
+    examples: [
+      "AppService.Restart(\"my-app\");",
+      "AppService.Restart(\"my-app\", \"my-rg\", \"staging\");"
+    ]
+  },
+  {
+    group: "AppService",
+    name: "AppService.Start",
+    desc: "Start an app service.",
+    examples: [
+      "AppService.Start(\"my-app\");",
+      "AppService.Start(\"my-app\", slot: \"staging\");"
+    ]
+  },
+  {
+    group: "AppService",
+    name: "AppService.Stop",
+    desc: "Stop an app service.",
+    examples: [
+      "AppService.Stop(\"my-app\");",
+      "AppService.Stop(\"my-app\", slot: \"staging\");"
     ]
   }
 ];
@@ -481,7 +625,7 @@ ando run --image my-custom-image</code></pre>
           />
         </div>
         <div class="no-results" id="no-results">No operations found matching your search.</div>
-        {["Dotnet", "Npm", "Ef", "Azure", "Bicep", "Cloudflare"].map((group) => (
+        {["Dotnet", "Npm", "Ef", "Azure", "Bicep", "Functions", "AppService", "Cloudflare"].map((group) => (
           <div class="op-group">
             <h3 class="op-title">{group}</h3>
             <table class="dir-table">

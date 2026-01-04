@@ -35,6 +35,12 @@ public class StepResult
 
     /// <summary>Error message if the step failed, null on success.</summary>
     public string? ErrorMessage { get; init; }
+
+    /// <summary>
+    /// Full exception if the step threw an exception, null otherwise.
+    /// Useful for debugging and detailed error reporting.
+    /// </summary>
+    public Exception? Exception { get; init; }
 }
 
 /// <summary>

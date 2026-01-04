@@ -30,6 +30,7 @@ public class ConsoleLogger : IBuildLogger, IDisposable
 {
     private readonly bool _useColor;
     private readonly StreamWriter? _logFile;
+    private readonly HashSet<string> _secretValues;
     private int _currentStep;
     private int _totalSteps;
     private bool _disposed;
@@ -51,9 +52,11 @@ public class ConsoleLogger : IBuildLogger, IDisposable
     /// </summary>
     /// <param name="useColor">Whether to use ANSI color codes in output.</param>
     /// <param name="logFilePath">Optional path for plain-text log file.</param>
-    public ConsoleLogger(bool useColor = true, string? logFilePath = null)
+    /// <param name="secretValues">Optional set of secret values to redact from output.</param>
+    public ConsoleLogger(bool useColor = true, string? logFilePath = null, IEnumerable<string>? secretValues = null)
     {
         _useColor = useColor;
+        _secretValues = secretValues != null ? [..secretValues] : [];
 
         // Set up log file if path provided.
         // File is cleared on each run to avoid growing indefinitely.
@@ -63,6 +66,34 @@ public class ConsoleLogger : IBuildLogger, IDisposable
             LogToFile($"Build started at {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
             LogToFile(new string('-', 60));
         }
+    }
+
+    /// <summary>
+    /// Adds secret values to be redacted from output.
+    /// Can be called after construction when secrets become known.
+    /// </summary>
+    public void AddSecrets(IEnumerable<string> secrets)
+    {
+        foreach (var secret in secrets.Where(s => !string.IsNullOrEmpty(s)))
+        {
+            _secretValues.Add(secret);
+        }
+    }
+
+    /// <summary>
+    /// Redacts any secret values from the message.
+    /// Replaces occurrences of secret values with [REDACTED].
+    /// </summary>
+    private string RedactSecrets(string message)
+    {
+        if (_secretValues.Count == 0) return message;
+
+        var result = message;
+        foreach (var secret in _secretValues.Where(s => s.Length >= 4)) // Only redact secrets 4+ chars
+        {
+            result = result.Replace(secret, "[REDACTED]");
+        }
+        return result;
     }
 
     public void Dispose()
@@ -138,33 +169,37 @@ public class ConsoleLogger : IBuildLogger, IDisposable
 
     public void Info(string message)
     {
-        LogToFile($"  {message}");
+        var redacted = RedactSecrets(message);
+        LogToFile($"  {redacted}");
 
         if (Verbosity < LogLevel.Normal) return;
-        Console.WriteLine($"     {LightGray}{message}{Reset}");
+        Console.WriteLine($"     {LightGray}{redacted}{Reset}");
     }
 
     public void Warning(string message)
     {
-        LogToFile($"⚠ {message}");
+        var redacted = RedactSecrets(message);
+        LogToFile($"⚠ {redacted}");
 
         if (Verbosity < LogLevel.Minimal) return;
-        Console.WriteLine($"  {Yellow}⚠{Reset}  {message}");
+        Console.WriteLine($"  {Yellow}⚠{Reset}  {redacted}");
     }
 
     public void Error(string message)
     {
-        LogToFile($"✖ ERROR: {message}");
+        var redacted = RedactSecrets(message);
+        LogToFile($"✖ ERROR: {redacted}");
 
-        Console.WriteLine($"  {Red}✖{Reset}  {message}");
+        Console.WriteLine($"  {Red}✖{Reset}  {redacted}");
     }
 
     public void Debug(string message)
     {
-        LogToFile($"  → {message}");
+        var redacted = RedactSecrets(message);
+        LogToFile($"  → {redacted}");
 
         if (Verbosity < LogLevel.Detailed) return;
-        Console.WriteLine($"     {Gray}→{Reset} {message}");
+        Console.WriteLine($"     {Gray}→{Reset} {redacted}");
     }
 
     public void WorkflowStarted(string workflowName, string? scriptPath = null, int totalSteps = 0)
