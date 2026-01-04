@@ -349,6 +349,9 @@ const operations = [
           <a href="#build">build.ando</a>
           <a href="#cli">Commands</a>
           <a href="#ops">Operations</a>
+          <button class="theme-toggle" id="theme-toggle" title="Toggle dark mode">
+            <span id="theme-icon">🌙</span>
+          </button>
         </div>
       </nav>
 
@@ -469,6 +472,15 @@ ando run --image my-custom-image</code></pre>
         <p class="section-subtitle">
           Each operation registers a deterministic step and runs inside the container.
         </p>
+        <div class="search-container">
+          <input
+            type="text"
+            class="search-input"
+            id="ops-search"
+            placeholder="Search operations..."
+          />
+        </div>
+        <div class="no-results" id="no-results">No operations found matching your search.</div>
         {["Dotnet", "Npm", "Ef", "Azure", "Bicep", "Cloudflare"].map((group) => (
           <div class="op-group">
             <h3 class="op-title">{group}</h3>
@@ -499,5 +511,101 @@ ando run --image my-custom-image</code></pre>
       </section>
 
     </main>
+
+    <script>
+      // Theme toggle functionality
+      const themeToggle = document.getElementById('theme-toggle');
+      const themeIcon = document.getElementById('theme-icon');
+      const html = document.documentElement;
+
+      // Check for saved theme preference or system preference
+      function getPreferredTheme() {
+        const saved = localStorage.getItem('theme');
+        if (saved) return saved;
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+
+      function setTheme(theme) {
+        if (theme === 'dark') {
+          html.setAttribute('data-theme', 'dark');
+          themeIcon.textContent = '☀️';
+        } else {
+          html.removeAttribute('data-theme');
+          themeIcon.textContent = '🌙';
+        }
+        localStorage.setItem('theme', theme);
+      }
+
+      // Initialize theme
+      setTheme(getPreferredTheme());
+
+      themeToggle.addEventListener('click', () => {
+        const current = html.getAttribute('data-theme');
+        setTheme(current === 'dark' ? 'light' : 'dark');
+      });
+
+      // Search functionality
+      const searchInput = document.getElementById('ops-search');
+      const noResults = document.getElementById('no-results');
+      const opGroups = document.querySelectorAll('.op-group');
+
+      searchInput.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase().trim();
+        let totalVisible = 0;
+
+        opGroups.forEach((group) => {
+          const rows = group.querySelectorAll('tbody tr');
+          let groupVisible = 0;
+
+          rows.forEach((row) => {
+            const opName = row.querySelector('td:first-child')?.textContent.toLowerCase() || '';
+            const desc = row.querySelector('td:nth-child(2)')?.textContent.toLowerCase() || '';
+            const examples = row.querySelector('td:nth-child(3)')?.textContent.toLowerCase() || '';
+
+            if (opName.includes(query) || desc.includes(query) || examples.includes(query)) {
+              row.classList.remove('hidden');
+              groupVisible++;
+            } else {
+              row.classList.add('hidden');
+            }
+          });
+
+          if (groupVisible === 0) {
+            group.classList.add('hidden');
+          } else {
+            group.classList.remove('hidden');
+            totalVisible += groupVisible;
+          }
+        });
+
+        noResults.classList.toggle('visible', totalVisible === 0 && query.length > 0);
+      });
+
+      // Copy to clipboard functionality
+      document.querySelectorAll('.code-block').forEach((block) => {
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.textContent = 'Copy';
+        block.appendChild(btn);
+
+        btn.addEventListener('click', async () => {
+          const code = block.querySelector('code')?.textContent || '';
+          try {
+            await navigator.clipboard.writeText(code);
+            btn.textContent = 'Copied!';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'Copy';
+              btn.classList.remove('copied');
+            }, 2000);
+          } catch (err) {
+            btn.textContent = 'Error';
+            setTimeout(() => {
+              btn.textContent = 'Copy';
+            }, 2000);
+          }
+        });
+      });
+    </script>
   </body>
 </html>

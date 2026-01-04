@@ -1,6 +1,6 @@
 @import url("https://rsms.me/inter/inter.css");
 
- :root {
+:root {
   --bg: #ffffff;
   --bg-alt: #f1f5f9;
   --ink: #0f172a;
@@ -10,8 +10,28 @@
   --card: #ffffff;
   --stroke: #e2e8f0;
   --shadow: rgba(15, 23, 42, 0.06);
+  --code-bg: #0f172a;
+  --code-border: #1e293b;
+  --code-text: #e2e8f0;
+  --inline-code-bg: #eef2f6;
   --mono: "IBM Plex Mono", "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --sans: "Inter var", "Inter", "Segoe UI", sans-serif;
+}
+
+[data-theme="dark"] {
+  --bg: #0f172a;
+  --bg-alt: #1e293b;
+  --ink: #f1f5f9;
+  --muted: #94a3b8;
+  --accent: #38bdf8;
+  --accent-soft: #0c4a6e;
+  --card: #1e293b;
+  --stroke: #334155;
+  --shadow: rgba(0, 0, 0, 0.3);
+  --code-bg: #0a0f1a;
+  --code-border: #1e293b;
+  --code-text: #e2e8f0;
+  --inline-code-bg: #334155;
 }
 
 * {
@@ -162,10 +182,10 @@ nav .links a:hover {
 .mini-code {
   margin: 0;
   padding: 10px 12px;
-  background: #0f172a;
-  border: 1px solid #1e293b;
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
   border-radius: 10px;
-  color: #e2e8f0;
+  color: var(--code-text);
   font-size: 0.84rem;
   line-height: 1.55;
   overflow-x: auto;
@@ -218,9 +238,9 @@ nav .links a:hover {
 }
 
 .code-block {
-  background: #0f172a;
+  background: var(--code-bg);
   border-radius: 12px;
-  border: 1px solid #1e293b;
+  border: 1px solid var(--code-border);
   padding: 16px;
   overflow-x: auto;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
@@ -249,9 +269,9 @@ code {
   font-family: var(--mono);
 }
 
- :not(pre) > code {
+:not(pre) > code {
   font-size: 0.9em;
-  background: #eef2f6;
+  background: var(--inline-code-bg);
   border: 1px solid var(--stroke);
   padding: 0 6px;
   border-radius: 6px;
@@ -259,7 +279,7 @@ code {
 
 .code-block code {
   font-size: 0.92rem;
-  color: #e2e8f0;
+  color: var(--code-text);
 }
 
 .tok-keyword {
@@ -337,6 +357,107 @@ footer {
   gap: 12px;
 }
 
+/* Search box */
+.search-container {
+  margin-bottom: 20px;
+}
+
+.search-input {
+  width: 100%;
+  max-width: 400px;
+  padding: 10px 16px;
+  border: 1px solid var(--stroke);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-family: var(--sans);
+}
+
+.search-input::placeholder {
+  color: var(--muted);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* Dark mode toggle */
+.theme-toggle {
+  background: var(--bg-alt);
+  border: 1px solid var(--stroke);
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.theme-toggle:hover {
+  background: var(--stroke);
+}
+
+/* Copy button */
+.code-block {
+  position: relative;
+}
+
+.copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--code-border);
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s;
+}
+
+.code-block:hover .copy-btn {
+  opacity: 1;
+}
+
+.copy-btn:hover {
+  background: var(--accent);
+  color: white;
+}
+
+.copy-btn.copied {
+  background: #22c55e;
+  color: white;
+}
+
+/* Hidden elements for search filtering */
+.op-group.hidden {
+  display: none;
+}
+
+.dir-table tr.hidden {
+  display: none;
+}
+
+/* No results message */
+.no-results {
+  text-align: center;
+  color: var(--muted);
+  padding: 40px 20px;
+  display: none;
+}
+
+.no-results.visible {
+  display: block;
+}
+
 @media (max-width: 720px) {
   body {
     padding: 10px;
@@ -349,5 +470,9 @@ footer {
 
   nav .links {
     flex-wrap: wrap;
+  }
+
+  .search-input {
+    max-width: 100%;
   }
 }
