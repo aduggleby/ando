@@ -1,3 +1,5 @@
+using Xunit;
+
 namespace WebApp.Tests;
 
 public class UnitTests

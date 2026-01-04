@@ -200,31 +200,4 @@ public class DockerManagerTests : IDisposable
     }
 }
 
-/// <summary>
-/// Helper for skipping tests based on conditions.
-/// </summary>
-public static class Skip
-{
-    public static void IfNot(bool condition, string reason)
-    {
-        if (!condition)
-        {
-            throw new SkipException(reason);
-        }
-    }
-}
-
-/// <summary>
-/// Exception thrown to skip a test.
-/// </summary>
-public class SkipException : Exception
-{
-    public SkipException(string message) : base(message) { }
-}
-
-/// <summary>
-/// Fact attribute that allows tests to be skipped.
-/// </summary>
-public class SkippableFactAttribute : FactAttribute
-{
-}
+// Skip, SkipException, and SkippableFact are provided by Xunit.SkippableFact package

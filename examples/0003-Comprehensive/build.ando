@@ -38,6 +38,8 @@ Dotnet.Build(Tests);
 Dotnet.Test(Tests);
 
 // Step 4: Publish with comprehensive options
+// Note: Restore first with the runtime to ensure assets are available
+Dotnet.Restore(App, o => o.WithRuntime("linux-x64"));
 Dotnet.Publish(App, o => o
     .Output(output)
     .WithConfiguration(Configuration.Release)

@@ -46,7 +46,8 @@ public class DotnetOperations(StepRegistry registry, IBuildLogger logger, Func<I
         RegisterCommand("Dotnet.Restore", "dotnet",
             () => new ArgumentBuilder()
                 .Add("restore", project.Path)
-                .AddFlag(options.NoCache, "--no-cache"),
+                .AddFlag(options.NoCache, "--no-cache")
+                .AddIfNotNull("-r", options.Runtime),
             project.Name);
     }
 
@@ -177,6 +178,16 @@ public class DotnetRestoreOptions
 {
     /// <summary>Bypass the NuGet cache when restoring.</summary>
     public bool NoCache { get; set; }
+
+    /// <summary>Target runtime identifier for runtime-specific restore.</summary>
+    public string? Runtime { get; private set; }
+
+    /// <summary>Sets the target runtime (e.g., linux-x64, win-x64, osx-arm64).</summary>
+    public DotnetRestoreOptions WithRuntime(string runtime)
+    {
+        Runtime = runtime;
+        return this;
+    }
 }
 
 /// <summary>Options for 'dotnet build' command.</summary>

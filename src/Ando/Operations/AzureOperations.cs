@@ -18,6 +18,7 @@
 // - Service Principal credentials can come from env vars or explicit parameters
 // =============================================================================
 
+using System.Diagnostics;
 using Ando.Execution;
 using Ando.Logging;
 using Ando.Steps;
@@ -160,5 +161,56 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
             throw new InvalidOperationException($"Required environment variable '{name}' is not set.");
         }
         return value;
+    }
+
+    /// <summary>
+    /// Checks if Azure CLI is installed and available on the system.
+    /// </summary>
+    /// <returns>True if Azure CLI is available, false otherwise.</returns>
+    public static bool IsAzureCliAvailable()
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "az",
+                Arguments = "--version",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+
+            using var process = Process.Start(startInfo);
+            if (process == null) return false;
+
+            process.WaitForExit(5000);
+            return process.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Gets OS-specific installation instructions for Azure CLI.
+    /// </summary>
+    /// <returns>Installation command or URL for the current platform.</returns>
+    public static string GetAzureCliInstallInstructions()
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            return "  macOS:   brew install azure-cli";
+        }
+        if (OperatingSystem.IsLinux())
+        {
+            return "  Linux:   curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash";
+        }
+        if (OperatingSystem.IsWindows())
+        {
+            return "  Windows: winget install Microsoft.AzureCLI";
+        }
+        return "  Visit: https://docs.microsoft.com/cli/azure/install-azure-cli";
     }
 }

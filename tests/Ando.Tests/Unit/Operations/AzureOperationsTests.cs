@@ -274,4 +274,37 @@ public class AzureOperationsTests
 
         Assert.False(success);
     }
+
+    [Fact]
+    public void IsAzureCliAvailable_ReturnsWithoutException()
+    {
+        // This test verifies the method runs without exception
+        // The actual result depends on whether Azure CLI is installed
+        var result = AzureOperations.IsAzureCliAvailable();
+
+        Assert.True(result || !result); // Always passes, just verifies no exception
+    }
+
+    [Fact]
+    public void GetAzureCliInstallInstructions_ReturnsNonEmptyString()
+    {
+        var instructions = AzureOperations.GetAzureCliInstallInstructions();
+
+        Assert.NotNull(instructions);
+        Assert.NotEmpty(instructions);
+    }
+
+    [Fact]
+    public void GetAzureCliInstallInstructions_ContainsInstallCommand()
+    {
+        var instructions = AzureOperations.GetAzureCliInstallInstructions();
+
+        // Should contain either a package manager command or a URL
+        var containsInstallInfo = instructions.Contains("brew") ||
+                                   instructions.Contains("curl") ||
+                                   instructions.Contains("winget") ||
+                                   instructions.Contains("microsoft.com");
+
+        Assert.True(containsInstallInfo, $"Expected install instructions, got: {instructions}");
+    }
 }

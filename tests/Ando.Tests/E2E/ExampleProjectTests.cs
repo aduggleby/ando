@@ -3,11 +3,14 @@
 //
 // Summary: End-to-end tests that run example projects.
 //
-// Tests execute actual build.ando scripts using --local mode.
+// Tests execute actual build.ando scripts in Docker containers.
 // Dynamically discovers and runs all examples in the examples/ directory.
+// These tests are skipped if Docker is not available.
 // =============================================================================
 
 using Ando.Cli;
+using Ando.Execution;
+using Ando.Tests.TestFixtures;
 using System.Collections;
 
 namespace Ando.Tests.E2E;
@@ -16,11 +19,18 @@ public class ExampleProjectTests : IDisposable
 {
     private readonly string _originalDirectory;
     private readonly string _examplesRoot;
+    private static readonly bool _dockerAvailable = CheckDockerAvailability();
 
     public ExampleProjectTests()
     {
         _originalDirectory = Environment.CurrentDirectory;
         _examplesRoot = GetExamplesRoot();
+    }
+
+    private static bool CheckDockerAvailability()
+    {
+        var dockerManager = new DockerManager(new TestLogger());
+        return dockerManager.IsDockerAvailable();
     }
 
     public void Dispose()
@@ -74,10 +84,20 @@ public class ExampleProjectTests : IDisposable
     }
 
     /// <summary>
-    /// Provides all example project directories as test data.
+    /// Provides example project directories that can be tested with the default Docker image.
+    /// Excludes examples that require special tooling (npm, Azure CLI, etc.).
     /// </summary>
     public class ExampleProjectData : IEnumerable<object[]>
     {
+        // Examples that require special tooling not in the default Docker image
+        private static readonly HashSet<string> ExcludedExamples = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "0004-NodeProject",    // Requires npm/Node.js
+            "0005-EfMigrations",   // Requires dotnet-ef tool
+            "0007-AzureBicep",     // Requires Azure CLI
+            "0008-AzureFullStack"  // Requires Azure CLI
+        };
+
         public IEnumerator<object[]> GetEnumerator()
         {
             var examplesRoot = GetExamplesRoot();
@@ -85,10 +105,12 @@ public class ExampleProjectTests : IDisposable
             foreach (var dir in Directory.GetDirectories(examplesRoot))
             {
                 var buildScript = Path.Combine(dir, "build.ando");
-                if (File.Exists(buildScript))
+                var dirName = Path.GetFileName(dir);
+
+                if (File.Exists(buildScript) && !ExcludedExamples.Contains(dirName))
                 {
                     // Return just the directory name for cleaner test names
-                    yield return new object[] { Path.GetFileName(dir) };
+                    yield return new object[] { dirName };
                 }
             }
         }
@@ -96,27 +118,31 @@ public class ExampleProjectTests : IDisposable
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
-    [Theory]
+    [SkippableTheory]
     [ClassData(typeof(ExampleProjectData))]
     public async Task Example_BuildsSuccessfully(string exampleName)
     {
+        Skip.IfNot(_dockerAvailable, "Docker is not available");
+
         var projectDir = Path.Combine(_examplesRoot, exampleName);
         Environment.CurrentDirectory = projectDir;
 
-        var cli = new AndoCli(new[] { "run", "--local" });
+        var cli = new AndoCli(new[] { "run" });
         var exitCode = await cli.RunAsync();
 
         exitCode.ShouldBe(0, $"Example '{exampleName}' failed to build");
     }
 
-    [Theory]
+    [SkippableTheory]
     [ClassData(typeof(ExampleProjectData))]
     public async Task Example_CreatesDistDirectory(string exampleName)
     {
+        Skip.IfNot(_dockerAvailable, "Docker is not available");
+
         var projectDir = Path.Combine(_examplesRoot, exampleName);
         Environment.CurrentDirectory = projectDir;
 
-        var cli = new AndoCli(new[] { "run", "--local" });
+        var cli = new AndoCli(new[] { "run" });
         var exitCode = await cli.RunAsync();
 
         exitCode.ShouldBe(0, $"Example '{exampleName}' failed to build");
@@ -130,9 +156,11 @@ public class ExampleProjectTests : IDisposable
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task NoBuildScript_ReturnsError()
     {
+        Skip.IfNot(_dockerAvailable, "Docker is not available");
+
         var tempDir = Path.Combine(Path.GetTempPath(), $"ando-e2e-empty-{Guid.NewGuid()}");
         Directory.CreateDirectory(tempDir);
 
@@ -140,7 +168,7 @@ public class ExampleProjectTests : IDisposable
         {
             Environment.CurrentDirectory = tempDir;
 
-            var cli = new AndoCli(new[] { "run", "--local" });
+            var cli = new AndoCli(new[] { "run" });
             var exitCode = await cli.RunAsync();
 
             exitCode.ShouldNotBe(0);
@@ -152,9 +180,11 @@ public class ExampleProjectTests : IDisposable
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task InvalidBuildScript_ReturnsError()
     {
+        Skip.IfNot(_dockerAvailable, "Docker is not available");
+
         var tempDir = Path.Combine(Path.GetTempPath(), $"ando-e2e-invalid-{Guid.NewGuid()}");
         Directory.CreateDirectory(tempDir);
 
@@ -168,7 +198,7 @@ public class ExampleProjectTests : IDisposable
 
             Environment.CurrentDirectory = tempDir;
 
-            var cli = new AndoCli(new[] { "run", "--local" });
+            var cli = new AndoCli(new[] { "run" });
             var exitCode = await cli.RunAsync();
 
             exitCode.ShouldNotBe(0);
@@ -183,7 +213,7 @@ public class ExampleProjectTests : IDisposable
     [Fact]
     public async Task CleanCommand_RemovesArtifacts()
     {
-        // Use the first available example project
+        // This test doesn't require Docker - it just tests the clean command
         var firstExample = Directory.GetDirectories(_examplesRoot)
             .FirstOrDefault(d => File.Exists(Path.Combine(d, "build.ando")));
 

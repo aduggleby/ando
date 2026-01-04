@@ -23,6 +23,7 @@
 
 using System.Diagnostics;
 using Ando.Logging;
+using Ando.Operations;
 using Ando.Steps;
 
 namespace Ando.Workflow;
@@ -83,6 +84,10 @@ public class WorkflowRunner(StepRegistry registry, IBuildLogger logger)
                         Duration = stepStopwatch.Elapsed,
                         ErrorMessage = "Step returned false"
                     });
+
+                    // Check if this is an Azure-related step and provide helpful instructions
+                    CheckAndLogToolAvailability(step.Name);
+
                     overallSuccess = false;
                     break; // Fail-fast: don't continue after failure
                 }
@@ -100,6 +105,10 @@ public class WorkflowRunner(StepRegistry registry, IBuildLogger logger)
                     Duration = stepStopwatch.Elapsed,
                     ErrorMessage = ex.Message
                 });
+
+                // Check if this is an Azure-related step and provide helpful instructions
+                CheckAndLogToolAvailability(step.Name);
+
                 overallSuccess = false;
                 break; // Fail-fast: don't continue after exception
             }
@@ -121,5 +130,25 @@ public class WorkflowRunner(StepRegistry registry, IBuildLogger logger)
             Duration = workflowStopwatch.Elapsed,
             StepResults = stepResults
         };
+    }
+
+    /// <summary>
+    /// Checks if a failed step requires a tool that isn't installed and logs helpful instructions.
+    /// </summary>
+    private void CheckAndLogToolAvailability(string stepName)
+    {
+        // Check for Azure CLI availability when Azure steps fail
+        if (stepName.StartsWith("Azure.", StringComparison.OrdinalIgnoreCase) ||
+            stepName.StartsWith("Bicep.", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!AzureOperations.IsAzureCliAvailable())
+            {
+                logger.Error("");
+                logger.Error("Azure CLI is not installed. To install:");
+                logger.Error(AzureOperations.GetAzureCliInstallInstructions());
+                logger.Error("");
+                logger.Error("Or visit: https://docs.microsoft.com/cli/azure/install-azure-cli");
+            }
+        }
     }
 }

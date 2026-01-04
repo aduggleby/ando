@@ -168,6 +168,103 @@ const operations = [
     ]
   },
   {
+    group: "Azure",
+    name: "Azure.EnsureLoggedIn",
+    desc: "Verify the user is logged in to Azure CLI.",
+    examples: [
+      "Azure.EnsureLoggedIn();"
+    ]
+  },
+  {
+    group: "Azure",
+    name: "Azure.ShowAccount",
+    desc: "Display current Azure account information.",
+    examples: [
+      "Azure.ShowAccount();"
+    ]
+  },
+  {
+    group: "Azure",
+    name: "Azure.LoginWithServicePrincipal",
+    desc: "Login with a Service Principal (for CI/CD).",
+    examples: [
+      "Azure.LoginWithServicePrincipal(clientId, secret, tenantId);",
+      "Azure.LoginWithServicePrincipal(); // Uses AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID env vars"
+    ]
+  },
+  {
+    group: "Azure",
+    name: "Azure.LoginWithManagedIdentity",
+    desc: "Login with Managed Identity (for Azure-hosted environments).",
+    examples: [
+      "Azure.LoginWithManagedIdentity(); // System-assigned",
+      "Azure.LoginWithManagedIdentity(\"client-id\"); // User-assigned"
+    ]
+  },
+  {
+    group: "Azure",
+    name: "Azure.SetSubscription",
+    desc: "Set the active Azure subscription.",
+    examples: [
+      "Azure.SetSubscription(\"subscription-id\");",
+      "Azure.SetSubscription(); // Uses AZURE_SUBSCRIPTION_ID env var"
+    ]
+  },
+  {
+    group: "Azure",
+    name: "Azure.CreateResourceGroup",
+    desc: "Create a resource group if it doesn't exist.",
+    examples: [
+      "Azure.CreateResourceGroup(\"my-rg\", \"eastus\");",
+      "Azure.CreateResourceGroup(\"prod-rg\", \"westeurope\");"
+    ]
+  },
+  {
+    group: "Azure",
+    name: "Azure.DeleteResourceGroup",
+    desc: "Delete a resource group and all its resources.",
+    examples: [
+      "Azure.DeleteResourceGroup(\"my-rg\");",
+      "Azure.DeleteResourceGroup(\"my-rg\", noWait: true);"
+    ]
+  },
+  {
+    group: "Bicep",
+    name: "Bicep.DeployToResourceGroup",
+    desc: "Deploy a Bicep template to a resource group.",
+    examples: [
+      "Bicep.DeployToResourceGroup(\"my-rg\", \"./infra/main.bicep\");",
+      "Bicep.DeployToResourceGroup(\"my-rg\", \"./main.bicep\", o => o\n  .WithParameterFile(\"./params.json\")\n  .CaptureOutputs());"
+    ]
+  },
+  {
+    group: "Bicep",
+    name: "Bicep.DeployToSubscription",
+    desc: "Deploy a Bicep template at subscription scope.",
+    examples: [
+      "Bicep.DeployToSubscription(\"eastus\", \"./infra/sub.bicep\");",
+      "Bicep.DeployToSubscription(\"eastus\", \"./sub.bicep\", o => o\n  .WithParameter(\"environment\", \"prod\")\n  .CaptureOutputs(\"infra_\"));"
+    ]
+  },
+  {
+    group: "Bicep",
+    name: "Bicep.WhatIf",
+    desc: "Preview what would be deployed (what-if analysis).",
+    examples: [
+      "Bicep.WhatIf(\"my-rg\", \"./infra/main.bicep\");",
+      "Bicep.WhatIf(\"my-rg\", \"./main.bicep\", o => o.WithParameterFile(\"./params.json\"));"
+    ]
+  },
+  {
+    group: "Bicep",
+    name: "Bicep.Build",
+    desc: "Compile a Bicep file to ARM JSON template.",
+    examples: [
+      "Bicep.Build(\"./infra/main.bicep\");",
+      "Bicep.Build(\"./main.bicep\", \"./output/main.json\");"
+    ]
+  },
+  {
     group: "Cloudflare",
     name: "Cloudflare.InDirectory",
     desc: "Set the working directory for Cloudflare commands.",
@@ -372,7 +469,7 @@ ando run --image my-custom-image</code></pre>
         <p class="section-subtitle">
           Each operation registers a deterministic step and runs inside the container.
         </p>
-        {["Dotnet", "Npm", "Ef", "Cloudflare"].map((group) => (
+        {["Dotnet", "Npm", "Ef", "Azure", "Bicep", "Cloudflare"].map((group) => (
           <div class="op-group">
             <h3 class="op-title">{group}</h3>
             <table class="dir-table">

@@ -1,0 +1,85 @@
+# =============================================================================
+# docker-compose.yml
+#
+# Local development environment for Ando.Server.
+# Includes SQL Server for database and volume mounts for Docker-in-Docker.
+#
+# Usage:
+#   docker compose up -d          # Start all services
+#   docker compose logs -f        # Follow logs
+#   docker compose down           # Stop all services
+#   docker compose down -v        # Stop and remove volumes
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Ando CI Server
+  # ---------------------------------------------------------------------------
+  ando-server:
+    build:
+      context: .
+      dockerfile: src/Ando.Server/Dockerfile
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=AndoServer;User Id=sa;Password=YourPassword123!;TrustServerCertificate=true
+      # Override these with your actual GitHub App credentials
+      - GitHub__AppId=${GITHUB_APP_ID:-}
+      - GitHub__ClientId=${GITHUB_CLIENT_ID:-}
+      - GitHub__ClientSecret=${GITHUB_CLIENT_SECRET:-}
+      - GitHub__WebhookSecret=${GITHUB_WEBHOOK_SECRET:-}
+      # Override with your Resend API key
+      - Resend__ApiKey=${RESEND_API_KEY:-}
+      # Encryption key (generate with: openssl rand -base64 32)
+      - Encryption__Key=${ENCRYPTION_KEY:-dGhpc2lzYWRldmVsb3BtZW50a2V5b25seTMyYnl0ZXM=}
+    volumes:
+      # Docker socket for Docker-in-Docker builds
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Persistent storage for build artifacts
+      - artifacts:/data/artifacts
+      # Persistent storage for cloned repositories
+      - repos:/data/repos
+      # Mount GitHub App private key if using file-based key
+      - ./github-app.pem:/app/github-app.pem:ro
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # SQL Server Database
+  # ---------------------------------------------------------------------------
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=YourPassword123!
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqldata:/var/opt/mssql
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "YourPassword123!" -C -Q "SELECT 1" || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+# -----------------------------------------------------------------------------
+# Named Volumes
+# -----------------------------------------------------------------------------
+volumes:
+  # SQL Server data
+  sqldata:
+    driver: local
+
+  # Build artifacts storage
+  artifacts:
+    driver: local
+
+  # Cloned repository storage
+  repos:
+    driver: local

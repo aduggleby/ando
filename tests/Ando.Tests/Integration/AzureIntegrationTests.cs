@@ -34,31 +34,7 @@ public class AzureIntegrationTests
         return new AzureOperations(_registry, _logger, () => _executor!);
     }
 
-    private static bool IsAzureCliAvailable()
-    {
-        try
-        {
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = "az",
-                Arguments = "--version",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            };
-
-            using var process = Process.Start(startInfo);
-            if (process == null) return false;
-
-            process.WaitForExit(5000);
-            return process.ExitCode == 0;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+    private static bool IsAzureCliAvailable() => AzureOperations.IsAzureCliAvailable();
 
     private static bool IsLoggedInToAzure()
     {
