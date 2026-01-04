@@ -14,6 +14,7 @@
 // =============================================================================
 
 using System.Security.Claims;
+using Ando.Server.Configuration;
 using Ando.Server.Data;
 using Ando.Server.Models;
 using Ando.Server.Services;
@@ -21,6 +22,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Ando.Server.Controllers;
 
@@ -36,24 +38,33 @@ public class TestController : ControllerBase
     private readonly IWebHostEnvironment _env;
     private readonly IBuildService _buildService;
     private readonly IEncryptionService _encryption;
-    private const string TestApiKey = "test-api-key-for-e2e-tests";
+    private readonly string _testApiKey;
 
     public TestController(
         AndoDbContext db,
         IWebHostEnvironment env,
         IBuildService buildService,
-        IEncryptionService encryption)
+        IEncryptionService encryption,
+        IOptions<TestSettings> testSettings)
     {
         _db = db;
         _env = env;
         _buildService = buildService;
         _encryption = encryption;
+        _testApiKey = testSettings.Value.ApiKey;
 
         // Safety check - this controller should NEVER be available outside Testing
         if (!_env.IsEnvironment("Testing"))
         {
             throw new InvalidOperationException(
                 "TestController is only available in the Testing environment");
+        }
+
+        // Verify API key is configured
+        if (string.IsNullOrEmpty(_testApiKey))
+        {
+            throw new InvalidOperationException(
+                "Test API key is not configured. Set Test__ApiKey environment variable.");
         }
     }
 
@@ -496,7 +507,7 @@ public class TestController : ControllerBase
     private bool ValidateApiKey()
     {
         var apiKey = Request.Headers["X-Test-Api-Key"].FirstOrDefault();
-        return apiKey == TestApiKey;
+        return !string.IsNullOrEmpty(apiKey) && apiKey == _testApiKey;
     }
 
     private static string GenerateTestAuthToken(User user)

@@ -42,6 +42,8 @@ builder.Services.Configure<BuildSettings>(
     builder.Configuration.GetSection(BuildSettings.SectionName));
 builder.Services.Configure<EncryptionSettings>(
     builder.Configuration.GetSection(EncryptionSettings.SectionName));
+builder.Services.Configure<TestSettings>(
+    builder.Configuration.GetSection(TestSettings.SectionName));
 
 // =============================================================================
 // Database
@@ -165,6 +167,9 @@ builder.Services.AddScoped<IProjectService, ProjectService>();
 builder.Services.AddScoped<CleanupArtifactsJob>();
 builder.Services.AddScoped<CleanupOldBuildsJob>();
 
+// Configuration Validation
+builder.Services.AddConfigurationValidation();
+
 // =============================================================================
 // Build Application
 // =============================================================================
@@ -174,6 +179,9 @@ var app = builder.Build();
 // =============================================================================
 // Middleware Pipeline
 // =============================================================================
+
+// Configuration validation - show error page if required config is missing
+app.UseConfigurationValidation();
 
 if (!app.Environment.IsDevelopment())
 {

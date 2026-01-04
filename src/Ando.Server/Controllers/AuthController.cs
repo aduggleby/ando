@@ -14,10 +14,12 @@
 // =============================================================================
 
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Ando.Server.Configuration;
 using Ando.Server.Data;
 using Ando.Server.Models;
+using Ando.Server.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -34,17 +36,20 @@ public class AuthController : Controller
     private readonly AndoDbContext _db;
     private readonly GitHubSettings _gitHubSettings;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IEncryptionService _encryption;
     private readonly ILogger<AuthController> _logger;
 
     public AuthController(
         AndoDbContext db,
         IOptions<GitHubSettings> gitHubSettings,
         IHttpClientFactory httpClientFactory,
+        IEncryptionService encryption,
         ILogger<AuthController> logger)
     {
         _db = db;
         _gitHubSettings = gitHubSettings.Value;
         _httpClientFactory = httpClientFactory;
+        _encryption = encryption;
         _logger = logger;
     }
 
@@ -107,9 +112,9 @@ public class AuthController : Controller
     [Route("auth/github/callback")]
     public async Task<IActionResult> GitHubCallback(string code, string state)
     {
-        // Verify state for CSRF protection
+        // Verify state for CSRF protection using constant-time comparison
         var expectedState = HttpContext.Session.GetString("OAuthState");
-        if (string.IsNullOrEmpty(expectedState) || state != expectedState)
+        if (string.IsNullOrEmpty(expectedState) || !ConstantTimeEquals(state, expectedState))
         {
             _logger.LogWarning("OAuth state mismatch");
             return RedirectToAction("Login", new { error = "invalid_state" });
@@ -292,6 +297,9 @@ public class AuthController : Controller
     {
         var user = await _db.Users.FirstOrDefaultAsync(u => u.GitHubId == gitHubUser.Id);
 
+        // Encrypt the access token before storage
+        var encryptedToken = _encryption.Encrypt(accessToken);
+
         if (user == null)
         {
             user = new User
@@ -300,7 +308,7 @@ public class AuthController : Controller
                 GitHubLogin = gitHubUser.Login,
                 Email = gitHubUser.Email,
                 AvatarUrl = gitHubUser.AvatarUrl,
-                AccessToken = accessToken, // TODO: Encrypt this
+                AccessToken = encryptedToken,
                 CreatedAt = DateTime.UtcNow,
                 LastLoginAt = DateTime.UtcNow
             };
@@ -313,7 +321,7 @@ public class AuthController : Controller
             user.GitHubLogin = gitHubUser.Login;
             user.Email = gitHubUser.Email ?? user.Email;
             user.AvatarUrl = gitHubUser.AvatarUrl ?? user.AvatarUrl;
-            user.AccessToken = accessToken; // TODO: Encrypt this
+            user.AccessToken = encryptedToken;
             user.LastLoginAt = DateTime.UtcNow;
             _logger.LogInformation("Updated user {Login} (GitHub ID: {GitHubId})", user.GitHubLogin, user.GitHubId);
         }
@@ -363,5 +371,21 @@ public class AuthController : Controller
         public string Login { get; set; } = "";
         public string? Email { get; set; }
         public string? AvatarUrl { get; set; }
+    }
+
+    /// <summary>
+    /// Performs constant-time string comparison to prevent timing attacks.
+    /// </summary>
+    private static bool ConstantTimeEquals(string a, string b)
+    {
+        if (a == null || b == null)
+        {
+            return a == b;
+        }
+
+        var aBytes = System.Text.Encoding.UTF8.GetBytes(a);
+        var bBytes = System.Text.Encoding.UTF8.GetBytes(b);
+
+        return CryptographicOperations.FixedTimeEquals(aBytes, bBytes);
     }
 }

@@ -38,6 +38,7 @@ public class BuildOrchestrator : IBuildOrchestrator
     private readonly IServiceProvider _serviceProvider;
     private readonly IGitHubService _gitHubService;
     private readonly IEmailService _emailService;
+    private readonly IEncryptionService _encryption;
     private readonly IHubContext<BuildLogHub> _hubContext;
     private readonly CancellationTokenRegistry _cancellationRegistry;
     private readonly BuildSettings _buildSettings;
@@ -48,6 +49,7 @@ public class BuildOrchestrator : IBuildOrchestrator
         IServiceProvider serviceProvider,
         IGitHubService gitHubService,
         IEmailService emailService,
+        IEncryptionService encryption,
         IHubContext<BuildLogHub> hubContext,
         CancellationTokenRegistry cancellationRegistry,
         IOptions<BuildSettings> buildSettings,
@@ -57,6 +59,7 @@ public class BuildOrchestrator : IBuildOrchestrator
         _serviceProvider = serviceProvider;
         _gitHubService = gitHubService;
         _emailService = emailService;
+        _encryption = encryption;
         _hubContext = hubContext;
         _cancellationRegistry = cancellationRegistry;
         _buildSettings = buildSettings.Value;
@@ -302,12 +305,12 @@ public class BuildOrchestrator : IBuildOrchestrator
         startInfo.ArgumentList.Add("-w");
         startInfo.ArgumentList.Add("/workspace");
 
-        // Add environment variables from secrets
+        // Add environment variables from secrets (decrypted)
         foreach (var secret in project.Secrets)
         {
-            // Note: Secrets should be decrypted by IEncryptionService before use
+            var decryptedValue = _encryption.Decrypt(secret.EncryptedValue);
             startInfo.ArgumentList.Add("-e");
-            startInfo.ArgumentList.Add($"{secret.Name}={secret.EncryptedValue}"); // TODO: Decrypt
+            startInfo.ArgumentList.Add($"{secret.Name}={decryptedValue}");
         }
 
         startInfo.ArgumentList.Add("--entrypoint");

@@ -196,7 +196,27 @@ From the GitHub App page, note:
 
 ## Step 3: Generate Secrets
 
-### 3.1 Generate Encryption Key
+You can generate all required secrets automatically using the setup script, or manually.
+
+### Option A: Automated Setup (Recommended)
+
+```bash
+# Download and run the setup script
+curl -O https://raw.githubusercontent.com/yourname/ando/main/scripts/setup-env.sh
+chmod +x setup-env.sh
+./setup-env.sh
+```
+
+The script will:
+1. Generate encryption key (AES-256)
+2. Generate SQL Server password
+3. Generate webhook secret
+4. Prompt for GitHub App credentials
+5. Create a complete `.env` file
+
+### Option B: Manual Setup
+
+#### 3.1 Generate Encryption Key
 
 The encryption key is used to encrypt secrets stored in the database (e.g., repository access tokens).
 
@@ -208,7 +228,7 @@ openssl rand -base64 32
 
 **Save this key securely** - you'll need it for the configuration.
 
-### 3.2 Generate SQL Server Password
+#### 3.2 Generate SQL Server Password
 
 ```bash
 # Generate a strong password (must meet SQL Server complexity requirements)
@@ -224,13 +244,28 @@ The password must contain:
 
 Example: `Xt3mK9pL2nR8vQ5wY7zA!`
 
-### 3.3 Generate Webhook Secret
+#### 3.3 Generate Webhook Secret
 
 ```bash
 # Generate webhook secret
 openssl rand -hex 32
 # Example output: a1b2c3d4e5f6...
 ```
+
+## Required Environment Variables
+
+The server validates these on startup and shows an error page if missing:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `Encryption__Key` | **Yes** | AES-256 encryption key (base64, 32 bytes) |
+| `GitHub__ClientId` | Production | GitHub OAuth Client ID |
+| `GitHub__ClientSecret` | Production | GitHub OAuth Client Secret |
+| `GitHub__WebhookSecret` | Production | GitHub webhook HMAC secret |
+| `GitHub__AppId` | Production | GitHub App ID |
+| `ConnectionStrings__DefaultConnection` | **Yes** | SQL Server connection string |
+
+If any required configuration is missing, the server will display a configuration error page listing exactly what needs to be set.
 
 ---
 
