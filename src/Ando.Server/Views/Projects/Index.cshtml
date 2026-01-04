@@ -1,0 +1,154 @@
+@model Ando.Server.ViewModels.ProjectListViewModel
+@using Ando.Server.Models
+@{
+    ViewData["Title"] = "Projects";
+    var failedCount = Model.Projects.Count(p => p.LastBuildStatus == BuildStatus.Failed || p.LastBuildStatus == BuildStatus.TimedOut);
+    var runningCount = Model.Projects.Count(p => p.LastBuildStatus == BuildStatus.Running || p.LastBuildStatus == BuildStatus.Queued);
+    var successCount = Model.Projects.Count(p => p.LastBuildStatus == BuildStatus.Success);
+}
+
+<div class="page-header">
+    <h1>Projects</h1>
+    <a href="/projects/create" class="btn btn-primary">New Project</a>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-error">@TempData["Error"]</div>
+}
+
+@if (Model.Projects.Count == 0)
+{
+    <div class="empty-state">
+        <h2>No projects yet</h2>
+        <p class="mb-4">Connect a GitHub repository to get started with automated builds.</p>
+        <div class="onboarding-checklist">
+            <div class="checklist-item">
+                <span class="checklist-number">1</span>
+                <span>Connect a repository from your GitHub account</span>
+            </div>
+            <div class="checklist-item">
+                <span class="checklist-number">2</span>
+                <span>Configure build settings and secrets</span>
+            </div>
+            <div class="checklist-item">
+                <span class="checklist-number">3</span>
+                <span>Push code to trigger automated builds</span>
+            </div>
+        </div>
+        <div class="mt-4 flex flex-wrap justify-center gap-3">
+            <a href="/projects/create" class="btn btn-primary">Connect Repository</a>
+            <a href="https://docs.ando.dev/getting-started" target="_blank" class="btn btn-secondary">View Documentation</a>
+        </div>
+    </div>
+}
+else
+{
+    <div class="section">
+        <div class="quick-filters">
+            <span class="filter-label">Filter:</span>
+            <button type="button" class="filter-btn filter-btn-active" data-filter="all" onclick="filterProjects('all')">
+                All <span class="filter-count">@Model.Projects.Count</span>
+            </button>
+            @if (failedCount > 0)
+            {
+                <button type="button" class="filter-btn filter-btn-failed" data-filter="failed" onclick="filterProjects('failed')">
+                    Failed <span class="filter-count">@failedCount</span>
+                </button>
+            }
+            @if (runningCount > 0)
+            {
+                <button type="button" class="filter-btn filter-btn-running" data-filter="running" onclick="filterProjects('running')">
+                    Running <span class="filter-count">@runningCount</span>
+                </button>
+            }
+            @if (successCount > 0)
+            {
+                <button type="button" class="filter-btn" data-filter="success" onclick="filterProjects('success')">
+                    Passing <span class="filter-count">@successCount</span>
+                </button>
+            }
+        </div>
+    </div>
+
+    <div class="projects-grid" id="projects-grid">
+        @foreach (var project in Model.Projects)
+        {
+            var statusClass = project.LastBuildStatus?.ToString().ToLower() ?? "none";
+            var filterGroup = project.LastBuildStatus switch
+            {
+                BuildStatus.Failed or BuildStatus.TimedOut => "failed",
+                BuildStatus.Running or BuildStatus.Queued => "running",
+                BuildStatus.Success => "success",
+                _ => "none"
+            };
+            <div class="project-card project-card-@statusClass" data-filter-group="@filterGroup">
+                <div class="project-header">
+                    <a href="/projects/@project.Id" class="project-name">@project.RepoFullName</a>
+                </div>
+                @if (project.LastBuildStatus.HasValue)
+                {
+                    <div class="project-status-banner status-banner-@statusClass">
+                        <span class="status-badge-lg status-@statusClass">
+                            @project.LastBuildStatus.Value
+                        </span>
+                    </div>
+                }
+                <div class="project-meta">
+                    <span title="Total builds">@project.TotalBuilds builds</span>
+                    @if (project.LastBuildAt.HasValue)
+                    {
+                        <span title="Last build">Last build @FormatRelativeTime(project.LastBuildAt.Value)</span>
+                    }
+                </div>
+                <div class="project-actions">
+                    <a href="/projects/@project.Id" class="btn btn-sm btn-primary">View</a>
+                    <a href="/projects/@project.Id/settings" class="btn btn-sm btn-secondary">Settings</a>
+                    <a href="@project.RepoUrl" target="_blank" class="btn btn-sm btn-secondary">GitHub</a>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<script>
+function filterProjects(filter) {
+    const cards = document.querySelectorAll('.project-card');
+    const buttons = document.querySelectorAll('.filter-btn');
+
+    buttons.forEach(btn => {
+        btn.classList.remove('filter-btn-active');
+        if (btn.dataset.filter === filter) {
+            btn.classList.add('filter-btn-active');
+        }
+    });
+
+    cards.forEach(card => {
+        const group = card.dataset.filterGroup;
+        if (filter === 'all' || group === filter) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+</script>
+
+@functions {
+    string FormatRelativeTime(DateTime dateTime)
+    {
+        var diff = DateTime.UtcNow - dateTime;
+
+        if (diff.TotalMinutes < 1) return "just now";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}d ago";
+
+        return dateTime.ToString("MMM d");
+    }
+}

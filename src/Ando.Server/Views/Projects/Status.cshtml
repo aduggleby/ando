@@ -1,0 +1,157 @@
+@model Ando.Server.ViewModels.ProjectStatusViewModel
+@using Ando.Server.ViewModels
+@{
+    ViewData["Title"] = "Deployment Status";
+    var deployedCount = Model.Projects.Count(p => p.DeploymentStatus == DeploymentStatus.Deployed);
+    var failedCount = Model.Projects.Count(p => p.DeploymentStatus == DeploymentStatus.Failed);
+    var notDeployedCount = Model.Projects.Count(p => p.DeploymentStatus == DeploymentStatus.NotDeployed);
+}
+
+<div class="page-header">
+    <h1>Deployment Status</h1>
+    <a href="/projects" class="btn btn-secondary">All Projects</a>
+</div>
+
+<div class="section">
+    <div class="status-controls">
+        <div class="quick-filters">
+            <span class="filter-label">Filter:</span>
+            <button type="button" class="filter-btn filter-btn-active" data-filter="all" onclick="filterStatus('all')">
+                All <span class="filter-count">@Model.Projects.Count</span>
+            </button>
+            @if (deployedCount > 0)
+            {
+                <button type="button" class="filter-btn filter-btn-success" data-filter="deployed" onclick="filterStatus('deployed')">
+                    Deployed <span class="filter-count">@deployedCount</span>
+                </button>
+            }
+            @if (failedCount > 0)
+            {
+                <button type="button" class="filter-btn filter-btn-failed" data-filter="failed" onclick="filterStatus('failed')">
+                    Failed <span class="filter-count">@failedCount</span>
+                </button>
+            }
+            @if (notDeployedCount > 0)
+            {
+                <button type="button" class="filter-btn" data-filter="notdeployed" onclick="filterStatus('notdeployed')">
+                    Not Deployed <span class="filter-count">@notDeployedCount</span>
+                </button>
+            }
+        </div>
+
+        <div class="sort-controls">
+            <span class="sort-label">Sort:</span>
+            <div class="sort-buttons">
+                @foreach (var field in Enum.GetValues<StatusSortField>())
+                {
+                    var isActive = Model.SortField == field;
+                    var newDirection = isActive && Model.SortDirection == SortDirection.Ascending
+                        ? SortDirection.Descending
+                        : SortDirection.Ascending;
+                    var directionIcon = isActive
+                        ? (Model.SortDirection == SortDirection.Ascending ? "↑" : "↓")
+                        : "";
+                    var label = field switch
+                    {
+                        StatusSortField.Alphabetical => "Name",
+                        StatusSortField.LastDeployment => "Last Deployment",
+                        StatusSortField.CreatedDate => "Created",
+                        _ => field.ToString()
+                    };
+                    <a href="/projects/status?sortBy=@field&direction=@newDirection"
+                       class="sort-btn @(isActive ? "sort-btn-active" : "")">
+                        @label @directionIcon
+                    </a>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (Model.Projects.Count == 0)
+{
+    <div class="empty-state">
+        <h2>No projects yet</h2>
+        <p>Connect a GitHub repository to get started with automated builds.</p>
+        <a href="/projects/create" class="btn btn-primary">Connect Repository</a>
+    </div>
+}
+else
+{
+    <div class="status-grid" id="status-grid">
+        @foreach (var project in Model.Projects)
+        {
+            <a href="/projects/@project.Id"
+               class="status-card status-card-@project.DeploymentStatus.ToString().ToLower()"
+               data-filter-group="@project.DeploymentStatus.ToString().ToLower()">
+                <div class="status-card-header">
+                    <span class="status-card-name">@project.RepoFullName</span>
+                    <span class="deployment-badge deployment-@project.DeploymentStatus.ToString().ToLower()">
+                        @(project.DeploymentStatus switch
+                        {
+                            DeploymentStatus.Deployed => "Deployed",
+                            DeploymentStatus.Failed => "Failed",
+                            DeploymentStatus.NotDeployed => "Not Deployed",
+                            _ => "Unknown"
+                        })
+                    </span>
+                </div>
+                <div class="status-card-meta">
+                    <span>@project.TotalBuilds builds</span>
+                    @if (project.LastDeploymentAt.HasValue)
+                    {
+                        <span class="time-relative" title="@project.LastDeploymentAt.Value.ToString("MMM d, yyyy 'at' h:mm tt")">
+                            Last: @FormatRelativeTime(project.LastDeploymentAt.Value)
+                        </span>
+                    }
+                    else
+                    {
+                        <span>Never deployed</span>
+                    }
+                </div>
+                <div class="status-card-footer">
+                    <span class="created-date" title="@project.CreatedAt.ToString("MMM d, yyyy 'at' h:mm tt")">
+                        Created @FormatRelativeTime(project.CreatedAt)
+                    </span>
+                </div>
+            </a>
+        }
+    </div>
+}
+
+<script>
+function filterStatus(filter) {
+    const cards = document.querySelectorAll('.status-card');
+    const buttons = document.querySelectorAll('.filter-btn');
+
+    buttons.forEach(btn => {
+        btn.classList.remove('filter-btn-active');
+        if (btn.dataset.filter === filter) {
+            btn.classList.add('filter-btn-active');
+        }
+    });
+
+    cards.forEach(card => {
+        const group = card.dataset.filterGroup;
+        if (filter === 'all' || group === filter) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+</script>
+
+@functions {
+    string FormatRelativeTime(DateTime dateTime)
+    {
+        var diff = DateTime.UtcNow - dateTime;
+
+        if (diff.TotalMinutes < 1) return "just now";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}d ago";
+
+        return dateTime.ToString("MMM d");
+    }
+}

@@ -1,0 +1,42 @@
+@model Ando.Server.Email.BuildFailedEmailViewModel
+@{
+    Layout = "_EmailLayout";
+}
+
+<h2 class="status-failed">Build Failed</h2>
+
+<table class="info-table">
+    <tr>
+        <td>Project</td>
+        <td><strong>@Model.ProjectName</strong></td>
+    </tr>
+    <tr>
+        <td>Branch</td>
+        <td>@Model.Branch</td>
+    </tr>
+    <tr>
+        <td>Commit</td>
+        <td><span class="commit-sha">@Model.CommitSha</span></td>
+    </tr>
+    <tr>
+        <td>Author</td>
+        <td>@Model.CommitAuthor</td>
+    </tr>
+    <tr>
+        <td>Message</td>
+        <td>@Model.CommitMessage</td>
+    </tr>
+    <tr>
+        <td>Failed at</td>
+        <td>@Model.FailedAt.ToString("yyyy-MM-dd HH:mm:ss") UTC</td>
+    </tr>
+</table>
+
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="error-box">
+        <strong>Error:</strong> @Model.ErrorMessage
+    </div>
+}
+
+<a href="@Model.BuildUrl" class="btn btn-primary">View Build Details</a>

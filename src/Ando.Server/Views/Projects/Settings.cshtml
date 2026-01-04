@@ -1,0 +1,285 @@
+@model Ando.Server.ViewModels.ProjectSettingsViewModel
+@{
+    ViewData["Title"] = $"Settings - {Model.RepoFullName}";
+}
+
+<div class="page-header">
+    <div class="breadcrumb">
+        <a href="/projects">Projects</a> /
+        <a href="/projects/@Model.Id">@Model.RepoFullName</a> /
+        <span>Settings</span>
+    </div>
+</div>
+
+<!-- Sticky save bar (hidden until changes are made) -->
+<div id="unsaved-bar" class="unsaved-bar" style="display: none;">
+    <span class="unsaved-text">You have unsaved changes</span>
+    <div class="unsaved-actions">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="discardChanges()">Discard</button>
+        <button type="submit" form="settings-form" class="btn btn-primary btn-sm">Save Changes</button>
+    </div>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-error">@TempData["Error"]</div>
+}
+
+<div class="settings-container">
+    <!-- Build Settings -->
+    <div class="settings-section">
+        <h2>Build Settings</h2>
+
+        <form id="settings-form" method="post" action="/projects/@Model.Id/settings" data-track-changes="true">
+            @Html.AntiForgeryToken()
+
+            <div class="form-group">
+                <label for="branchFilter">Branch Filter</label>
+                <input type="text" id="branchFilter" name="branchFilter" value="@Model.BranchFilter"
+                       placeholder="main,master,develop" />
+                <span class="form-hint">Comma-separated list of branches to build. Leave empty to build all branches.</span>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="enablePrBuilds" value="true" @(Model.EnablePrBuilds ? "checked" : "") />
+                    <span>Enable Pull Request Builds</span>
+                </label>
+                <span class="form-hint">Build pull requests targeting the filtered branches.</span>
+            </div>
+
+            <div class="form-group">
+                <label for="timeoutMinutes">Build Timeout (minutes)</label>
+                <input type="number" id="timeoutMinutes" name="timeoutMinutes" value="@Model.TimeoutMinutes"
+                       min="1" max="60" />
+                <span class="form-hint">Maximum time for a build before it's cancelled (1-60 minutes).</span>
+            </div>
+
+            <div class="form-group">
+                <label for="dockerImage">Docker Image (optional)</label>
+                <input type="text" id="dockerImage" name="dockerImage" value="@Model.DockerImage"
+                       placeholder="mcr.microsoft.com/dotnet/sdk:10.0-alpine" />
+                <span class="form-hint">Custom Docker image for builds. Leave empty to use the default.</span>
+            </div>
+
+            <h3>Notifications</h3>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="notifyOnFailure" value="true" @(Model.NotifyOnFailure ? "checked" : "") />
+                    <span>Notify on Build Failure</span>
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label for="notificationEmail">Notification Email</label>
+                <input type="email" id="notificationEmail" name="notificationEmail" value="@Model.NotificationEmail"
+                       placeholder="builds@example.com" />
+                <span class="form-hint">Email address to receive failure notifications.</span>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Save Settings</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Secrets -->
+    <div class="settings-section">
+        <h2>Secrets</h2>
+        <p class="section-description">
+            Environment variables that will be available during builds.
+            Secrets cannot be viewed once saved.
+        </p>
+
+        @if (Model.SecretNames.Count > 0)
+        {
+            <table class="secrets-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var name in Model.SecretNames)
+                    {
+                        <tr>
+                            <td>
+                                <code class="secret-name">@name</code>
+                                <button type="button" class="btn-icon" onclick="copySecretName('@name')" title="Copy name">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                    </svg>
+                                </button>
+                            </td>
+                            <td>
+                                <form method="post" action="/projects/@Model.Id/secrets/@name/delete"
+                                      onsubmit="return confirm('Delete secret @name?');">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <p class="empty-message">No secrets configured.</p>
+        }
+
+        <h3>Add Secret</h3>
+        <form method="post" action="/projects/@Model.Id/secrets" class="add-secret-form">
+            @Html.AntiForgeryToken()
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="secretName">Name</label>
+                    <input type="text" id="secretName" name="name" placeholder="MY_SECRET"
+                           pattern="^[A-Z_][A-Z0-9_]*$" required
+                           oninput="formatSecretName(this)" />
+                    <span class="form-hint format-helper">Use UPPERCASE_WITH_UNDERSCORES</span>
+                </div>
+                <div class="form-group flex-grow">
+                    <label for="secretValue">Value</label>
+                    <div class="password-input-wrapper">
+                        <input type="password" id="secretValue" name="value" placeholder="secret value" required />
+                        <button type="button" class="btn-icon password-toggle" onclick="toggleSecretVisibility()" title="Show/hide">
+                            <svg id="eye-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                            <svg id="eye-off-icon" class="w-4 h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group form-button">
+                    <button type="submit" class="btn btn-primary">Add</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Danger Zone -->
+    <div class="settings-section danger-zone">
+        <h2>Danger Zone</h2>
+
+        <div class="danger-item">
+            <div class="danger-info">
+                <h3>Delete Project</h3>
+                <p>Permanently delete this project and all its builds, logs, and artifacts.</p>
+            </div>
+            <form method="post" action="/projects/@Model.Id/delete"
+                  onsubmit="return confirm('Are you sure you want to delete this project? This action cannot be undone.');">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-danger">Delete Project</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Track form changes for unsaved warning
+let originalFormData = null;
+let hasUnsavedChanges = false;
+
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('settings-form');
+    if (form) {
+        originalFormData = new FormData(form);
+
+        form.addEventListener('input', checkForChanges);
+        form.addEventListener('change', checkForChanges);
+    }
+});
+
+function checkForChanges() {
+    const form = document.getElementById('settings-form');
+    const currentData = new FormData(form);
+    let changed = false;
+
+    for (const [key, value] of currentData.entries()) {
+        if (key === '__RequestVerificationToken') continue;
+        const original = originalFormData.get(key) || '';
+        if (value !== original) {
+            changed = true;
+            break;
+        }
+    }
+
+    hasUnsavedChanges = changed;
+    document.getElementById('unsaved-bar').style.display = changed ? 'flex' : 'none';
+}
+
+function discardChanges() {
+    const form = document.getElementById('settings-form');
+    form.reset();
+
+    // Reset checkboxes to original values
+    for (const [key, value] of originalFormData.entries()) {
+        const input = form.querySelector(`[name="${key}"]`);
+        if (input && input.type === 'checkbox') {
+            input.checked = value === 'true';
+        }
+    }
+
+    hasUnsavedChanges = false;
+    document.getElementById('unsaved-bar').style.display = 'none';
+}
+
+// Warn before leaving with unsaved changes
+window.addEventListener('beforeunload', (e) => {
+    if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
+
+// Secret visibility toggle
+function toggleSecretVisibility() {
+    const input = document.getElementById('secretValue');
+    const eyeIcon = document.getElementById('eye-icon');
+    const eyeOffIcon = document.getElementById('eye-off-icon');
+
+    if (input.type === 'password') {
+        input.type = 'text';
+        eyeIcon.classList.add('hidden');
+        eyeOffIcon.classList.remove('hidden');
+    } else {
+        input.type = 'password';
+        eyeIcon.classList.remove('hidden');
+        eyeOffIcon.classList.add('hidden');
+    }
+}
+
+// Copy secret name to clipboard
+async function copySecretName(name) {
+    try {
+        await navigator.clipboard.writeText(name);
+        // Show brief feedback
+        const btn = event.currentTarget;
+        btn.classList.add('text-success');
+        setTimeout(() => btn.classList.remove('text-success'), 1000);
+    } catch (err) {
+        console.error('Failed to copy:', err);
+    }
+}
+
+// Auto-format secret name to uppercase with underscores
+function formatSecretName(input) {
+    const value = input.value;
+    const formatted = value.toUpperCase().replace(/[^A-Z0-9_]/g, '_').replace(/^[0-9]/, '_$&');
+    if (formatted !== value) {
+        input.value = formatted;
+    }
+}
+</script>

@@ -58,6 +58,9 @@ public class BuildContext
     /// <summary>Azure Bicep deployment operations.</summary>
     public BicepOperations Bicep { get; }
 
+    /// <summary>Cloudflare operations (Pages deployment, etc.).</summary>
+    public CloudflareOperations Cloudflare { get; }
+
     /// <summary>Artifact operations for copying files to host.</summary>
     public ArtifactOperations Artifacts { get; }
 
@@ -94,6 +97,7 @@ public class BuildContext
         Npm = new NpmOperations(StepRegistry, logger, () => Executor);
         Azure = new AzureOperations(StepRegistry, logger, () => Executor);
         Bicep = new BicepOperations(StepRegistry, logger, () => Executor, Context.Vars);
+        Cloudflare = new CloudflareOperations(StepRegistry, logger, () => Executor);
         Artifacts = new ArtifactOperations(logger);
     }
 

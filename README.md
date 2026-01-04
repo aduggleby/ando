@@ -318,6 +318,16 @@ ANDO uses:
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for details.
 
+## Ando.Server (CI/CD)
+
+Ando includes a CI/CD server component (`Ando.Server`) that provides:
+- GitHub webhook integration for automatic builds
+- Real-time build log streaming via SignalR
+- Build artifact management with retention policies
+- OAuth authentication via GitHub App
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for comprehensive deployment instructions including TrueNAS/Docker setup.
+
 ## License
 
 MIT License

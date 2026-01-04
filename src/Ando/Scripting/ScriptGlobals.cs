@@ -78,6 +78,12 @@ public class ScriptGlobals
     public BicepOperations Bicep { get; }
 
     /// <summary>
+    /// Cloudflare operations (Pages deployment, etc.).
+    /// Usage: Cloudflare.PagesDeploy(o => o.WithProjectName("my-site"))
+    /// </summary>
+    public CloudflareOperations Cloudflare { get; }
+
+    /// <summary>
     /// Artifact operations for specifying which files to copy back to host.
     /// Usage: Artifacts.CopyToHost("/workspace/dist", "./dist")
     /// </summary>
@@ -104,6 +110,7 @@ public class ScriptGlobals
         Npm = buildContext.Npm;
         Azure = buildContext.Azure;
         Bicep = buildContext.Bicep;
+        Cloudflare = buildContext.Cloudflare;
         Artifacts = buildContext.Artifacts;
         Project = new ProjectHelper();
     }

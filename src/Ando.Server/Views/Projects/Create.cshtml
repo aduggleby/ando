@@ -1,0 +1,69 @@
+@model Ando.Server.ViewModels.CreateProjectViewModel
+@{
+    ViewData["Title"] = "Connect Repository";
+}
+
+<div class="page-header">
+    <div class="breadcrumb">
+        <a href="/projects">Projects</a> / <span>Connect Repository</span>
+    </div>
+</div>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-error">@TempData["Error"]</div>
+}
+
+<div class="section">
+    <h2>Select a Repository</h2>
+    <p class="section-description">Choose a repository you own to set up automated builds.</p>
+
+    @if (Model.Repositories.Count == 0)
+    {
+        <div class="empty-state">
+            <h3>No repositories found</h3>
+            <p>We couldn't find any repositories you own. Make sure you have at least one repository on GitHub.</p>
+            <a href="https://github.com/new" target="_blank" class="btn btn-primary">Create Repository</a>
+        </div>
+    }
+    else
+    {
+        <div class="repos-grid">
+            @foreach (var repo in Model.Repositories)
+            {
+                <div class="repo-card @(repo.AlreadyConnected ? "repo-connected" : "")">
+                    <div class="repo-header">
+                        <span class="repo-name">@repo.FullName</span>
+                        @if (repo.IsPrivate)
+                        {
+                            <span class="private-badge">Private</span>
+                        }
+                    </div>
+                    <div class="repo-meta">
+                        <span>Default branch: @repo.DefaultBranch</span>
+                    </div>
+                    <div class="repo-actions">
+                        @if (repo.AlreadyConnected)
+                        {
+                            <span class="connected-badge">Already Connected</span>
+                        }
+                        else
+                        {
+                            <form method="post" action="/projects/create">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="gitHubRepoId" value="@repo.GitHubRepoId" />
+                                <button type="submit" class="btn btn-primary">Connect</button>
+                            </form>
+                        }
+                        <a href="@repo.HtmlUrl" target="_blank" class="btn btn-secondary btn-sm">View on GitHub</a>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>

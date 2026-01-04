@@ -166,6 +166,67 @@ const operations = [
     examples: [
       "Npm.Build();"
     ]
+  },
+  {
+    group: "Cloudflare",
+    name: "Cloudflare.InDirectory",
+    desc: "Set the working directory for Cloudflare commands.",
+    examples: [
+      "Cloudflare.InDirectory(\"./website\");",
+      "Cloudflare.InDirectory(\".\").PagesDeploy(...);"
+    ]
+  },
+  {
+    group: "Cloudflare",
+    name: "Cloudflare.EnsureAuthenticated",
+    desc: "Verify Cloudflare credentials via 'wrangler whoami'.",
+    examples: [
+      "Cloudflare.EnsureAuthenticated();"
+    ]
+  },
+  {
+    group: "Cloudflare",
+    name: "Cloudflare.PagesDeploy",
+    desc: "Deploy the ./dist directory to Cloudflare Pages.",
+    examples: [
+      "Cloudflare.PagesDeploy(o => o.WithProjectName(\"my-site\"));",
+      "Cloudflare.PagesDeploy(o => o\n  .WithProjectName(\"my-site\")\n  .WithBranch(\"main\"));"
+    ]
+  },
+  {
+    group: "Cloudflare",
+    name: "Cloudflare.PagesDeployDirectory",
+    desc: "Deploy a specific directory to Cloudflare Pages.",
+    examples: [
+      "Cloudflare.PagesDeployDirectory(\"./dist\", o => o.WithProjectName(\"my-site\"));",
+      "Cloudflare.PagesDeployDirectory(\"./build\", o => o\n  .WithProjectName(\"my-site\")\n  .WithBranch(\"preview\")\n  .WithCommitHash(\"abc123\"));"
+    ]
+  },
+  {
+    group: "Cloudflare",
+    name: "Cloudflare.PagesListProjects",
+    desc: "List all Cloudflare Pages projects.",
+    examples: [
+      "Cloudflare.PagesListProjects();"
+    ]
+  },
+  {
+    group: "Cloudflare",
+    name: "Cloudflare.PagesCreateProject",
+    desc: "Create a new Cloudflare Pages project.",
+    examples: [
+      "Cloudflare.PagesCreateProject(\"my-site\");",
+      "Cloudflare.PagesCreateProject(\"my-site\", \"develop\");"
+    ]
+  },
+  {
+    group: "Cloudflare",
+    name: "Cloudflare.PagesListDeployments",
+    desc: "List deployments for a Cloudflare Pages project.",
+    examples: [
+      "Cloudflare.PagesListDeployments(\"my-site\");",
+      "Cloudflare.PagesListDeployments(); // Uses CLOUDFLARE_PROJECT_NAME env var"
+    ]
   }
 ];
 ---
@@ -311,7 +372,7 @@ ando run --image my-custom-image</code></pre>
         <p class="section-subtitle">
           Each operation registers a deterministic step and runs inside the container.
         </p>
-        {["Dotnet", "Npm", "Ef"].map((group) => (
+        {["Dotnet", "Npm", "Ef", "Cloudflare"].map((group) => (
           <div class="op-group">
             <h3 class="op-title">{group}</h3>
             <table class="dir-table">

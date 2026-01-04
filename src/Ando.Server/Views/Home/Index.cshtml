@@ -1,0 +1,144 @@
+@model Ando.Server.ViewModels.DashboardViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="dashboard">
+    <div class="page-header">
+        <h1>Dashboard</h1>
+        <a href="/projects/create" class="btn btn-primary">New Project</a>
+    </div>
+
+    <div class="dashboard-stats">
+        <div class="stat-card">
+            <h3>Projects</h3>
+            <p class="stat-value">@Model.TotalProjects</p>
+        </div>
+        <div class="stat-card">
+            <h3>Builds Today</h3>
+            <p class="stat-value">@Model.BuildsToday</p>
+        </div>
+        <div class="stat-card">
+            <h3>Failed Today</h3>
+            <p class="stat-value @(Model.FailedToday > 0 ? "text-error" : "")">@Model.FailedToday</p>
+        </div>
+        <div class="stat-card">
+            <h3>Success Rate</h3>
+            <p class="stat-value @(GetSuccessRateClass())">@GetSuccessRate()</p>
+        </div>
+    </div>
+
+    <section class="recent-builds">
+        <div class="section-header">
+            <h2>Recent Builds</h2>
+            @if (Model.TotalProjects > 0)
+            {
+                <a href="/projects" class="btn btn-secondary btn-sm">View All Projects</a>
+            }
+        </div>
+
+        @if (Model.RecentBuilds.Count == 0)
+        {
+            <div class="empty-state">
+                <h3>Get started with Ando CI</h3>
+                <p class="mb-4">Follow these steps to set up your first automated build:</p>
+                <div class="onboarding-checklist">
+                    <div class="checklist-item @(Model.TotalProjects > 0 ? "checklist-done" : "")">
+                        <span class="checklist-number">1</span>
+                        <span>Connect a GitHub repository</span>
+                    </div>
+                    <div class="checklist-item">
+                        <span class="checklist-number">2</span>
+                        <span>Add a <code>build.ando</code> file to your repo</span>
+                    </div>
+                    <div class="checklist-item">
+                        <span class="checklist-number">3</span>
+                        <span>Push changes to trigger your first build</span>
+                    </div>
+                </div>
+                <div class="mt-4 flex flex-wrap justify-center gap-3">
+                    <a href="/projects/create" class="btn btn-primary">Connect Repository</a>
+                    <a href="https://docs.ando.dev/getting-started" target="_blank" class="btn btn-secondary">View Documentation</a>
+                </div>
+            </div>
+        }
+        else
+        {
+            <table class="builds-table">
+                <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Project</th>
+                        <th>Branch</th>
+                        <th>Commit</th>
+                        <th>Started</th>
+                        <th>Duration</th>
+                        <th><span class="sr-only">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var build in Model.RecentBuilds)
+                    {
+                        <tr class="build-row" onclick="window.location='/builds/@build.BuildId'">
+                            <td>
+                                <span class="status-badge status-@build.Status.ToLower()">
+                                    @build.Status
+                                </span>
+                            </td>
+                            <td>@build.ProjectName</td>
+                            <td><span class="branch-name">@build.Branch</span></td>
+                            <td><code class="commit-sha">@build.CommitSha</code></td>
+                            <td>@FormatRelativeTime(build.StartedAt)</td>
+                            <td>@FormatDuration(build.Duration)</td>
+                            <td><a href="/builds/@build.BuildId" class="build-view-link" onclick="event.stopPropagation()">View</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+</div>
+
+@functions {
+    string FormatDuration(TimeSpan? duration)
+    {
+        if (!duration.HasValue) return "-";
+
+        var d = duration.Value;
+        if (d.TotalSeconds < 60) return $"{d.Seconds}s";
+        if (d.TotalMinutes < 60) return $"{d.Minutes}m {d.Seconds}s";
+        return $"{(int)d.TotalHours}h {d.Minutes}m";
+    }
+
+    string FormatRelativeTime(DateTime? dateTime)
+    {
+        if (!dateTime.HasValue) return "-";
+
+        var diff = DateTime.UtcNow - dateTime.Value;
+
+        if (diff.TotalMinutes < 1) return "just now";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}d ago";
+
+        return dateTime.Value.ToString("MMM d");
+    }
+
+    string GetSuccessRate()
+    {
+        if (Model.BuildsToday == 0) return "-";
+        var successCount = Model.BuildsToday - Model.FailedToday;
+        var rate = (double)successCount / Model.BuildsToday * 100;
+        return $"{rate:0}%";
+    }
+
+    string GetSuccessRateClass()
+    {
+        if (Model.BuildsToday == 0) return "";
+        var successCount = Model.BuildsToday - Model.FailedToday;
+        var rate = (double)successCount / Model.BuildsToday * 100;
+        if (rate >= 90) return "text-success";
+        if (rate >= 70) return "text-warning";
+        return "text-error";
+    }
+}
