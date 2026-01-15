@@ -16,11 +16,14 @@
 using System.Security.Claims;
 using Ando.Server.Configuration;
 using Ando.Server.Data;
+using Ando.Server.Hubs;
 using Ando.Server.Models;
 using Ando.Server.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -35,22 +38,31 @@ namespace Ando.Server.Controllers;
 public class TestController : ControllerBase
 {
     private readonly AndoDbContext _db;
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly IWebHostEnvironment _env;
     private readonly IBuildService _buildService;
     private readonly IEncryptionService _encryption;
+    private readonly IHubContext<BuildLogHub> _hubContext;
     private readonly string _testApiKey;
 
     public TestController(
         AndoDbContext db,
+        UserManager<ApplicationUser> userManager,
+        SignInManager<ApplicationUser> signInManager,
         IWebHostEnvironment env,
         IBuildService buildService,
         IEncryptionService encryption,
+        IHubContext<BuildLogHub> hubContext,
         IOptions<TestSettings> testSettings)
     {
         _db = db;
+        _userManager = userManager;
+        _signInManager = signInManager;
         _env = env;
         _buildService = buildService;
         _encryption = encryption;
+        _hubContext = hubContext;
         _testApiKey = testSettings.Value.ApiKey;
 
         // Safety check - this controller should NEVER be available outside Testing
@@ -98,36 +110,42 @@ public class TestController : ControllerBase
 
         // Generate unique identifiers
         var uniqueId = Guid.NewGuid().ToString("N")[..8];
-        var gitHubId = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var login = request.Login ?? $"testuser-{uniqueId}";
         var email = request.Email ?? $"{login}@test.example.com";
 
-        var user = new User
+        var user = new ApplicationUser
         {
-            GitHubId = gitHubId,
-            GitHubLogin = login,
+            UserName = email,
             Email = email,
-            AvatarUrl = $"https://avatars.githubusercontent.com/u/{gitHubId}",
-            AccessToken = _encryption.Encrypt($"test-token-{uniqueId}"),
+            DisplayName = login,
+            EmailConfirmed = true, // Test users are automatically verified
+            EmailVerified = true,
             CreatedAt = DateTime.UtcNow,
             LastLoginAt = DateTime.UtcNow
         };
 
-        _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        // Create user with a test password
+        var result = await _userManager.CreateAsync(user, $"TestPass123!{uniqueId}");
+        if (!result.Succeeded)
+        {
+            return BadRequest(new { error = "Failed to create user", details = result.Errors });
+        }
+
+        // Add to User role
+        await _userManager.AddToRoleAsync(user, UserRoles.User);
 
         return Ok(new CreateTestUserResponse
         {
             UserId = user.Id,
-            GitHubId = user.GitHubId,
-            Login = user.GitHubLogin,
+            GitHubId = 0, // No GitHub connection for test users
+            Login = login,
             Email = user.Email!,
             AuthToken = GenerateTestAuthToken(user)
         });
     }
 
     /// <summary>
-    /// Authenticates as a test user (sets cookies).
+    /// Authenticates as a test user (sets cookies) using SignInManager.
     /// </summary>
     [HttpPost("users/{userId:int}/login")]
     public async Task<IActionResult> LoginAs(int userId)
@@ -137,29 +155,14 @@ public class TestController : ControllerBase
             return Unauthorized(new { error = "Invalid API key" });
         }
 
-        var user = await _db.Users.FindAsync(userId);
+        var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null)
         {
             return NotFound(new { error = "User not found" });
         }
 
-        // Create authentication cookie
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new(ClaimTypes.Name, user.GitHubLogin),
-            new("GitHubId", user.GitHubId.ToString()),
-        };
-
-        if (!string.IsNullOrEmpty(user.Email))
-        {
-            claims.Add(new Claim(ClaimTypes.Email, user.Email));
-        }
-
-        var identity = new ClaimsIdentity(claims, "Cookies");
-        var principal = new ClaimsPrincipal(identity);
-
-        await HttpContext.SignInAsync("Cookies", principal);
+        // Use SignInManager to properly sign in with Identity's authentication scheme
+        await _signInManager.SignInAsync(user, isPersistent: true);
 
         return Ok(new { success = true, userId = user.Id });
     }
@@ -175,17 +178,14 @@ public class TestController : ControllerBase
             return Unauthorized(new { error = "Invalid API key" });
         }
 
-        var user = await _db.Users
-            .Include(u => u.Projects)
-            .FirstOrDefaultAsync(u => u.Id == userId);
-
+        var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null)
         {
             return NotFound(new { error = "User not found" });
         }
 
-        _db.Users.Remove(user);
-        await _db.SaveChangesAsync();
+        // Delete user (cascade deletes projects via EF)
+        await _userManager.DeleteAsync(user);
 
         return Ok(new { success = true });
     }
@@ -205,7 +205,7 @@ public class TestController : ControllerBase
             return Unauthorized(new { error = "Invalid API key" });
         }
 
-        var user = await _db.Users.FindAsync(request.UserId);
+        var user = await _userManager.FindByIdAsync(request.UserId.ToString());
         if (user == null)
         {
             return NotFound(new { error = "User not found" });
@@ -213,7 +213,7 @@ public class TestController : ControllerBase
 
         var uniqueId = Guid.NewGuid().ToString("N")[..8];
         var repoName = request.RepoName ?? $"test-repo-{uniqueId}";
-        var fullName = $"{user.GitHubLogin}/{repoName}";
+        var fullName = $"{user.EffectiveDisplayName}/{repoName}";
 
         var project = new Project
         {
@@ -297,7 +297,7 @@ public class TestController : ControllerBase
         var build = new Build
         {
             ProjectId = project.Id,
-            CommitSha = request.CommitSha ?? uniqueId[..40].PadRight(40, '0'),
+            CommitSha = request.CommitSha ?? uniqueId.PadRight(40, '0'),
             Branch = request.Branch ?? project.DefaultBranch,
             CommitMessage = request.CommitMessage ?? "Test commit",
             CommitAuthor = request.CommitAuthor ?? "Test User",
@@ -305,7 +305,9 @@ public class TestController : ControllerBase
             Trigger = request.Trigger ?? BuildTrigger.Manual,
             QueuedAt = DateTime.UtcNow,
             StartedAt = request.Status == BuildStatus.Running ? DateTime.UtcNow : null,
-            PullRequestNumber = request.PullRequestNumber
+            PullRequestNumber = request.PullRequestNumber,
+            // Set a fake job ID for test builds so cancel works
+            HangfireJobId = $"test-job-{uniqueId}"
         };
 
         _db.Builds.Add(build);
@@ -385,7 +387,7 @@ public class TestController : ControllerBase
     }
 
     /// <summary>
-    /// Adds log entries to a build.
+    /// Adds log entries to a build and broadcasts them via SignalR.
     /// </summary>
     [HttpPost("builds/{buildId:int}/logs")]
     public async Task<IActionResult> AddLogEntries(int buildId, [FromBody] AddTestLogEntriesRequest request)
@@ -405,6 +407,7 @@ public class TestController : ControllerBase
             .Where(l => l.BuildId == buildId)
             .MaxAsync(l => (int?)l.Sequence) ?? 0;
 
+        var addedEntries = new List<object>();
         foreach (var entry in request.Entries)
         {
             maxSequence++;
@@ -418,9 +421,26 @@ public class TestController : ControllerBase
                 Timestamp = DateTime.UtcNow
             };
             _db.BuildLogEntries.Add(logEntry);
+
+            // Store entry data for SignalR broadcast
+            addedEntries.Add(new
+            {
+                sequence = logEntry.Sequence,
+                type = logEntry.Type.ToString(),
+                message = logEntry.Message,
+                stepName = logEntry.StepName,
+                timestamp = logEntry.Timestamp
+            });
         }
 
         await _db.SaveChangesAsync();
+
+        // Broadcast log entries via SignalR
+        var groupName = BuildLogHub.GetGroupName(buildId);
+        foreach (var entry in addedEntries)
+        {
+            await _hubContext.Clients.Group(groupName).SendAsync("LogReceived", entry);
+        }
 
         return Ok(new { success = true, lastSequence = maxSequence });
     }
@@ -476,14 +496,10 @@ public class TestController : ControllerBase
         if (request?.UserId.HasValue == true)
         {
             // Clean up specific user
-            var user = await _db.Users
-                .Include(u => u.Projects)
-                .FirstOrDefaultAsync(u => u.Id == request.UserId);
-
+            var user = await _userManager.FindByIdAsync(request.UserId.Value.ToString());
             if (user != null)
             {
-                _db.Users.Remove(user);
-                await _db.SaveChangesAsync();
+                await _userManager.DeleteAsync(user);
             }
         }
         else if (request?.ProjectId.HasValue == true)
@@ -510,12 +526,12 @@ public class TestController : ControllerBase
         return !string.IsNullOrEmpty(apiKey) && apiKey == _testApiKey;
     }
 
-    private static string GenerateTestAuthToken(User user)
+    private static string GenerateTestAuthToken(ApplicationUser user)
     {
         // For test purposes, we generate a simple token
         // The actual authentication uses cookies set by LoginAs
         return Convert.ToBase64String(
-            System.Text.Encoding.UTF8.GetBytes($"{user.Id}:{user.GitHubLogin}:{DateTime.UtcNow.Ticks}"));
+            System.Text.Encoding.UTF8.GetBytes($"{user.Id}:{user.EffectiveDisplayName}:{DateTime.UtcNow.Ticks}"));
     }
 }
 

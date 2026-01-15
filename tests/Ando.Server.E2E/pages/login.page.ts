@@ -2,6 +2,7 @@
  * Login Page Object Model
  *
  * Represents the login page and provides methods for authentication actions.
+ * Updated for email/password authentication.
  */
 
 import { Page, Locator, expect } from '@playwright/test';
@@ -9,14 +10,22 @@ import { Page, Locator, expect } from '@playwright/test';
 export class LoginPage {
   readonly page: Page;
   readonly heading: Locator;
-  readonly loginButton: Locator;
-  readonly description: Locator;
+  readonly emailInput: Locator;
+  readonly passwordInput: Locator;
+  readonly submitButton: Locator;
+  readonly forgotPasswordLink: Locator;
+  readonly registerLink: Locator;
+  readonly errorMessage: Locator;
 
   constructor(page: Page) {
     this.page = page;
     this.heading = page.locator('h1');
-    this.loginButton = page.locator('a.btn-primary, button.btn-primary').filter({ hasText: /GitHub/i });
-    this.description = page.locator('.login-box p');
+    this.emailInput = page.locator('input[type="email"], input[name="Email"]');
+    this.passwordInput = page.locator('input[type="password"], input[name="Password"]');
+    this.submitButton = page.locator('button[type="submit"]');
+    this.forgotPasswordLink = page.locator('a[href="/auth/forgot-password"]');
+    this.registerLink = page.locator('a[href="/auth/register"]');
+    this.errorMessage = page.locator('.alert-error');
   }
 
   async goto() {
@@ -25,14 +34,24 @@ export class LoginPage {
 
   async expectToBeVisible() {
     await expect(this.heading).toBeVisible();
-    await expect(this.heading).toContainText(/login|sign in/i);
+    // Updated: new login page says "Welcome back"
+    await expect(this.heading).toContainText(/welcome|login|sign in/i);
   }
 
-  async expectLoginButtonVisible() {
-    await expect(this.loginButton).toBeVisible();
+  async expectFormVisible() {
+    await expect(this.emailInput).toBeVisible();
+    await expect(this.passwordInput).toBeVisible();
+    await expect(this.submitButton).toBeVisible();
   }
 
-  async getLoginButtonHref(): Promise<string | null> {
-    return this.loginButton.getAttribute('href');
+  async login(email: string, password: string) {
+    await this.emailInput.fill(email);
+    await this.passwordInput.fill(password);
+    await this.submitButton.click();
+  }
+
+  async expectErrorMessage(message: string | RegExp) {
+    await expect(this.errorMessage).toBeVisible();
+    await expect(this.errorMessage).toContainText(message);
   }
 }

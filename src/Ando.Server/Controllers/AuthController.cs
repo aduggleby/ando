@@ -1,160 +1,227 @@
 // =============================================================================
 // AuthController.cs
 //
-// Summary: Handles user authentication via GitHub OAuth.
+// Summary: Handles user authentication with email/password login.
 //
-// This controller manages the complete OAuth flow including redirecting to
-// GitHub, handling the callback, creating/updating user accounts, and
-// managing the authentication cookie.
+// This controller manages user registration, login, logout, password reset,
+// and email verification. It uses ASP.NET Core Identity for security.
 //
 // Design Decisions:
-// - Uses ASP.NET Core cookie authentication (not Identity)
-// - User data is stored in the database, linked by GitHubId
-// - Access tokens are encrypted before storage
+// - First registered user automatically becomes global admin
+// - Soft email verification (users can log in but see reminder banner)
+// - Password reset via email token
+// - Uses Identity's UserManager and SignInManager
 // =============================================================================
 
 using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text.Json;
-using Ando.Server.Configuration;
 using Ando.Server.Data;
 using Ando.Server.Models;
 using Ando.Server.Services;
-using Microsoft.AspNetCore.Authentication;
+using Ando.Server.ViewModels;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 
 namespace Ando.Server.Controllers;
 
 /// <summary>
-/// Controller for GitHub OAuth authentication.
+/// Controller for email/password authentication.
 /// </summary>
 public class AuthController : Controller
 {
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly AndoDbContext _db;
-    private readonly GitHubSettings _gitHubSettings;
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly IEncryptionService _encryption;
+    private readonly IEmailService _emailService;
     private readonly ILogger<AuthController> _logger;
 
     public AuthController(
+        UserManager<ApplicationUser> userManager,
+        SignInManager<ApplicationUser> signInManager,
         AndoDbContext db,
-        IOptions<GitHubSettings> gitHubSettings,
-        IHttpClientFactory httpClientFactory,
-        IEncryptionService encryption,
+        IEmailService emailService,
         ILogger<AuthController> logger)
     {
+        _userManager = userManager;
+        _signInManager = signInManager;
         _db = db;
-        _gitHubSettings = gitHubSettings.Value;
-        _httpClientFactory = httpClientFactory;
-        _encryption = encryption;
+        _emailService = emailService;
         _logger = logger;
     }
 
     // -------------------------------------------------------------------------
-    // Login Page
+    // Login
     // -------------------------------------------------------------------------
 
     /// <summary>
     /// Displays the login page.
     /// </summary>
     [AllowAnonymous]
-    [Route("auth/login")]
-    public IActionResult Login(string? returnUrl = null)
+    [HttpGet("auth/login")]
+    public IActionResult Login(string? returnUrl = null, string? error = null)
     {
         if (User.Identity?.IsAuthenticated == true)
         {
             return Redirect(returnUrl ?? "/");
         }
 
-        ViewData["ReturnUrl"] = returnUrl;
-        return View();
-    }
-
-    // -------------------------------------------------------------------------
-    // GitHub OAuth Flow
-    // -------------------------------------------------------------------------
-
-    /// <summary>
-    /// Initiates the GitHub OAuth flow by redirecting to GitHub.
-    /// </summary>
-    [AllowAnonymous]
-    [Route("auth/github")]
-    public IActionResult GitHubLogin(string? returnUrl = null)
-    {
-        // Store return URL in session for callback
-        if (!string.IsNullOrEmpty(returnUrl))
+        var errorMessage = error switch
         {
-            HttpContext.Session.SetString("ReturnUrl", returnUrl);
-        }
+            "invalid_credentials" => "Invalid email or password.",
+            "account_locked" => "Your account has been locked. Please try again later.",
+            "email_not_confirmed" => "Please verify your email before logging in.",
+            _ => null
+        };
 
-        var callbackUrl = Url.Action("GitHubCallback", "Auth", null, Request.Scheme);
-        var state = Guid.NewGuid().ToString("N");
+        var model = new LoginViewModel
+        {
+            ReturnUrl = returnUrl,
+            ErrorMessage = errorMessage
+        };
 
-        // Store state for CSRF protection
-        HttpContext.Session.SetString("OAuthState", state);
-
-        var authUrl = $"https://github.com/login/oauth/authorize" +
-            $"?client_id={Uri.EscapeDataString(_gitHubSettings.ClientId)}" +
-            $"&redirect_uri={Uri.EscapeDataString(callbackUrl!)}" +
-            $"&scope=user:email,repo" +
-            $"&state={state}";
-
-        return Redirect(authUrl);
+        return View(model);
     }
 
     /// <summary>
-    /// Handles the OAuth callback from GitHub.
+    /// Processes the login form submission.
     /// </summary>
     [AllowAnonymous]
-    [Route("auth/github/callback")]
-    public async Task<IActionResult> GitHubCallback(string code, string state)
+    [HttpPost("auth/login")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Login(LoginViewModel model)
     {
-        // Verify state for CSRF protection using constant-time comparison
-        var expectedState = HttpContext.Session.GetString("OAuthState");
-        if (string.IsNullOrEmpty(expectedState) || !ConstantTimeEquals(state, expectedState))
+        if (!ModelState.IsValid)
         {
-            _logger.LogWarning("OAuth state mismatch");
-            return RedirectToAction("Login", new { error = "invalid_state" });
+            return View(model);
         }
 
-        HttpContext.Session.Remove("OAuthState");
-
-        try
+        var user = await _userManager.FindByEmailAsync(model.Email);
+        if (user == null)
         {
-            // Exchange code for access token
-            var accessToken = await ExchangeCodeForTokenAsync(code);
-            if (string.IsNullOrEmpty(accessToken))
+            model.ErrorMessage = "Invalid email or password.";
+            return View(model);
+        }
+
+        var result = await _signInManager.PasswordSignInAsync(
+            user,
+            model.Password,
+            model.RememberMe,
+            lockoutOnFailure: true);
+
+        if (result.Succeeded)
+        {
+            // Update last login time
+            user.LastLoginAt = DateTime.UtcNow;
+            await _userManager.UpdateAsync(user);
+
+            _logger.LogInformation("User {Email} logged in", model.Email);
+            return Redirect(model.ReturnUrl ?? "/");
+        }
+
+        if (result.IsLockedOut)
+        {
+            _logger.LogWarning("User {Email} account locked out", model.Email);
+            model.ErrorMessage = "Your account has been locked due to too many failed attempts. Please try again later.";
+            return View(model);
+        }
+
+        model.ErrorMessage = "Invalid email or password.";
+        return View(model);
+    }
+
+    // -------------------------------------------------------------------------
+    // Registration
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Displays the registration page.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("auth/register")]
+    public IActionResult Register()
+    {
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            return RedirectToAction("Index", "Home");
+        }
+
+        return View(new RegisterViewModel());
+    }
+
+    /// <summary>
+    /// Processes the registration form submission.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost("auth/register")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Register(RegisterViewModel model)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        // Check if this is the first user (will become admin)
+        var isFirstUser = !await _userManager.Users.AnyAsync();
+
+        var user = new ApplicationUser
+        {
+            UserName = model.Email,
+            Email = model.Email,
+            DisplayName = model.DisplayName,
+            EmailVerified = false,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        var result = await _userManager.CreateAsync(user, model.Password);
+
+        if (result.Succeeded)
+        {
+            // Assign role based on whether this is the first user
+            var role = isFirstUser ? UserRoles.Admin : UserRoles.User;
+            await _userManager.AddToRoleAsync(user, role);
+
+            _logger.LogInformation(
+                "New user {Email} registered as {Role}",
+                model.Email,
+                role);
+
+            // Generate and send email verification token
+            await SendVerificationEmailAsync(user);
+
+            // Sign in the user immediately
+            await _signInManager.SignInAsync(user, isPersistent: false);
+
+            return RedirectToAction("RegisterSuccess", new { email = model.Email, isFirst = isFirstUser });
+        }
+
+        // Handle registration errors
+        foreach (var error in result.Errors)
+        {
+            if (error.Code == "DuplicateEmail" || error.Code == "DuplicateUserName")
             {
-                return RedirectToAction("Login", new { error = "token_exchange_failed" });
+                model.ErrorMessage = "An account with this email already exists.";
+                break;
             }
-
-            // Get user info from GitHub
-            var gitHubUser = await GetGitHubUserAsync(accessToken);
-            if (gitHubUser == null)
-            {
-                return RedirectToAction("Login", new { error = "user_fetch_failed" });
-            }
-
-            // Create or update user in database
-            var user = await GetOrCreateUserAsync(gitHubUser, accessToken);
-
-            // Sign in user
-            await SignInUserAsync(user);
-
-            // Redirect to return URL or home
-            var returnUrl = HttpContext.Session.GetString("ReturnUrl") ?? "/";
-            HttpContext.Session.Remove("ReturnUrl");
-
-            return Redirect(returnUrl);
+            model.ErrorMessage = error.Description;
         }
-        catch (Exception ex)
+
+        return View(model);
+    }
+
+    /// <summary>
+    /// Displays the registration success page.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("auth/register-success")]
+    public IActionResult RegisterSuccess(string email, bool isFirst = false)
+    {
+        return View(new RegisterSuccessViewModel
         {
-            _logger.LogError(ex, "GitHub OAuth callback failed");
-            return RedirectToAction("Login", new { error = "auth_failed" });
-        }
+            Email = email,
+            IsFirstUser = isFirst
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -165,11 +232,233 @@ public class AuthController : Controller
     /// Signs out the current user.
     /// </summary>
     [Authorize]
-    [Route("auth/logout")]
+    [HttpGet("auth/logout")]
     public async Task<IActionResult> Logout()
     {
-        await HttpContext.SignOutAsync("Cookies");
+        await _signInManager.SignOutAsync();
+        _logger.LogInformation("User logged out");
         return RedirectToAction("Login");
+    }
+
+    // -------------------------------------------------------------------------
+    // Forgot Password
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Displays the forgot password page.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("auth/forgot-password")]
+    public IActionResult ForgotPassword()
+    {
+        return View(new ForgotPasswordViewModel());
+    }
+
+    /// <summary>
+    /// Processes the forgot password form submission.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost("auth/forgot-password")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordViewModel model)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        var user = await _userManager.FindByEmailAsync(model.Email);
+        if (user != null)
+        {
+            // Generate password reset token
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var resetUrl = Url.Action(
+                "ResetPassword",
+                "Auth",
+                new { email = model.Email, token },
+                Request.Scheme);
+
+            // Send password reset email
+            try
+            {
+                await _emailService.SendEmailAsync(
+                    model.Email,
+                    "Reset Your Password - Ando CI",
+                    $"""
+                    <h2>Reset Your Password</h2>
+                    <p>Click the link below to reset your password:</p>
+                    <p><a href="{resetUrl}">Reset Password</a></p>
+                    <p>If you didn't request this, you can safely ignore this email.</p>
+                    <p>This link will expire in 24 hours.</p>
+                    """);
+
+                _logger.LogInformation("Password reset email sent to {Email}", model.Email);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send password reset email to {Email}", model.Email);
+            }
+        }
+
+        // Always show success to prevent email enumeration
+        model.EmailSent = true;
+        return View(model);
+    }
+
+    // -------------------------------------------------------------------------
+    // Reset Password
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Displays the reset password page.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("auth/reset-password")]
+    public IActionResult ResetPassword(string email, string token)
+    {
+        if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(token))
+        {
+            return RedirectToAction("Login", new { error = "invalid_reset_link" });
+        }
+
+        return View(new ResetPasswordViewModel
+        {
+            Email = email,
+            Token = token
+        });
+    }
+
+    /// <summary>
+    /// Processes the reset password form submission.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost("auth/reset-password")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResetPassword(ResetPasswordViewModel model)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        var user = await _userManager.FindByEmailAsync(model.Email);
+        if (user == null)
+        {
+            // Don't reveal that the user doesn't exist
+            return RedirectToAction("Login");
+        }
+
+        var result = await _userManager.ResetPasswordAsync(user, model.Token, model.Password);
+        if (result.Succeeded)
+        {
+            _logger.LogInformation("Password reset successful for {Email}", model.Email);
+            TempData["Success"] = "Your password has been reset. You can now log in with your new password.";
+            return RedirectToAction("Login");
+        }
+
+        foreach (var error in result.Errors)
+        {
+            model.ErrorMessage = error.Description;
+        }
+
+        return View(model);
+    }
+
+    // -------------------------------------------------------------------------
+    // Email Verification
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Verifies the user's email address.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("auth/verify-email")]
+    public async Task<IActionResult> VerifyEmail(string userId, string token)
+    {
+        var model = new VerifyEmailViewModel();
+
+        if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(token))
+        {
+            model.Success = false;
+            model.Message = "Invalid verification link.";
+            return View(model);
+        }
+
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+        {
+            model.Success = false;
+            model.Message = "User not found.";
+            return View(model);
+        }
+
+        // Check our custom email verification token
+        if (user.EmailVerificationToken != token)
+        {
+            model.Success = false;
+            model.Message = "Invalid or expired verification link.";
+            return View(model);
+        }
+
+        // Mark email as verified
+        user.EmailVerified = true;
+        user.EmailConfirmed = true;
+        user.EmailVerificationToken = null;
+        await _userManager.UpdateAsync(user);
+
+        _logger.LogInformation("Email verified for {Email}", user.Email);
+
+        model.Success = true;
+        model.Message = "Your email has been verified successfully!";
+        return View(model);
+    }
+
+    /// <summary>
+    /// Resends the verification email.
+    /// </summary>
+    [Authorize]
+    [HttpPost("auth/resend-verification")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResendVerification()
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user == null)
+        {
+            return RedirectToAction("Login");
+        }
+
+        if (user.EmailVerified)
+        {
+            TempData["Info"] = "Your email is already verified.";
+            return RedirectToAction("Index", "Home");
+        }
+
+        // Rate limit: only allow resending once per minute
+        if (user.EmailVerificationSentAt.HasValue &&
+            DateTime.UtcNow - user.EmailVerificationSentAt.Value < TimeSpan.FromMinutes(1))
+        {
+            TempData["Error"] = "Please wait a minute before requesting another verification email.";
+            return RedirectToAction("Index", "Home");
+        }
+
+        await SendVerificationEmailAsync(user);
+
+        TempData["Success"] = "Verification email sent! Please check your inbox.";
+        return RedirectToAction("Index", "Home");
+    }
+
+    // -------------------------------------------------------------------------
+    // Access Denied
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Displays the access denied page.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("auth/access-denied")]
+    public IActionResult AccessDenied()
+    {
+        return View();
     }
 
     // -------------------------------------------------------------------------
@@ -177,215 +466,39 @@ public class AuthController : Controller
     // -------------------------------------------------------------------------
 
     /// <summary>
-    /// Exchanges the OAuth authorization code for an access token.
+    /// Generates and sends a verification email to the user.
     /// </summary>
-    private async Task<string?> ExchangeCodeForTokenAsync(string code)
+    private async Task SendVerificationEmailAsync(ApplicationUser user)
     {
-        using var client = _httpClientFactory.CreateClient();
+        // Generate a simple verification token
+        var token = Guid.NewGuid().ToString("N");
+        user.EmailVerificationToken = token;
+        user.EmailVerificationSentAt = DateTime.UtcNow;
+        await _userManager.UpdateAsync(user);
 
-        var tokenRequest = new Dictionary<string, string>
-        {
-            ["client_id"] = _gitHubSettings.ClientId,
-            ["client_secret"] = _gitHubSettings.ClientSecret,
-            ["code"] = code
-        };
+        var verifyUrl = Url.Action(
+            "VerifyEmail",
+            "Auth",
+            new { userId = user.Id.ToString(), token },
+            Request.Scheme);
 
-        var request = new HttpRequestMessage(HttpMethod.Post, "https://github.com/login/oauth/access_token")
-        {
-            Content = new FormUrlEncodedContent(tokenRequest)
-        };
-        request.Headers.Accept.Add(new("application/json"));
-
-        var response = await client.SendAsync(request);
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogWarning("Token exchange failed with status {Status}", response.StatusCode);
-            return null;
-        }
-
-        var content = await response.Content.ReadAsStringAsync();
-        using var doc = JsonDocument.Parse(content);
-
-        if (doc.RootElement.TryGetProperty("access_token", out var tokenElement))
-        {
-            return tokenElement.GetString();
-        }
-
-        if (doc.RootElement.TryGetProperty("error", out var errorElement))
-        {
-            _logger.LogWarning("Token exchange error: {Error}", errorElement.GetString());
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Gets user information from the GitHub API.
-    /// </summary>
-    private async Task<GitHubUserInfo?> GetGitHubUserAsync(string accessToken)
-    {
-        using var client = _httpClientFactory.CreateClient("GitHub");
-        client.DefaultRequestHeaders.Authorization = new("Bearer", accessToken);
-
-        var response = await client.GetAsync("user");
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogWarning("Failed to get GitHub user: {Status}", response.StatusCode);
-            return null;
-        }
-
-        var content = await response.Content.ReadAsStringAsync();
-        using var doc = JsonDocument.Parse(content);
-        var root = doc.RootElement;
-
-        var user = new GitHubUserInfo
-        {
-            Id = root.GetProperty("id").GetInt64(),
-            Login = root.GetProperty("login").GetString()!,
-            Email = root.TryGetProperty("email", out var emailProp) ? emailProp.GetString() : null,
-            AvatarUrl = root.TryGetProperty("avatar_url", out var avatarProp) ? avatarProp.GetString() : null
-        };
-
-        // If email is not public, try to get it from emails endpoint
-        if (string.IsNullOrEmpty(user.Email))
-        {
-            user.Email = await GetPrimaryEmailAsync(client);
-        }
-
-        return user;
-    }
-
-    /// <summary>
-    /// Gets the user's primary email from the GitHub emails endpoint.
-    /// </summary>
-    private async Task<string?> GetPrimaryEmailAsync(HttpClient client)
-    {
         try
         {
-            var response = await client.GetAsync("user/emails");
-            if (!response.IsSuccessStatusCode)
-            {
-                return null;
-            }
+            await _emailService.SendEmailAsync(
+                user.Email!,
+                "Verify Your Email - Ando CI",
+                $"""
+                <h2>Welcome to Ando CI!</h2>
+                <p>Please verify your email address by clicking the link below:</p>
+                <p><a href="{verifyUrl}">Verify Email</a></p>
+                <p>If you didn't create an account, you can safely ignore this email.</p>
+                """);
 
-            var content = await response.Content.ReadAsStringAsync();
-            using var doc = JsonDocument.Parse(content);
-
-            foreach (var email in doc.RootElement.EnumerateArray())
-            {
-                var isPrimary = email.TryGetProperty("primary", out var primaryProp) && primaryProp.GetBoolean();
-                var isVerified = email.TryGetProperty("verified", out var verifiedProp) && verifiedProp.GetBoolean();
-
-                if (isPrimary && isVerified && email.TryGetProperty("email", out var emailProp))
-                {
-                    return emailProp.GetString();
-                }
-            }
+            _logger.LogInformation("Verification email sent to {Email}", user.Email);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to get primary email");
+            _logger.LogError(ex, "Failed to send verification email to {Email}", user.Email);
         }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Gets or creates a user in the database based on GitHub info.
-    /// </summary>
-    private async Task<User> GetOrCreateUserAsync(GitHubUserInfo gitHubUser, string accessToken)
-    {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.GitHubId == gitHubUser.Id);
-
-        // Encrypt the access token before storage
-        var encryptedToken = _encryption.Encrypt(accessToken);
-
-        if (user == null)
-        {
-            user = new User
-            {
-                GitHubId = gitHubUser.Id,
-                GitHubLogin = gitHubUser.Login,
-                Email = gitHubUser.Email,
-                AvatarUrl = gitHubUser.AvatarUrl,
-                AccessToken = encryptedToken,
-                CreatedAt = DateTime.UtcNow,
-                LastLoginAt = DateTime.UtcNow
-            };
-            _db.Users.Add(user);
-            _logger.LogInformation("Created new user {Login} (GitHub ID: {GitHubId})", user.GitHubLogin, user.GitHubId);
-        }
-        else
-        {
-            // Update existing user
-            user.GitHubLogin = gitHubUser.Login;
-            user.Email = gitHubUser.Email ?? user.Email;
-            user.AvatarUrl = gitHubUser.AvatarUrl ?? user.AvatarUrl;
-            user.AccessToken = encryptedToken;
-            user.LastLoginAt = DateTime.UtcNow;
-            _logger.LogInformation("Updated user {Login} (GitHub ID: {GitHubId})", user.GitHubLogin, user.GitHubId);
-        }
-
-        await _db.SaveChangesAsync();
-        return user;
-    }
-
-    /// <summary>
-    /// Signs in the user by creating an authentication cookie.
-    /// </summary>
-    private async Task SignInUserAsync(User user)
-    {
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new(ClaimTypes.Name, user.GitHubLogin),
-            new("GitHubId", user.GitHubId.ToString()),
-        };
-
-        if (!string.IsNullOrEmpty(user.Email))
-        {
-            claims.Add(new(ClaimTypes.Email, user.Email));
-        }
-
-        if (!string.IsNullOrEmpty(user.AvatarUrl))
-        {
-            claims.Add(new("AvatarUrl", user.AvatarUrl));
-        }
-
-        var identity = new ClaimsIdentity(claims, "Cookies");
-        var principal = new ClaimsPrincipal(identity);
-
-        await HttpContext.SignInAsync("Cookies", principal, new AuthenticationProperties
-        {
-            IsPersistent = true,
-            ExpiresUtc = DateTimeOffset.UtcNow.AddDays(30)
-        });
-    }
-
-    /// <summary>
-    /// DTO for GitHub user information.
-    /// </summary>
-    private class GitHubUserInfo
-    {
-        public long Id { get; set; }
-        public string Login { get; set; } = "";
-        public string? Email { get; set; }
-        public string? AvatarUrl { get; set; }
-    }
-
-    /// <summary>
-    /// Performs constant-time string comparison to prevent timing attacks.
-    /// </summary>
-    private static bool ConstantTimeEquals(string a, string b)
-    {
-        if (a == null || b == null)
-        {
-            return a == b;
-        }
-
-        var aBytes = System.Text.Encoding.UTF8.GetBytes(a);
-        var bBytes = System.Text.Encoding.UTF8.GetBytes(b);
-
-        return CryptographicOperations.FixedTimeEquals(aBytes, bBytes);
     }
 }

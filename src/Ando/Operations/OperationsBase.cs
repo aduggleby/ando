@@ -37,13 +37,23 @@ public abstract class OperationsBase
         string command,
         string[] args,
         string? context = null,
-        string? workingDirectory = null)
+        string? workingDirectory = null,
+        Dictionary<string, string>? environment = null)
     {
         Registry.Register(stepName, async () =>
         {
-            var options = workingDirectory != null
-                ? new CommandOptions { WorkingDirectory = workingDirectory }
-                : null;
+            var options = new CommandOptions();
+            if (workingDirectory != null)
+            {
+                options.WorkingDirectory = workingDirectory;
+            }
+            if (environment != null)
+            {
+                foreach (var (key, value) in environment)
+                {
+                    options.Environment[key] = value;
+                }
+            }
             var result = await ExecutorFactory().ExecuteAsync(command, args, options);
             return result.Success;
         }, context);
@@ -51,14 +61,36 @@ public abstract class OperationsBase
 
     /// <summary>
     /// Registers a step that executes a command with arguments built by the provided builder function.
+    /// The buildArgs function is called at step execution time, not registration time,
+    /// allowing for deferred evaluation of values that may require API calls or prompts.
     /// </summary>
     protected void RegisterCommand(
         string stepName,
         string command,
         Func<ArgumentBuilder> buildArgs,
         string? context = null,
-        string? workingDirectory = null)
+        string? workingDirectory = null,
+        Dictionary<string, string>? environment = null)
     {
-        RegisterCommand(stepName, command, buildArgs().Build(), context, workingDirectory);
+        Registry.Register(stepName, async () =>
+        {
+            // Build arguments at execution time, not registration time.
+            var args = buildArgs().Build();
+
+            var options = new CommandOptions();
+            if (workingDirectory != null)
+            {
+                options.WorkingDirectory = workingDirectory;
+            }
+            if (environment != null)
+            {
+                foreach (var (key, value) in environment)
+                {
+                    options.Environment[key] = value;
+                }
+            }
+            var result = await ExecutorFactory().ExecuteAsync(command, args, options);
+            return result.Success;
+        }, context);
     }
 }

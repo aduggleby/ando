@@ -58,9 +58,9 @@ export class BuildDetailsPage {
     this.commitSha = page.locator('.commit-sha').first();
     this.branch = page.locator('.branch-name').first();
     this.commitMessage = page.locator('.commit-message').first();
-    this.commitAuthor = page.locator('.info-item').filter({ hasText: /author/i }).locator('.info-value');
-    this.trigger = page.locator('.info-item').filter({ hasText: /trigger/i }).locator('.info-value');
-    this.duration = page.locator('#build-duration, .info-item').filter({ hasText: /duration/i }).locator('.info-value');
+    this.commitAuthor = page.locator('.info-item').filter({ has: page.locator('.info-label', { hasText: 'Author' }) }).locator('.info-value');
+    this.trigger = page.locator('.info-item').filter({ has: page.locator('.info-label', { hasText: 'Trigger' }) }).locator('.info-value');
+    this.duration = page.locator('.info-item').filter({ has: page.locator('.info-label', { hasText: 'Duration' }) }).locator('.info-value');
     this.errorMessage = page.locator('.error-message pre');
 
     // Artifacts

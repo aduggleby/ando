@@ -2,7 +2,7 @@
 // Demonstrates ALL Dotnet operations with advanced options
 //
 // This example shows:
-// - Project.From() for multiple projects
+// - DotnetProject() for multiple projects
 // - Root / "path" syntax for BuildPath
 // - Context.Paths.Artifacts usage
 // - Context.Vars["key"] usage
@@ -12,8 +12,8 @@
 // - Dotnet.Publish() with all options (runtime, self-contained, single-file)
 
 // Define projects
-var App = Project.From("./src/WebApp/WebApp.csproj");
-var Tests = Project.From("./tests/WebApp.Tests/WebApp.Tests.csproj");
+var App = DotnetProject("./src/WebApp/WebApp.csproj");
+var Tests = DotnetProject("./tests/WebApp.Tests/WebApp.Tests.csproj");
 
 // Output paths using BuildPath syntax
 var output = Root / "dist";

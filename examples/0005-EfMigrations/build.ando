@@ -12,7 +12,7 @@
 // - Ef.RemoveMigration() for removing migrations
 
 // Reference the data project and DbContext
-var DataProject = Project.From("./src/DataProject/DataProject.csproj");
+var DataProject = DotnetProject("./src/DataProject/DataProject.csproj");
 var DbContext = Ef.DbContextFrom(DataProject, "AppDbContext");
 
 // Ensure EF tools are installed

@@ -8,17 +8,18 @@
 // "warm containers" for performance - keeping containers running between builds.
 //
 // Architecture:
-// - Creates containers with the project mounted at /workspace
+// - Creates containers with project files COPIED into /workspace (not mounted)
 // - Mounts cache directories to persist NuGet/npm packages across builds
 // - Uses 'tail -f /dev/null' to keep containers running indefinitely
 // - ContainerExecutor handles command execution within containers
 //
 // Design Decisions:
+// - Project files are copied in (not mounted) for true isolation - Docker
+//   operations cannot modify host files during build execution
 // - Warm containers avoid the overhead of container creation on each build
 // - Alpine-based images for smaller size and faster pulls
-// - Cache directories persist across builds for faster dependency resolution
-// - Project is mounted read-write for build outputs
-// - Optional Docker socket mount enables Docker-in-Docker for image builds
+// - Cache directories mounted for faster dependency resolution across builds
+// - Artifacts must be explicitly copied back to host after build completion
 // =============================================================================
 
 using System.Diagnostics;
@@ -53,7 +54,7 @@ public class ContainerConfig
     public string Name { get; set; } = "ando-build";
 
     /// <summary>
-    /// Project root directory to mount at /workspace in the container.
+    /// Project root directory. Files will be copied (not mounted) to /workspace.
     /// </summary>
     public required string ProjectRoot { get; set; }
 
@@ -72,6 +73,28 @@ public class DockerManager
 {
     private readonly IBuildLogger _logger;
     private readonly ProcessRunner _processRunner;
+
+    // Directories to exclude when copying project to container.
+    // These are typically large, generated, or version-controlled directories.
+    private static readonly string[] ExcludedDirectories =
+    [
+        ".git",
+        "node_modules",
+        "bin",
+        "obj",
+        ".vs",
+        ".idea",
+        "packages",
+        "TestResults",
+        "test-results",
+        "coverage",
+        ".pytest_cache",
+        "__pycache__",
+        "dist",
+        "build",
+        "target",
+        // Keep .ando for cache directories
+    ];
 
     public DockerManager(IBuildLogger logger)
     {
@@ -145,6 +168,7 @@ public class DockerManager
 
     /// <summary>
     /// Creates a new container or starts an existing one.
+    /// For warm containers, re-copies project files to ensure fresh state.
     /// </summary>
     public async Task<ContainerInfo> EnsureContainerAsync(ContainerConfig config)
     {
@@ -156,9 +180,18 @@ public class DockerManager
             {
                 _logger.Debug($"Starting existing container: {config.Name}");
                 await StartContainerAsync(existing.Id);
-                return existing with { IsRunning = true };
+                existing = existing with { IsRunning = true };
             }
-            _logger.Debug($"Reusing running container: {config.Name}");
+            else
+            {
+                _logger.Debug($"Reusing running container: {config.Name}");
+            }
+
+            // For warm containers, re-copy project files to ensure fresh build state.
+            // This maintains isolation while preserving cached dependencies.
+            _logger.Info($"Syncing project files to container...");
+            await CopyProjectToContainerAsync(existing.Id, config.ProjectRoot);
+
             return existing;
         }
 
@@ -166,27 +199,16 @@ public class DockerManager
         return await CreateContainerAsync(config);
     }
 
-    // Creates a new container with appropriate mounts and configuration.
+    // Creates a new container with cache mounts (but NOT project mount).
+    // Project files are copied in separately for isolation.
     // Container runs 'tail -f /dev/null' to stay alive indefinitely.
     private async Task<ContainerInfo> CreateContainerAsync(ContainerConfig config)
     {
         _logger.Info($"Creating Docker container '{config.Name}'");
         _logger.Info($"  Image: {config.Image}");
-        _logger.Info($"  Mount: {config.ProjectRoot} -> /workspace");
+        _logger.Info($"  Project files will be copied (isolated mode)");
 
-        // Build the docker run command arguments.
-        var args = new List<string>
-        {
-            "run",
-            "-d",                              // Detached mode
-            "--name", config.Name,             // Named for easy lookup
-            "-v", $"{config.ProjectRoot}:/workspace",  // Mount project
-            "-w", "/workspace",                // Set working directory
-            "--entrypoint", "tail",            // Override entrypoint to keep alive
-        };
-
-        // Ensure cache directories exist before mounting.
-        // These persist NuGet packages and npm modules across builds.
+        // Ensure cache directories exist on host before mounting.
         var cacheDir = Path.Combine(config.ProjectRoot, ".ando", "cache");
         var nugetCacheDir = Path.Combine(cacheDir, "nuget");
         var npmCacheDir = Path.Combine(cacheDir, "npm");
@@ -196,31 +218,41 @@ public class DockerManager
         _logger.Debug($"  Created host cache directory: {nugetCacheDir}");
         _logger.Debug($"  Created host cache directory: {npmCacheDir}");
 
-        // Configure environment variables for package manager caches.
-        // This significantly speeds up subsequent builds.
-        args.AddRange(new[]
+        // Build the docker run command arguments.
+        // Note: Project root is NOT mounted - files are copied in for isolation.
+        var args = new List<string>
         {
+            "run",
+            "-d",                              // Detached mode
+            "--name", config.Name,             // Named for easy lookup
+            "-w", "/workspace",                // Set working directory
+            "--entrypoint", "tail",            // Override entrypoint to keep alive
+            // Mount only cache directories for warm container performance.
+            // These persist NuGet packages and npm modules across builds.
+            "-v", $"{nugetCacheDir}:/workspace/.ando/cache/nuget",
+            "-v", $"{npmCacheDir}:/workspace/.ando/cache/npm",
+            // Configure environment variables for package manager caches.
             "-e", "NUGET_PACKAGES=/workspace/.ando/cache/nuget",
             "-e", "npm_config_cache=/workspace/.ando/cache/npm",
-        });
+        };
 
         _logger.Info($"  Container directories:");
-        _logger.Info($"    /workspace                    - Project root (mounted)");
+        _logger.Info($"    /workspace                    - Project root (copied, isolated)");
         _logger.Info($"    /workspace/artifacts          - Build outputs");
-        _logger.Info($"    /workspace/.ando/cache/nuget  - NuGet package cache");
-        _logger.Info($"    /workspace/.ando/cache/npm    - npm package cache");
+        _logger.Info($"    /workspace/.ando/cache/nuget  - NuGet package cache (mounted)");
+        _logger.Info($"    /workspace/.ando/cache/npm    - npm package cache (mounted)");
 
         // Optional: Mount Docker socket for Docker-in-Docker scenarios.
         // Required when builds need to create Docker images.
         if (config.MountDockerSocket)
         {
-            args.AddRange(new[] { "-v", "/var/run/docker.sock:/var/run/docker.sock" });
+            args.AddRange(["-v", "/var/run/docker.sock:/var/run/docker.sock"]);
             _logger.Info($"  Docker socket mounted for Docker-in-Docker");
         }
 
         // Add image and arguments to 'tail' command.
         args.Add(config.Image);
-        args.AddRange(new[] { "-f", "/dev/null" }); // Keep container running forever
+        args.AddRange(["-f", "/dev/null"]); // Keep container running forever
 
         var startInfo = new ProcessStartInfo
         {
@@ -253,7 +285,151 @@ public class DockerManager
 
         _logger.Info($"  Container ID: {containerId[..12]}");
 
+        // Create the /workspace directory in container.
+        await ExecuteInContainerAsync(containerId, "mkdir", ["-p", "/workspace"]);
+
+        // Copy project files into the container.
+        _logger.Info($"Copying project files to container...");
+        await CopyProjectToContainerAsync(containerId, config.ProjectRoot);
+
         return new ContainerInfo(containerId, config.Name, true);
+    }
+
+    /// <summary>
+    /// Copies project files from host to container's /workspace directory.
+    /// Excludes large/generated directories for efficiency.
+    /// This is the key to isolation - the container works on a copy, not the original.
+    /// </summary>
+    public async Task CopyProjectToContainerAsync(string containerId, string projectRoot)
+    {
+        // First, clean the workspace (except cache directories).
+        // This ensures a fresh state for each build.
+        await ExecuteInContainerAsync(containerId, "sh", ["-c",
+            "find /workspace -mindepth 1 -maxdepth 1 ! -name '.ando' -exec rm -rf {} +"]);
+
+        // Create a temporary tar archive excluding unwanted directories.
+        // Using tar is much faster than individual docker cp calls.
+        var tarPath = Path.Combine(Path.GetTempPath(), $"ando-project-{Guid.NewGuid():N}.tar");
+
+        try
+        {
+            // Build tar exclude arguments.
+            var excludeArgs = new List<string> { "-cf", tarPath };
+            foreach (var dir in ExcludedDirectories)
+            {
+                excludeArgs.Add("--exclude");
+                excludeArgs.Add(dir);
+            }
+            // Exclude .ando directory except we want it for structure, just not cache contents
+            excludeArgs.Add("--exclude");
+            excludeArgs.Add(".ando/cache");
+
+            excludeArgs.Add("-C");
+            excludeArgs.Add(projectRoot);
+            excludeArgs.Add(".");
+
+            // Create the tar archive on the host.
+            var tarStartInfo = new ProcessStartInfo
+            {
+                FileName = "tar",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+
+            foreach (var arg in excludeArgs)
+            {
+                tarStartInfo.ArgumentList.Add(arg);
+            }
+
+            _logger.Debug($"Creating tar archive of project (excluding: {string.Join(", ", ExcludedDirectories)})");
+
+            using (var tarProcess = Process.Start(tarStartInfo))
+            {
+                if (tarProcess == null)
+                {
+                    throw new InvalidOperationException("Failed to start tar process");
+                }
+
+                await tarProcess.WaitForExitAsync();
+                if (tarProcess.ExitCode != 0)
+                {
+                    var tarError = await tarProcess.StandardError.ReadToEndAsync();
+                    _logger.Warning($"Tar had warnings (may be normal): {tarError}");
+                }
+            }
+
+            // Copy the tar archive to the container.
+            var copyStartInfo = new ProcessStartInfo
+            {
+                FileName = "docker",
+                ArgumentList = { "cp", tarPath, $"{containerId}:/tmp/project.tar" },
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+
+            using (var copyProcess = Process.Start(copyStartInfo))
+            {
+                if (copyProcess == null)
+                {
+                    throw new InvalidOperationException("Failed to start docker cp process");
+                }
+
+                await copyProcess.WaitForExitAsync();
+                if (copyProcess.ExitCode != 0)
+                {
+                    var copyError = await copyProcess.StandardError.ReadToEndAsync();
+                    throw new InvalidOperationException($"Failed to copy tar to container: {copyError}");
+                }
+            }
+
+            // Extract the tar archive inside the container.
+            await ExecuteInContainerAsync(containerId, "tar", ["-xf", "/tmp/project.tar", "-C", "/workspace"]);
+
+            // Clean up the tar file in the container.
+            await ExecuteInContainerAsync(containerId, "rm", ["-f", "/tmp/project.tar"]);
+
+            _logger.Debug($"Project files copied to container successfully");
+        }
+        finally
+        {
+            // Clean up temporary tar file on host.
+            if (File.Exists(tarPath))
+            {
+                File.Delete(tarPath);
+            }
+        }
+    }
+
+    // Helper method to execute a command in the container.
+    private async Task ExecuteInContainerAsync(string containerId, string command, string[] args)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "docker",
+            ArgumentList = { "exec", containerId, command },
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+
+        foreach (var arg in args)
+        {
+            startInfo.ArgumentList.Add(arg);
+        }
+
+        using var process = Process.Start(startInfo);
+        if (process == null)
+        {
+            throw new InvalidOperationException($"Failed to execute {command} in container");
+        }
+
+        await process.WaitForExitAsync();
+        // Don't throw on non-zero exit - some commands may fail benignly
     }
 
     /// <summary>
@@ -261,7 +437,7 @@ public class DockerManager
     /// </summary>
     private async Task StartContainerAsync(string containerId)
     {
-        var result = await _processRunner.ExecuteAsync("docker", new[] { "start", containerId });
+        var result = await _processRunner.ExecuteAsync("docker", ["start", containerId]);
         if (!result.Success)
         {
             throw new InvalidOperationException($"Failed to start container: {result.Error}");
@@ -273,7 +449,7 @@ public class DockerManager
     /// </summary>
     public async Task StopContainerAsync(string containerId)
     {
-        await _processRunner.ExecuteAsync("docker", new[] { "stop", containerId });
+        await _processRunner.ExecuteAsync("docker", ["stop", containerId]);
     }
 
     /// <summary>
@@ -281,7 +457,7 @@ public class DockerManager
     /// </summary>
     public async Task RemoveContainerAsync(string containerName)
     {
-        await _processRunner.ExecuteAsync("docker", new[] { "rm", "-f", containerName });
+        await _processRunner.ExecuteAsync("docker", ["rm", "-f", containerName]);
     }
 
     /// <summary>
@@ -289,13 +465,9 @@ public class DockerManager
     /// </summary>
     public async Task CleanArtifactsAsync(string containerId)
     {
-        await _processRunner.ExecuteAsync("docker", new[]
-        {
-            "exec", containerId, "rm", "-rf", "/workspace/artifacts"
-        });
-        await _processRunner.ExecuteAsync("docker", new[]
-        {
-            "exec", containerId, "mkdir", "-p", "/workspace/artifacts"
-        });
+        await _processRunner.ExecuteAsync("docker",
+            ["exec", containerId, "rm", "-rf", "/workspace/artifacts"]);
+        await _processRunner.ExecuteAsync("docker",
+            ["exec", containerId, "mkdir", "-p", "/workspace/artifacts"]);
     }
 }

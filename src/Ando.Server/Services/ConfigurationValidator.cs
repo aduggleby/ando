@@ -13,8 +13,10 @@
 // - Collects all errors rather than failing on first error
 // - Differentiates between production and development requirements
 // - Stores errors in a singleton for access by error middleware
+// - Validates Docker is running in rootless mode for security
 // =============================================================================
 
+using System.Diagnostics;
 using Ando.Server.Configuration;
 using Microsoft.Extensions.Options;
 
@@ -130,6 +132,66 @@ public class ConfigurationValidator
             {
                 _errors.Add("GitHub:AppId is required. Set via environment variable: GitHub__AppId");
             }
+
+            // ---------------------------------------------------------------------
+            // Docker Security (required for production)
+            // ---------------------------------------------------------------------
+            ValidateDockerRootless();
+        }
+    }
+
+    /// <summary>
+    /// Validates that Docker is running in rootless mode.
+    /// Running Docker as root is a security risk as it allows container escapes
+    /// to gain full root access to the host system.
+    /// </summary>
+    private void ValidateDockerRootless()
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "docker",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+            startInfo.ArgumentList.Add("info");
+            startInfo.ArgumentList.Add("--format");
+            startInfo.ArgumentList.Add("{{.SecurityOptions}}");
+
+            using var process = Process.Start(startInfo);
+            if (process == null)
+            {
+                _errors.Add("Docker is not available. Ensure Docker is installed and accessible.");
+                return;
+            }
+
+            process.WaitForExit(TimeSpan.FromSeconds(10));
+
+            if (process.ExitCode != 0)
+            {
+                var error = process.StandardError.ReadToEnd();
+                _errors.Add($"Failed to check Docker configuration: {error}");
+                return;
+            }
+
+            var output = process.StandardOutput.ReadToEnd();
+
+            // Check if rootless mode is enabled by looking for "rootless" in security options
+            // Rootless Docker reports "name=rootless" in its security options
+            if (!output.Contains("rootless", StringComparison.OrdinalIgnoreCase))
+            {
+                _errors.Add(
+                    "Docker is running as root, which is a security risk. " +
+                    "Build containers could escape and gain root access to the host. " +
+                    "Please configure Docker to run in rootless mode. " +
+                    "See: https://docs.docker.com/engine/security/rootless/");
+            }
+        }
+        catch (Exception ex)
+        {
+            _errors.Add($"Failed to validate Docker configuration: {ex.Message}");
         }
     }
 }

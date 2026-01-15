@@ -60,6 +60,15 @@ public class BuildOperations
     /// <summary>Artifact operations for copying files to host.</summary>
     public ArtifactOperations Artifacts { get; }
 
+    /// <summary>Node.js installation operations (installs Node.js globally).</summary>
+    public NodeInstallOperations Node { get; }
+
+    /// <summary>.NET SDK installation operations (installs SDK globally).</summary>
+    public DotnetInstallOperations DotnetSdk { get; }
+
+    /// <summary>Logging operations for build script output.</summary>
+    public LogOperations Log { get; }
+
     /// <summary>
     /// Creates all operation instances.
     /// </summary>
@@ -82,5 +91,8 @@ public class BuildOperations
         Functions = new FunctionsOperations(registry, logger, executorFactory);
         AppService = new AppServiceOperations(registry, logger, executorFactory);
         Artifacts = new ArtifactOperations(logger);
+        Node = new NodeInstallOperations(registry, logger, executorFactory);
+        DotnetSdk = new DotnetInstallOperations(registry, logger, executorFactory);
+        Log = new LogOperations(logger);
     }
 }

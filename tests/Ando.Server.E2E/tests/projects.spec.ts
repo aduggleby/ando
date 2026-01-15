@@ -38,7 +38,7 @@ test.describe('Projects List', () => {
     await expect(projectCard).toContainText(testProject.repoFullName);
 
     // Check build status badge is shown
-    await expect(projectCard.locator('.status-badge')).toBeVisible();
+    await expect(projectCard.locator('.status-badge-lg, .status-badge')).toBeVisible();
   });
 
   test('can navigate to project details', async ({ authedPage, testProject }) => {
@@ -273,13 +273,17 @@ test.describe('Project Secrets', () => {
     expect(secrets).not.toContain('TO_DELETE');
   });
 
-  test('rejects invalid secret names', async ({ authedPage, testProject }) => {
+  test('auto-formats secret names to uppercase', async ({ authedPage, testProject }) => {
     const settings = new ProjectSettingsPage(authedPage);
     await settings.goto(testProject.id);
 
-    // Try to add secret with invalid name (lowercase)
-    await settings.addSecret('invalid_name', 'value');
-    await settings.expectErrorMessage(/must be uppercase/i);
+    // Add secret with lowercase name - should be auto-formatted to uppercase
+    await settings.addSecret('my_secret_key', 'value');
+    await settings.expectSuccessMessage(/secret.*saved/i);
+
+    // Verify it was saved with uppercase name
+    const secrets = await settings.getSecretNames();
+    expect(secrets).toContain('MY_SECRET_KEY');
   });
 
   test('secret values are never displayed', async ({ authedPage, testProject, testApi }) => {
@@ -354,8 +358,9 @@ test.describe('Project Deletion', () => {
 
 test.describe('User Isolation', () => {
   test('user cannot see other users projects', async ({ authedPage, testApi }) => {
-    // Create another user with a project
-    const otherUser = await testApi.createUser({ login: 'other-user' });
+    // Create another user with a project (use unique name to avoid conflicts)
+    const uniqueId = Date.now().toString(36);
+    const otherUser = await testApi.createUser({ login: `other-user-${uniqueId}` });
     const otherProject = await testApi.createProject({
       userId: otherUser.userId,
       repoName: 'other-project',
@@ -373,8 +378,9 @@ test.describe('User Isolation', () => {
   });
 
   test('user cannot access other users project details', async ({ authedPage, testApi }) => {
-    // Create another user with a project
-    const otherUser = await testApi.createUser({ login: 'other-user-2' });
+    // Create another user with a project (use unique name to avoid conflicts)
+    const uniqueId = Date.now().toString(36);
+    const otherUser = await testApi.createUser({ login: `other-user-${uniqueId}` });
     const otherProject = await testApi.createProject({
       userId: otherUser.userId,
       repoName: 'private-project',

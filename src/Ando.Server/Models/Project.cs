@@ -27,7 +27,7 @@ public class Project
     /// <summary>
     /// The user who owns this project.
     /// </summary>
-    public User Owner { get; set; } = null!;
+    public ApplicationUser Owner { get; set; } = null!;
 
     // -------------------------------------------------------------------------
     // GitHub Repository Info

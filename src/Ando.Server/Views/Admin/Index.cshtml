@@ -1,0 +1,166 @@
+@model Ando.Server.ViewModels.AdminDashboardViewModel
+@{
+    ViewData["Title"] = "Admin Dashboard";
+    Layout = "_Layout";
+}
+
+<div class="dashboard">
+    <div class="page-header">
+        <h1>Admin Dashboard</h1>
+        <a href="/admin/users" class="btn btn-primary">Manage Users</a>
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success mb-4">
+            @TempData["Success"]
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-error mb-4">
+            @TempData["Error"]
+        </div>
+    }
+
+    <div class="dashboard-stats">
+        <div class="stat-card">
+            <h3>Total Users</h3>
+            <p class="stat-value">@Model.TotalUsers</p>
+        </div>
+        <div class="stat-card">
+            <h3>Verified</h3>
+            <p class="stat-value text-success">@Model.VerifiedUsers</p>
+        </div>
+        <div class="stat-card">
+            <h3>Unverified</h3>
+            <p class="stat-value @(Model.UnverifiedUsers > 0 ? "text-warning" : "")">@Model.UnverifiedUsers</p>
+        </div>
+        <div class="stat-card">
+            <h3>Admins</h3>
+            <p class="stat-value">@Model.AdminUsers</p>
+        </div>
+    </div>
+
+    <div class="dashboard-stats mt-4">
+        <div class="stat-card">
+            <h3>Total Projects</h3>
+            <p class="stat-value">@Model.TotalProjects</p>
+        </div>
+        <div class="stat-card">
+            <h3>Total Builds</h3>
+            <p class="stat-value">@Model.TotalBuilds</p>
+        </div>
+        <div class="stat-card">
+            <h3>Builds (24h)</h3>
+            <p class="stat-value">@Model.RecentBuilds</p>
+        </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mt-8">
+        <section class="recent-builds">
+            <div class="section-header">
+                <h2>Recent Users</h2>
+                <a href="/admin/users" class="btn btn-secondary btn-sm">View All</a>
+            </div>
+
+            @if (Model.RecentUsers.Count == 0)
+            {
+                <div class="empty-state">
+                    <p>No users yet.</p>
+                </div>
+            }
+            else
+            {
+                <table class="builds-table">
+                    <thead>
+                        <tr>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Joined</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var user in Model.RecentUsers)
+                        {
+                            <tr class="build-row" onclick="window.location='/admin/users/@user.Id'">
+                                <td>
+                                    <div class="font-medium">@user.DisplayName</div>
+                                    <div class="text-xs text-slate-500">@user.Email</div>
+                                </td>
+                                <td>
+                                    @if (user.EmailVerified)
+                                    {
+                                        <span class="status-badge status-success">Verified</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-badge status-pending">Pending</span>
+                                    }
+                                </td>
+                                <td>@FormatRelativeTime(user.CreatedAt)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </section>
+
+        <section class="recent-builds">
+            <div class="section-header">
+                <h2>Recent Builds</h2>
+                <a href="/admin/projects" class="btn btn-secondary btn-sm">View Projects</a>
+            </div>
+
+            @if (Model.RecentBuilds24h.Count == 0)
+            {
+                <div class="empty-state">
+                    <p>No builds in the last 24 hours.</p>
+                </div>
+            }
+            else
+            {
+                <table class="builds-table">
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th>Project</th>
+                            <th>Branch</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var build in Model.RecentBuilds24h)
+                        {
+                            <tr class="build-row" onclick="window.location='/builds/@build.Id'">
+                                <td>
+                                    <span class="status-badge status-@build.Status.ToLower()">
+                                        @build.Status
+                                    </span>
+                                </td>
+                                <td>@build.ProjectName</td>
+                                <td><span class="branch-name">@build.Branch</span></td>
+                                <td>@FormatRelativeTime(build.CreatedAt)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </section>
+    </div>
+</div>
+
+@functions {
+    string FormatRelativeTime(DateTime dateTime)
+    {
+        var diff = DateTime.UtcNow - dateTime;
+
+        if (diff.TotalMinutes < 1) return "just now";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}d ago";
+
+        return dateTime.ToString("MMM d");
+    }
+}

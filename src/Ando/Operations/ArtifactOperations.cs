@@ -5,7 +5,8 @@
 //
 // ArtifactOperations allows build scripts to specify which files or directories
 // from the container's /workspace should be copied back to the host machine
-// after a successful build. This is essential since all builds run in Docker.
+// after a successful build. This is essential since all builds run in Docker
+// with isolated workspaces (project files are copied in, not mounted).
 //
 // Architecture:
 // - Scripts register artifacts using CopyToHost(containerPath, hostPath)
@@ -19,6 +20,7 @@
 // Design Decisions:
 // - Artifacts are registered during script execution, not copied immediately
 // - This allows validation and batch copying after build success
+// - All artifacts are copied via 'docker cp' since workspace is not mounted
 // - Logging provides visibility into what files are being copied
 // =============================================================================
 
@@ -76,9 +78,8 @@ public class ArtifactOperations
     /// Called by BuildContext after successful build completion.
     /// </summary>
     /// <remarks>
-    /// Files under /workspace are already on the host via the volume mount,
-    /// so we verify they exist rather than copying. Only files outside /workspace
-    /// need to be copied via docker cp.
+    /// Since the workspace is not mounted (files are copied in for isolation),
+    /// all artifacts must be copied back to the host via 'docker cp'.
     /// </remarks>
     internal async Task CopyToHostAsync(string containerId, string projectRoot, IBuildLogger logger)
     {
@@ -88,7 +89,7 @@ public class ArtifactOperations
             return;
         }
 
-        logger.Info($"Processing {_artifacts.Count} artifact(s):");
+        logger.Info($"Copying {_artifacts.Count} artifact(s) from container:");
 
         foreach (var artifact in _artifacts)
         {
@@ -97,23 +98,6 @@ public class ArtifactOperations
                 ? artifact.HostPath
                 : Path.Combine(projectRoot, artifact.HostPath.TrimStart('.', '/'));
 
-            // Check if the artifact is under /workspace (the mounted volume).
-            // If so, it's already on the host - just verify it exists.
-            if (artifact.ContainerPath.StartsWith("/workspace/"))
-            {
-                // The path relative to /workspace maps directly to the host project root.
-                var relativePath = artifact.ContainerPath["/workspace/".Length..];
-                var mountedPath = Path.Combine(projectRoot, relativePath);
-
-                if (Directory.Exists(mountedPath) || File.Exists(mountedPath))
-                {
-                    logger.Info($"  {artifact.ContainerPath} -> {hostPath} (via mount)");
-                    logger.Debug($"  Already available at: {mountedPath}");
-                    continue;
-                }
-            }
-
-            // For paths outside the mount, or if verification failed, use docker cp.
             // Ensure host directory exists.
             var hostDir = Path.GetDirectoryName(hostPath);
             if (!string.IsNullOrEmpty(hostDir))

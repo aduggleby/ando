@@ -13,7 +13,7 @@
 // - Publishing the application for deployment
 
 // Define projects
-var WebApp = Project.From("./src/WebApp/WebApp.csproj");
+var WebApp = DotnetProject("./src/WebApp/WebApp.csproj");
 var DbContext = Ef.DbContextFrom(WebApp, "AppDbContext");
 
 // Ensure EF tools are available

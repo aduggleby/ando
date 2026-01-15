@@ -96,4 +96,59 @@ public class ScriptHost(IBuildLogger logger)
 
         return context;
     }
+
+    /// <summary>
+    /// Verifies a build script compiles without errors, without executing it.
+    /// Returns compilation diagnostics if any errors are found.
+    /// </summary>
+    /// <param name="scriptPath">Path to the build.ando file.</param>
+    /// <returns>List of compilation error messages, empty if script is valid.</returns>
+    public async Task<List<string>> VerifyScriptAsync(string scriptPath)
+    {
+        var errors = new List<string>();
+
+        if (!File.Exists(scriptPath))
+        {
+            errors.Add($"Build script not found: {scriptPath}");
+            return errors;
+        }
+
+        var scriptContent = await File.ReadAllTextAsync(scriptPath);
+
+        // Configure Roslyn with the same options used for actual execution.
+        var options = ScriptOptions.Default
+            .WithReferences(
+                typeof(BuildContext).Assembly,
+                typeof(object).Assembly,
+                typeof(Console).Assembly,
+                typeof(File).Assembly,
+                typeof(Task).Assembly,
+                typeof(Enumerable).Assembly)
+            .WithImports(
+                "System",
+                "System.IO",
+                "System.Linq",
+                "System.Threading.Tasks",
+                "System.Collections.Generic",
+                "Ando.Context",
+                "Ando.References",
+                "Ando.Operations",
+                "Ando.Workflow",
+                "Ando.Steps");
+
+        // Create and compile the script without running it.
+        var script = CSharpScript.Create(scriptContent, options, typeof(ScriptGlobals));
+        var diagnostics = script.Compile();
+
+        // Collect any errors (warnings are ignored).
+        foreach (var diagnostic in diagnostics)
+        {
+            if (diagnostic.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
+            {
+                errors.Add(diagnostic.ToString());
+            }
+        }
+
+        return errors;
+    }
 }

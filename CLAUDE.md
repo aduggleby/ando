@@ -1,5 +1,7 @@
 # ANDO - Claude Code Instructions
 
+**Important:** Always address the user as "Mr. Ando".
+
 ## Project Overview
 
 ANDO is a typed C# build system using Roslyn scripting. Build scripts (`build.ando` files) are real C# code executed via Roslyn in Docker containers.
@@ -35,22 +37,57 @@ website/            # Documentation website (see website/CLAUDE.md)
 
 ## Testing
 
-```bash
-# Run unit tests only
-dotnet test --filter "Category=Unit"
+**IMPORTANT**: When asked to run tests, run ALL tests including Playwright E2E tests.
 
-# Run all tests
+### .NET Tests
+```bash
+# Run all .NET tests (unit + integration)
 dotnet test
 
 # Run with coverage
 dotnet test /p:CollectCoverage=true
+
+# Run specific test categories
+dotnet test --filter "Category=Unit"
+dotnet test --filter "Category=Integration"
 ```
+
+### Playwright E2E Tests
+E2E tests use docker-compose to create an isolated network where SQL Server and the server communicate privately. Only the server's web port (5000) is exposed.
+
+```bash
+# Install dependencies (required first time)
+cd tests/Ando.Server.E2E && npm install
+
+# Run all E2E tests (starts docker-compose automatically)
+cd tests/Ando.Server.E2E && npm test
+
+# Run with UI for debugging
+cd tests/Ando.Server.E2E && npm run test:ui
+
+# Run headed (visible browser)
+cd tests/Ando.Server.E2E && npm run test:headed
+
+# Clean up containers after tests
+cd tests && docker compose -f docker-compose.test.yml down
+```
+
+### SQL Server for Integration/E2E Tests
+- **Integration tests** (.NET): Use Testcontainers to spin up SQL Server automatically
+- **E2E tests** (Playwright): Use docker-compose with isolated network
+  - `ando-e2e-sqlserver`: SQL Server (no public ports, internal network only)
+  - `ando-e2e-server`: Web server (port 17100 exposed)
+
+### Port Allocation
+This project uses port range **17100-17199**. Other projects use different ranges to avoid conflicts.
 
 Uses:
 - xUnit for testing framework
 - FsCheck for property-based testing
 - Shouldly for assertions
 - MockExecutor for testing without executing commands
+- Testcontainers.MsSql for SQL Server integration tests
+- Playwright for browser-based E2E tests
 
 ## Build Commands
 
@@ -83,6 +120,22 @@ dotnet publish src/Ando/Ando.csproj -c Release -r linux-x64 --self-contained -o 
 - Prefer async/await for I/O operations
 - Operations register steps; they don't execute immediately
 - Use fluent builders for options (e.g., `WithConfiguration()`, `WithRuntime()`)
+
+## Keeping Documentation in Sync
+
+**IMPORTANT**: When making changes to the codebase:
+
+1. **Build and run tests first** - Always run `dotnet build` and `dotnet test` to verify changes work before updating documentation
+2. **Then update all related documentation and examples**:
+
+1. **Website documentation** (`website/src/data/operations.js`) - Update operation descriptions and examples
+2. **Website landing page** (`website/src/pages/index.astro`) - Update the example build.ando section
+3. **Example build.ando files** (`examples/*/build.ando`) - Update all example scripts
+4. **Main build.ando** (`build.ando`) - Update if affected
+5. **Test files** - Update test assertions and embedded scripts
+6. **CLAUDE.md files** - Update if instructions change
+
+Run `npm run build` in the website directory to verify documentation builds correctly.
 
 ## Documentation Standards
 

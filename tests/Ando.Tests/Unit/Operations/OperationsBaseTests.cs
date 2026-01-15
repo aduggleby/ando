@@ -93,7 +93,7 @@ public class OperationsBaseTests
     }
 
     [Fact]
-    public async Task RegisterCommand_WithoutWorkingDirectory_HasNullOptions()
+    public async Task RegisterCommand_WithoutWorkingDirectory_HasNullWorkingDirectory()
     {
         var ops = CreateTestOps();
 
@@ -101,7 +101,8 @@ public class OperationsBaseTests
         await _registry.Steps[0].Execute();
 
         var cmd = _executor.ExecutedCommands[0];
-        cmd.Options.ShouldBeNull();
+        cmd.Options.ShouldNotBeNull();
+        cmd.Options!.WorkingDirectory.ShouldBeNull();
     }
 
     [Fact]

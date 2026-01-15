@@ -1,0 +1,47 @@
+---
+interface Operation {
+  group: string;
+  name: string;
+  desc: string;
+  examples: string[];
+}
+
+interface Props {
+  operations: Operation[];
+  showGroup?: boolean;
+}
+
+const { operations, showGroup = false } = Astro.props;
+
+// Generate anchor ID from operation name (e.g., "Cloudflare.PagesDeploy" -> "pagesdeploy")
+function getAnchorId(name: string): string {
+  // Remove the provider prefix and convert to lowercase
+  const parts = name.split(".");
+  return parts[parts.length - 1].toLowerCase();
+}
+---
+
+<table class="w-full text-sm">
+  <thead>
+    <tr class="border-b border-zinc-200 dark:border-zinc-700">
+      <th class="w-48 px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Operation</th>
+      <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    {
+      operations.map((item) => (
+        <tr class="border-b border-zinc-100 align-top hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3">
+            <a href={`#${getAnchorId(item.name)}`} class="hover:text-cyan-600 dark:hover:text-cyan-400">
+              <code class="whitespace-nowrap text-cyan-600 dark:text-cyan-400">{item.name}</code>
+            </a>
+          </td>
+          <td class="px-3 py-3">
+            <div class="text-zinc-600 dark:text-zinc-400" set:html={item.desc} />
+          </td>
+        </tr>
+      ))
+    }
+  </tbody>
+</table>

@@ -10,6 +10,14 @@
 // - Static class since these are pure utility functions with no state
 // - Throws InvalidOperationException for missing required variables (consistent with VarsContext)
 // - Provides optional description parameter for clearer error messages
+//
+// Interactive Prompting (GetRequiredOrPrompt):
+// - Prompts user via Console if environment variable is not set
+// - Supports secret input (hidden characters) for tokens/passwords
+// - Sets the environment variable for the CURRENT PROCESS only after prompting
+// - Child processes inherit the variable, but it is NOT persisted to the shell
+// - When the process exits, prompted values are lost
+// - This is intentional: credentials should not be stored automatically
 // =============================================================================
 
 namespace Ando.Utilities;
@@ -57,5 +65,77 @@ public static class EnvironmentHelper
     {
         var value = Environment.GetEnvironmentVariable(name);
         return string.IsNullOrEmpty(value) ? defaultValue : value;
+    }
+
+    /// <summary>
+    /// Gets a required environment variable, prompting the user if not set.
+    /// After prompting, sets the environment variable for the current process
+    /// so subsequent calls and child processes can use it.
+    /// </summary>
+    /// <param name="name">Environment variable name.</param>
+    /// <param name="description">Description shown in the prompt.</param>
+    /// <param name="isSecret">If true, hides input (for tokens/passwords).</param>
+    /// <returns>The environment variable value.</returns>
+    public static string GetRequiredOrPrompt(string name, string description, bool isSecret = false)
+    {
+        var value = Environment.GetEnvironmentVariable(name);
+        if (!string.IsNullOrEmpty(value))
+        {
+            return value;
+        }
+
+        // Prompt the user for the value.
+        Console.Write($"{description} ({name}): ");
+
+        if (isSecret)
+        {
+            value = ReadSecretLine();
+        }
+        else
+        {
+            value = Console.ReadLine();
+        }
+
+        if (string.IsNullOrEmpty(value))
+        {
+            throw new InvalidOperationException($"Value for '{name}' ({description}) is required.");
+        }
+
+        // Set the environment variable for this process and child processes.
+        Environment.SetEnvironmentVariable(name, value);
+
+        return value;
+    }
+
+    /// <summary>
+    /// Reads a line from console showing asterisks instead of actual characters.
+    /// </summary>
+    private static string ReadSecretLine()
+    {
+        var value = new System.Text.StringBuilder();
+
+        while (true)
+        {
+            var key = Console.ReadKey(intercept: true);
+
+            if (key.Key == ConsoleKey.Enter)
+            {
+                Console.WriteLine();
+                break;
+            }
+            else if (key.Key == ConsoleKey.Backspace && value.Length > 0)
+            {
+                value.Length--;
+                // Erase the asterisk: move back, overwrite with space, move back again.
+                Console.Write("\b \b");
+            }
+            else if (!char.IsControl(key.KeyChar))
+            {
+                value.Append(key.KeyChar);
+                Console.Write('*');
+            }
+        }
+
+        return value.ToString();
     }
 }

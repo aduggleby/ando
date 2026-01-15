@@ -1,8 +1,8 @@
 // 0002-Library: Multi-Project Example
 // Demonstrates building a console app that depends on a library
 
-var Library = Project.From("./src/Greeter.Lib/Greeter.Lib.csproj");
-var Console = Project.From("./src/Greeter.Console/Greeter.Console.csproj");
+var Library = DotnetProject("./src/Greeter.Lib/Greeter.Lib.csproj");
+var Console = DotnetProject("./src/Greeter.Console/Greeter.Console.csproj");
 
 // Output directory
 var output = Root / "dist";

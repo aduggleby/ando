@@ -1,7 +1,7 @@
 // 0001-Simple: Hello World Example
 // Demonstrates basic project build and publish
 
-var App = Project.From("./src/HelloWorld.csproj");
+var App = DotnetProject("./src/HelloWorld.csproj");
 
 // Output directory
 var output = Root / "dist";

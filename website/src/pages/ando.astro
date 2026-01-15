@@ -1,0 +1,221 @@
+---
+import ProviderLayout from "../layouts/ProviderLayout.astro";
+import OperationsTable from "../components/OperationsTable.astro";
+import CodeBlock from "../components/CodeBlock.astro";
+import { getOperationsForProvider } from "../data/operations.js";
+
+const operations = getOperationsForProvider("Ando");
+
+const dotnetProjectCode = `var app = DotnetProject("./src/MyApp/MyApp.csproj");
+Dotnet.Build(app);`;
+
+const directoryCode = `var frontend = Directory("./frontend");
+Npm.Ci(frontend);
+Npm.Build(frontend);
+
+// Use / operator to specify subdirectories for deployment
+Cloudflare.PagesDeploy(frontend / "dist", "my-site");`;
+
+const pathsCode = `// Root is the project root (where build.ando is located)
+var output = Root / "dist";
+var artifacts = Root / "artifacts" / "release";
+
+// Context.Paths provides additional path helpers
+var artifactsDir = Context.Paths.Artifacts;
+
+Dotnet.Publish(app, o => o.Output(output));`;
+
+const varsCode = `// Set custom variables
+Context.Vars["BUILD_NUMBER"] = "123";
+
+// Read environment variables (returns null if not set)
+var apiKey = Context.Vars.Env("API_KEY");
+
+// Require an environment variable (throws if not set)
+var dbUrl = Context.Vars.EnvRequired("DATABASE_URL");`;
+
+const optionsCode = `// Set release configuration for optimized builds
+Options.UseConfiguration(Configuration.Release);
+
+// Use a specific Docker image
+Options.UseImage("mcr.microsoft.com/dotnet/sdk:9.0");
+
+// Chain multiple options
+Options
+    .UseConfiguration(Configuration.Release)
+    .UseImage("ubuntu:24.04");
+
+// Now all Dotnet operations use Release configuration
+Dotnet.Build(app);  // Uses -c Release`;
+
+const completeCode = `// Project and directory references
+var api = DotnetProject("./src/Api/Api.csproj");
+var frontend = Directory("./frontend");
+
+// Configure build options
+Options.UseConfiguration(Configuration.Release);
+
+// Build backend
+Dotnet.Restore(api);
+Dotnet.Build(api);
+Dotnet.Publish(api, o => o.Output(Root / "dist" / "api"));
+
+// Build frontend
+Npm.Ci(frontend);
+Npm.Build(frontend);
+
+// Copy artifacts to host
+Artifacts.CopyToHost("dist", "./dist");`;
+---
+
+<ProviderLayout title="Ando" provider="Ando" description="Globals and helpers available in all build.ando scripts.">
+  <section id="operations" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Globals</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      These globals are available in all build.ando scripts without any prefix or import.
+    </p>
+    <OperationsTable operations={operations} />
+  </section>
+
+  <section id="references" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Reference Types</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      ANDO uses typed references for projects and directories, providing compile-time safety and clear intent.
+    </p>
+
+    <h3 class="mt-6 mb-3 text-base font-semibold text-zinc-900 dark:text-white">DotnetProject</h3>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      Creates a reference to a .NET project file. Used with <code
+        class="rounded border border-zinc-200 bg-zinc-100 px-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+        >Dotnet</code
+      > and <code
+        class="rounded border border-zinc-200 bg-zinc-100 px-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800">Ef</code
+      > operations.
+    </p>
+    <div class="mb-4">
+      <CodeBlock code={dotnetProjectCode} lang="csharp" />
+    </div>
+
+    <h3 class="mt-6 mb-3 text-base font-semibold text-zinc-900 dark:text-white">Directory</h3>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      Creates a reference to a directory. Used with <code
+        class="rounded border border-zinc-200 bg-zinc-100 px-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+        >Npm</code
+      > and <code
+        class="rounded border border-zinc-200 bg-zinc-100 px-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+        >Cloudflare</code
+      > operations. Supports the <code
+        class="rounded border border-zinc-200 bg-zinc-100 px-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800">/</code
+      > operator for path combining.
+    </p>
+    <div class="mb-4">
+      <CodeBlock code={directoryCode} lang="csharp" />
+    </div>
+  </section>
+
+  <section id="paths" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Path Helpers</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      ANDO provides path helpers that support the <code
+        class="rounded border border-zinc-200 bg-zinc-100 px-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800">/</code
+      > operator for readable path construction.
+    </p>
+
+    <div class="mb-4">
+      <CodeBlock code={pathsCode} lang="csharp" />
+    </div>
+  </section>
+
+  <section id="variables" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Build Variables</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      Use <code class="rounded border border-zinc-200 bg-zinc-100 px-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+        >Context.Vars</code
+      > to store and retrieve build variables, including environment variables.
+    </p>
+
+    <div class="mb-4">
+      <CodeBlock code={varsCode} lang="csharp" />
+    </div>
+  </section>
+
+  <section id="options" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Build Options</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      The <code class="rounded border border-zinc-200 bg-zinc-100 px-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+        >Options</code
+      > global provides methods to configure build behavior. These settings affect subsequent operations in the build script.
+    </p>
+
+    <table class="my-4 w-full text-sm">
+      <thead>
+        <tr class="border-b border-zinc-200 dark:border-zinc-700">
+          <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Method</th>
+          <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3"><code class="text-cyan-600 dark:text-cyan-400">UseConfiguration(config)</code></td>
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400"
+            >Sets the build configuration (<code class="rounded bg-zinc-100 px-1 text-sm dark:bg-zinc-800">Debug</code> or
+            <code class="rounded bg-zinc-100 px-1 text-sm dark:bg-zinc-800">Release</code>). Affects <code
+              class="rounded bg-zinc-100 px-1 text-sm dark:bg-zinc-800">Dotnet.Build</code
+            >, <code class="rounded bg-zinc-100 px-1 text-sm dark:bg-zinc-800">Dotnet.Test</code>, and <code
+              class="rounded bg-zinc-100 px-1 text-sm dark:bg-zinc-800">Dotnet.Publish</code
+            > operations.</td
+          >
+        </tr>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3"><code class="text-cyan-600 dark:text-cyan-400">UseImage(image)</code></td>
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400"
+            >Sets the Docker image for the build container. Overrides the CLI default (e.g., <code
+              class="rounded bg-zinc-100 px-1 text-sm dark:bg-zinc-800">"ubuntu:22.04"</code
+            >, <code class="rounded bg-zinc-100 px-1 text-sm dark:bg-zinc-800">"node:20"</code>).</td
+          >
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 class="mt-6 mb-3 text-base font-semibold text-zinc-900 dark:text-white">Configuration Enum</h3>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      The <code class="rounded border border-zinc-200 bg-zinc-100 px-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+        >Configuration</code
+      > global provides the available build configurations.
+    </p>
+
+    <table class="my-4 w-full text-sm">
+      <thead>
+        <tr class="border-b border-zinc-200 dark:border-zinc-700">
+          <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Value</th>
+          <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3"><code class="text-cyan-600 dark:text-cyan-400">Configuration.Debug</code></td>
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400"
+            >Debug configuration with debugging symbols. This is the default.</td
+          >
+        </tr>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3"><code class="text-cyan-600 dark:text-cyan-400">Configuration.Release</code></td>
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">Release configuration with optimizations enabled.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 class="mt-6 mb-3 text-base font-semibold text-zinc-900 dark:text-white">Example Usage</h3>
+    <div class="mb-4">
+      <CodeBlock code={optionsCode} lang="csharp" />
+    </div>
+  </section>
+
+  <section id="example" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Complete Example</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      A full-stack build script showing all the core globals in action.
+    </p>
+    <CodeBlock code={completeCode} lang="csharp" filename="build.ando" />
+  </section>
+</ProviderLayout>

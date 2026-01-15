@@ -206,10 +206,7 @@ Context.Vars.EnvRequired("VAR"); // Throws if not set
 
 ## Examples
 
-See the [examples](./examples) directory:
-
-- **0001-Simple**: Hello World - basic project build and publish
-- **0002-Library**: Multi-project - console app with library dependency
+See the [examples](./examples) directory.
 
 ### Adding a New Example
 

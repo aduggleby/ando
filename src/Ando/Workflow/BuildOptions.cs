@@ -41,12 +41,27 @@ public class BuildOptions
     public Configuration Configuration { get; private set; } = Configuration.Debug;
 
     /// <summary>
+    /// Docker image to use for the build. If null, uses CLI default.
+    /// </summary>
+    public string? Image { get; private set; }
+
+    /// <summary>
     /// Sets the build configuration.
     /// </summary>
     /// <param name="configuration">The configuration to use.</param>
     public BuildOptions UseConfiguration(Configuration configuration)
     {
         Configuration = configuration;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the Docker image to use for the build.
+    /// </summary>
+    /// <param name="image">Docker image name (e.g., "ubuntu:22.04", "node:20").</param>
+    public BuildOptions UseImage(string image)
+    {
+        Image = image;
         return this;
     }
 }

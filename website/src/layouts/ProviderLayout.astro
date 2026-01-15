@@ -1,0 +1,86 @@
+---
+import BaseLayout from "./BaseLayout.astro";
+
+interface Props {
+  title: string;
+  provider: string;
+  description: string;
+}
+
+const { title, provider, description } = Astro.props;
+---
+
+<BaseLayout title={`${title} - ANDO`} description={description}>
+  <div class="flex gap-12">
+    <div class="max-w-4xl flex-1">
+      <section id="top" class="mb-8 md:mb-12">
+        <h1 class="mb-2 text-2xl font-bold text-zinc-900 sm:text-3xl dark:text-white">{provider} Operations</h1>
+        <p class="text-base text-zinc-500 sm:text-lg dark:text-zinc-400">{description}</p>
+      </section>
+
+      <div id="content">
+        <slot />
+      </div>
+    </div>
+
+    <aside class="hidden w-48 shrink-0 lg:block">
+      <nav id="toc" class="sticky top-8">
+        <h4 class="mb-3 text-xs font-semibold tracking-wider text-zinc-400 uppercase">On this page</h4>
+        <ul id="toc-list" class="space-y-2 text-sm">
+          <!-- Populated by JavaScript -->
+        </ul>
+      </nav>
+    </aside>
+  </div>
+
+  <script>
+    // Build table of contents from h2 elements
+    const tocList = document.getElementById("toc-list");
+    const content = document.getElementById("content");
+    const headings = content?.querySelectorAll("section[id] > h2") || [];
+
+    headings.forEach((heading) => {
+      const section = heading.parentElement;
+      const id = section?.id;
+      const text = heading.textContent;
+      if (!id || !text) return;
+
+      const li = document.createElement("li");
+      const link = document.createElement("a");
+      link.href = `#${id}`;
+      link.textContent = text;
+      link.className =
+        "toc-link block text-zinc-500 dark:text-zinc-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors";
+      li.appendChild(link);
+      tocList?.appendChild(li);
+    });
+
+    // Highlight active section on scroll
+    const tocLinks = document.querySelectorAll(".toc-link");
+    const sections = content?.querySelectorAll("section[id]") || [];
+
+    function updateActiveLink() {
+      let currentSection = "";
+      sections.forEach((section) => {
+        const rect = section.getBoundingClientRect();
+        if (rect.top <= 100) {
+          currentSection = section.id;
+        }
+      });
+
+      tocLinks.forEach((link) => {
+        const href = link.getAttribute("href");
+        if (href === `#${currentSection}`) {
+          link.classList.add("text-cyan-600", "dark:text-cyan-400", "font-medium");
+          link.classList.remove("text-zinc-500", "dark:text-zinc-400");
+        } else {
+          link.classList.remove("text-cyan-600", "dark:text-cyan-400", "font-medium");
+          link.classList.add("text-zinc-500", "dark:text-zinc-400");
+        }
+      });
+    }
+
+    window.addEventListener("scroll", updateActiveLink);
+    updateActiveLink();
+  </script>
+</BaseLayout>

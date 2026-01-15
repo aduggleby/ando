@@ -1,0 +1,70 @@
+# =============================================================================
+# Docker Compose for E2E Test Infrastructure
+#
+# Creates an isolated network where SQL Server and Ando.Server communicate
+# privately. Only the server's web port (5000) is exposed publicly.
+#
+# Usage:
+#   docker compose -f tests/docker-compose.test.yml up -d --build
+#   npm test (from tests/Ando.Server.E2E)
+#   docker compose -f tests/docker-compose.test.yml down
+# =============================================================================
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: ando-e2e-sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=Test@Password123!
+      - MSSQL_PID=Developer
+    # No ports exposed - only accessible within the network
+    networks:
+      - ando-e2e-network
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "Test@Password123!" -C -Q "SELECT 1" || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  server:
+    build:
+      context: ../
+      dockerfile: src/Ando.Server/Dockerfile
+    container_name: ando-e2e-server
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Testing
+      - ASPNETCORE_URLS=http://+:8080
+      # Connection string uses container name (sqlserver) instead of localhost
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=AndoServer_E2E;User Id=sa;Password=Test@Password123!;TrustServerCertificate=True
+      - GitHub__AppId=12345
+      - GitHub__ClientId=test-client-id
+      - GitHub__ClientSecret=test-client-secret
+      - GitHub__WebhookSecret=test-webhook-secret
+      - Encryption__Key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      - Test__ApiKey=test-api-key-for-e2e-tests
+      - Storage__ArtifactsPath=/data/artifacts
+      - Build__ReposPath=/data/repos
+    ports:
+      # Only expose the web server port (project range: 17100-17199)
+      - "17100:8080"
+    networks:
+      - ando-e2e-network
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    healthcheck:
+      test: curl -f http://localhost:8080/health || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    volumes:
+      # Mount Docker socket for build container execution
+      - /var/run/docker.sock:/var/run/docker.sock
+
+networks:
+  ando-e2e-network:
+    driver: bridge
+    # Isolated network - no external connectivity except through exposed ports

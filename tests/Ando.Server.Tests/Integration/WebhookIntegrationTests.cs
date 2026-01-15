@@ -10,9 +10,9 @@
 //
 // Design Decisions:
 // - Uses WebApplicationFactory for full HTTP pipeline testing
-// - Uses in-memory database for speed and isolation
+// - Uses real SQL Server via Testcontainers for accurate behavior
 // - Mocks only Hangfire to avoid actual job execution
-// - Each test gets isolated database via unique database name
+// - Each test class gets isolated database via unique database name
 // =============================================================================
 
 using System.Net;
@@ -22,31 +22,43 @@ using System.Text;
 using System.Text.Json;
 using Ando.Server.Data;
 using Ando.Server.Models;
+using Ando.Server.Tests.TestFixtures;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Ando.Server.Tests.Integration;
 
 [Trait("Category", "Integration")]
-public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>, IDisposable
+[Collection(SqlServerCollection.Name)]
+public class WebhookIntegrationTests : IAsyncLifetime, IDisposable
 {
+    private readonly SqlServerFixture _sqlServerFixture;
     private readonly AndoWebApplicationFactory _factory;
     private readonly HttpClient _client;
-    private readonly IServiceScope _scope;
-    private readonly AndoDbContext _db;
+    private IServiceScope? _scope;
+    private AndoDbContext? _db;
 
-    public WebhookIntegrationTests(AndoWebApplicationFactory factory)
+    public WebhookIntegrationTests(SqlServerFixture sqlServerFixture)
     {
-        _factory = factory;
-        _client = factory.CreateClient();
-        _scope = factory.Services.CreateScope();
+        _sqlServerFixture = sqlServerFixture;
+        _factory = new AndoWebApplicationFactory(_sqlServerFixture.ConnectionString);
+        _client = _factory.CreateClient();
+    }
+
+    public async Task InitializeAsync()
+    {
+        await _factory.InitializeDatabaseAsync();
+        _scope = _factory.Services.CreateScope();
         _db = _scope.ServiceProvider.GetRequiredService<AndoDbContext>();
     }
 
+    public Task DisposeAsync() => Task.CompletedTask;
+
     public void Dispose()
     {
-        _scope.Dispose();
+        _scope?.Dispose();
         _client.Dispose();
+        _factory.Dispose();
     }
 
     // -------------------------------------------------------------------------
@@ -67,7 +79,7 @@ public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>,
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        var build = await _db.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
+        var build = await _db!.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
         build.ShouldNotBeNull();
         build.CommitSha.ShouldBe(commitSha);
         build.Branch.ShouldBe("main");
@@ -91,7 +103,7 @@ public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>,
         _factory.EnqueuedJobIds.Count.ShouldBeGreaterThan(initialJobCount);
 
         // Verify the build has the job ID
-        var build = await _db.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
+        var build = await _db!.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
         build.ShouldNotBeNull();
         build.HangfireJobId.ShouldNotBeNullOrEmpty();
     }
@@ -111,8 +123,8 @@ public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>,
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Reload project from database (clear change tracker to get fresh data)
-        _db.ChangeTracker.Clear();
-        var updatedProject = await _db.Projects.FindAsync(project.Id);
+        _db!.ChangeTracker.Clear();
+        var updatedProject = await _db!.Projects.FindAsync(project.Id);
         updatedProject!.LastBuildAt.ShouldNotBeNull();
         updatedProject.LastBuildAt!.Value.ShouldBeGreaterThan(originalLastBuildAt ?? DateTime.MinValue);
     }
@@ -123,7 +135,7 @@ public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>,
         // Arrange
         var project = await CreateTestProjectAsync();
         project.InstallationId = 100; // Initial value
-        await _db.SaveChangesAsync();
+        await _db!.SaveChangesAsync();
 
         var payload = CreatePushPayload(
             project.GitHubRepoId,
@@ -138,8 +150,8 @@ public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>,
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Clear change tracker to get fresh data from database
-        _db.ChangeTracker.Clear();
-        var updatedProject = await _db.Projects.FindAsync(project.Id);
+        _db!.ChangeTracker.Clear();
+        var updatedProject = await _db!.Projects.FindAsync(project.Id);
         updatedProject!.InstallationId.ShouldBe(999);
     }
 
@@ -163,7 +175,7 @@ public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>,
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        var build = await _db.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
+        var build = await _db!.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
         build.ShouldNotBeNull();
         build.CommitMessage.ShouldBe(commitMessage);
         build.CommitAuthor.ShouldBe(commitAuthor);
@@ -185,7 +197,7 @@ public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>,
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        var build = await _db.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
+        var build = await _db!.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
         build.ShouldBeNull();
     }
 
@@ -194,7 +206,7 @@ public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>,
     {
         // Arrange
         var unknownRepoId = 999999L;
-        var buildCountBefore = await _db.Builds.CountAsync();
+        var buildCountBefore = await _db!.Builds.CountAsync();
         var payload = CreatePushPayload(unknownRepoId, "unknown/repo", "main");
 
         // Act
@@ -204,7 +216,7 @@ public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>,
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // No new builds should have been created
-        var buildCountAfter = await _db.Builds.CountAsync();
+        var buildCountAfter = await _db!.Builds.CountAsync();
         buildCountAfter.ShouldBe(buildCountBefore);
     }
 
@@ -225,7 +237,7 @@ public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>,
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        var build = await _db.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
+        var build = await _db!.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
         build.ShouldBeNull();
     }
 
@@ -250,7 +262,7 @@ public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>,
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        var build = await _db.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
+        var build = await _db!.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
         build.ShouldNotBeNull();
         build.Trigger.ShouldBe(BuildTrigger.PullRequest);
         build.PullRequestNumber.ShouldBe(42);
@@ -273,7 +285,7 @@ public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>,
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        var build = await _db.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
+        var build = await _db!.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
         build.ShouldBeNull();
     }
 
@@ -294,7 +306,7 @@ public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>,
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        var build = await _db.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
+        var build = await _db!.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
         build.ShouldNotBeNull();
     }
 
@@ -315,7 +327,7 @@ public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>,
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        var build = await _db.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
+        var build = await _db!.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
         build.ShouldBeNull();
     }
 
@@ -338,7 +350,7 @@ public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>,
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        var build = await _db.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
+        var build = await _db!.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
         build.ShouldNotBeNull();
         build.CommitMessage.ShouldNotBeNull();
         build.CommitMessage.ShouldContain(prTitle);
@@ -362,7 +374,7 @@ public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>,
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
-        var build = await _db.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
+        var build = await _db!.Builds.FirstOrDefaultAsync(b => b.ProjectId == project.Id);
         build.ShouldBeNull();
     }
 
@@ -415,7 +427,7 @@ public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>,
         }
 
         // Assert
-        var builds = await _db.Builds.Where(b => b.ProjectId == project.Id).ToListAsync();
+        var builds = await _db!.Builds.Where(b => b.ProjectId == project.Id).ToListAsync();
         builds.Count.ShouldBe(3);
 
         builds.Select(b => b.CommitSha).ShouldBe(
@@ -443,8 +455,8 @@ public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>,
         await SendWebhookAsync("push", payload2);
 
         // Assert
-        var builds1 = await _db.Builds.Where(b => b.ProjectId == project1.Id).ToListAsync();
-        var builds2 = await _db.Builds.Where(b => b.ProjectId == project2.Id).ToListAsync();
+        var builds1 = await _db!.Builds.Where(b => b.ProjectId == project1.Id).ToListAsync();
+        var builds2 = await _db!.Builds.Where(b => b.ProjectId == project2.Id).ToListAsync();
 
         builds1.Count.ShouldBe(1);
         builds2.Count.ShouldBe(1);
@@ -501,7 +513,7 @@ public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>,
             GitHubLogin = $"testuser_{Guid.NewGuid():N}",
             CreatedAt = DateTime.UtcNow
         };
-        _db.Users.Add(user);
+        _db!.Users.Add(user);
 
         var project = new Project
         {
@@ -516,9 +528,9 @@ public class WebhookIntegrationTests : IClassFixture<AndoWebApplicationFactory>,
             TimeoutMinutes = 15,
             CreatedAt = DateTime.UtcNow
         };
-        _db.Projects.Add(project);
+        _db!.Projects.Add(project);
 
-        await _db.SaveChangesAsync();
+        await _db!.SaveChangesAsync();
         return project;
     }
 

@@ -1,0 +1,95 @@
+---
+
+---
+
+<script>
+  // @ts-nocheck
+  // Mobile menu toggle
+  const mobileMenuBtn = document.getElementById("mobile-menu-btn");
+  const mobileMenu = document.getElementById("mobile-menu");
+  mobileMenuBtn?.addEventListener("click", () => {
+    mobileMenu?.classList.toggle("hidden");
+  });
+
+  // Theme toggle functionality with three modes: light, dark, system
+  const themeToggle = document.getElementById("theme-toggle");
+  const mobileThemeToggle = document.getElementById("mobile-theme-toggle");
+  const themeIcon = document.getElementById("theme-icon");
+  const mobileThemeIcon = document.getElementById("mobile-theme-icon");
+  const html = document.documentElement;
+
+  function getSystemTheme() {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
+  function getSavedTheme() {
+    return localStorage.getItem("theme") || "system";
+  }
+
+  function applyTheme(theme) {
+    const effectiveTheme = theme === "system" ? getSystemTheme() : theme;
+    if (effectiveTheme === "dark") {
+      html.classList.add("dark");
+    } else {
+      html.classList.remove("dark");
+    }
+    // Icons: ☀️ = light mode, 🌙 = dark mode, 💻 = system
+    const icon = theme === "system" ? "💻" : theme === "dark" ? "🌙" : "☀️";
+    if (themeIcon) themeIcon.textContent = icon;
+    if (mobileThemeIcon) mobileThemeIcon.textContent = icon;
+  }
+
+  function setTheme(theme) {
+    localStorage.setItem("theme", theme);
+    applyTheme(theme);
+  }
+
+  // Initialize theme
+  applyTheme(getSavedTheme());
+
+  // Listen for system theme changes
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    if (getSavedTheme() === "system") {
+      applyTheme("system");
+    }
+  });
+
+  // Cycle through: light -> dark -> system -> light
+  function cycleTheme() {
+    const current = getSavedTheme();
+    const next = current === "light" ? "dark" : current === "dark" ? "system" : "light";
+    setTheme(next);
+  }
+  themeToggle?.addEventListener("click", cycleTheme);
+  mobileThemeToggle?.addEventListener("click", cycleTheme);
+
+  // Copy to clipboard functionality
+  document.querySelectorAll("pre").forEach((block) => {
+    const wrapper = block.parentElement;
+    if (!wrapper.classList.contains("relative")) return;
+
+    const btn = document.createElement("button");
+    btn.className =
+      "absolute top-3 right-3 px-2 py-1 text-xs bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 rounded hover:bg-zinc-300 dark:hover:bg-zinc-600 transition-colors";
+    btn.textContent = "Copy";
+    wrapper.appendChild(btn);
+
+    btn.addEventListener("click", async () => {
+      const code = block.querySelector("code")?.textContent || "";
+      try {
+        await navigator.clipboard.writeText(code);
+        btn.textContent = "Copied!";
+        btn.classList.add("bg-green-500", "text-white");
+        setTimeout(() => {
+          btn.textContent = "Copy";
+          btn.classList.remove("bg-green-500", "text-white");
+        }, 2000);
+      } catch (err) {
+        btn.textContent = "Error";
+        setTimeout(() => {
+          btn.textContent = "Copy";
+        }, 2000);
+      }
+    });
+  });
+</script>

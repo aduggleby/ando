@@ -7,7 +7,7 @@
 // - Artifacts.CopyToHost() for copying build outputs
 // - Container-to-host file transfer after build completion
 
-var App = Project.From("./src/App/App.csproj");
+var App = DotnetProject("./src/App/App.csproj");
 var output = Root / "dist";
 
 // Use Release configuration

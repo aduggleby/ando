@@ -297,6 +297,8 @@ export class ProjectSettingsPage {
 
   async deleteSecret(name: string) {
     const row = this.secretsTable.locator('tr').filter({ hasText: name });
+    // Handle confirmation dialog
+    this.page.once('dialog', dialog => dialog.accept());
     await row.locator('button').filter({ hasText: /delete/i }).click();
   }
 

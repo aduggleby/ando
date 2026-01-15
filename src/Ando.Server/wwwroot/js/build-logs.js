@@ -88,7 +88,7 @@ async function startConnection() {
         reconnectAttempts = 0;
 
         // Join the build's group
-        await connection.invoke("JoinBuild", buildId);
+        await connection.invoke("JoinBuildLog", buildId);
 
         // Catch up on any missed logs
         await catchUpLogs();

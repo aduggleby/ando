@@ -58,6 +58,8 @@ Mounting the Docker socket (`/var/run/docker.sock`) grants the container full ac
 ### Mitigations
 
 #### Currently Implemented
+- **Rootless Docker Validation**: Server validates Docker is running in rootless mode on startup (production only). Running Docker as root would allow container escapes to gain full host access.
+- **Isolated Build Network**: Build containers run on a dedicated `ando-builds` Docker network, isolated from the host network and other non-build containers. Containers have internet access for fetching dependencies.
 - Containers are created with `--rm` flag (auto-cleanup)
 - Build timeout enforcement prevents infinite resource consumption
 - Container cleanup on build completion/failure
@@ -69,26 +71,16 @@ Mounting the Docker socket (`/var/run/docker.sock`) grants the container full ac
    - Run builds on isolated hosts with no access to production systems
    - Use separate Docker daemon per tenant if multi-tenant
 
-2. **Rootless Docker**
-   - Consider running Docker in rootless mode to limit host access
-   - Reduces impact of container escape attacks
-
-3. **Resource Limits**
+2. **Resource Limits**
    ```bash
    docker run --memory=4g --cpus=2 --pids-limit=1000
    ```
 
-4. **Network Isolation**
-   ```bash
-   docker run --network=none  # For builds that don't need network
-   docker run --network=build-network  # Isolated build network
-   ```
-
-5. **Seccomp Profiles**
+3. **Seccomp Profiles**
    - Apply restrictive seccomp profiles to limit syscalls
    - Use AppArmor or SELinux for additional containment
 
-6. **Alternative Approaches**
+4. **Alternative Approaches**
    - **Sysbox**: Provides true container isolation with nested Docker
    - **Kaniko**: Build images without Docker daemon
    - **Buildah**: Daemonless container builds
@@ -156,7 +148,8 @@ If you discover a security vulnerability, please report it privately. Do not cre
 - [ ] Set all required environment variables
 - [ ] Use HTTPS in production
 - [ ] Configure secure cookie settings
-- [ ] Set up network isolation for build containers
+- [x] ~~Set up network isolation for build containers~~ (automated: `ando-builds` network)
+- [x] ~~Validate Docker rootless mode~~ (automated: startup validation)
 - [ ] Implement resource limits on build containers
 - [ ] Enable audit logging
 - [ ] Regular security updates for base images

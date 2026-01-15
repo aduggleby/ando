@@ -310,8 +310,8 @@ test.describe('Build Logs', () => {
     await buildDetails.goto(build.buildId);
 
     // Check step names are shown
-    await expect(authedPage.locator('.log-step')).toContainText('[build]');
-    await expect(authedPage.locator('.log-step')).toContainText('[test]');
+    await expect(authedPage.locator('.log-step').first()).toContainText('[build]');
+    await expect(authedPage.locator('.log-step').last()).toContainText('[test]');
   });
 });
 
@@ -392,7 +392,7 @@ test.describe('Build Steps Progress', () => {
     await buildDetails.goto(build.buildId);
 
     // Check steps info is displayed
-    await expect(authedPage.locator('#build-steps, .info-item').filter({ hasText: /steps/i }))
+    await expect(authedPage.locator('#steps-count, .steps-progress-count'))
       .toContainText('3 / 5');
   });
 
@@ -412,7 +412,7 @@ test.describe('Build Steps Progress', () => {
     await buildDetails.goto(build.buildId);
 
     // Check failed count is shown
-    await expect(authedPage.locator('.failed-count')).toContainText('2 failed');
+    await expect(authedPage.locator('.text-error, .failed-count')).toContainText('2 failed');
   });
 });
 
@@ -434,8 +434,9 @@ test.describe('Build Triggering', () => {
 
 test.describe('User Isolation', () => {
   test('cannot view other users builds', async ({ authedPage, testApi }) => {
-    // Create another user with a project and build
-    const otherUser = await testApi.createUser({ login: 'build-owner' });
+    // Create another user with a project and build (use unique name to avoid conflicts)
+    const uniqueId = Date.now().toString(36);
+    const otherUser = await testApi.createUser({ login: `build-owner-${uniqueId}` });
     const otherProject = await testApi.createProject({
       userId: otherUser.userId,
       repoName: 'private-repo',

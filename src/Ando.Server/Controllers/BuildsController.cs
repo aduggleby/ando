@@ -28,6 +28,7 @@ namespace Ando.Server.Controllers;
 /// Controller for build operations.
 /// </summary>
 [Authorize]
+[Route("builds")]
 public class BuildsController : Controller
 {
     private readonly AndoDbContext _db;
@@ -67,13 +68,13 @@ public class BuildsController : Controller
 
         if (build == null)
         {
-            return NotFound();
+            return View("NotFound");
         }
 
         // Verify ownership
         if (build.Project.OwnerId != userId)
         {
-            return NotFound();
+            return View("NotFound");
         }
 
         var viewModel = new BuildDetailsViewModel
@@ -142,13 +143,13 @@ public class BuildsController : Controller
 
         if (build == null)
         {
-            return NotFound();
+            return View("NotFound");
         }
 
         // Verify ownership
         if (build.Project.OwnerId != userId)
         {
-            return NotFound();
+            return View("NotFound");
         }
 
         if (build.Status != BuildStatus.Queued && build.Status != BuildStatus.Running)
@@ -190,13 +191,13 @@ public class BuildsController : Controller
 
         if (build == null)
         {
-            return NotFound();
+            return View("NotFound");
         }
 
         // Verify ownership
         if (build.Project.OwnerId != userId)
         {
-            return NotFound();
+            return View("NotFound");
         }
 
         if (build.Status != BuildStatus.Failed &&
@@ -240,13 +241,13 @@ public class BuildsController : Controller
 
         if (artifact == null)
         {
-            return NotFound();
+            return View("NotFound");
         }
 
         // Verify ownership
         if (artifact.Build.Project.OwnerId != userId)
         {
-            return NotFound();
+            return View("NotFound");
         }
 
         if (!System.IO.File.Exists(artifact.StoragePath))
@@ -278,13 +279,13 @@ public class BuildsController : Controller
 
         if (build == null)
         {
-            return NotFound();
+            return View("NotFound");
         }
 
         // Verify ownership
         if (build.Project.OwnerId != userId)
         {
-            return NotFound();
+            return View("NotFound");
         }
 
         var logs = await _db.BuildLogEntries

@@ -37,7 +37,7 @@ public class ScriptHostTests
         try
         {
             await File.WriteAllTextAsync(scriptPath, """
-                var project = Project.From("./src/Test/Test.csproj");
+                var project = DotnetProject("./src/Test/Test.csproj");
                 Dotnet.Build(project);
                 """);
 
@@ -177,7 +177,7 @@ public class ScriptHostTests
     }
 
     [Fact]
-    public async Task LoadScriptAsync_ExposesProjectFromHelper()
+    public async Task LoadScriptAsync_ExposesProjectFunction()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
@@ -186,7 +186,7 @@ public class ScriptHostTests
         try
         {
             await File.WriteAllTextAsync(scriptPath, """
-                var project = Project.From("./src/MyApp/MyApp.csproj");
+                var project = DotnetProject("./src/MyApp/MyApp.csproj");
                 Context.Vars["projectName"] = project.Name;
                 """);
 
@@ -194,6 +194,31 @@ public class ScriptHostTests
             var context = await host.LoadScriptAsync(scriptPath, tempDir);
 
             Assert.Equal("MyApp", context.Context.Vars["projectName"]);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LoadScriptAsync_ExposesDirectoryFunction()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
+        var scriptPath = Path.Combine(tempDir, "build.ando");
+
+        try
+        {
+            await File.WriteAllTextAsync(scriptPath, """
+                var frontend = Directory("./frontend");
+                Context.Vars["dirName"] = frontend.Name;
+                """);
+
+            var host = new ScriptHost(_logger);
+            var context = await host.LoadScriptAsync(scriptPath, tempDir);
+
+            Assert.Equal("frontend", context.Context.Vars["dirName"]);
         }
         finally
         {

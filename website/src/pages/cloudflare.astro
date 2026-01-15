@@ -1,0 +1,168 @@
+---
+import ProviderLayout from "../layouts/ProviderLayout.astro";
+import OperationsTable from "../components/OperationsTable.astro";
+import OperationDetails from "../components/OperationDetails.astro";
+import CodeBlock from "../components/CodeBlock.astro";
+import { getOperationsForProvider } from "../data/operations.js";
+
+const operations = getOperationsForProvider("Cloudflare");
+
+const exampleCode = `// Create a directory reference
+var website = Directory("./website");
+
+// Ensure we're authenticated with Cloudflare
+Cloudflare.EnsureAuthenticated();
+
+// Build the site
+Npm.Ci(website);
+Npm.Run(website, "build");
+
+// Deploy to Cloudflare Pages (deploy the dist folder)
+Cloudflare.PagesDeploy(website / "dist", "my-website");
+
+// Purge the cache (accepts domain name or Zone ID)
+Cloudflare.PurgeCache("my-website.com");`;
+---
+
+<ProviderLayout
+  title="Cloudflare"
+  provider="Cloudflare"
+  description="Deploy static sites to Cloudflare Pages using the wrangler CLI."
+>
+  <section id="operations" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Operations</h2>
+    <OperationsTable operations={operations} />
+  </section>
+
+  <section id="details" class="mb-8">
+    <h2 class="mb-6 text-xl font-bold text-zinc-900 dark:text-white">Operation Details</h2>
+    <OperationDetails operations={operations} />
+  </section>
+
+  <section id="authentication" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Authentication</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      Cloudflare operations require an API token and account ID. Set these as environment variables or enter them when
+      prompted.
+    </p>
+
+    <h3 class="mt-6 mb-3 text-base font-semibold text-zinc-900 dark:text-white">Environment Variables</h3>
+    <table class="my-3 w-full text-sm">
+      <thead>
+        <tr class="border-b border-zinc-200 dark:border-zinc-700">
+          <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Variable</th>
+          <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3"><code class="text-cyan-600 dark:text-cyan-400">CLOUDFLARE_API_TOKEN</code></td>
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">API token with Cloudflare Pages permissions</td>
+        </tr>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3"><code class="text-cyan-600 dark:text-cyan-400">CLOUDFLARE_ACCOUNT_ID</code></td>
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">Your Cloudflare account ID (found in dashboard URL)</td
+          >
+        </tr>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3"><code class="text-cyan-600 dark:text-cyan-400">CLOUDFLARE_PROJECT_NAME</code></td>
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">Optional default project name for Pages operations</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 class="mt-6 mb-3 text-base font-semibold text-zinc-900 dark:text-white">Interactive Prompting</h3>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      When running locally without environment variables set, <code
+        class="rounded border border-zinc-200 bg-zinc-100 px-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+        >Cloudflare.EnsureAuthenticated()</code
+      >
+      will prompt for credentials interactively. The API token input is hidden for security. Credentials are only stored for
+      the current build session and are cleared when the process exits.
+    </p>
+
+    <h3 class="mt-6 mb-3 text-base font-semibold text-zinc-900 dark:text-white">Creating a Cloudflare API Token</h3>
+    <ol class="my-4 list-decimal pl-6 leading-relaxed text-zinc-500 dark:text-zinc-400">
+      <li class="mb-2">
+        Go to <a
+          href="https://dash.cloudflare.com/profile/api-tokens"
+          target="_blank"
+          rel="noopener"
+          class="text-cyan-600 hover:underline dark:text-cyan-400"
+          >Cloudflare Dashboard &rarr; Profile &rarr; API Tokens</a
+        >
+      </li>
+      <li class="mb-2">Click <strong class="text-zinc-700 dark:text-zinc-300">Create Token</strong></li>
+      <li class="mb-2">Click <strong class="text-zinc-700 dark:text-zinc-300">Create Custom Token</strong></li>
+      <li class="mb-2">Add the required permissions (see table below)</li>
+      <li class="mb-2">
+        Under <strong class="text-zinc-700 dark:text-zinc-300">Account Resources</strong>, select your account
+      </li>
+      <li class="mb-2">
+        Under <strong class="text-zinc-700 dark:text-zinc-300">Zone Resources</strong>, select <strong
+          class="text-zinc-700 dark:text-zinc-300">All zones</strong
+        > or specific zones
+      </li>
+      <li class="mb-2">
+        Click <strong class="text-zinc-700 dark:text-zinc-300">Continue to summary</strong>, then <strong
+          class="text-zinc-700 dark:text-zinc-300">Create Token</strong
+        >
+      </li>
+      <li class="mb-2">
+        Copy the token and set it as <code
+          class="rounded border border-zinc-200 bg-zinc-100 px-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+          >CLOUDFLARE_API_TOKEN</code
+        >
+      </li>
+    </ol>
+
+    <h3 class="mt-6 mb-3 text-base font-semibold text-zinc-900 dark:text-white">Required Token Permissions</h3>
+    <table class="my-3 w-full text-sm">
+      <thead>
+        <tr class="border-b border-zinc-200 dark:border-zinc-700">
+          <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Permission</th>
+          <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Required For</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3"
+            ><code class="text-cyan-600 dark:text-cyan-400">Account → Cloudflare Pages → Edit</code></td
+          >
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">Deploying to Cloudflare Pages</td>
+        </tr>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3"><code class="text-cyan-600 dark:text-cyan-400">Zone → Cache Purge → Purge</code></td>
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400"
+            >Purging cache with <code class="rounded bg-zinc-100 px-1 text-sm dark:bg-zinc-800">PurgeCache()</code></td
+          >
+        </tr>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3"><code class="text-cyan-600 dark:text-cyan-400">Zone → Zone → Read</code></td>
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400"
+            >Resolving domain names to Zone IDs (for <code class="rounded bg-zinc-100 px-1 text-sm dark:bg-zinc-800"
+              >PurgeCache("example.com")</code
+            >)</td
+          >
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 class="mt-6 mb-3 text-base font-semibold text-zinc-900 dark:text-white">Finding Your Account ID</h3>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      Your account ID is in the Cloudflare dashboard URL: <code
+        class="rounded border border-zinc-200 bg-zinc-100 px-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+        >https://dash.cloudflare.com/<strong class="text-zinc-700 dark:text-zinc-300">ACCOUNT_ID</strong>/...</code
+      >
+      <br />Or find it on any zone's overview page in the right sidebar under <strong
+        class="text-zinc-700 dark:text-zinc-300">API &rarr; Account ID</strong
+      >.
+    </p>
+  </section>
+
+  <section id="example" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Example</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">Deploy a static site to Cloudflare Pages and purge the cache.</p>
+    <CodeBlock code={exampleCode} lang="csharp" filename="build.ando" />
+  </section>
+</ProviderLayout>

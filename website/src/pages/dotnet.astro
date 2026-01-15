@@ -1,0 +1,48 @@
+---
+import ProviderLayout from "../layouts/ProviderLayout.astro";
+import OperationsTable from "../components/OperationsTable.astro";
+import OperationDetails from "../components/OperationDetails.astro";
+import CodeBlock from "../components/CodeBlock.astro";
+import { getOperationsForProvider } from "../data/operations.js";
+
+const operations = getOperationsForProvider("Dotnet");
+
+const exampleCode = `// Define project references
+var App = DotnetProject("./src/App/App.csproj");
+var Tests = DotnetProject("./tests/App.Tests/App.Tests.csproj");
+
+// Restore, build, and test
+Dotnet.Restore(App);
+Dotnet.Build(App, o => o.Configuration = Configuration.Release);
+Dotnet.Test(Tests);
+
+// Publish as self-contained single file
+Dotnet.Publish(App, o => o
+  .Output(Root / "dist")
+  .WithConfiguration(Configuration.Release)
+  .WithRuntime("linux-x64")
+  .AsSelfContained()
+  .AsSingleFile());`;
+---
+
+<ProviderLayout
+  title="Dotnet"
+  provider="Dotnet"
+  description="Build, test, and publish .NET projects using the dotnet CLI."
+>
+  <section id="operations" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Operations</h2>
+    <OperationsTable operations={operations} />
+  </section>
+
+  <section id="details" class="mb-8">
+    <h2 class="mb-6 text-xl font-bold text-zinc-900 dark:text-white">Operation Details</h2>
+    <OperationDetails operations={operations} />
+  </section>
+
+  <section id="example" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Example</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">Build and publish a .NET application.</p>
+    <CodeBlock code={exampleCode} lang="csharp" filename="build.ando" />
+  </section>
+</ProviderLayout>

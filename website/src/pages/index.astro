@@ -1,755 +1,223 @@
 ---
-import "../styles/global.css";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import CodeBlock from "../components/CodeBlock.astro";
+import { getOperationsGroupedByProvider, operations, getAnchorId } from "../data/operations.js";
+
+type Operation = { group: string; name: string; desc: string; examples?: string[] };
+const groupedOperations = getOperationsGroupedByProvider() as [string, Operation[]][];
+const totalOperations = operations.length;
 
 const commands = [
   { cmd: "ando", desc: "Run the build script (same as 'ando run')." },
   { cmd: "ando run", desc: "Run the build script in a Docker container." },
+  { cmd: "ando verify", desc: "Check build script for errors without executing." },
   { cmd: "ando clean", desc: "Remove artifacts, temp files, and containers." },
-  { cmd: "ando help", desc: "Show available commands and options." }
+  { cmd: "ando help", desc: "Show available commands and options." },
 ];
 
-const runOptions = [
-  { flag: "--verbosity <level>", desc: "Set output verbosity (quiet|minimal|normal|detailed)." },
-  { flag: "--no-color", desc: "Disable colored output." },
-  { flag: "--cold", desc: "Always create a fresh container (ignore warm cache)." },
-  { flag: "--image <image>", desc: "Use a custom Docker image." },
-  { flag: "--dind", desc: "Mount Docker socket for Docker-in-Docker builds." }
-];
+// Provider metadata for linking (sorted alphabetically)
+const providerLinks: Record<string, { href: string; label: string }> = {
+  Ando: { href: "/ando", label: "Ando" },
+  AppService: { href: "/appservice", label: "App Service" },
+  Azure: { href: "/azure", label: "Azure" },
+  Bicep: { href: "/bicep", label: "Bicep" },
+  Cloudflare: { href: "/cloudflare", label: "Cloudflare" },
+  Dotnet: { href: "/dotnet", label: "Dotnet" },
+  DotnetSdk: { href: "/dotnetsdk", label: "DotnetSdk" },
+  Ef: { href: "/ef", label: "EF Core" },
+  Functions: { href: "/functions", label: "Functions" },
+  Node: { href: "/node", label: "Node" },
+  Npm: { href: "/npm", label: "Npm" },
+};
 
-const cleanOptions = [
-  { flag: "--artifacts", desc: "Remove the artifacts directory." },
-  { flag: "--temp", desc: "Remove temp directory." },
-  { flag: "--cache", desc: "Remove NuGet and npm caches." },
-  { flag: "--container", desc: "Remove the project's warm container." },
-  { flag: "--all", desc: "Remove all of the above." }
-];
+const gettingStartedCode = `# Install ANDO
+dotnet tool install -g ando
 
-const operations = [
-  {
-    group: "Dotnet",
-    name: "Dotnet.Restore",
-    desc: "Restore NuGet packages for a project.",
-    examples: [
-      "Dotnet.Restore(App);",
-      "Dotnet.Restore(App, o => o.NoCache = true);"
-    ]
-  },
-  {
-    group: "Dotnet",
-    name: "Dotnet.Build",
-    desc: "Compile a project with optional configuration.",
-    examples: [
-      "Dotnet.Build(App);",
-      "Dotnet.Build(App, o => o.Configuration = Configuration.Release);"
-    ]
-  },
-  {
-    group: "Dotnet",
-    name: "Dotnet.Test",
-    desc: "Run unit tests for a project.",
-    examples: [
-      "Dotnet.Test(Tests);",
-      "Dotnet.Test(Tests, o => o.Filter = \"Category=Unit\");"
-    ]
-  },
-  {
-    group: "Dotnet",
-    name: "Dotnet.Publish",
-    desc: "Create deployment artifacts with full publish options.",
-    examples: [
-      "Dotnet.Publish(App);",
-      "Dotnet.Publish(App, o => o\n  .Output(Root / \"dist\")\n  .WithConfiguration(Configuration.Release)\n  .WithRuntime(\"linux-x64\")\n  .AsSelfContained()\n  .AsSingleFile());"
-    ]
-  },
-  {
-    group: "Dotnet",
-    name: "Dotnet.Tool",
-    desc: "Create a reference to a .NET CLI tool for installation.",
-    examples: [
-      "var efTool = Dotnet.Tool(\"dotnet-ef\");",
-      "var efTool = Dotnet.Tool(\"dotnet-ef\", \"9.0.0\");"
-    ]
-  },
-  {
-    group: "Ef",
-    name: "Ef.DbContextFrom",
-    desc: "Create a reference to a DbContext in a project.",
-    examples: [
-      "var db = Ef.DbContextFrom(DataProject);",
-      "var db = Ef.DbContextFrom(DataProject, \"AppDbContext\");"
-    ]
-  },
-  {
-    group: "Ef",
-    name: "Ef.DatabaseUpdate",
-    desc: "Apply pending EF Core migrations to the database.",
-    examples: [
-      "Ef.DatabaseUpdate(db);",
-      "Ef.DatabaseUpdate(db, connectionString: \"Server=...\");"
-    ]
-  },
-  {
-    group: "Ef",
-    name: "Ef.AddMigration",
-    desc: "Create a new EF Core migration.",
-    examples: [
-      "Ef.AddMigration(db, \"InitialCreate\");",
-      "Ef.AddMigration(db, \"AddUsers\", outputDir: \"Migrations\");"
-    ]
-  },
-  {
-    group: "Ef",
-    name: "Ef.Script",
-    desc: "Generate an idempotent SQL migration script.",
-    examples: [
-      "Ef.Script(db, Root / \"migration.sql\");",
-      "Ef.Script(db, Root / \"migration.sql\", fromMigration: \"Init\");"
-    ]
-  },
-  {
-    group: "Ef",
-    name: "Ef.RemoveMigration",
-    desc: "Remove the last migration.",
-    examples: [
-      "Ef.RemoveMigration(db);",
-      "Ef.RemoveMigration(db, force: true);"
-    ]
-  },
-  {
-    group: "Npm",
-    name: "Npm.InDirectory",
-    desc: "Set the working directory for npm commands.",
-    examples: [
-      "Npm.InDirectory(\"./frontend\");",
-      "Npm.InDirectory(\"./frontend\").Install();"
-    ]
-  },
-  {
-    group: "Npm",
-    name: "Npm.Install",
-    desc: "Run 'npm install' to install dependencies.",
-    examples: [
-      "Npm.Install();",
-      "Npm.InDirectory(\"./app\").Install();"
-    ]
-  },
-  {
-    group: "Npm",
-    name: "Npm.Ci",
-    desc: "Run 'npm ci' for clean, reproducible installs (preferred for CI).",
-    examples: [
-      "Npm.Ci();",
-      "Npm.InDirectory(\"./app\").Ci();"
-    ]
-  },
-  {
-    group: "Npm",
-    name: "Npm.Run",
-    desc: "Run an npm script from package.json.",
-    examples: [
-      "Npm.Run(\"build\");",
-      "Npm.Run(\"lint\");"
-    ]
-  },
-  {
-    group: "Npm",
-    name: "Npm.Test",
-    desc: "Run 'npm test'.",
-    examples: [
-      "Npm.Test();"
-    ]
-  },
-  {
-    group: "Npm",
-    name: "Npm.Build",
-    desc: "Run 'npm run build'.",
-    examples: [
-      "Npm.Build();"
-    ]
-  },
-  {
-    group: "Azure",
-    name: "Azure.EnsureLoggedIn",
-    desc: "Verify the user is logged in to Azure CLI.",
-    examples: [
-      "Azure.EnsureLoggedIn();"
-    ]
-  },
-  {
-    group: "Azure",
-    name: "Azure.ShowAccount",
-    desc: "Display current Azure account information.",
-    examples: [
-      "Azure.ShowAccount();"
-    ]
-  },
-  {
-    group: "Azure",
-    name: "Azure.LoginWithServicePrincipal",
-    desc: "Login with a Service Principal (for CI/CD).",
-    examples: [
-      "Azure.LoginWithServicePrincipal(clientId, secret, tenantId);",
-      "Azure.LoginWithServicePrincipal(); // Uses AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID env vars"
-    ]
-  },
-  {
-    group: "Azure",
-    name: "Azure.LoginWithManagedIdentity",
-    desc: "Login with Managed Identity (for Azure-hosted environments).",
-    examples: [
-      "Azure.LoginWithManagedIdentity(); // System-assigned",
-      "Azure.LoginWithManagedIdentity(\"client-id\"); // User-assigned"
-    ]
-  },
-  {
-    group: "Azure",
-    name: "Azure.SetSubscription",
-    desc: "Set the active Azure subscription.",
-    examples: [
-      "Azure.SetSubscription(\"subscription-id\");",
-      "Azure.SetSubscription(); // Uses AZURE_SUBSCRIPTION_ID env var"
-    ]
-  },
-  {
-    group: "Azure",
-    name: "Azure.CreateResourceGroup",
-    desc: "Create a resource group if it doesn't exist.",
-    examples: [
-      "Azure.CreateResourceGroup(\"my-rg\", \"eastus\");",
-      "Azure.CreateResourceGroup(\"prod-rg\", \"westeurope\");"
-    ]
-  },
-  {
-    group: "Azure",
-    name: "Azure.DeleteResourceGroup",
-    desc: "Delete a resource group and all its resources.",
-    examples: [
-      "Azure.DeleteResourceGroup(\"my-rg\");",
-      "Azure.DeleteResourceGroup(\"my-rg\", noWait: true);"
-    ]
-  },
-  {
-    group: "Bicep",
-    name: "Bicep.DeployToResourceGroup",
-    desc: "Deploy a Bicep template to a resource group.",
-    examples: [
-      "Bicep.DeployToResourceGroup(\"my-rg\", \"./infra/main.bicep\");",
-      "Bicep.DeployToResourceGroup(\"my-rg\", \"./main.bicep\", o => o\n  .WithParameterFile(\"./params.json\")\n  .WithDeploymentSlot(\"staging\")\n  .CaptureOutputs());"
-    ]
-  },
-  {
-    group: "Bicep",
-    name: "Bicep.DeployToSubscription",
-    desc: "Deploy a Bicep template at subscription scope.",
-    examples: [
-      "Bicep.DeployToSubscription(\"eastus\", \"./infra/sub.bicep\");",
-      "Bicep.DeployToSubscription(\"eastus\", \"./sub.bicep\", o => o\n  .WithParameter(\"environment\", \"prod\")\n  .CaptureOutputs(\"infra_\"));"
-    ]
-  },
-  {
-    group: "Bicep",
-    name: "Bicep.WhatIf",
-    desc: "Preview what would be deployed (what-if analysis).",
-    examples: [
-      "Bicep.WhatIf(\"my-rg\", \"./infra/main.bicep\");",
-      "Bicep.WhatIf(\"my-rg\", \"./main.bicep\", o => o.WithParameterFile(\"./params.json\"));"
-    ]
-  },
-  {
-    group: "Bicep",
-    name: "Bicep.Build",
-    desc: "Compile a Bicep file to ARM JSON template.",
-    examples: [
-      "Bicep.Build(\"./infra/main.bicep\");",
-      "Bicep.Build(\"./main.bicep\", \"./output/main.json\");"
-    ]
-  },
-  {
-    group: "Cloudflare",
-    name: "Cloudflare.InDirectory",
-    desc: "Set the working directory for Cloudflare commands.",
-    examples: [
-      "Cloudflare.InDirectory(\"./website\");",
-      "Cloudflare.InDirectory(\".\").PagesDeploy(...);"
-    ]
-  },
-  {
-    group: "Cloudflare",
-    name: "Cloudflare.EnsureAuthenticated",
-    desc: "Verify Cloudflare credentials via 'wrangler whoami'.",
-    examples: [
-      "Cloudflare.EnsureAuthenticated();"
-    ]
-  },
-  {
-    group: "Cloudflare",
-    name: "Cloudflare.PagesDeploy",
-    desc: "Deploy the ./dist directory to Cloudflare Pages.",
-    examples: [
-      "Cloudflare.PagesDeploy(o => o.WithProjectName(\"my-site\"));",
-      "Cloudflare.PagesDeploy(o => o\n  .WithProjectName(\"my-site\")\n  .WithBranch(\"main\"));"
-    ]
-  },
-  {
-    group: "Cloudflare",
-    name: "Cloudflare.PagesDeployDirectory",
-    desc: "Deploy a specific directory to Cloudflare Pages.",
-    examples: [
-      "Cloudflare.PagesDeployDirectory(\"./dist\", o => o.WithProjectName(\"my-site\"));",
-      "Cloudflare.PagesDeployDirectory(\"./build\", o => o\n  .WithProjectName(\"my-site\")\n  .WithBranch(\"preview\")\n  .WithCommitHash(\"abc123\"));"
-    ]
-  },
-  {
-    group: "Cloudflare",
-    name: "Cloudflare.PagesListProjects",
-    desc: "List all Cloudflare Pages projects.",
-    examples: [
-      "Cloudflare.PagesListProjects();"
-    ]
-  },
-  {
-    group: "Cloudflare",
-    name: "Cloudflare.PagesCreateProject",
-    desc: "Create a new Cloudflare Pages project.",
-    examples: [
-      "Cloudflare.PagesCreateProject(\"my-site\");",
-      "Cloudflare.PagesCreateProject(\"my-site\", \"develop\");"
-    ]
-  },
-  {
-    group: "Cloudflare",
-    name: "Cloudflare.PagesListDeployments",
-    desc: "List deployments for a Cloudflare Pages project.",
-    examples: [
-      "Cloudflare.PagesListDeployments(\"my-site\");",
-      "Cloudflare.PagesListDeployments(); // Uses CLOUDFLARE_PROJECT_NAME env var"
-    ]
-  },
-  {
-    group: "Functions",
-    name: "Functions.DeployZip",
-    desc: "Deploy a function app using zip deploy.",
-    examples: [
-      "Functions.DeployZip(\"my-func\", \"./publish.zip\");",
-      "Functions.DeployZip(\"my-func\", \"./publish.zip\", \"my-rg\", o => o\n  .WithDeploymentSlot(\"staging\"));"
-    ]
-  },
-  {
-    group: "Functions",
-    name: "Functions.Publish",
-    desc: "Publish using Azure Functions Core Tools.",
-    examples: [
-      "Functions.Publish(\"my-func\");",
-      "Functions.Publish(\"my-func\", \"./src/MyFunc\", o => o\n  .WithDeploymentSlot(\"staging\")\n  .WithConfiguration(\"Release\"));"
-    ]
-  },
-  {
-    group: "Functions",
-    name: "Functions.DeployWithSwap",
-    desc: "Deploy to a slot then swap to production (zero-downtime).",
-    examples: [
-      "Functions.DeployWithSwap(\"my-func\", \"./publish.zip\");",
-      "Functions.DeployWithSwap(\"my-func\", \"./publish.zip\", \"staging\", \"my-rg\");"
-    ]
-  },
-  {
-    group: "Functions",
-    name: "Functions.SwapSlots",
-    desc: "Swap deployment slots.",
-    examples: [
-      "Functions.SwapSlots(\"my-func\", \"staging\");",
-      "Functions.SwapSlots(\"my-func\", \"staging\", \"my-rg\", \"production\");"
-    ]
-  },
-  {
-    group: "Functions",
-    name: "Functions.Restart",
-    desc: "Restart a function app.",
-    examples: [
-      "Functions.Restart(\"my-func\");",
-      "Functions.Restart(\"my-func\", \"my-rg\", \"staging\");"
-    ]
-  },
-  {
-    group: "Functions",
-    name: "Functions.Start",
-    desc: "Start a function app.",
-    examples: [
-      "Functions.Start(\"my-func\");",
-      "Functions.Start(\"my-func\", slot: \"staging\");"
-    ]
-  },
-  {
-    group: "Functions",
-    name: "Functions.Stop",
-    desc: "Stop a function app.",
-    examples: [
-      "Functions.Stop(\"my-func\");",
-      "Functions.Stop(\"my-func\", slot: \"staging\");"
-    ]
-  },
-  {
-    group: "AppService",
-    name: "AppService.DeployZip",
-    desc: "Deploy an app service using zip deploy.",
-    examples: [
-      "AppService.DeployZip(\"my-app\", \"./publish.zip\");",
-      "AppService.DeployZip(\"my-app\", \"./publish.zip\", \"my-rg\", o => o\n  .WithDeploymentSlot(\"staging\"));"
-    ]
-  },
-  {
-    group: "AppService",
-    name: "AppService.DeployWithSwap",
-    desc: "Deploy to a slot then swap to production (zero-downtime).",
-    examples: [
-      "AppService.DeployWithSwap(\"my-app\", \"./publish.zip\");",
-      "AppService.DeployWithSwap(\"my-app\", \"./publish.zip\", \"staging\", \"my-rg\");"
-    ]
-  },
-  {
-    group: "AppService",
-    name: "AppService.SwapSlots",
-    desc: "Swap deployment slots.",
-    examples: [
-      "AppService.SwapSlots(\"my-app\", \"staging\");",
-      "AppService.SwapSlots(\"my-app\", \"staging\", \"my-rg\", \"production\");"
-    ]
-  },
-  {
-    group: "AppService",
-    name: "AppService.CreateSlot",
-    desc: "Create a new deployment slot.",
-    examples: [
-      "AppService.CreateSlot(\"my-app\", \"staging\");",
-      "AppService.CreateSlot(\"my-app\", \"staging\", \"my-rg\", \"production\");"
-    ]
-  },
-  {
-    group: "AppService",
-    name: "AppService.DeleteSlot",
-    desc: "Delete a deployment slot.",
-    examples: [
-      "AppService.DeleteSlot(\"my-app\", \"staging\");",
-      "AppService.DeleteSlot(\"my-app\", \"staging\", \"my-rg\");"
-    ]
-  },
-  {
-    group: "AppService",
-    name: "AppService.ListSlots",
-    desc: "List deployment slots for an app service.",
-    examples: [
-      "AppService.ListSlots(\"my-app\");",
-      "AppService.ListSlots(\"my-app\", \"my-rg\");"
-    ]
-  },
-  {
-    group: "AppService",
-    name: "AppService.Restart",
-    desc: "Restart an app service.",
-    examples: [
-      "AppService.Restart(\"my-app\");",
-      "AppService.Restart(\"my-app\", \"my-rg\", \"staging\");"
-    ]
-  },
-  {
-    group: "AppService",
-    name: "AppService.Start",
-    desc: "Start an app service.",
-    examples: [
-      "AppService.Start(\"my-app\");",
-      "AppService.Start(\"my-app\", slot: \"staging\");"
-    ]
-  },
-  {
-    group: "AppService",
-    name: "AppService.Stop",
-    desc: "Stop an app service.",
-    examples: [
-      "AppService.Stop(\"my-app\");",
-      "AppService.Stop(\"my-app\", slot: \"staging\");"
-    ]
-  }
-];
+# Create a hello world build script
+echo 'Log.Info("Hello, World!");' > build.ando
+
+# Run the build script
+ando run`;
+
+const exampleBuildCode = `// Project and directory references
+var WebApi = DotnetProject("./src/WebApi/WebApi.csproj");
+var Frontend = Directory("./frontend");
+
+// Backend build and publish
+Dotnet.Restore(WebApi);
+Dotnet.Build(WebApi);
+Dotnet.Test(WebApi);
+Dotnet.Publish(WebApi, o => o
+  .Output(Root / "artifacts" / "api"));
+
+// Deploy backend to Azure App Service
+Azure.EnsureAuthenticated();
+Artifact.Zip(Root / "artifacts" / "api", Root / "artifacts" / "api.zip");
+AppService.DeployWithSwap("my-webapi", Root / "artifacts" / "api.zip");
+
+// Frontend build and deploy
+Npm.Ci(Frontend);
+Npm.Run(Frontend, "build");
+
+// Deploy frontend to Cloudflare Pages
+Cloudflare.EnsureAuthenticated();
+Cloudflare.PagesDeploy(Frontend / "dist", "my-frontend");`;
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ANDO - Typed C# Build System</title>
-    <link rel="preconnect" href="https://rsms.me/" />
-    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
-    <meta
-      name="description"
-      content="ANDO is a strongly typed, C#-native build system for build, test, and deploy workflows without YAML or DSLs."
-    />
-  </head>
-  <body>
-    <main>
-      <nav>
-        <a href="#top">ANDO</a>
-        <div class="links">
-          <a href="#docker">Docker</a>
-          <a href="#build">build.ando</a>
-          <a href="#cli">Commands</a>
-          <a href="#ops">Operations</a>
-          <button class="theme-toggle" id="theme-toggle" title="Toggle dark mode">
-            <span id="theme-icon">🌙</span>
-          </button>
-        </div>
-      </nav>
+<BaseLayout
+  title="Build and deploy toolchain in plain C#"
+  description="ANDO is a typed build and deployment system. No YAML, no DSLs, no ceremony."
+>
+  <section id="top" class="mb-10 md:mb-16">
+    <h1 class="mb-4 max-w-4xl pt-24 text-3xl font-bold text-zinc-900 sm:mb-6 sm:text-8xl dark:text-white">
+      Build and deploy with a familiar syntax
+    </h1>
+    <blockquote
+      class="mb-18 border-l-2 border-zinc-200 pl-4 text-sm text-zinc-400 italic dark:border-zinc-700 dark:text-zinc-500"
+    >
+      From the Latin <span class="not-italic">"andō"</span> - to set in motion.
+    </blockquote>
+    <p class="mb-8 font-serif text-3xl text-zinc-600 dark:text-zinc-400">
+      ANDO is a continous integration tool that runs your build and deployment workflow inside a Docker container. C#
+      like syntax, support for .NET, Node, Npm, Cloudflare and more.
+    </p>
+  </section>
 
-      <section id="top">
-        <h1>Typed builds that feel like real C#.</h1>
-        <p class="lede">
-          ANDO executes a single <strong>build.ando</strong> file with top-level statements and typed
-          operations. No YAML, no DSLs, no ceremony.
-        </p>
-        <p class="section-subtitle" id="docker">
-          ANDO runs every workflow inside a Docker container for clean, reproducible builds. Your
-          repo is mounted into <strong>/workspace</strong>, and the CLI manages container lifecycle.
-        </p>
-        <div class="code-block">
-          <span class="label">shell</span>
-          <pre><code>ando run
-ando run --cold
-ando run --image my-custom-image</code></pre>
-        </div>
-      </section>
+  <section id="getting-started" class="mb-10 md:mb-16">
+    <h2 class="mb-2 text-xl font-bold text-zinc-900 sm:text-2xl dark:text-white">Getting started</h2>
+    <p class="mb-4 text-zinc-500 sm:mb-6 dark:text-zinc-400">Install as a dotnet tool.</p>
 
-      <section id="build">
-        <h2 class="section-title">Example build.ando</h2>
-        <p class="section-subtitle">
-          A single C# file defines projects, tools, workflow settings, and operations.
-        </p>
-        <div class="code-block">
-          <span class="label">build.ando</span>
-          <pre><code><span class="tok-comment">// Project references</span>
-<span class="tok-keyword">var</span> <span class="tok-type">WebApi</span> <span class="tok-op">=</span> <span class="tok-namespace">Project</span>.<span class="tok-func">From</span>(<span class="tok-string">"./src/WebApi/WebApi.csproj"</span>);
-<span class="tok-keyword">var</span> <span class="tok-type">Frontend</span> <span class="tok-op">=</span> <span class="tok-namespace">Project</span>.<span class="tok-func">From</span>(<span class="tok-string">"./src/Frontend"</span>);
+    <CodeBlock code={gettingStartedCode} lang="shell" filename="shell" />
+  </section>
 
-<span class="tok-comment">// Tools</span>
-<span class="tok-keyword">var</span> <span class="tok-type">EfTool</span> <span class="tok-op">=</span> <span class="tok-namespace">Dotnet</span>.<span class="tok-func">Tool</span>(<span class="tok-string">"dotnet-ef"</span>, <span class="tok-prop">version</span>: <span class="tok-string">"8.0.0"</span>);
-<span class="tok-keyword">var</span> <span class="tok-type">NodeTool</span> <span class="tok-op">=</span> <span class="tok-namespace">Node</span>.<span class="tok-func">Use</span>(<span class="tok-prop">version</span>: <span class="tok-string">"20.11.0"</span>);
-
-<span class="tok-comment">// Workflow</span>
-<span class="tok-func">Workflow</span>(<span class="tok-string">"ci"</span>, <span class="tok-type">w</span> <span class="tok-op">=&gt;</span>
-&#123;
-  <span class="tok-type">w</span>.<span class="tok-prop">Configuration</span> <span class="tok-op">=</span> <span class="tok-type">Configuration</span>.<span class="tok-type">Release</span>;
-  <span class="tok-type">w</span>.<span class="tok-prop">Verbosity</span> <span class="tok-op">=</span> <span class="tok-type">Verbosity</span>.<span class="tok-type">Minimal</span>;
-&#125;);
-
-<span class="tok-comment">// Backend build</span>
-<span class="tok-namespace">Dotnet</span>.<span class="tok-func">Restore</span>(<span class="tok-type">WebApi</span>);
-<span class="tok-namespace">Dotnet</span>.<span class="tok-func">Build</span>(<span class="tok-type">WebApi</span>);
-<span class="tok-namespace">Dotnet</span>.<span class="tok-func">Test</span>(<span class="tok-type">WebApi</span>);
-
-<span class="tok-comment">// Frontend build</span>
-<span class="tok-namespace">Npm</span>.<span class="tok-func">Ci</span>();
-<span class="tok-namespace">Npm</span>.<span class="tok-func">Run</span>(<span class="tok-string">"build"</span>);
-
-<span class="tok-comment">// Publish</span>
-<span class="tok-namespace">Dotnet</span>.<span class="tok-func">Publish</span>(<span class="tok-type">WebApi</span>, <span class="tok-type">o</span> <span class="tok-op">=&gt;</span> <span class="tok-type">o</span>
-  .<span class="tok-func">Output</span>(<span class="tok-type">Context</span>.<span class="tok-type">Paths</span>.<span class="tok-type">Artifacts</span> <span class="tok-op">/</span> <span class="tok-string">"publish"</span> <span class="tok-op">/</span> <span class="tok-string">"api"</span>));</code></pre>
-        </div>
-      </section>
-
-      <section id="cli">
-        <h2 class="section-title">ANDO commands</h2>
-        <p class="section-subtitle">The CLI provides a small, focused surface area.</p>
-        <table class="dir-table">
-          <thead>
-            <tr>
-              <th>Command</th>
-              <th>Description</th>
-            </tr>
-          </thead>
-          <tbody>
-            {commands.map((item) => (
-              <tr>
-                <td><code>{item.cmd}</code></td>
-                <td>{item.desc}</td>
+  <section id="cli" class="mb-10 md:mb-16">
+    <h2 class="mb-2 text-xl font-bold text-zinc-900 sm:text-2xl dark:text-white">ANDO commands</h2>
+    <p class="mb-4 text-zinc-500 sm:mb-6 dark:text-zinc-400">The CLI provides a small, focused surface area.</p>
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[400px] text-sm">
+        <thead>
+          <tr class="border-b border-zinc-200 dark:border-zinc-700">
+            <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Command</th>
+            <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Description</th
+            >
+          </tr>
+        </thead>
+        <tbody>
+          {
+            commands.map((item) => (
+              <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+                <td class="px-3 py-3">
+                  <code class="rounded bg-zinc-100 px-1.5 py-0.5 text-cyan-600 dark:bg-zinc-800 dark:text-cyan-400">
+                    {item.cmd}
+                  </code>
+                </td>
+                <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">{item.desc}</td>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-3 text-sm text-zinc-400 dark:text-zinc-500">
+      See the <a href="/cli" class="text-cyan-600 hover:underline dark:text-cyan-400">CLI reference</a> for all options.
+    </p>
+  </section>
 
-        <h3 class="op-title">Run options</h3>
-        <table class="dir-table">
-          <thead>
-            <tr>
-              <th>Flag</th>
-              <th>Description</th>
-            </tr>
-          </thead>
-          <tbody>
-            {runOptions.map((item) => (
-              <tr>
-                <td><code>{item.flag}</code></td>
-                <td>{item.desc}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+  <section id="build" class="mb-10 md:mb-16">
+    <h2 class="mb-2 text-xl font-bold text-zinc-900 sm:text-2xl dark:text-white">Example build.ando</h2>
+    <p class="mb-4 text-zinc-500 sm:mb-6 dark:text-zinc-400">
+      A single C# file defines projects, tools, workflow settings, and operations.
+    </p>
+    <CodeBlock code={exampleBuildCode} lang="csharp" filename="build.ando" />
+  </section>
 
-        <h3 class="op-title">Clean options</h3>
-        <table class="dir-table">
-          <thead>
-            <tr>
-              <th>Flag</th>
-              <th>Description</th>
-            </tr>
-          </thead>
-          <tbody>
-            {cleanOptions.map((item) => (
-              <tr>
-                <td><code>{item.flag}</code></td>
-                <td>{item.desc}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-
-      <section id="ops">
-        <h2 class="section-title">Operations directory</h2>
-        <p class="section-subtitle">
-          Each operation registers a deterministic step and runs inside the container.
-        </p>
-        <div class="search-container">
-          <input
-            type="text"
-            class="search-input"
-            id="ops-search"
-            placeholder="Search operations..."
-          />
-        </div>
-        <div class="no-results" id="no-results">No operations found matching your search.</div>
-        {["Dotnet", "Npm", "Ef", "Azure", "Bicep", "Functions", "AppService", "Cloudflare"].map((group) => (
-          <div class="op-group">
-            <h3 class="op-title">{group}</h3>
-            <table class="dir-table">
-              <thead>
-                <tr>
-                  <th>Operation</th>
-                  <th>Description</th>
-                  <th>Examples</th>
-                </tr>
-              </thead>
-              <tbody>
-                {operations
-                  .filter((item) => item.group === group)
-                  .map((item) => (
-                    <tr>
-                      <td><code>{item.name}</code></td>
-                      <td>{item.desc}</td>
-                      <td>
-                        <pre class="mini-code"><code>{item.examples.join("\n")}</code></pre>
+  <section id="ops" class="mb-10 md:mb-16">
+    <h2 class="mb-2 text-xl font-bold text-zinc-900 sm:text-2xl dark:text-white">All Operations</h2>
+    <p class="mb-4 text-zinc-500 sm:mb-6 dark:text-zinc-400">
+      Each operation registers a deterministic step and runs inside the container.
+    </p>
+    <div class="mb-4">
+      <input
+        type="text"
+        id="ops-search"
+        placeholder="Search operations..."
+        class="w-full rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-800 placeholder-zinc-400 focus:border-transparent focus:ring-2 focus:ring-cyan-500 focus:outline-none sm:max-w-md dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:placeholder-zinc-500"
+      />
+    </div>
+    <div id="ops-container">
+      {
+        groupedOperations.map(([provider, ops]) => (
+          <div class="ops-group mb-6" data-provider={provider}>
+            <h3 class="mb-3 flex items-center gap-2 text-base font-semibold text-zinc-800 sm:text-lg dark:text-zinc-200">
+              <a href={providerLinks[provider]?.href || "#"} class="hover:text-cyan-600 dark:hover:text-cyan-400">
+                {providerLinks[provider]?.label || provider}
+              </a>
+              <span class="text-sm font-normal text-zinc-400 dark:text-zinc-500">({ops.length})</span>
+            </h3>
+            <div class="overflow-x-auto">
+              <table class="mb-4 w-full min-w-[400px] text-sm">
+                <tbody>
+                  {ops.map((op) => (
+                    <tr
+                      data-group={op.group}
+                      data-name={op.name.toLowerCase()}
+                      class="ops-row border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50"
+                    >
+                      <td class="w-1/3 px-3 py-3">
+                        <a
+                          href={`${providerLinks[op.group]?.href || "#"}#${getAnchorId(op.name)}`}
+                          class="hover:text-cyan-600 dark:hover:text-cyan-400"
+                        >
+                          <code class="text-cyan-600 dark:text-cyan-400">{op.name}</code>
+                        </a>
                       </td>
+                      <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400" set:html={op.desc} />
                     </tr>
                   ))}
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           </div>
-        ))}
-      </section>
-
-    </main>
-
-    <script>
-      // Theme toggle functionality
-      const themeToggle = document.getElementById('theme-toggle');
-      const themeIcon = document.getElementById('theme-icon');
-      const html = document.documentElement;
-
-      // Check for saved theme preference or system preference
-      function getPreferredTheme() {
-        const saved = localStorage.getItem('theme');
-        if (saved) return saved;
-        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        ))
       }
+    </div>
+    <p class="mt-3 text-sm text-zinc-400 dark:text-zinc-500" id="ops-count">{totalOperations} operations</p>
+  </section>
 
-      function setTheme(theme) {
-        if (theme === 'dark') {
-          html.setAttribute('data-theme', 'dark');
-          themeIcon.textContent = '☀️';
-        } else {
-          html.removeAttribute('data-theme');
-          themeIcon.textContent = '🌙';
-        }
-        localStorage.setItem('theme', theme);
+  <script>
+    // @ts-nocheck
+    // Operations search functionality
+    const searchInput = document.getElementById("ops-search");
+    const opsContainer = document.getElementById("ops-container");
+    const opsCount = document.getElementById("ops-count");
+    const rows = opsContainer?.querySelectorAll(".ops-row") || [];
+    const groups = opsContainer?.querySelectorAll(".ops-group") || [];
+    const totalCount = rows.length;
+
+    searchInput?.addEventListener("input", (e) => {
+      const query = e.target.value.toLowerCase().trim();
+      let visibleCount = 0;
+
+      // First, filter individual rows
+      rows.forEach((row) => {
+        const name = row.dataset.name || "";
+        const group = row.dataset.group?.toLowerCase() || "";
+        const desc = row.textContent?.toLowerCase() || "";
+        const matches = name.includes(query) || group.includes(query) || desc.includes(query);
+
+        row.style.display = matches ? "" : "none";
+        if (matches) visibleCount++;
+      });
+
+      // Then, hide groups that have no visible rows
+      groups.forEach((group) => {
+        const visibleRows = group.querySelectorAll('.ops-row:not([style*="display: none"])');
+        group.style.display = visibleRows.length > 0 ? "" : "none";
+      });
+
+      if (opsCount) {
+        opsCount.textContent = query ? `${visibleCount} of ${totalCount} operations` : `${totalCount} operations`;
       }
-
-      // Initialize theme
-      setTheme(getPreferredTheme());
-
-      themeToggle.addEventListener('click', () => {
-        const current = html.getAttribute('data-theme');
-        setTheme(current === 'dark' ? 'light' : 'dark');
-      });
-
-      // Search functionality
-      const searchInput = document.getElementById('ops-search');
-      const noResults = document.getElementById('no-results');
-      const opGroups = document.querySelectorAll('.op-group');
-
-      searchInput.addEventListener('input', (e) => {
-        const query = e.target.value.toLowerCase().trim();
-        let totalVisible = 0;
-
-        opGroups.forEach((group) => {
-          const rows = group.querySelectorAll('tbody tr');
-          let groupVisible = 0;
-
-          rows.forEach((row) => {
-            const opName = row.querySelector('td:first-child')?.textContent.toLowerCase() || '';
-            const desc = row.querySelector('td:nth-child(2)')?.textContent.toLowerCase() || '';
-            const examples = row.querySelector('td:nth-child(3)')?.textContent.toLowerCase() || '';
-
-            if (opName.includes(query) || desc.includes(query) || examples.includes(query)) {
-              row.classList.remove('hidden');
-              groupVisible++;
-            } else {
-              row.classList.add('hidden');
-            }
-          });
-
-          if (groupVisible === 0) {
-            group.classList.add('hidden');
-          } else {
-            group.classList.remove('hidden');
-            totalVisible += groupVisible;
-          }
-        });
-
-        noResults.classList.toggle('visible', totalVisible === 0 && query.length > 0);
-      });
-
-      // Copy to clipboard functionality
-      document.querySelectorAll('.code-block').forEach((block) => {
-        const btn = document.createElement('button');
-        btn.className = 'copy-btn';
-        btn.textContent = 'Copy';
-        block.appendChild(btn);
-
-        btn.addEventListener('click', async () => {
-          const code = block.querySelector('code')?.textContent || '';
-          try {
-            await navigator.clipboard.writeText(code);
-            btn.textContent = 'Copied!';
-            btn.classList.add('copied');
-            setTimeout(() => {
-              btn.textContent = 'Copy';
-              btn.classList.remove('copied');
-            }, 2000);
-          } catch (err) {
-            btn.textContent = 'Error';
-            setTimeout(() => {
-              btn.textContent = 'Copy';
-            }, 2000);
-          }
-        });
-      });
-    </script>
-  </body>
-</html>
+    });
+  </script>
+</BaseLayout>

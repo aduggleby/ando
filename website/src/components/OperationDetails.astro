@@ -1,0 +1,85 @@
+---
+import { getHighlighter } from "../lib/highlighter";
+
+interface Operation {
+  group: string;
+  name: string;
+  desc: string;
+  examples: string[];
+}
+
+interface Props {
+  operations: Operation[];
+}
+
+const { operations } = Astro.props;
+
+// Generate anchor ID from operation name (e.g., "Cloudflare.PagesDeploy" -> "pagesdeploy")
+function getAnchorId(name: string): string {
+  const parts = name.split(".");
+  return parts[parts.length - 1].toLowerCase();
+}
+
+// Get cached highlighter instance
+const highlighter = await getHighlighter();
+
+// Highlight code examples for an operation
+function highlightExamples(examples: string[]): string {
+  const code = examples.join("\n");
+  return highlighter.codeToHtml(code, {
+    lang: "csharp",
+    themes: {
+      light: "github-light",
+      dark: "github-dark",
+    },
+    defaultColor: false,
+  });
+}
+---
+
+{
+  operations.map((op) => (
+    <section id={getAnchorId(op.name)} class="mb-8 scroll-mt-8">
+      <h3 class="mb-2 text-lg font-semibold text-zinc-900 dark:text-white">
+        <code class="text-cyan-600 dark:text-cyan-400">{op.name}</code>
+      </h3>
+      <p class="mb-4 text-zinc-500 dark:text-zinc-400" set:html={op.desc} />
+      <div
+        class="code-block relative overflow-x-auto rounded-xl border border-zinc-200 p-4 font-mono text-sm leading-relaxed dark:border-zinc-700"
+        set:html={highlightExamples(op.examples)}
+      />
+    </section>
+  ))
+}
+
+<style is:global>
+  .code-block pre {
+    margin: 0;
+    background: transparent !important;
+  }
+
+  .code-block code {
+    font-size: 0.875rem;
+    line-height: 1.625;
+  }
+
+  /* Light theme background */
+  .code-block {
+    background-color: rgb(250 250 250); /* zinc-50 */
+  }
+
+  /* Dark theme background */
+  .dark .code-block {
+    background-color: rgb(24 24 27); /* zinc-900 */
+  }
+
+  /* Shiki dual theme: show light theme spans in light mode */
+  .code-block .shiki span {
+    color: var(--shiki-light);
+  }
+
+  /* Shiki dual theme: show dark theme spans in dark mode */
+  .dark .code-block .shiki span {
+    color: var(--shiki-dark);
+  }
+</style>

@@ -28,6 +28,7 @@ namespace Ando.Server.Controllers;
 /// Controller for project management.
 /// </summary>
 [Authorize]
+[Route("projects")]
 public class ProjectsController : Controller
 {
     private readonly AndoDbContext _db;
@@ -183,7 +184,7 @@ public class ProjectsController : Controller
 
         if (project == null)
         {
-            return NotFound();
+            return View("NotFound");
         }
 
         var recentBuilds = await _buildService.GetBuildsForProjectAsync(id, 0, 20);
@@ -234,13 +235,13 @@ public class ProjectsController : Controller
         var userId = GetCurrentUserId();
         var user = await _db.Users.FindAsync(userId);
 
-        if (user?.AccessToken == null)
+        if (user?.GitHubAccessToken == null)
         {
             return RedirectToAction("Login", "Auth");
         }
 
         // Get user's repositories from GitHub
-        var repos = await _gitHubService.GetUserRepositoriesAsync(user.AccessToken);
+        var repos = await _gitHubService.GetUserRepositoriesAsync(user.GitHubAccessToken);
 
         // Get already connected repo IDs
         var connectedRepoIds = await _db.Projects
@@ -276,13 +277,13 @@ public class ProjectsController : Controller
         var userId = GetCurrentUserId();
         var user = await _db.Users.FindAsync(userId);
 
-        if (user?.AccessToken == null)
+        if (user?.GitHubAccessToken == null)
         {
             return RedirectToAction("Login", "Auth");
         }
 
         // Get repository info from GitHub
-        var repos = await _gitHubService.GetUserRepositoriesAsync(user.AccessToken);
+        var repos = await _gitHubService.GetUserRepositoriesAsync(user.GitHubAccessToken);
         var repo = repos.FirstOrDefault(r => r.Id == gitHubRepoId);
 
         if (repo == null)
@@ -325,7 +326,7 @@ public class ProjectsController : Controller
 
         if (project == null)
         {
-            return NotFound();
+            return View("NotFound");
         }
 
         var secretNames = await _projectService.GetSecretNamesAsync(id);
@@ -358,7 +359,7 @@ public class ProjectsController : Controller
 
         if (project == null)
         {
-            return NotFound();
+            return View("NotFound");
         }
 
         await _projectService.UpdateProjectSettingsAsync(
@@ -386,7 +387,7 @@ public class ProjectsController : Controller
 
         if (project == null)
         {
-            return NotFound();
+            return View("NotFound");
         }
 
         if (string.IsNullOrWhiteSpace(form.Name) || string.IsNullOrWhiteSpace(form.Value))
@@ -420,7 +421,7 @@ public class ProjectsController : Controller
 
         if (project == null)
         {
-            return NotFound();
+            return View("NotFound");
         }
 
         await _projectService.DeleteSecretAsync(id, name);
@@ -445,7 +446,7 @@ public class ProjectsController : Controller
 
         if (project == null)
         {
-            return NotFound();
+            return View("NotFound");
         }
 
         await _projectService.DeleteProjectAsync(id);
@@ -470,7 +471,7 @@ public class ProjectsController : Controller
 
         if (project == null)
         {
-            return NotFound();
+            return View("NotFound");
         }
 
         // Get the latest commit SHA for the branch

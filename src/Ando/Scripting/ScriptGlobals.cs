@@ -8,17 +8,17 @@
 // here are accessible without qualification in scripts.
 //
 // Example build.ando script:
-//   var project = Project.From("./src/MyApp/MyApp.csproj");
+//   var project = DotnetProject("./src/MyApp/MyApp.csproj");
+//   var frontend = Directory("./frontend");
 //   Dotnet.Restore(project);
 //   Dotnet.Build(project);
-//   Dotnet.Publish(project, opt => opt
-//       .WithConfiguration(Configuration.Release)
-//       .Output(Context.Paths.Artifacts / "app"));
+//   Npm.Ci(frontend);
+//   Npm.Run(frontend, "build");
 //
 // Design Decisions:
 // - Properties are exposed directly as globals (no "Ando." prefix needed)
 // - Root is a shorthand for Context.Paths.Root to reduce verbosity
-// - Project helper provides a natural syntax: Project.From(path)
+// - DotnetProject and Directory are functions that create typed references
 // - Operations (Dotnet, Ef, Npm) register steps when called
 // =============================================================================
 
@@ -102,10 +102,35 @@ public class ScriptGlobals
     public ArtifactOperations Artifacts { get; }
 
     /// <summary>
-    /// Helper to create project references.
-    /// Usage: Project.From("path/to/project.csproj")
+    /// Node.js installation operations (installs Node.js globally).
+    /// Usage: Node.Install() or Node.Install("20")
     /// </summary>
-    public ProjectHelper Project { get; }
+    public NodeInstallOperations Node { get; }
+
+    /// <summary>
+    /// .NET SDK installation operations (installs SDK globally).
+    /// Usage: DotnetSdk.Install() or DotnetSdk.Install("8.0")
+    /// </summary>
+    public DotnetInstallOperations DotnetSdk { get; }
+
+    /// <summary>
+    /// Logging operations for build script output.
+    /// Usage: Log.Info("message"), Log.Warning("message"), Log.Error("message"), Log.Debug("message")
+    /// </summary>
+    public LogOperations Log { get; }
+
+    /// <summary>
+    /// Creates a .NET project reference from a path.
+    /// Usage: var app = DotnetProject("./src/MyApp/MyApp.csproj");
+    /// </summary>
+    public Func<string, ProjectRef> DotnetProject { get; }
+
+    /// <summary>
+    /// Creates a directory reference from a path.
+    /// Usage: var frontend = Directory("./frontend");
+    /// Usage: var current = Directory(); // defaults to "."
+    /// </summary>
+    public DirectoryRef Directory(string path = ".") => new DirectoryRef(path);
 
     /// <summary>
     /// Current build configuration (Debug or Release).
@@ -126,16 +151,9 @@ public class ScriptGlobals
         Functions = buildContext.Functions;
         AppService = buildContext.AppService;
         Artifacts = buildContext.Artifacts;
-        Project = new ProjectHelper();
-    }
-
-    /// <summary>
-    /// Helper class for creating project references.
-    /// Provides natural syntax: Project.From("path")
-    /// </summary>
-    public class ProjectHelper
-    {
-        /// <summary>Creates a project reference from a path.</summary>
-        public ProjectRef From(string path) => ProjectRef.From(path);
+        Node = buildContext.Node;
+        DotnetSdk = buildContext.DotnetSdk;
+        Log = buildContext.Log;
+        DotnetProject = path => ProjectRef.From(path);
     }
 }

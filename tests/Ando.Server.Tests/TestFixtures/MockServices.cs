@@ -238,6 +238,12 @@ public class MockEmailService : IEmailService
 {
     public List<EmailCall> SentEmails { get; } = [];
 
+    public Task SendEmailAsync(string to, string subject, string htmlBody)
+    {
+        SentEmails.Add(new EmailCall("Custom", to, subject));
+        return Task.CompletedTask;
+    }
+
     public Task SendBuildFailedEmailAsync(Build build, string recipientEmail)
     {
         SentEmails.Add(new EmailCall(

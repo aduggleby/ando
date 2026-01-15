@@ -71,7 +71,7 @@ export interface WorkerFixtures {
 export const test = base.extend<TestFixtures, WorkerFixtures>({
   // Worker-scoped base URL
   baseUrl: [async ({}, use) => {
-    await use(process.env.BASE_URL || 'http://localhost:5000');
+    await use(process.env.BASE_URL || 'http://localhost:17100');
   }, { scope: 'worker' }],
 
   // Test API client

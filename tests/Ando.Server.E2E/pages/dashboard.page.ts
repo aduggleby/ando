@@ -22,7 +22,7 @@ export class DashboardPage {
   constructor(page: Page) {
     this.page = page;
     this.heading = page.locator('h1');
-    this.newProjectButton = page.locator('a.btn-primary').filter({ hasText: /new project/i });
+    this.newProjectButton = page.locator('a[href="/projects/create"].btn-primary').first();
     this.projectsStatCard = page.locator('.stat-card').filter({ hasText: /projects/i });
     this.buildsStatCard = page.locator('.stat-card').filter({ hasText: /builds today/i });
     this.failedStatCard = page.locator('.stat-card').filter({ hasText: /failed today/i });
@@ -72,7 +72,8 @@ export class DashboardPage {
 
   async clickNewProject() {
     await this.newProjectButton.click();
-    await this.page.waitForURL('**/projects/create**');
+    // Wait for navigation (may go to create page or login depending on GitHub connection)
+    await this.page.waitForLoadState('networkidle');
   }
 
   async clickBuildRow(buildId: number) {

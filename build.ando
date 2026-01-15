@@ -1,8 +1,8 @@
 // ANDO Build Script
 // Builds the ANDO CLI tool as single-file self-contained executables
 
-var project = Project.From("./src/Ando/Ando.csproj");
-var testProject = Project.From("./tests/Ando.Tests/Ando.Tests.csproj");
+var project = DotnetProject("./src/Ando/Ando.csproj");
+var testProject = DotnetProject("./tests/Ando.Tests/Ando.Tests.csproj");
 
 // Base output directory
 var distPath = Root / "dist";

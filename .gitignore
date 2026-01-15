@@ -22,11 +22,16 @@ Thumbs.db
 
 # Test results and coverage
 TestResults/
+test-results/
 coverage/
 *.coverage
 *.coveragexml
 coverage.cobertura.xml
 coverage.lcov
+
+# Playwright
+playwright-report/
+.playwright-mcp/
 
 # ANDO temp files
 .ando/
@@ -48,6 +53,9 @@ yarn-error.log
 .env
 .env.local
 .env.*.local
+
+# Deployment scripts (contain local config)
+publish-to-nas.sh
 
 # Build caches
 .cache/

@@ -4,9 +4,16 @@ import { defineConfig, devices } from '@playwright/test';
  * Playwright configuration for Ando.Server E2E tests.
  *
  * Uses a test-specific base URL and ensures proper isolation between tests.
+ * Requires a SQL Server container (ando-e2e-sqlserver) to be running.
  */
 export default defineConfig({
   testDir: './tests',
+
+  // Global setup starts docker-compose (SQL Server + server)
+  globalSetup: './global-setup.ts',
+
+  // Global teardown stops containers (only in CI or with CLEANUP=1)
+  globalTeardown: './global-teardown.ts',
 
   // Run tests in parallel for speed
   fullyParallel: true,
@@ -28,8 +35,8 @@ export default defineConfig({
 
   // Shared settings for all projects
   use: {
-    // Base URL for the test server
-    baseURL: process.env.BASE_URL || 'http://localhost:5000',
+    // Base URL for the test server (project port range: 17100-17199)
+    baseURL: process.env.BASE_URL || 'http://localhost:17100',
 
     // Collect trace on first retry
     trace: 'on-first-retry',
@@ -72,15 +79,6 @@ export default defineConfig({
     // },
   ],
 
-  // Run local dev server before starting the tests
-  webServer: {
-    command: 'dotnet run --project ../../src/Ando.Server/Ando.Server.csproj --environment Testing',
-    url: 'http://localhost:5000/health',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120000,
-    env: {
-      ASPNETCORE_ENVIRONMENT: 'Testing',
-      ASPNETCORE_URLS: 'http://localhost:5000',
-    },
-  },
+  // Server is started by docker-compose in global-setup.ts
+  // No webServer config needed - containers are managed externally
 });

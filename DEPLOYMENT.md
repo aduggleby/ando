@@ -1,6 +1,6 @@
 # Ando.Server Deployment Guide
 
-This guide covers deploying Ando.Server (the CI/CD server component) on TrueNAS SCALE with persistent storage, automatic restarts, and all required dependencies.
+This guide covers deploying Ando.Server (the CI/CD server component) on TrueNAS SCALE with persistent storage and automatic restarts. This guide assumes you have an existing SQL Server instance for the database.
 
 ## Table of Contents
 
@@ -27,7 +27,7 @@ Ando.Server provides:
 - Real-time build log streaming via SignalR
 - Background job execution via Hangfire
 - Build artifact management with retention policies
-- Email notifications for build failures (via Resend)
+- Email notifications for build failures (Resend, Azure, or SMTP)
 - OAuth authentication via GitHub App
 
 ### Components
@@ -35,7 +35,9 @@ Ando.Server provides:
 | Service | Image | Port | Purpose |
 |---------|-------|------|---------|
 | `ando-server` | Built from source | 8080 | Main application server |
-| `sqlserver` | `mcr.microsoft.com/mssql/server:2022-latest` | 1433 | Database (EF Core + Hangfire) |
+
+**External Dependencies:**
+- SQL Server (existing instance) - Database for EF Core and Hangfire
 
 ---
 
@@ -45,6 +47,10 @@ Ando.Server provides:
 - **Storage pool** with at least 50GB free space
 - **Public IP or domain** for GitHub webhooks
 - **GitHub account** with admin access to target repositories
+- **SQL Server instance** (2019 or later) with:
+  - A database created for Ando (e.g., `AndoServer`)
+  - A SQL login with `db_owner` role on that database
+  - Network connectivity from the TrueNAS host
 
 ---
 
@@ -69,20 +75,19 @@ Ando.Server provides:
                     │  └─────────────┘      │  │  Docker Socket          │││
                     │                       │  │  (Build Containers)     │││
                     │                       │  └─────────────────────────┘││
-                    │                       └─────────────────────────────┘│
-                    │                                     │                │
-                    │                                     ▼                │
-                    │                       ┌─────────────────────────────┐│
-                    │                       │      sqlserver              ││
-                    │                       │  SQL Server 2022 (1433)     ││
-                    │                       └─────────────────────────────┘│
-                    │                                                       │
-                    │  Datasets:                                            │
-                    │  ├── /mnt/pool/ando/sqldata     (database files)     │
-                    │  ├── /mnt/pool/ando/artifacts   (build artifacts)    │
-                    │  ├── /mnt/pool/ando/repos       (git repositories)   │
-                    │  └── /mnt/pool/ando/config      (config files)       │
-                    └─────────────────────────────────────────────────────┘
+                    │                       └──────────────┬──────────────┘│
+                    │                                      │               │
+                    │  Datasets:                           │               │
+                    │  ├── /mnt/pool/ando/artifacts        │               │
+                    │  ├── /mnt/pool/ando/repos            │               │
+                    │  └── /mnt/pool/ando/config           │               │
+                    └──────────────────────────────────────┼───────────────┘
+                                                           │
+                                                           ▼
+                                            ┌─────────────────────────────┐
+                                            │   Existing SQL Server       │
+                                            │   (External)                │
+                                            └─────────────────────────────┘
 ```
 
 ---
@@ -100,32 +105,66 @@ Create persistent datasets on your TrueNAS pool for data that must survive conta
 | Dataset Name | Path | Purpose |
 |--------------|------|---------|
 | `ando` | `/mnt/pool/ando` | Parent dataset |
-| `ando/sqldata` | `/mnt/pool/ando/sqldata` | SQL Server data files |
 | `ando/artifacts` | `/mnt/pool/ando/artifacts` | Build artifacts |
 | `ando/repos` | `/mnt/pool/ando/repos` | Cloned git repositories |
 | `ando/config` | `/mnt/pool/ando/config` | Configuration files |
 
-### Via CLI
+### Via TrueNAS Web Shell
 
 ```bash
-# SSH into TrueNAS
-ssh root@truenas
-
 # Create datasets (replace 'tank' with your pool name)
 zfs create tank/ando
-zfs create tank/ando/sqldata
 zfs create tank/ando/artifacts
 zfs create tank/ando/repos
 zfs create tank/ando/config
 
-# Set permissions for SQL Server (requires specific UID)
-chown -R 10001:10001 /mnt/tank/ando/sqldata
-
-# Set permissions for application data
-chown -R 1000:1000 /mnt/tank/ando/artifacts
-chown -R 1000:1000 /mnt/tank/ando/repos
-chown -R 1000:1000 /mnt/tank/ando/config
+# Set permissions for application data (568 is the TrueNAS apps user)
+chown -R 568:568 /mnt/tank/ando/artifacts
+chown -R 568:568 /mnt/tank/ando/repos
+chown -R 568:568 /mnt/tank/ando/config
 ```
+
+### Finding Your Mount Path
+
+TrueNAS SCALE mounts ZFS datasets at `/mnt/<pool-name>/<dataset-path>`. To find your pool's mount path:
+
+```bash
+# List all pools and their mount points
+zfs list -o name,mountpoint | grep -v "^NAME"
+
+# Example output:
+# tank                    /mnt/tank
+# tank/ando               /mnt/tank/ando
+# tank/ando/artifacts     /mnt/tank/ando/artifacts
+```
+
+**Important:** Update all paths in `docker-compose.yml` to match your pool name. If your pool is named `storage` instead of `tank`, your paths would be:
+
+| Example Pool Name | Mount Path |
+|-------------------|------------|
+| `tank` | `/mnt/tank/ando` |
+| `storage` | `/mnt/storage/ando` |
+| `data` | `/mnt/data/ando` |
+
+The `docker-compose.yml` in this guide uses `/mnt/tank/ando` - replace `tank` with your actual pool name throughout.
+
+### Configuring Volumes in TrueNAS Apps
+
+If deploying via the TrueNAS Apps UI instead of docker-compose, configure the storage mounts in the app editor:
+
+![TrueNAS Apps Volume Configuration](images/truenas-volumes.png)
+
+Configure the following host path volumes:
+
+| Container Path | Host Path | Description |
+|----------------|-----------|-------------|
+| `/data/artifacts` | `/mnt/tank/ando/artifacts` | Build artifacts storage |
+| `/data/repos` | `/mnt/tank/ando/repos` | Cloned repositories |
+| `/app/config` | `/mnt/tank/ando/config` | Configuration directory |
+
+**Note:** TrueNAS Apps only supports directory mounts, not individual files. Place `github-app.pem` in the config directory and set `GitHub__PrivateKeyPath=/app/config/github-app.pem` in your environment variables.
+
+**Docker Socket Access:** Ando requires access to the Docker socket for running builds. TrueNAS SCALE uses Kubernetes (k3s) for its Apps system, so the Docker socket may not be available. Use docker-compose deployment instead (see [Step 5](#step-5-deploy-with-docker-compose)).
 
 ---
 
@@ -196,27 +235,7 @@ From the GitHub App page, note:
 
 ## Step 3: Generate Secrets
 
-You can generate all required secrets automatically using the setup script, or manually.
-
-### Option A: Automated Setup (Recommended)
-
-```bash
-# Download and run the setup script
-curl -O https://raw.githubusercontent.com/yourname/ando/main/scripts/setup-env.sh
-chmod +x setup-env.sh
-./setup-env.sh
-```
-
-The script will:
-1. Generate encryption key (AES-256)
-2. Generate SQL Server password
-3. Generate webhook secret
-4. Prompt for GitHub App credentials
-5. Create a complete `.env` file
-
-### Option B: Manual Setup
-
-#### 3.1 Generate Encryption Key
+### Generate Encryption Key
 
 The encryption key is used to encrypt secrets stored in the database (e.g., repository access tokens).
 
@@ -228,23 +247,7 @@ openssl rand -base64 32
 
 **Save this key securely** - you'll need it for the configuration.
 
-#### 3.2 Generate SQL Server Password
-
-```bash
-# Generate a strong password (must meet SQL Server complexity requirements)
-openssl rand -base64 24 | tr -d '/+=' | head -c 24
-# Example output: Xt3mK9pL2nR8vQ5wY7zA
-```
-
-The password must contain:
-- At least 8 characters
-- Uppercase and lowercase letters
-- Numbers
-- Special characters (add one manually, e.g., `!`)
-
-Example: `Xt3mK9pL2nR8vQ5wY7zA!`
-
-#### 3.3 Generate Webhook Secret
+### Generate Webhook Secret
 
 ```bash
 # Generate webhook secret
@@ -252,20 +255,9 @@ openssl rand -hex 32
 # Example output: a1b2c3d4e5f6...
 ```
 
-## Required Environment Variables
+## Environment Variables
 
-The server validates these on startup and shows an error page if missing:
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `Encryption__Key` | **Yes** | AES-256 encryption key (base64, 32 bytes) |
-| `GitHub__ClientId` | Production | GitHub OAuth Client ID |
-| `GitHub__ClientSecret` | Production | GitHub OAuth Client Secret |
-| `GitHub__WebhookSecret` | Production | GitHub webhook HMAC secret |
-| `GitHub__AppId` | Production | GitHub App ID |
-| `ConnectionStrings__DefaultConnection` | **Yes** | SQL Server connection string |
-
-If any required configuration is missing, the server will display a configuration error page listing exactly what needs to be set.
+The server validates configuration on startup and shows an error page if anything is missing. See the `.env` file below for all required variables.
 
 ---
 
@@ -286,60 +278,75 @@ Create `/mnt/tank/ando/config/.env`:
 ASPNETCORE_ENVIRONMENT=Production
 
 # -----------------------------------------------------------------------------
-# Database
+# Database (External SQL Server)
 # -----------------------------------------------------------------------------
-# SQL Server SA password (must be complex: uppercase, lowercase, number, special char)
-SA_PASSWORD=YourSecurePassword123!
-
-# Full connection string (uses SA_PASSWORD above)
-# Note: 'sqlserver' is the Docker service name
-CONNECTION_STRING=Server=sqlserver;Database=AndoServer;User Id=sa;Password=YourSecurePassword123!;TrustServerCertificate=true;Encrypt=true
+# Connection string to your existing SQL Server instance
+# Replace with your server hostname, database name, and credentials
+#
+# Format: Server=<hostname>;Database=<dbname>;User Id=<user>;Password=<password>;TrustServerCertificate=true;Encrypt=true
+#
+# Examples:
+#   - Named instance: Server=sqlserver.local\MSSQLSERVER;Database=AndoServer;...
+#   - Default instance: Server=192.168.1.100;Database=AndoServer;...
+#   - Azure SQL: Server=yourserver.database.windows.net;Database=AndoServer;...
+#
+ConnectionStrings__DefaultConnection=Server=your-sql-server.local;Database=AndoServer;User Id=ando_user;Password=YourPassword;TrustServerCertificate=true;Encrypt=true
 
 # -----------------------------------------------------------------------------
 # GitHub App Configuration
 # Get these from: https://github.com/settings/apps/YOUR-APP-NAME
 # -----------------------------------------------------------------------------
-GITHUB_APP_ID=123456
-GITHUB_APP_NAME=ando-ci
-GITHUB_CLIENT_ID=Iv1.abc123def456
-GITHUB_CLIENT_SECRET=your_client_secret_here
-GITHUB_WEBHOOK_SECRET=your_webhook_secret_here
+GitHub__AppId=123456
+GitHub__AppName=ando-ci
+GitHub__ClientId=Iv1.abc123def456
+GitHub__ClientSecret=your_client_secret_here
+GitHub__WebhookSecret=your_webhook_secret_here
+GitHub__PrivateKeyPath=/app/github-app.pem
 
 # -----------------------------------------------------------------------------
 # Encryption
 # Generate with: openssl rand -base64 32
 # Used to encrypt secrets stored in the database
 # -----------------------------------------------------------------------------
-ENCRYPTION_KEY=K7gNU3sdo+OL0wNhqoVWhr3g6s1xYv72ol/pe/Unols=
+Encryption__Key=K7gNU3sdo+OL0wNhqoVWhr3g6s1xYv72ol/pe/Unols=
 
 # -----------------------------------------------------------------------------
 # Email Notifications (Optional)
-# Sign up at: https://resend.com
-# Leave empty to disable email notifications
+# Choose a provider: Resend, Azure, or Smtp
+# Leave provider-specific fields empty to disable email notifications
 # -----------------------------------------------------------------------------
-RESEND_API_KEY=
-RESEND_FROM_ADDRESS=builds@your-domain.com
-RESEND_FROM_NAME=Ando CI
+Email__Provider=Resend
+Email__FromAddress=builds@your-domain.com
+Email__FromName=Ando CI
+
+# Resend provider (https://resend.com)
+Email__Resend__ApiKey=
+
+# Azure Email Communication Service
+Email__Azure__ConnectionString=
+
+# SMTP provider (direct SMTP connection)
+Email__Smtp__Host=
+Email__Smtp__Port=587
+Email__Smtp__Username=
+Email__Smtp__Password=
+Email__Smtp__UseSsl=true
 
 # -----------------------------------------------------------------------------
 # Build Configuration
 # -----------------------------------------------------------------------------
-# Default timeout for builds (in minutes)
-BUILD_TIMEOUT_MINUTES=15
-# Maximum allowed timeout
-BUILD_MAX_TIMEOUT_MINUTES=60
-# Number of concurrent build workers
-BUILD_WORKER_COUNT=2
-# Default Docker image for builds
-BUILD_DOCKER_IMAGE=mcr.microsoft.com/dotnet/sdk:9.0-alpine
+Build__DefaultTimeoutMinutes=15
+Build__MaxTimeoutMinutes=60
+Build__WorkerCount=2
+Build__DefaultDockerImage=mcr.microsoft.com/dotnet/sdk:9.0-alpine
+Build__ReposPath=/data/repos
 
 # -----------------------------------------------------------------------------
 # Storage Configuration
 # -----------------------------------------------------------------------------
-# Days to keep build artifacts before cleanup
-ARTIFACT_RETENTION_DAYS=30
-# Days to keep build logs before cleanup
-LOG_RETENTION_DAYS=90
+Storage__ArtifactsPath=/data/artifacts
+Storage__ArtifactRetentionDays=30
+Storage__BuildLogRetentionDays=90
 ```
 
 **Set secure permissions:**
@@ -359,8 +366,12 @@ Create `/mnt/tank/ando/config/docker-compose.yml`:
 # This configuration provides:
 # - Persistent storage mapped to TrueNAS datasets
 # - Automatic restart on failure and host reboot
-# - Health checks for all services
+# - Health checks for the application
 # - Proper security isolation
+#
+# Prerequisites:
+# - Existing SQL Server instance with database created
+# - .env file configured with ConnectionStrings__DefaultConnection
 #
 # Usage:
 #   cd /mnt/tank/ando/config
@@ -385,41 +396,14 @@ services:
     ports:
       - "5000:8080"
 
-    # Environment variables from .env file
+    # Load environment variables from .env file
+    # Uses standard .NET configuration syntax (e.g., GitHub__AppId)
+    env_file:
+      - .env
+
+    # Additional environment variables (overrides .env if needed)
     environment:
-      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - ASPNETCORE_URLS=http://+:8080
-
-      # Database connection
-      - ConnectionStrings__DefaultConnection=${CONNECTION_STRING}
-
-      # GitHub App configuration
-      - GitHub__AppId=${GITHUB_APP_ID}
-      - GitHub__AppName=${GITHUB_APP_NAME}
-      - GitHub__ClientId=${GITHUB_CLIENT_ID}
-      - GitHub__ClientSecret=${GITHUB_CLIENT_SECRET}
-      - GitHub__WebhookSecret=${GITHUB_WEBHOOK_SECRET}
-      - GitHub__PrivateKeyPath=/app/github-app.pem
-
-      # Encryption
-      - Encryption__Key=${ENCRYPTION_KEY}
-
-      # Email (optional)
-      - Resend__ApiKey=${RESEND_API_KEY:-}
-      - Resend__FromAddress=${RESEND_FROM_ADDRESS:-builds@localhost}
-      - Resend__FromName=${RESEND_FROM_NAME:-Ando CI}
-
-      # Storage paths (inside container)
-      - Storage__ArtifactsPath=/data/artifacts
-      - Storage__ArtifactRetentionDays=${ARTIFACT_RETENTION_DAYS:-30}
-      - Storage__BuildLogRetentionDays=${LOG_RETENTION_DAYS:-90}
-
-      # Build configuration
-      - Build__DefaultTimeoutMinutes=${BUILD_TIMEOUT_MINUTES:-15}
-      - Build__MaxTimeoutMinutes=${BUILD_MAX_TIMEOUT_MINUTES:-60}
-      - Build__DefaultDockerImage=${BUILD_DOCKER_IMAGE:-mcr.microsoft.com/dotnet/sdk:9.0-alpine}
-      - Build__WorkerCount=${BUILD_WORKER_COUNT:-2}
-      - Build__ReposPath=/data/repos
 
     # Persistent volume mounts
     volumes:
@@ -432,11 +416,6 @@ services:
 
       # GitHub App private key (read-only)
       - /mnt/tank/ando/config/github-app.pem:/app/github-app.pem:ro
-
-    # Wait for SQL Server to be healthy before starting
-    depends_on:
-      sqlserver:
-        condition: service_healthy
 
     # Restart policy - survives host reboots
     restart: unless-stopped
@@ -467,55 +446,6 @@ services:
     # Security options
     security_opt:
       - no-new-privileges:true
-
-  # ---------------------------------------------------------------------------
-  # SQL Server Database
-  # ---------------------------------------------------------------------------
-  sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: ando-sqlserver
-    hostname: sqlserver
-
-    # Expose SQL Server port (optional - remove if only internal access needed)
-    ports:
-      - "1433:1433"
-
-    environment:
-      - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=${SA_PASSWORD}
-      - MSSQL_PID=Developer  # Use 'Express' for production if not licensed
-      - MSSQL_AGENT_ENABLED=false
-      - MSSQL_COLLATION=SQL_Latin1_General_CP1_CI_AS
-
-    # Persistent storage for database files
-    volumes:
-      - /mnt/tank/ando/sqldata:/var/opt/mssql:rw
-
-    # Restart policy - survives host reboots
-    restart: unless-stopped
-
-    # Health check - ensures SQL Server is ready to accept connections
-    healthcheck:
-      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${SA_PASSWORD}" -C -Q "SELECT 1" || exit 1
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s  # SQL Server needs time to initialize
-
-    # Resource limits
-    deploy:
-      resources:
-        limits:
-          memory: 4G  # SQL Server needs significant memory
-        reservations:
-          memory: 2G
-
-    # Logging configuration
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "100m"
-        max-file: "5"
 
 # =============================================================================
 # Networks
@@ -558,15 +488,16 @@ docker compose logs -f
 ### 5.3 Verify Database Initialization
 
 The first startup will:
-1. Create the `AndoServer` database
-2. Run EF Core migrations
-3. Set up Hangfire tables
+1. Run EF Core migrations on your existing database
+2. Set up Hangfire tables
 
 Check the logs:
 
 ```bash
 docker compose logs ando-server | grep -i "database\|migration"
 ```
+
+**Note:** Ensure your SQL Server user has sufficient permissions to create tables and run migrations.
 
 ---
 
@@ -647,7 +578,7 @@ curl http://localhost:5000/health
 # Expected: {"status":"healthy","timestamp":"2026-01-04T12:00:00Z"}
 ```
 
-### 7.2 Check All Services
+### 7.2 Check Container Status
 
 ```bash
 # Check container status
@@ -656,7 +587,6 @@ docker compose ps
 # Expected output:
 # NAME             STATUS                   PORTS
 # ando-server      Up X minutes (healthy)   0.0.0.0:5000->8080/tcp
-# ando-sqlserver   Up X minutes (healthy)   0.0.0.0:1433->1433/tcp
 ```
 
 ### 7.3 Test GitHub OAuth
@@ -679,25 +609,54 @@ docker compose ps
 
 ### Environment Variables
 
+Environment variables use .NET's standard configuration syntax with `__` (double underscore) as the hierarchy separator.
+
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `ASPNETCORE_ENVIRONMENT` | No | `Production` | Runtime environment |
-| `CONNECTION_STRING` | Yes | - | SQL Server connection string |
-| `GITHUB_APP_ID` | Yes | - | GitHub App ID (numeric) |
-| `GITHUB_APP_NAME` | Yes | - | GitHub App slug name |
-| `GITHUB_CLIENT_ID` | Yes | - | OAuth Client ID |
-| `GITHUB_CLIENT_SECRET` | Yes | - | OAuth Client Secret |
-| `GITHUB_WEBHOOK_SECRET` | Yes | - | Webhook HMAC secret |
-| `ENCRYPTION_KEY` | Yes | - | Base64-encoded 32-byte key |
-| `RESEND_API_KEY` | No | - | Resend API key for emails |
-| `RESEND_FROM_ADDRESS` | No | `builds@localhost` | Email sender address |
-| `RESEND_FROM_NAME` | No | `Ando CI` | Email sender name |
-| `ARTIFACT_RETENTION_DAYS` | No | `30` | Days to keep artifacts |
-| `LOG_RETENTION_DAYS` | No | `90` | Days to keep build logs |
-| `BUILD_TIMEOUT_MINUTES` | No | `15` | Default build timeout |
-| `BUILD_MAX_TIMEOUT_MINUTES` | No | `60` | Maximum build timeout |
-| `BUILD_WORKER_COUNT` | No | `2` | Concurrent build workers |
-| `BUILD_DOCKER_IMAGE` | No | `mcr.microsoft.com/dotnet/sdk:9.0-alpine` | Default build image |
+| `ConnectionStrings__DefaultConnection` | Yes | - | SQL Server connection string |
+| `GitHub__AppId` | Yes | - | GitHub App ID (numeric) |
+| `GitHub__AppName` | Yes | - | GitHub App slug name |
+| `GitHub__ClientId` | Yes | - | OAuth Client ID |
+| `GitHub__ClientSecret` | Yes | - | OAuth Client Secret |
+| `GitHub__WebhookSecret` | Yes | - | Webhook HMAC secret |
+| `GitHub__PrivateKeyPath` | Yes | - | Path to GitHub App private key |
+| `Encryption__Key` | Yes | - | Base64-encoded 32-byte key |
+| `Email__Provider` | No | `Resend` | Email provider: `Resend`, `Azure`, or `Smtp` |
+| `Email__FromAddress` | No | - | Email sender address |
+| `Email__FromName` | No | `Ando CI` | Email sender name |
+| `Email__Resend__ApiKey` | No | - | Resend API key (if using Resend) |
+| `Email__Azure__ConnectionString` | No | - | Azure Communication Services connection string |
+| `Email__Smtp__Host` | No | - | SMTP server hostname |
+| `Email__Smtp__Port` | No | `587` | SMTP server port |
+| `Email__Smtp__Username` | No | - | SMTP authentication username |
+| `Email__Smtp__Password` | No | - | SMTP authentication password |
+| `Email__Smtp__UseSsl` | No | `true` | Use SSL/TLS for SMTP |
+| `Storage__ArtifactsPath` | No | `/data/artifacts` | Path to store build artifacts |
+| `Storage__ArtifactRetentionDays` | No | `30` | Days to keep artifacts |
+| `Storage__BuildLogRetentionDays` | No | `90` | Days to keep build logs |
+| `Build__DefaultTimeoutMinutes` | No | `15` | Default build timeout |
+| `Build__MaxTimeoutMinutes` | No | `60` | Maximum build timeout |
+| `Build__WorkerCount` | No | `2` | Concurrent build workers |
+| `Build__DefaultDockerImage` | No | `mcr.microsoft.com/dotnet/sdk:9.0-alpine` | Default build image |
+| `Build__ReposPath` | No | `/data/repos` | Path for cloned repositories |
+
+### Connection String Format
+
+The `ConnectionStrings__DefaultConnection` environment variable should follow this format:
+
+```
+Server=<hostname>;Database=<database>;User Id=<username>;Password=<password>;TrustServerCertificate=true;Encrypt=true
+```
+
+| Component | Description | Example |
+|-----------|-------------|---------|
+| `Server` | SQL Server hostname (and instance name if applicable) | `sqlserver.local`, `192.168.1.100\MSSQLSERVER` |
+| `Database` | Database name | `AndoServer` |
+| `User Id` | SQL login username | `ando_user` |
+| `Password` | SQL login password | `YourSecurePassword` |
+| `TrustServerCertificate` | Set to `true` for self-signed certs | `true` |
+| `Encrypt` | Enable encryption | `true` |
 
 ### Volume Mounts
 
@@ -705,7 +664,6 @@ docker compose ps
 |----------------|-----------|---------|
 | `/data/artifacts` | `/mnt/tank/ando/artifacts` | Build artifacts |
 | `/data/repos` | `/mnt/tank/ando/repos` | Cloned repositories |
-| `/var/opt/mssql` | `/mnt/tank/ando/sqldata` | SQL Server data |
 | `/app/github-app.pem` | `/mnt/tank/ando/config/github-app.pem` | GitHub App private key |
 | `/var/run/docker.sock` | `/var/run/docker.sock` | Docker socket (DinD) |
 
@@ -714,7 +672,6 @@ docker compose ps
 | Port | Service | Protocol | Notes |
 |------|---------|----------|-------|
 | 5000 | ando-server | HTTP | Main application |
-| 1433 | sqlserver | TCP | Database (can be internal-only) |
 
 ---
 
@@ -725,12 +682,8 @@ docker compose ps
 ```bash
 cd /mnt/tank/ando/config
 
-# All services
+# View logs
 docker compose logs -f
-
-# Specific service
-docker compose logs -f ando-server
-docker compose logs -f sqlserver
 
 # Last 100 lines
 docker compose logs --tail=100 ando-server
@@ -754,23 +707,9 @@ docker compose up -d
 
 ### Backup
 
-#### Database Backup
+**Note:** Database backups should be handled by your existing SQL Server backup procedures. The steps below cover backing up Ando-specific configuration and data.
 
-```bash
-# Create backup directory
-mkdir -p /mnt/tank/ando/backups
-
-# Backup SQL Server database
-docker exec ando-sqlserver /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P "YourPassword" -C \
-  -Q "BACKUP DATABASE [AndoServer] TO DISK = N'/var/opt/mssql/backup/AndoServer.bak' WITH FORMAT"
-
-# Copy backup to host
-docker cp ando-sqlserver:/var/opt/mssql/backup/AndoServer.bak \
-  /mnt/tank/ando/backups/AndoServer_$(date +%Y%m%d).bak
-```
-
-#### Full Backup Script
+#### Configuration Backup Script
 
 Create `/mnt/tank/ando/config/backup.sh`:
 
@@ -785,14 +724,6 @@ echo "Starting backup at $(date)"
 
 # Create backup directory
 mkdir -p "$BACKUP_DIR"
-
-# Backup database
-echo "Backing up database..."
-docker exec ando-sqlserver /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P "${SA_PASSWORD}" -C \
-  -Q "BACKUP DATABASE [AndoServer] TO DISK = N'/var/opt/mssql/backup/AndoServer.bak' WITH FORMAT"
-docker cp ando-sqlserver:/var/opt/mssql/backup/AndoServer.bak \
-  "$BACKUP_DIR/AndoServer_$DATE.bak"
 
 # Backup config files
 echo "Backing up config..."
@@ -843,34 +774,33 @@ docker image prune -f --filter "label=ando.build=true"
 docker compose logs ando-server
 
 # Common issues:
-# - Database connection failed: Check SA_PASSWORD matches
+# - Database connection failed: Verify ConnectionStrings__DefaultConnection is correct and SQL Server is reachable
 # - GitHub key not found: Verify github-app.pem exists and has correct permissions
 # - Port already in use: Change port mapping in docker-compose.yml
 ```
 
 ### Database Connection Issues
 
-```bash
-# Test SQL Server connection
-docker exec -it ando-sqlserver /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P "YourPassword" -C -Q "SELECT 1"
+1. Verify your SQL Server is reachable from the TrueNAS host:
+   ```bash
+   # Test connectivity (replace with your SQL Server hostname and port)
+   nc -zv your-sql-server.local 1433
+   ```
 
-# Check if database exists
-docker exec -it ando-sqlserver /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P "YourPassword" -C \
-  -Q "SELECT name FROM sys.databases"
-```
+2. Check that the database exists and the user has proper permissions
+3. Verify the connection string format in your `.env` file
+4. Check SQL Server logs for authentication failures
 
 ### GitHub OAuth Not Working
 
 1. Verify callback URL in GitHub App settings matches your domain
-2. Check `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` are correct
+2. Check `GitHub__ClientId` and `GitHub__ClientSecret` are correct
 3. Ensure HTTPS is working (OAuth requires HTTPS in production)
 
 ### Webhooks Not Received
 
 1. Check webhook URL is publicly accessible
-2. Verify `GITHUB_WEBHOOK_SECRET` matches what's configured in GitHub
+2. Verify `GitHub__WebhookSecret` matches what's configured in GitHub
 3. Check recent deliveries in GitHub App settings → Advanced → Recent Deliveries
 
 ### Builds Not Running
@@ -888,12 +818,9 @@ docker exec ando-server docker ps
 ### Permission Issues
 
 ```bash
-# Fix artifact directory permissions
-chown -R 1000:1000 /mnt/tank/ando/artifacts
-chown -R 1000:1000 /mnt/tank/ando/repos
-
-# Fix SQL Server directory permissions
-chown -R 10001:10001 /mnt/tank/ando/sqldata
+# Fix artifact directory permissions (568 is the TrueNAS apps user)
+chown -R 568:568 /mnt/tank/ando/artifacts
+chown -R 568:568 /mnt/tank/ando/repos
 ```
 
 ### Reset Everything
@@ -904,11 +831,10 @@ cd /mnt/tank/ando/config
 # Stop and remove containers
 docker compose down
 
-# Remove volumes (WARNING: destroys all data)
+# Remove volumes (WARNING: destroys local data)
 docker compose down -v
 
 # Remove data directories
-rm -rf /mnt/tank/ando/sqldata/*
 rm -rf /mnt/tank/ando/artifacts/*
 rm -rf /mnt/tank/ando/repos/*
 
@@ -916,13 +842,15 @@ rm -rf /mnt/tank/ando/repos/*
 docker compose up -d
 ```
 
+**Note:** This does not affect your external SQL Server database. To reset the database, use your SQL Server management tools.
+
 ---
 
 ## Security Considerations
 
 1. **Secrets Management**: Never commit `.env` or `github-app.pem` to version control
 2. **HTTPS**: Always use HTTPS in production (configure reverse proxy)
-3. **Database**: Consider restricting SQL Server port to internal network only
+3. **Database Credentials**: Use a dedicated SQL login with minimal required permissions (db_owner on the Ando database only)
 4. **Docker Socket**: The server has access to the Docker socket - ensure only trusted users have access
 5. **Encryption Key**: Keep the encryption key secure - losing it means losing access to encrypted secrets
 6. **Firewall**: Only expose necessary ports (5000, or just 443 via reverse proxy)
@@ -941,15 +869,12 @@ docker compose down
 # View logs
 docker compose logs -f
 
-# Restart a service
+# Restart
 docker compose restart ando-server
 
 # Check health
 curl http://localhost:5000/health
 
-# Enter server container
+# Enter container
 docker exec -it ando-server bash
-
-# Enter database container
-docker exec -it ando-sqlserver bash
 ```

@@ -5,7 +5,7 @@
 //
 // Tests verify that:
 // - Each operation (Install, Ci, Run, Test, Build) registers the correct step
-// - InDirectory/InProject correctly sets working directory
+// - DirectoryRef correctly sets working directory
 // - Steps execute the correct npm commands with proper arguments
 // - Working directory is passed via CommandOptions
 // =============================================================================
@@ -27,12 +27,16 @@ public class NpmOperationsTests
     private NpmOperations CreateNpm() =>
         new NpmOperations(_registry, _logger, () => _executor);
 
+    private static DirectoryRef TestDir(string path = "./test-project") =>
+        new DirectoryRef(path);
+
     [Fact]
     public void Install_RegistersStep()
     {
         var npm = CreateNpm();
+        var dir = TestDir();
 
-        npm.Install();
+        npm.Install(dir);
 
         Assert.Single(_registry.Steps);
         Assert.Equal("Npm.Install", _registry.Steps[0].Name);
@@ -42,8 +46,9 @@ public class NpmOperationsTests
     public async Task Install_ExecutesNpmInstall()
     {
         var npm = CreateNpm();
+        var dir = TestDir();
 
-        npm.Install();
+        npm.Install(dir);
         await _registry.Steps[0].Execute();
 
         Assert.Single(_executor.ExecutedCommands);
@@ -54,8 +59,9 @@ public class NpmOperationsTests
     public void Ci_RegistersStep()
     {
         var npm = CreateNpm();
+        var dir = TestDir();
 
-        npm.Ci();
+        npm.Ci(dir);
 
         Assert.Single(_registry.Steps);
         Assert.Equal("Npm.Ci", _registry.Steps[0].Name);
@@ -65,8 +71,9 @@ public class NpmOperationsTests
     public async Task Ci_ExecutesNpmCi()
     {
         var npm = CreateNpm();
+        var dir = TestDir();
 
-        npm.Ci();
+        npm.Ci(dir);
         await _registry.Steps[0].Execute();
 
         _executor.WasExecuted("npm", "ci").ShouldBeTrue();
@@ -76,8 +83,9 @@ public class NpmOperationsTests
     public void Run_RegistersStepWithScriptName()
     {
         var npm = CreateNpm();
+        var dir = TestDir();
 
-        npm.Run("lint");
+        npm.Run(dir, "lint");
 
         Assert.Single(_registry.Steps);
         Assert.Equal("Npm.Run(lint)", _registry.Steps[0].Name);
@@ -87,8 +95,9 @@ public class NpmOperationsTests
     public async Task Run_ExecutesNpmRunWithScriptName()
     {
         var npm = CreateNpm();
+        var dir = TestDir();
 
-        npm.Run("lint");
+        npm.Run(dir, "lint");
         await _registry.Steps[0].Execute();
 
         var cmd = _executor.ExecutedCommands[0];
@@ -101,8 +110,9 @@ public class NpmOperationsTests
     public void Test_RegistersStep()
     {
         var npm = CreateNpm();
+        var dir = TestDir();
 
-        npm.Test();
+        npm.Test(dir);
 
         Assert.Single(_registry.Steps);
         Assert.Equal("Npm.Test", _registry.Steps[0].Name);
@@ -112,8 +122,9 @@ public class NpmOperationsTests
     public async Task Test_ExecutesNpmTest()
     {
         var npm = CreateNpm();
+        var dir = TestDir();
 
-        npm.Test();
+        npm.Test(dir);
         await _registry.Steps[0].Execute();
 
         _executor.WasExecuted("npm", "test").ShouldBeTrue();
@@ -123,8 +134,9 @@ public class NpmOperationsTests
     public void Build_RegistersStep()
     {
         var npm = CreateNpm();
+        var dir = TestDir();
 
-        npm.Build();
+        npm.Build(dir);
 
         Assert.Single(_registry.Steps);
         Assert.Equal("Npm.Build", _registry.Steps[0].Name);
@@ -134,8 +146,9 @@ public class NpmOperationsTests
     public async Task Build_ExecutesNpmRunBuild()
     {
         var npm = CreateNpm();
+        var dir = TestDir();
 
-        npm.Build();
+        npm.Build(dir);
         await _registry.Steps[0].Execute();
 
         var cmd = _executor.ExecutedCommands[0];
@@ -145,59 +158,27 @@ public class NpmOperationsTests
     }
 
     [Fact]
-    public void InDirectory_SetsWorkingDirectory()
+    public void DirectoryRef_SetsContextToDirectoryName()
     {
         var npm = CreateNpm();
+        var dir = new DirectoryRef("/path/to/project");
 
-        npm.InDirectory("/path/to/project").Install();
+        npm.Install(dir);
 
-        Assert.Equal("/path/to/project", _registry.Steps[0].Context);
+        Assert.Equal("project", _registry.Steps[0].Context);
     }
 
     [Fact]
-    public void InProject_SetsWorkingDirectoryFromProject()
+    public async Task AllOperations_UseCorrectWorkingDirectory()
     {
         var npm = CreateNpm();
-        var project = ProjectRef.From("./src/frontend/frontend.csproj");
+        var dir = new DirectoryRef("/custom/path");
 
-        npm.InProject(project).Install();
-
-        Assert.Equal("./src/frontend", _registry.Steps[0].Context);
-    }
-
-    [Fact]
-    public void InDirectory_ReturnsSameInstance_ForChaining()
-    {
-        var npm = CreateNpm();
-
-        var result = npm.InDirectory("/path");
-
-        result.ShouldBeSameAs(npm);
-    }
-
-    [Fact]
-    public void InProject_ReturnsSameInstance_ForChaining()
-    {
-        var npm = CreateNpm();
-        var project = ProjectRef.From("./src/app/app.csproj");
-
-        var result = npm.InProject(project);
-
-        result.ShouldBeSameAs(npm);
-    }
-
-    [Fact]
-    public async Task AllOperations_UseWorkingDirectory()
-    {
-        var npm = CreateNpm();
-        var workDir = "/custom/path";
-
-        npm.InDirectory(workDir);
-        npm.Install();
-        npm.Ci();
-        npm.Run("test");
-        npm.Test();
-        npm.Build();
+        npm.Install(dir);
+        npm.Ci(dir);
+        npm.Run(dir, "test");
+        npm.Test(dir);
+        npm.Build(dir);
 
         // Execute all steps
         foreach (var step in _registry.Steps)
@@ -209,7 +190,7 @@ public class NpmOperationsTests
         _registry.Steps.Count.ShouldBe(5);
         foreach (var step in _registry.Steps)
         {
-            step.Context.ShouldBe(workDir);
+            step.Context.ShouldBe("path"); // Directory name from /custom/path
         }
     }
 
@@ -217,9 +198,10 @@ public class NpmOperationsTests
     public async Task CommandFailure_ReturnsFalse()
     {
         var npm = CreateNpm();
+        var dir = TestDir();
         _executor.SimulateFailure = true;
 
-        npm.Install();
+        npm.Install(dir);
         var result = await _registry.Steps[0].Execute();
 
         result.ShouldBeFalse();

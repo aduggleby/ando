@@ -1,3 +1,8 @@
+@using Ando.Server.Models
+@using Ando.Server.Services
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<ApplicationUser> UserManager
+@inject IImpersonationService ImpersonationService
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -279,9 +284,14 @@
             @if (User.Identity?.IsAuthenticated == true)
             {
                 var currentPath = Context.Request.Path.Value?.ToLower() ?? "";
+                var isAdmin = User.IsInRole(UserRoles.Admin);
                 <div class="nav-links">
                     <a href="/projects" class="nav-link @(currentPath.StartsWith("/projects") && !currentPath.Contains("/status") ? "nav-link-active" : "")">Projects</a>
                     <a href="/projects/status" class="nav-link @(currentPath.Contains("/status") ? "nav-link-active" : "")">Status</a>
+                    @if (isAdmin)
+                    {
+                        <a href="/admin" class="nav-link @(currentPath.StartsWith("/admin") ? "nav-link-active" : "")">Admin</a>
+                    }
                     <div class="nav-divider"></div>
                     <a href="/auth/logout" class="nav-link">Logout</a>
                     <a href="/projects/create" class="btn btn-primary btn-sm nav-create">New Project</a>
@@ -289,6 +299,52 @@
             }
         </nav>
     </header>
+
+    @if (ImpersonationService.IsImpersonating)
+    {
+        var impersonatedUser = await UserManager.GetUserAsync(User);
+        <div class="bg-purple-600 text-white px-4 py-3">
+            <div class="mx-auto max-w-6xl flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3 text-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                    </svg>
+                    <span>
+                        <strong>Impersonation Mode:</strong> You are viewing as <strong>@impersonatedUser?.Email</strong>
+                    </span>
+                </div>
+                <form method="post" action="/admin/stop-impersonation" class="inline">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="inline-flex items-center gap-2 rounded-md bg-white/20 px-3 py-1.5 text-sm font-medium hover:bg-white/30 transition">
+                        Stop Impersonating
+                    </button>
+                </form>
+            </div>
+        </div>
+    }
+    else if (User.Identity?.IsAuthenticated == true)
+    {
+        var currentUser = await UserManager.GetUserAsync(User);
+        if (currentUser != null && !currentUser.EmailVerified)
+        {
+            <div class="bg-amber-50 border-b border-amber-200 px-4 py-3">
+                <div class="mx-auto max-w-6xl flex items-center justify-between gap-4">
+                    <div class="flex items-center gap-3 text-sm text-amber-800">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        <span>Please verify your email address. Check your inbox for a verification link.</span>
+                    </div>
+                    <form method="post" action="/auth/resend-verification" class="inline">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="text-sm font-medium text-amber-800 hover:text-amber-900 underline">
+                            Resend email
+                        </button>
+                    </form>
+                </div>
+            </div>
+        }
+    }
 
     <main>
         @RenderBody()

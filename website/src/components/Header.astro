@@ -1,0 +1,113 @@
+---
+const navLinks = [
+  { href: "/#cli", label: "Commands" },
+  { href: "/#build", label: "Example" },
+  { href: "/#ops", label: "Operations" },
+];
+
+const sortedProviders = [
+  { href: "/ando", label: "Ando" },
+  { href: "/appservice", label: "App Service" },
+  { href: "/azure", label: "Azure" },
+  { href: "/bicep", label: "Bicep" },
+  { href: "/cloudflare", label: "Cloudflare" },
+  { href: "/dotnet", label: "Dotnet" },
+  { href: "/dotnetsdk", label: "DotnetSdk" },
+  { href: "/ef", label: "EF Core" },
+  { href: "/functions", label: "Functions" },
+  { href: "/node", label: "Node" },
+  { href: "/npm", label: "Npm" },
+];
+---
+
+<header>
+  <nav class="mb-8 flex items-center justify-between md:mb-16">
+    <a href="/" class="text-xl font-bold text-zinc-900 hover:text-cyan-600 dark:text-white dark:hover:text-cyan-400">
+      <span class="text-sky-600">a</span><span class="text-sky-500">n</span><span class="text-sky-400">d</span><span
+        class="text-sky-300">o</span
+      >
+
+      - secure and simple CI</a
+    >
+    <!-- Mobile menu button -->
+    <button
+      id="mobile-menu-btn"
+      class="flex items-center justify-center rounded p-2 text-zinc-600 hover:bg-zinc-100 md:hidden dark:text-zinc-400 dark:hover:bg-zinc-800"
+      aria-label="Toggle menu"
+    >
+      <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+      </svg>
+    </button>
+    <!-- Desktop navigation -->
+    <div class="hidden items-center gap-6 md:flex">
+      {
+        navLinks.map(({ href, label }) => (
+          <a
+            href={href}
+            class="font-semibold text-zinc-500 hover:text-cyan-600 dark:text-zinc-400 dark:hover:text-cyan-400"
+          >
+            {label}
+          </a>
+        ))
+      }
+      <div class="group relative">
+        <button
+          class="flex items-center gap-1 font-semibold text-zinc-500 hover:text-cyan-600 dark:text-zinc-400 dark:hover:text-cyan-400"
+        >
+          Providers <span class="text-xs transition-transform group-hover:rotate-180">▼</span>
+        </button>
+        <div
+          class="invisible absolute top-full right-0 z-50 mt-2 w-40 rounded-lg border border-zinc-200 bg-white py-2 opacity-0 shadow-lg transition-all group-hover:visible group-hover:opacity-100 dark:border-zinc-700 dark:bg-zinc-800"
+        >
+          {
+            sortedProviders.map(({ href, label }) => (
+              <a
+                href={href}
+                class="block px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-cyan-600 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-cyan-400"
+              >
+                {label}
+              </a>
+            ))
+          }
+        </div>
+      </div>
+      <button id="theme-toggle" title="Toggle dark mode" class="text-xl hover:opacity-80">
+        <span id="theme-icon">🌙</span>
+      </button>
+    </div>
+  </nav>
+  <!-- Mobile navigation menu -->
+  <div
+    id="mobile-menu"
+    class="mb-8 hidden rounded-lg border border-zinc-200 bg-zinc-50 p-4 md:hidden dark:border-zinc-700 dark:bg-zinc-800"
+  >
+    <div class="flex flex-col gap-3">
+      {
+        navLinks.map(({ href, label }) => (
+          <a href={href} class="font-semibold text-zinc-600 hover:text-cyan-600 dark:text-zinc-300">
+            {label}
+          </a>
+        ))
+      }
+      <div class="border-t border-zinc-200 pt-3 dark:border-zinc-700">
+        <span class="text-xs font-semibold tracking-wider text-zinc-400 uppercase">Providers</span>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        {
+          sortedProviders.map(({ href, label }) => (
+            <a href={href} class="text-sm text-zinc-600 hover:text-cyan-600 dark:text-zinc-300">
+              {label}
+            </a>
+          ))
+        }
+      </div>
+      <div class="border-t border-zinc-200 pt-3 dark:border-zinc-700">
+        <button id="mobile-theme-toggle" class="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+          <span id="mobile-theme-icon">🌙</span>
+          <span>Toggle theme</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</header>

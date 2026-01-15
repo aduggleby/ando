@@ -1,34 +1,37 @@
 // =============================================================================
 // build.ando - ANDO Documentation Website Deployment
 //
-// Demonstrates CloudflareOperations for static site deployment.
-//
 // Prerequisites:
-// - Node.js installed
-// - CLOUDFLARE_API_TOKEN env var set
-// - CLOUDFLARE_ACCOUNT_ID env var set
-// - CLOUDFLARE_PROJECT_NAME env var set (or use WithProjectName)
+// - CLOUDFLARE_API_TOKEN env var set (or enter when prompted)
+// - CLOUDFLARE_ACCOUNT_ID env var set (or enter when prompted)
 //
 // This script:
-// 1. Installs npm dependencies
-// 2. Builds the Astro site
-// 3. Verifies Cloudflare authentication
-// 4. Deploys to Cloudflare Pages
+// 1. Installs Node.js in the Ubuntu container
+// 2. Installs npm dependencies
+// 3. Builds the Astro site
+// 4. Verifies Cloudflare authentication
+// 5. Deploys to Cloudflare Pages
+// 6. Purges the Cloudflare cache
 // =============================================================================
 
+// Create a directory reference for the website project.
+var website = Directory(".");
+
+// Install Node.js (includes npm) in the Ubuntu container.
+Node.Install();
+
 // Install dependencies.
-Npm.InDirectory(".");
-Npm.Install();
+Npm.Install(website);
 
 // Build the Astro site (outputs to ./dist).
-Npm.Build();
+Npm.Build(website);
 
 // Verify Cloudflare authentication.
-Cloudflare.InDirectory(".");
 Cloudflare.EnsureAuthenticated();
 
 // Deploy to Cloudflare Pages.
-// Project name can be set via CLOUDFLARE_PROJECT_NAME env var, or:
-Cloudflare.PagesDeploy(o => o
-    .WithProjectName("ando-docs")
-    .WithBranch("main"));
+Cloudflare.PagesDeploy(website / "dist", "ando");
+
+// Purge the Cloudflare cache to ensure visitors see the latest content.
+// Accepts either a Zone ID or domain name (domain is resolved to Zone ID automatically).
+Cloudflare.PurgeCache("andobuild.com");

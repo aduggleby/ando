@@ -85,6 +85,15 @@ public class BuildContext
     /// <summary>Artifact operations for copying files to host.</summary>
     public ArtifactOperations Artifacts => Operations.Artifacts;
 
+    /// <summary>Node.js installation operations (installs Node.js globally).</summary>
+    public NodeInstallOperations Node => Operations.Node;
+
+    /// <summary>.NET SDK installation operations (installs SDK globally).</summary>
+    public DotnetInstallOperations DotnetSdk => Operations.DotnetSdk;
+
+    /// <summary>Logging operations for build script output.</summary>
+    public LogOperations Log => Operations.Log;
+
     // Docker manager, container ID, and host root path for artifact copying.
     // Set after container is created via SetDockerManager().
     private DockerManager? _dockerManager;

@@ -1,0 +1,196 @@
+# ANDO - Build and Deploy Toolchain
+
+> ANDO is a typed build system where build scripts are written in C# and executed in Docker containers.
+
+## Quick Start
+
+```
+dotnet tool install -g ando
+echo 'Log.Info("Hello, World!");' > build.ando
+ando run
+```
+
+## CLI Commands
+
+- `ando` or `ando run` - Run the build script in a Docker container
+- `ando verify` - Check build script for errors without executing
+- `ando clean` - Remove artifacts, temp files, and containers
+- `ando help` - Show available commands
+
+## Key Facts
+
+- File: `build.ando` (C# code, no .cs extension)
+- Execution: All builds run in Docker containers
+- No `using` statements needed - namespaces are pre-imported
+- Operations register steps that execute in order
+
+## Global Variables
+
+| Variable | Type | Description |
+|----------|------|-------------|
+| Root | BuildPath | Project root directory. Supports `/` operator for paths. |
+| Configuration | Configuration | Build configuration (Debug or Release). |
+| Options | BuildOptions | Build options like image, configuration. |
+| Context | BuildContextObject | Access to Paths and Vars properties. |
+| Dotnet | DotnetOperations | .NET CLI operations (build, test, publish). |
+| Ef | EfOperations | Entity Framework Core operations. |
+| Npm | NpmOperations | npm operations (install, run, ci). |
+| Node | NodeInstallOperations | Node.js installation. |
+| DotnetSdk | DotnetInstallOperations | .NET SDK installation. |
+| Azure | AzureOperations | Azure CLI authentication. |
+| Bicep | BicepOperations | Azure Bicep deployments. |
+| AppService | AppServiceOperations | Azure App Service deployments. |
+| Functions | FunctionsOperations | Azure Functions deployments. |
+| Cloudflare | CloudflareOperations | Cloudflare Pages deployments. |
+| Artifacts | ArtifactOperations | Copy files from container to host. |
+| Log | LogOperations | Logging (Info, Warning, Error, Debug). |
+
+## Global Functions
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| DotnetProject(path) | ProjectRef | Create a .NET project reference from a .csproj path. |
+| Directory(path?) | DirectoryRef | Create a directory reference. Defaults to "." if no path. |
+
+## Common Patterns
+
+### Path Operations
+```csharp
+var outputPath = Root / "artifacts" / "publish";
+var distDir = Directory("./frontend") / "dist";
+```
+
+### .NET Build + Test + Publish
+```csharp
+var project = DotnetProject("./src/MyApp/MyApp.csproj");
+
+Dotnet.Restore(project);
+Dotnet.Build(project);
+Dotnet.Test(project);
+Dotnet.Publish(project, o => o.Output(Root / "artifacts"));
+```
+
+### Frontend Build
+```csharp
+var frontend = Directory("./frontend");
+
+Node.Install("20");
+Npm.Ci(frontend);
+Npm.Run(frontend, "build");
+```
+
+### Azure Deployment
+```csharp
+Azure.EnsureAuthenticated();
+Azure.SetSubscription("my-subscription-id");
+
+AppService.DeployZip("my-app", Root / "artifacts" / "app.zip");
+```
+
+### Cloudflare Pages
+```csharp
+Cloudflare.EnsureAuthenticated();
+Cloudflare.PagesDeploy(Directory("./website") / "dist", "my-project");
+```
+
+### Copy Artifacts to Host
+```csharp
+Artifacts.CopyToHost("/workspace/dist", "./dist");
+```
+
+## All Operations
+
+### Ando
+- DotnetProject(path) - Creates a reference to a .NET project file (.csproj)
+- Directory(path?) - Creates a reference to a directory
+- Root - The root path of the project
+- Context - Access to Paths and Vars
+- Options - Build options configuration
+- Configuration - Build configuration enum
+- Artifacts.CopyToHost(src, dest) - Copy files from container to host
+- Log.Info(message) - Log informational message
+- Log.Warning(message) - Log warning message
+- Log.Error(message) - Log error message
+- Log.Debug(message) - Log debug message
+
+### Node
+- Node.Install(version?) - Install Node.js globally (default: v22)
+
+### DotnetSdk
+- DotnetSdk.Install(version?) - Install .NET SDK globally (default: 9.0)
+
+### Dotnet
+- Dotnet.Restore(project) - Restore NuGet packages
+- Dotnet.Build(project) - Compile a project
+- Dotnet.Test(project) - Run unit tests
+- Dotnet.Publish(project, options?) - Create deployment artifacts
+- Dotnet.Tool(name, version?) - Reference a .NET CLI tool
+
+### Ef
+- Ef.DbContextFrom(project, contextName?) - Reference a DbContext
+- Ef.DatabaseUpdate(context) - Apply pending migrations
+- Ef.AddMigration(context, name) - Create a new migration
+- Ef.Script(context, outputPath) - Generate SQL migration script
+- Ef.RemoveMigration(context) - Remove the last migration
+
+### Npm
+- Npm.Install(directory) - Run npm install
+- Npm.Ci(directory) - Run npm ci (clean install)
+- Npm.Run(directory, script) - Run an npm script
+- Npm.Test(directory) - Run npm test
+- Npm.Build(directory) - Run npm run build
+
+### Azure
+- Azure.EnsureAuthenticated() - Authenticate using best available method
+- Azure.EnsureLoggedIn() - Verify logged in to Azure CLI
+- Azure.ShowAccount() - Display current account info
+- Azure.LoginWithServicePrincipal(clientId?, secret?, tenantId?) - Login with SP
+- Azure.LoginWithManagedIdentity(clientId?) - Login with managed identity
+- Azure.SetSubscription(subscriptionId?) - Set active subscription
+- Azure.CreateResourceGroup(name, location) - Create resource group
+- Azure.DeleteResourceGroup(name) - Delete resource group
+
+### Bicep
+- Bicep.DeployToResourceGroup(rg, template, options?) - Deploy to resource group
+- Bicep.DeployToSubscription(location, template, options?) - Deploy at subscription scope
+- Bicep.WhatIf(rg, template, options?) - Preview deployment
+- Bicep.Build(template, output?) - Compile Bicep to ARM JSON
+
+### Cloudflare
+- Cloudflare.EnsureAuthenticated() - Verify Cloudflare credentials
+- Cloudflare.PagesDeploy(directory, projectName, options?) - Deploy to Pages
+- Cloudflare.PagesListProjects() - List all Pages projects
+- Cloudflare.PagesCreateProject(name, branch?) - Create a Pages project
+- Cloudflare.PagesListDeployments(projectName?) - List deployments
+- Cloudflare.PurgeCache(zoneIdOrDomain?) - Purge entire cache
+
+### Functions
+- Functions.DeployZip(name, zipPath, rg?, options?) - Deploy via zip deploy
+- Functions.Publish(name, projectPath?, options?) - Publish using func CLI
+- Functions.DeployWithSwap(name, zipPath, slot?, rg?) - Deploy then swap
+- Functions.SwapSlots(name, sourceSlot, rg?, targetSlot?) - Swap slots
+- Functions.Restart(name, rg?, slot?) - Restart function app
+- Functions.Start(name, rg?, slot?) - Start function app
+- Functions.Stop(name, rg?, slot?) - Stop function app
+
+### AppService
+- AppService.DeployZip(name, zipPath, rg?, options?) - Deploy via zip deploy
+- AppService.DeployWithSwap(name, zipPath, slot?, rg?) - Deploy then swap
+- AppService.SwapSlots(name, sourceSlot, rg?, targetSlot?) - Swap slots
+- AppService.CreateSlot(name, slotName, rg?, configSource?) - Create slot
+- AppService.DeleteSlot(name, slotName, rg?) - Delete slot
+- AppService.ListSlots(name, rg?) - List deployment slots
+- AppService.Restart(name, rg?, slot?) - Restart app service
+- AppService.Start(name, rg?, slot?) - Start app service
+- AppService.Stop(name, rg?, slot?) - Stop app service
+
+## Tips for Writing Build Scripts
+
+1. Build scripts are C# - use C# syntax including var, lambdas, string interpolation
+2. No semicolons needed at end of lines (but they work if included)
+3. Operations execute in the order they are called
+4. Use DotnetProject() for .csproj files, Directory() for folders
+5. The `/` operator concatenates paths: Root / "src" / "app"
+6. Options are configured via fluent lambdas: o => o.Output(...).WithRuntime(...)
+7. Always call EnsureAuthenticated() before cloud operations
+8. Use `ando verify` to check scripts without executing

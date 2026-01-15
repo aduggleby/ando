@@ -1,0 +1,124 @@
+@model Ando.Server.ViewModels.AdminProjectListViewModel
+@{
+    ViewData["Title"] = "All Projects";
+    Layout = "_Layout";
+}
+
+<div class="dashboard">
+    <div class="page-header">
+        <h1>All Projects</h1>
+        <a href="/admin" class="btn btn-secondary">Back to Dashboard</a>
+    </div>
+
+    <div class="rounded-lg border border-slate-200 bg-white p-4 mb-6">
+        <form method="get" class="flex flex-wrap gap-4 items-end">
+            <div class="flex-1 min-w-[200px]">
+                <label class="block mb-2 text-sm">Search</label>
+                <input type="text" name="search" value="@Model.SearchQuery"
+                       placeholder="Search by name, description, or owner..."
+                       class="w-full" />
+            </div>
+            <button type="submit" class="btn btn-primary">Filter</button>
+            @if (!string.IsNullOrEmpty(Model.SearchQuery))
+            {
+                <a href="/admin/projects" class="btn btn-secondary">Clear</a>
+            }
+        </form>
+    </div>
+
+    <div class="text-sm text-slate-500 mb-4">
+        Showing @Model.Projects.Count of @Model.TotalProjects projects
+    </div>
+
+    @if (Model.Projects.Count == 0)
+    {
+        <div class="empty-state">
+            <p>No projects found matching your criteria.</p>
+        </div>
+    }
+    else
+    {
+        <div class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+            <table class="builds-table">
+                <thead>
+                    <tr>
+                        <th>Project</th>
+                        <th>Owner</th>
+                        <th>Builds</th>
+                        <th>Last Build</th>
+                        <th>Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var project in Model.Projects)
+                    {
+                        <tr class="build-row" onclick="window.location='/projects/@project.Id'">
+                            <td>
+                                <div class="font-medium">@project.Name</div>
+                                @if (!string.IsNullOrEmpty(project.Description))
+                                {
+                                    <div class="text-xs text-slate-500 truncate max-w-xs">@project.Description</div>
+                                }
+                            </td>
+                            <td>
+                                <a href="/admin/users/@project.OwnerId" class="hover:text-blue-600" onclick="event.stopPropagation()">
+                                    <div class="font-medium">@project.OwnerDisplayName</div>
+                                    <div class="text-xs text-slate-500">@project.OwnerEmail</div>
+                                </a>
+                            </td>
+                            <td>@project.BuildCount</td>
+                            <td>@FormatDate(project.LastBuildAt)</td>
+                            <td>@FormatDate(project.CreatedAt)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Model.TotalPages > 1)
+        {
+            <div class="flex justify-center gap-2 mt-6">
+                @if (Model.CurrentPage > 1)
+                {
+                    <a href="@GetPageUrl(Model.CurrentPage - 1)" class="btn btn-secondary btn-sm">Previous</a>
+                }
+
+                @for (var i = Math.Max(1, Model.CurrentPage - 2); i <= Math.Min(Model.TotalPages, Model.CurrentPage + 2); i++)
+                {
+                    if (i == Model.CurrentPage)
+                    {
+                        <span class="btn btn-primary btn-sm">@i</span>
+                    }
+                    else
+                    {
+                        <a href="@GetPageUrl(i)" class="btn btn-secondary btn-sm">@i</a>
+                    }
+                }
+
+                @if (Model.CurrentPage < Model.TotalPages)
+                {
+                    <a href="@GetPageUrl(Model.CurrentPage + 1)" class="btn btn-secondary btn-sm">Next</a>
+                }
+            </div>
+        }
+    }
+</div>
+
+@functions {
+    string FormatDate(DateTime? date)
+    {
+        if (!date.HasValue) return "-";
+        var diff = DateTime.UtcNow - date.Value;
+        if (diff.TotalDays < 1) return "Today";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}d ago";
+        return date.Value.ToString("MMM d, yyyy");
+    }
+
+    string GetPageUrl(int page)
+    {
+        var query = new List<string> { $"page={page}" };
+        if (!string.IsNullOrEmpty(Model.SearchQuery))
+            query.Add($"search={Uri.EscapeDataString(Model.SearchQuery)}");
+        return $"/admin/projects?{string.Join("&", query)}";
+    }
+}

@@ -5,6 +5,7 @@
 //
 // Tests verify that:
 // - Each operation registers correct steps
+// - DirectoryRef correctly sets working directory for deploy operations
 // - Steps execute the correct wrangler CLI commands with proper arguments
 // - Environment variable resolution works correctly
 // - Options are correctly applied to commands
@@ -14,6 +15,7 @@
 // =============================================================================
 
 using Ando.Operations;
+using Ando.References;
 using Ando.Steps;
 using Ando.Tests.TestFixtures;
 
@@ -30,6 +32,7 @@ public class CloudflareOperationsTests : IDisposable
     private readonly string? _originalApiToken;
     private readonly string? _originalAccountId;
     private readonly string? _originalProjectName;
+    private readonly string? _originalZoneId;
 
     public CloudflareOperationsTests()
     {
@@ -37,6 +40,7 @@ public class CloudflareOperationsTests : IDisposable
         _originalApiToken = Environment.GetEnvironmentVariable("CLOUDFLARE_API_TOKEN");
         _originalAccountId = Environment.GetEnvironmentVariable("CLOUDFLARE_ACCOUNT_ID");
         _originalProjectName = Environment.GetEnvironmentVariable("CLOUDFLARE_PROJECT_NAME");
+        _originalZoneId = Environment.GetEnvironmentVariable("CLOUDFLARE_ZONE_ID");
 
         // Set test values.
         Environment.SetEnvironmentVariable("CLOUDFLARE_API_TOKEN", "test-token");
@@ -49,10 +53,14 @@ public class CloudflareOperationsTests : IDisposable
         Environment.SetEnvironmentVariable("CLOUDFLARE_API_TOKEN", _originalApiToken);
         Environment.SetEnvironmentVariable("CLOUDFLARE_ACCOUNT_ID", _originalAccountId);
         Environment.SetEnvironmentVariable("CLOUDFLARE_PROJECT_NAME", _originalProjectName);
+        Environment.SetEnvironmentVariable("CLOUDFLARE_ZONE_ID", _originalZoneId);
     }
 
     private CloudflareOperations CreateCloudflare() =>
         new CloudflareOperations(_registry, _logger, () => _executor);
+
+    private static DirectoryRef TestDir(string path = "./website") =>
+        new DirectoryRef(path);
 
     [Fact]
     public void EnsureAuthenticated_RegistersStep()
@@ -98,11 +106,12 @@ public class CloudflareOperationsTests : IDisposable
     }
 
     [Fact]
-    public void PagesDeployDirectory_RegistersStep()
+    public void PagesDeploy_WithProjectName_RegistersStep()
     {
         var cf = CreateCloudflare();
+        var dir = TestDir();
 
-        cf.PagesDeployDirectory("./dist", o => o.WithProjectName("my-site"));
+        cf.PagesDeploy(dir, "my-site");
 
         Assert.Single(_registry.Steps);
         Assert.Equal("Cloudflare.Pages.Deploy", _registry.Steps[0].Name);
@@ -110,10 +119,11 @@ public class CloudflareOperationsTests : IDisposable
     }
 
     [Fact]
-    public async Task PagesDeployDirectory_ExecutesCorrectCommand()
+    public async Task PagesDeploy_WithProjectName_ExecutesCorrectCommand()
     {
         var cf = CreateCloudflare();
-        cf.PagesDeployDirectory("./dist", o => o.WithProjectName("test-project"));
+        var dir = TestDir();
+        cf.PagesDeploy(dir, "test-project");
 
         await _registry.Steps[0].Execute();
 
@@ -122,16 +132,16 @@ public class CloudflareOperationsTests : IDisposable
         Assert.Contains("wrangler", cmd.Args);
         Assert.Contains("pages", cmd.Args);
         Assert.Contains("deploy", cmd.Args);
-        Assert.Contains("./dist", cmd.Args);
         Assert.Contains("--project-name", cmd.Args);
         Assert.Equal("test-project", cmd.GetArgValue("--project-name"));
     }
 
     [Fact]
-    public async Task PagesDeployDirectory_IncludesOptionalParameters()
+    public async Task PagesDeploy_WithOptions_IncludesOptionalParameters()
     {
         var cf = CreateCloudflare();
-        cf.PagesDeployDirectory("./dist", o => o
+        var dir = TestDir();
+        cf.PagesDeploy(dir, o => o
             .WithProjectName("test-project")
             .WithBranch("main")
             .WithCommitHash("abc123")
@@ -146,48 +156,52 @@ public class CloudflareOperationsTests : IDisposable
     }
 
     [Fact]
-    public void PagesDeployDirectory_UsesEnvVarForProjectName()
+    public void PagesDeploy_WithOptions_UsesEnvVarForProjectName()
     {
         Environment.SetEnvironmentVariable("CLOUDFLARE_PROJECT_NAME", "env-project");
         var cf = CreateCloudflare();
+        var dir = TestDir();
 
-        cf.PagesDeployDirectory("./dist"); // No project name in options.
+        cf.PagesDeploy(dir, o => { }); // No project name in options.
 
         Assert.Single(_registry.Steps);
         Assert.Equal("env-project", _registry.Steps[0].Context);
     }
 
     [Fact]
-    public void PagesDeployDirectory_ThrowsWhenNoProjectName()
+    public void PagesDeploy_WithOptions_ThrowsWhenNoProjectName()
     {
         Environment.SetEnvironmentVariable("CLOUDFLARE_PROJECT_NAME", null);
         var cf = CreateCloudflare();
+        var dir = TestDir();
 
         Assert.Throws<InvalidOperationException>(() =>
-            cf.PagesDeployDirectory("./dist")); // No project name anywhere.
+            cf.PagesDeploy(dir, o => { })); // No project name anywhere.
     }
 
     [Fact]
-    public void PagesDeploy_DefaultsToDistDirectory()
+    public void PagesDeploy_WithDirectorySubpath_RegistersStep()
     {
         var cf = CreateCloudflare();
+        var dir = TestDir() / "dist";  // Use / operator for subpath.
 
-        cf.PagesDeploy(o => o.WithProjectName("my-site"));
+        cf.PagesDeploy(dir, "my-site");
 
-        // Verify the step was registered.
         Assert.Single(_registry.Steps);
+        Assert.Equal("Cloudflare.Pages.Deploy", _registry.Steps[0].Name);
     }
 
     [Fact]
-    public async Task PagesDeploy_DeploysDistDirectory()
+    public async Task PagesDeploy_SetsCorrectWorkingDirectory()
     {
         var cf = CreateCloudflare();
-        cf.PagesDeploy(o => o.WithProjectName("my-site"));
+        var dir = TestDir("./website") / "dist";
+        cf.PagesDeploy(dir, "my-site");
 
         await _registry.Steps[0].Execute();
 
         var cmd = _executor.LastCommand!;
-        Assert.Contains("./dist", cmd.Args);
+        Assert.Equal("./website/dist", cmd.Options?.WorkingDirectory);
     }
 
     [Fact]
@@ -306,13 +320,42 @@ public class CloudflareOperationsTests : IDisposable
     }
 
     [Fact]
-    public void InDirectory_ReturnsSameInstance()
+    public void PurgeCache_RegistersStep()
     {
         var cf = CreateCloudflare();
 
-        var result = cf.InDirectory("./website");
+        cf.PurgeCache("test-zone-id");
 
-        Assert.Same(cf, result);
+        Assert.Single(_registry.Steps);
+        Assert.Equal("Cloudflare.PurgeCache", _registry.Steps[0].Name);
+    }
+
+    [Fact]
+    public async Task PurgeCache_ExecutesCorrectCommand()
+    {
+        var cf = CreateCloudflare();
+        cf.PurgeCache("my-zone-123");
+
+        await _registry.Steps[0].Execute();
+
+        var cmd = _executor.LastCommand!;
+        Assert.Equal("curl", cmd.Command);
+        Assert.Contains("-X", cmd.Args);
+        Assert.Contains("POST", cmd.Args);
+        Assert.Contains("https://api.cloudflare.com/client/v4/zones/my-zone-123/purge_cache", cmd.Args);
+        Assert.Contains("--data", cmd.Args);
+        Assert.Contains("{\"purge_everything\":true}", cmd.Args);
+    }
+
+    [Fact]
+    public void PurgeCache_UsesEnvVarForZoneId()
+    {
+        Environment.SetEnvironmentVariable("CLOUDFLARE_ZONE_ID", "env-zone-id");
+        var cf = CreateCloudflare();
+
+        cf.PurgeCache(); // No zone ID in parameter.
+
+        Assert.Single(_registry.Steps);
     }
 
     [Fact]

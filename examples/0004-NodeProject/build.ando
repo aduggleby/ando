@@ -2,23 +2,23 @@
 // Demonstrates NpmOperations for Node.js projects
 //
 // This example shows:
-// - Npm.InDirectory() for setting working directory
-// - Npm.Install() / Npm.Ci() for dependency installation
-// - Npm.Run("script") for custom scripts
-// - Npm.Test() for running tests
-// - Npm.Build() for building
+// - Directory() for creating directory references
+// - Npm.Install(dir) / Npm.Ci(dir) for dependency installation
+// - Npm.Run(dir, "script") for custom scripts
+// - Npm.Test(dir) for running tests
+// - Npm.Build(dir) for building
 
-// Set npm working directory to project root
-Npm.InDirectory(".");
+// Create a directory reference for the project
+var app = Directory(".");
 
 // Install dependencies
-Npm.Install();
+Npm.Install(app);
 
 // Run linting
-Npm.Run("lint");
+Npm.Run(app, "lint");
 
 // Run tests
-Npm.Test();
+Npm.Test(app);
 
 // Build the project
-Npm.Build();
+Npm.Build(app);

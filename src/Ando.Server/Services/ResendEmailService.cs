@@ -3,25 +3,19 @@
 //
 // Summary: Email service implementation using Resend API.
 //
-// Sends transactional emails via the Resend API. Uses Razor views for
-// email template rendering.
+// Sends transactional emails via the Resend API (https://resend.com).
+// Inherits Razor view rendering from BaseEmailService.
 //
 // Design Decisions:
-// - Uses Razor views for email templates (same engine as web views)
-// - Templates inherit from a base layout for consistent styling
-// - API key from configuration
+// - Uses HttpClient for API calls (configured in DI)
+// - API key from configuration determines if emails are sent
+// - Gracefully skips sending if not configured
 // =============================================================================
 
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Ando.Server.Configuration;
-using Ando.Server.Email;
-using Ando.Server.Models;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Abstractions;
-using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.Razor;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.Extensions.Options;
 
@@ -30,73 +24,41 @@ namespace Ando.Server.Services;
 /// <summary>
 /// Email service implementation using Resend API.
 /// </summary>
-public class ResendEmailService : IEmailService
+public class ResendEmailService : BaseEmailService
 {
     private readonly HttpClient _httpClient;
-    private readonly ResendSettings _settings;
-    private readonly IRazorViewEngine _viewEngine;
-    private readonly ITempDataProvider _tempDataProvider;
-    private readonly IServiceProvider _serviceProvider;
-    private readonly ILogger<ResendEmailService> _logger;
 
     public ResendEmailService(
         IHttpClientFactory httpClientFactory,
-        IOptions<ResendSettings> settings,
+        IOptions<EmailSettings> settings,
         IRazorViewEngine viewEngine,
         ITempDataProvider tempDataProvider,
         IServiceProvider serviceProvider,
         ILogger<ResendEmailService> logger)
+        : base(settings, viewEngine, tempDataProvider, serviceProvider, logger)
     {
         _httpClient = httpClientFactory.CreateClient("Resend");
-        _settings = settings.Value;
-        _viewEngine = viewEngine;
-        _tempDataProvider = tempDataProvider;
-        _serviceProvider = serviceProvider;
-        _logger = logger;
     }
 
     /// <inheritdoc />
-    public async Task SendBuildFailedEmailAsync(Build build, string recipientEmail)
+    public override async Task SendEmailAsync(string to, string subject, string htmlBody)
     {
-        var viewModel = new BuildFailedEmailViewModel
+        var apiKey = Settings.Resend.ApiKey;
+
+        if (string.IsNullOrEmpty(apiKey))
         {
-            ProjectName = build.Project.RepoFullName,
-            Branch = build.Branch,
-            CommitSha = build.ShortCommitSha,
-            CommitMessage = build.CommitMessage ?? "No message",
-            CommitAuthor = build.CommitAuthor ?? "Unknown",
-            ErrorMessage = build.ErrorMessage,
-            BuildUrl = $"/builds/{build.Id}", // TODO: Full URL from config
-            FailedAt = build.FinishedAt ?? DateTime.UtcNow
-        };
-
-        var htmlBody = await RenderViewAsync("Email/BuildFailed", viewModel);
-
-        await SendEmailAsync(
-            recipientEmail,
-            $"Build Failed: {build.Project.RepoFullName} ({build.Branch})",
-            htmlBody);
-    }
-
-    /// <summary>
-    /// Sends an email via the Resend API.
-    /// </summary>
-    private async Task SendEmailAsync(string to, string subject, string htmlBody)
-    {
-        if (string.IsNullOrEmpty(_settings.ApiKey))
-        {
-            _logger.LogWarning("Resend API key not configured, skipping email to {To}", to);
+            Logger.LogWarning("Resend API key not configured, skipping email to {To}", to);
             return;
         }
 
         try
         {
             var request = new HttpRequestMessage(HttpMethod.Post, "emails");
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _settings.ApiKey);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
             var body = new
             {
-                from = $"{_settings.FromName} <{_settings.FromAddress}>",
+                from = GetFromString(),
                 to = new[] { to },
                 subject,
                 html = htmlBody
@@ -112,61 +74,17 @@ public class ResendEmailService : IEmailService
             if (!response.IsSuccessStatusCode)
             {
                 var error = await response.Content.ReadAsStringAsync();
-                _logger.LogError("Failed to send email: {Status} - {Error}", response.StatusCode, error);
+                Logger.LogError("Failed to send email via Resend: {Status} - {Error}",
+                    response.StatusCode, error);
             }
             else
             {
-                _logger.LogInformation("Sent email to {To}: {Subject}", to, subject);
+                Logger.LogInformation("Sent email via Resend to {To}: {Subject}", to, subject);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error sending email to {To}", to);
+            Logger.LogError(ex, "Error sending email via Resend to {To}", to);
         }
-    }
-
-    /// <summary>
-    /// Renders a Razor view to HTML string.
-    /// </summary>
-    private async Task<string> RenderViewAsync<TModel>(string viewName, TModel model)
-    {
-        var httpContext = new DefaultHttpContext { RequestServices = _serviceProvider };
-        var actionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor());
-
-        using var sw = new StringWriter();
-
-        var viewResult = _viewEngine.FindView(actionContext, viewName, false);
-
-        if (!viewResult.Success)
-        {
-            // Try as absolute path
-            viewResult = _viewEngine.GetView(null, $"~/Views/{viewName}.cshtml", false);
-        }
-
-        if (!viewResult.Success)
-        {
-            throw new InvalidOperationException($"View '{viewName}' not found. Searched: {string.Join(", ", viewResult.SearchedLocations)}");
-        }
-
-        var viewDictionary = new ViewDataDictionary<TModel>(
-            new EmptyModelMetadataProvider(),
-            new ModelStateDictionary())
-        {
-            Model = model
-        };
-
-        var tempData = new TempDataDictionary(httpContext, _tempDataProvider);
-
-        var viewContext = new ViewContext(
-            actionContext,
-            viewResult.View,
-            viewDictionary,
-            tempData,
-            sw,
-            new HtmlHelperOptions());
-
-        await viewResult.View.RenderAsync(viewContext);
-
-        return sw.ToString();
     }
 }

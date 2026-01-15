@@ -15,20 +15,22 @@
 // =============================================================================
 
 using Ando.Server.Models;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Ando.Server.Data;
 
 /// <summary>
 /// Entity Framework Core database context for Ando.Server.
+/// Inherits from IdentityDbContext to provide ASP.NET Core Identity tables.
 /// </summary>
-public class AndoDbContext : DbContext
+public class AndoDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, int>
 {
     public AndoDbContext(DbContextOptions<AndoDbContext> options) : base(options)
     {
     }
 
-    public DbSet<User> Users => Set<User>();
+    // Note: Users DbSet is provided by IdentityDbContext as base.Users
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectSecret> ProjectSecrets => Set<ProjectSecret>();
     public DbSet<Build> Builds => Set<Build>();
@@ -48,34 +50,36 @@ public class AndoDbContext : DbContext
     }
 
     // -------------------------------------------------------------------------
-    // User Configuration
+    // ApplicationUser Configuration (extends Identity user)
     // -------------------------------------------------------------------------
     private static void ConfigureUser(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<User>(entity =>
+        modelBuilder.Entity<ApplicationUser>(entity =>
         {
-            entity.HasKey(e => e.Id);
-
-            entity.Property(e => e.GitHubId)
-                .IsRequired();
-
-            entity.Property(e => e.GitHubLogin)
-                .IsRequired()
+            // Display name and avatar
+            entity.Property(e => e.DisplayName)
                 .HasMaxLength(100);
-
-            entity.Property(e => e.Email)
-                .HasMaxLength(255);
 
             entity.Property(e => e.AvatarUrl)
                 .HasMaxLength(500);
 
-            entity.Property(e => e.AccessToken)
+            // Soft email verification
+            entity.Property(e => e.EmailVerificationToken)
+                .HasMaxLength(200);
+
+            // Optional GitHub connection (for repository access)
+            entity.Property(e => e.GitHubLogin)
+                .HasMaxLength(100);
+
+            entity.Property(e => e.GitHubAccessToken)
                 .HasMaxLength(500);
 
-            // Unique index on GitHub ID for login lookups
+            // Index on GitHub ID for lookups (when connected)
             entity.HasIndex(e => e.GitHubId)
-                .IsUnique();
+                .IsUnique()
+                .HasFilter("[GitHubId] IS NOT NULL");
 
+            // Relationship to projects
             entity.HasMany(e => e.Projects)
                 .WithOne(p => p.Owner)
                 .HasForeignKey(p => p.OwnerId)

@@ -35,6 +35,13 @@ namespace Ando.Server.BuildExecution;
 /// </summary>
 public class BuildOrchestrator : IBuildOrchestrator
 {
+    /// <summary>
+    /// Name of the isolated Docker network for build containers.
+    /// This network provides internet access but isolates builds from
+    /// the host network and other non-build containers.
+    /// </summary>
+    private const string BuildNetworkName = "ando-builds";
+
     private readonly IServiceProvider _serviceProvider;
     private readonly IGitHubService _gitHubService;
     private readonly IEmailService _emailService;
@@ -278,6 +285,63 @@ public class BuildOrchestrator : IBuildOrchestrator
     }
 
     /// <summary>
+    /// Ensures the isolated build network exists.
+    /// Creates it if it doesn't exist.
+    /// </summary>
+    private async Task EnsureBuildNetworkAsync(CancellationToken cancellationToken)
+    {
+        // Check if network already exists
+        var checkInfo = new ProcessStartInfo
+        {
+            FileName = "docker",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        checkInfo.ArgumentList.Add("network");
+        checkInfo.ArgumentList.Add("inspect");
+        checkInfo.ArgumentList.Add(BuildNetworkName);
+
+        using var checkProcess = Process.Start(checkInfo);
+        if (checkProcess != null)
+        {
+            await checkProcess.WaitForExitAsync(cancellationToken);
+            if (checkProcess.ExitCode == 0)
+            {
+                // Network already exists
+                return;
+            }
+        }
+
+        // Create the network
+        _logger.LogInformation("Creating isolated build network: {NetworkName}", BuildNetworkName);
+
+        var createInfo = new ProcessStartInfo
+        {
+            FileName = "docker",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        createInfo.ArgumentList.Add("network");
+        createInfo.ArgumentList.Add("create");
+        createInfo.ArgumentList.Add("--driver");
+        createInfo.ArgumentList.Add("bridge");
+        createInfo.ArgumentList.Add(BuildNetworkName);
+
+        using var createProcess = Process.Start(createInfo);
+        if (createProcess != null)
+        {
+            await createProcess.WaitForExitAsync(cancellationToken);
+            if (createProcess.ExitCode != 0)
+            {
+                var error = await createProcess.StandardError.ReadToEndAsync(cancellationToken);
+                _logger.LogWarning("Failed to create build network: {Error}", error);
+            }
+        }
+    }
+
+    /// <summary>
     /// Creates a Docker container for the build.
     /// </summary>
     private async Task<string?> CreateBuildContainerAsync(
@@ -285,6 +349,9 @@ public class BuildOrchestrator : IBuildOrchestrator
         string repoPath,
         CancellationToken cancellationToken)
     {
+        // Ensure the isolated build network exists
+        await EnsureBuildNetworkAsync(cancellationToken);
+
         var image = project.DockerImage ?? _buildSettings.DefaultDockerImage;
 
         var startInfo = new ProcessStartInfo
@@ -298,6 +365,11 @@ public class BuildOrchestrator : IBuildOrchestrator
         startInfo.ArgumentList.Add("run");
         startInfo.ArgumentList.Add("-d");
         startInfo.ArgumentList.Add("--rm");
+
+        // Use isolated build network (provides internet access but isolates from host/other containers)
+        startInfo.ArgumentList.Add("--network");
+        startInfo.ArgumentList.Add(BuildNetworkName);
+
         startInfo.ArgumentList.Add("-v");
         startInfo.ArgumentList.Add($"{repoPath}:/workspace");
         startInfo.ArgumentList.Add("-v");

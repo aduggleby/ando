@@ -5,7 +5,8 @@
 //
 // Tests verify that:
 // - All properties are correctly initialized from BuildContext
-// - Project.From creates correct ProjectRef instances
+// - Project() creates correct ProjectRef instances
+// - Directory() creates correct DirectoryRef instances
 // - Configuration exposes the correct value from Options
 // =============================================================================
 
@@ -40,7 +41,7 @@ public class ScriptGlobalsTests
         globals.Ef.ShouldNotBeNull();
         globals.Npm.ShouldNotBeNull();
         globals.Artifacts.ShouldNotBeNull();
-        globals.Project.ShouldNotBeNull();
+        globals.DotnetProject.ShouldNotBeNull();
     }
 
     [Fact]
@@ -126,11 +127,11 @@ public class ScriptGlobalsTests
     }
 
     [Fact]
-    public void Project_From_CreatesProjectRef()
+    public void DotnetProject_CreatesProjectRef()
     {
         var globals = CreateGlobals();
 
-        var project = globals.Project.From("./src/MyApp/MyApp.csproj");
+        var project = globals.DotnetProject("./src/MyApp/MyApp.csproj");
 
         project.ShouldNotBeNull();
         project.ShouldBeOfType<ProjectRef>();
@@ -138,12 +139,45 @@ public class ScriptGlobalsTests
     }
 
     [Fact]
-    public void Project_From_ExtractsProjectName()
+    public void DotnetProject_ExtractsProjectName()
     {
         var globals = CreateGlobals();
 
-        var project = globals.Project.From("./src/MyWebApp/MyWebApp.csproj");
+        var project = globals.DotnetProject("./src/MyWebApp/MyWebApp.csproj");
 
         project.Name.ShouldBe("MyWebApp");
+    }
+
+    [Fact]
+    public void Directory_CreatesDirectoryRef()
+    {
+        var globals = CreateGlobals();
+
+        var dir = globals.Directory("./frontend");
+
+        dir.ShouldNotBeNull();
+        dir.ShouldBeOfType<DirectoryRef>();
+        dir.Path.ShouldBe("./frontend");
+    }
+
+    [Fact]
+    public void Directory_ExtractsDirectoryName()
+    {
+        var globals = CreateGlobals();
+
+        var dir = globals.Directory("./path/to/frontend");
+
+        dir.Name.ShouldBe("frontend");
+    }
+
+    [Fact]
+    public void Directory_DefaultsToCurrentDirectory()
+    {
+        var globals = CreateGlobals();
+
+        var dir = globals.Directory();
+
+        dir.ShouldNotBeNull();
+        dir.Path.ShouldBe(".");
     }
 }

@@ -132,23 +132,32 @@ public class BuildService : IBuildService
             return false;
         }
 
-        // Try to cancel via registry (for running builds)
+        // Try to cancel via registry (for running builds with active workers)
         if (_cancellationRegistry.TryCancel(buildId))
         {
-            _logger.LogInformation("Cancelled running build {BuildId}", buildId);
+            _logger.LogInformation("Cancelled running build {BuildId} via registry", buildId);
             return true;
         }
 
-        // If build is queued but not yet running, delete the Hangfire job
+        // For queued builds, delete the Hangfire job
         if (build.Status == BuildStatus.Queued && !string.IsNullOrEmpty(build.HangfireJobId))
         {
             _jobClient.Delete(build.HangfireJobId);
+        }
 
+        // Mark build as cancelled (handles both queued and running builds without
+        // an active cancellation token, such as test builds or orphaned builds)
+        if (build.Status == BuildStatus.Queued || build.Status == BuildStatus.Running)
+        {
             build.Status = BuildStatus.Cancelled;
             build.FinishedAt = DateTime.UtcNow;
+            if (build.StartedAt.HasValue)
+            {
+                build.Duration = build.FinishedAt - build.StartedAt;
+            }
             await _db.SaveChangesAsync();
 
-            _logger.LogInformation("Cancelled queued build {BuildId}", buildId);
+            _logger.LogInformation("Cancelled build {BuildId} (status: {Status})", buildId, build.Status);
             return true;
         }
 

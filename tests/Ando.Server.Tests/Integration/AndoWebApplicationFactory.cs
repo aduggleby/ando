@@ -3,14 +3,15 @@
 //
 // Summary: Custom WebApplicationFactory for integration testing.
 //
-// Configures the test server with in-memory database and mock external services.
-// Allows integration tests to exercise the full HTTP pipeline while controlling
-// external dependencies.
+// Configures the test server with a real SQL Server database (via Testcontainers)
+// and mock external services. Allows integration tests to exercise the full HTTP
+// pipeline while controlling external dependencies.
 //
 // Design Decisions:
-// - Uses in-memory database for speed and isolation
+// - Uses real SQL Server for accurate database behavior
 // - Mocks Hangfire to avoid real job scheduling
 // - Provides access to database for test setup and verification
+// - Falls back to in-memory database if no connection string provided
 // =============================================================================
 
 using Ando.Server.BuildExecution;
@@ -32,7 +33,8 @@ namespace Ando.Server.Tests.Integration;
 /// </summary>
 public class AndoWebApplicationFactory : WebApplicationFactory<Program>
 {
-    private readonly string _databaseName = Guid.NewGuid().ToString();
+    private readonly string? _connectionString;
+    private readonly string _databaseName = $"AndoTest_{Guid.NewGuid():N}";
 
     /// <summary>
     /// The mock Hangfire job client for verifying job enqueuing.
@@ -49,8 +51,21 @@ public class AndoWebApplicationFactory : WebApplicationFactory<Program>
     /// </summary>
     public string WebhookSecret { get; set; } = "test-webhook-secret-for-integration";
 
-    public AndoWebApplicationFactory()
+    /// <summary>
+    /// Creates a new factory using in-memory database (for unit tests).
+    /// </summary>
+    public AndoWebApplicationFactory() : this(null)
     {
+    }
+
+    /// <summary>
+    /// Creates a new factory using the specified SQL Server connection string.
+    /// </summary>
+    /// <param name="connectionString">SQL Server connection string, or null for in-memory database.</param>
+    public AndoWebApplicationFactory(string? connectionString)
+    {
+        _connectionString = connectionString;
+
         // Setup mock job client to return incrementing job IDs
         var jobCounter = 0;
         MockJobClient
@@ -81,11 +96,28 @@ public class AndoWebApplicationFactory : WebApplicationFactory<Program>
                 services.Remove(descriptor);
             }
 
-            // Add in-memory database with clean registration
-            services.AddDbContext<AndoDbContext>((sp, options) =>
+            // Use SQL Server if connection string provided, otherwise fall back to in-memory
+            if (!string.IsNullOrEmpty(_connectionString))
             {
-                options.UseInMemoryDatabase(_databaseName);
-            });
+                // Build connection string with unique database name
+                var connBuilder = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(_connectionString)
+                {
+                    InitialCatalog = _databaseName
+                };
+
+                services.AddDbContext<AndoDbContext>((sp, options) =>
+                {
+                    options.UseSqlServer(connBuilder.ConnectionString);
+                });
+            }
+            else
+            {
+                // Fall back to in-memory database for simple unit tests
+                services.AddDbContext<AndoDbContext>((sp, options) =>
+                {
+                    options.UseInMemoryDatabase(_databaseName);
+                });
+            }
 
             // Remove real Hangfire services
             services.RemoveAll<IBackgroundJobClient>();
@@ -123,6 +155,11 @@ public class AndoWebApplicationFactory : WebApplicationFactory<Program>
                 options.WorkerCount = 1;
             });
 
+            services.Configure<TestSettings>(options =>
+            {
+                options.ApiKey = "test-api-key-for-integration-tests";
+            });
+
             // Register CancellationTokenRegistry as singleton (required by BuildService)
             services.RemoveAll<CancellationTokenRegistry>();
             services.AddSingleton<CancellationTokenRegistry>();
@@ -145,4 +182,22 @@ public class AndoWebApplicationFactory : WebApplicationFactory<Program>
     {
         return scope.ServiceProvider.GetRequiredService<AndoDbContext>();
     }
+
+    /// <summary>
+    /// Initializes the database by creating it and running migrations.
+    /// Call this before running tests when using SQL Server.
+    /// </summary>
+    public async Task InitializeDatabaseAsync()
+    {
+        using var scope = Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AndoDbContext>();
+
+        // For SQL Server, ensure database is created fresh
+        if (!string.IsNullOrEmpty(_connectionString))
+        {
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+        }
+    }
+
 }

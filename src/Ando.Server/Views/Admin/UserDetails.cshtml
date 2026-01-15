@@ -1,0 +1,193 @@
+@model Ando.Server.ViewModels.UserDetailsViewModel
+@{
+    ViewData["Title"] = $"User: {Model.Email}";
+    Layout = "_Layout";
+}
+
+<div class="dashboard">
+    <div class="page-header">
+        <div>
+            <a href="/admin/users" class="text-sm text-slate-500 hover:text-slate-700 mb-2 inline-block">&larr; Back to Users</a>
+            <h1>@Model.DisplayName</h1>
+        </div>
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success mb-4">
+            @TempData["Success"]
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-error mb-4">
+            @TempData["Error"]
+        </div>
+    }
+
+    <div class="grid lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 space-y-6">
+            <div class="rounded-lg border border-slate-200 bg-white p-6">
+                <h2 class="text-lg font-semibold mb-4">User Information</h2>
+
+                <dl class="grid grid-cols-2 gap-4">
+                    <div>
+                        <dt class="text-sm text-slate-500">Email</dt>
+                        <dd class="font-medium">@Model.Email</dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm text-slate-500">Display Name</dt>
+                        <dd class="font-medium">@(Model.DisplayName ?? "-")</dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm text-slate-500">Role</dt>
+                        <dd>
+                            @if (Model.IsAdmin)
+                            {
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded text-sm font-medium bg-purple-100 text-purple-800">
+                                    Admin
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded text-sm font-medium bg-slate-100 text-slate-700">
+                                    User
+                                </span>
+                            }
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm text-slate-500">Account Status</dt>
+                        <dd>
+                            @if (Model.IsLockedOut)
+                            {
+                                <span class="status-badge status-failed">Locked until @Model.LockoutEnd?.ToString("MMM d, h:mm tt")</span>
+                            }
+                            else
+                            {
+                                <span class="status-badge status-success">Active</span>
+                            }
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm text-slate-500">Email Verification</dt>
+                        <dd>
+                            @if (Model.EmailVerified)
+                            {
+                                <span class="status-badge status-success">Verified</span>
+                            }
+                            else
+                            {
+                                <span class="status-badge status-pending">Pending</span>
+                                @if (Model.EmailVerificationSentAt.HasValue)
+                                {
+                                    <span class="text-xs text-slate-500 ml-2">Sent @Model.EmailVerificationSentAt.Value.ToString("MMM d")</span>
+                                }
+                            }
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm text-slate-500">GitHub Connection</dt>
+                        <dd>
+                            @if (Model.HasGitHubConnection)
+                            {
+                                <span class="text-emerald-600">@Model.GitHubLogin</span>
+                                @if (Model.GitHubConnectedAt.HasValue)
+                                {
+                                    <span class="text-xs text-slate-500 ml-2">since @Model.GitHubConnectedAt.Value.ToString("MMM d, yyyy")</span>
+                                }
+                            }
+                            else
+                            {
+                                <span class="text-slate-400">Not connected</span>
+                            }
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm text-slate-500">Joined</dt>
+                        <dd class="font-medium">@Model.CreatedAt.ToString("MMMM d, yyyy")</dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm text-slate-500">Last Login</dt>
+                        <dd class="font-medium">@(Model.LastLoginAt?.ToString("MMMM d, yyyy h:mm tt") ?? "Never")</dd>
+                    </div>
+                </dl>
+            </div>
+
+            <div class="rounded-lg border border-slate-200 bg-white p-6">
+                <h2 class="text-lg font-semibold mb-4">Projects (@Model.Projects.Count)</h2>
+
+                @if (Model.Projects.Count == 0)
+                {
+                    <p class="text-slate-500">This user has no projects.</p>
+                }
+                else
+                {
+                    <div class="space-y-3">
+                        @foreach (var project in Model.Projects)
+                        {
+                            <a href="/projects/@project.Id" class="block p-3 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors">
+                                <div class="font-medium">@project.Name</div>
+                                @if (!string.IsNullOrEmpty(project.Description))
+                                {
+                                    <div class="text-sm text-slate-500 truncate">@project.Description</div>
+                                }
+                                <div class="text-xs text-slate-400 mt-1">
+                                    @project.BuildCount builds &middot; Created @project.CreatedAt.ToString("MMM d, yyyy")
+                                </div>
+                            </a>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="space-y-6">
+            <div class="rounded-lg border border-slate-200 bg-white p-6">
+                <h2 class="text-lg font-semibold mb-4">Statistics</h2>
+
+                <dl class="space-y-3">
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500">Projects</dt>
+                        <dd class="font-medium">@Model.Projects.Count</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500">Total Builds</dt>
+                        <dd class="font-medium">@Model.TotalBuilds</dd>
+                    </div>
+                </dl>
+            </div>
+
+            <div class="rounded-lg border border-slate-200 bg-white p-6">
+                <h2 class="text-lg font-semibold mb-4">Actions</h2>
+
+                <div class="space-y-3">
+                    <a href="/admin/users/@Model.Id/role" class="btn btn-secondary w-full justify-center">
+                        Change Role
+                    </a>
+
+                    <a href="/admin/users/@Model.Id/lock" class="btn btn-secondary w-full justify-center">
+                        @(Model.IsLockedOut ? "Manage Lock" : "Lock Account")
+                    </a>
+
+                    @if (!Model.IsAdmin)
+                    {
+                        <form method="post" action="/admin/users/@Model.Id/impersonate" class="w-full">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-secondary w-full justify-center">
+                                Impersonate User
+                            </button>
+                        </form>
+                    }
+
+                    <hr class="my-4" />
+
+                    <a href="/admin/users/@Model.Id/delete" class="btn w-full justify-center bg-red-50 text-red-600 hover:bg-red-100 border-red-200">
+                        Delete User
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

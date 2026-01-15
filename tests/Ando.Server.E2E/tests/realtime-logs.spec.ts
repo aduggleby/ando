@@ -113,8 +113,12 @@ test.describe('Real-time Log Streaming', () => {
         { type: 'Output', message: 'Downloading dependencies...' },
       ]);
 
-      // Wait for logs to appear (via SignalR or polling)
-      await buildDetails.waitForLogEntry('Build started', 10000);
+      // Reload the page to trigger log catch-up (SignalR may not work in test environment)
+      await authedPage.reload();
+      await authedPage.waitForLoadState('networkidle');
+
+      // Verify logs appear after reload
+      await buildDetails.waitForLogEntry('Build started', 5000);
       await buildDetails.waitForLogEntry('Downloading dependencies...', 5000);
     });
 

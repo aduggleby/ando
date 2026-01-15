@@ -26,7 +26,7 @@ COPY src/ src/
 
 # Build and publish
 WORKDIR /src/src/Ando.Server
-RUN dotnet publish -c Release -o /app --no-restore
+RUN dotnet publish -c Release -o /app
 
 # -----------------------------------------------------------------------------
 # Stage 2: Runtime

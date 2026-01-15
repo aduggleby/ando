@@ -98,7 +98,7 @@ public class AndoCli : IDisposable
         // - "help", "--help", "-h" -> show help
         // - "clean" -> cleanup command
         // This allows "ando" and "ando run" to behave identically.
-        if (_args.Length == 0 || _args[0] == "run" || !_args[0].StartsWith("-") && _args[0] != "clean" && _args[0] != "help")
+        if (_args.Length == 0 || _args[0] == "run" || !_args[0].StartsWith("-") && _args[0] != "clean" && _args[0] != "help" && _args[0] != "verify")
         {
             PrintHeader();
             return await RunCommandAsync();
@@ -108,6 +108,12 @@ public class AndoCli : IDisposable
         {
             PrintHeader();
             return HelpCommand();
+        }
+
+        if (_args[0] == "verify")
+        {
+            PrintHeader();
+            return await VerifyCommandAsync();
         }
 
         if (_args[0] == "clean")
@@ -140,7 +146,7 @@ public class AndoCli : IDisposable
                 _logger.Error("");
                 _logger.Error("Create a build.ando file to get started:");
                 _logger.Error("");
-                _logger.Error("  var project = Project.From(\"./src/MyApp/MyApp.csproj\");");
+                _logger.Error("  var project = DotnetProject(\"./src/MyApp/MyApp.csproj\");");
                 _logger.Error("  Dotnet.Restore(project);");
                 _logger.Error("  Dotnet.Build(project);");
                 _logger.Error("");
@@ -150,7 +156,18 @@ public class AndoCli : IDisposable
             // Get the host path for Docker configuration.
             var hostRootPath = Path.GetDirectoryName(scriptPath) ?? Environment.CurrentDirectory;
 
-            // Step 2: Set up Docker container for isolated execution.
+            // Check for .env file and offer to load it.
+            await PromptToLoadEnvFileAsync(hostRootPath);
+
+            // Step 2: Load and compile the build script using Roslyn.
+            // We load first to read Options.Image before creating the container.
+            // Use /workspace as the root path since that's where the project is mounted
+            // inside the container. This ensures paths in the script resolve correctly.
+            const string containerRootPath = "/workspace";
+            var scriptHost = new ScriptHost(_logger);
+            var context = await scriptHost.LoadScriptAsync(scriptPath, containerRootPath);
+
+            // Step 3: Set up Docker container for isolated execution.
             // All ANDO builds run in Docker containers for reproducibility.
             var dockerManager = new DockerManager(_logger);
             if (!dockerManager.IsDockerAvailable())
@@ -174,7 +191,7 @@ public class AndoCli : IDisposable
             {
                 Name = containerName,
                 ProjectRoot = hostRootPath,
-                Image = GetDockerImage(),
+                Image = GetDockerImage(context.Options),
                 MountDockerSocket = HasFlag("--dind"),  // For building Docker images
             };
 
@@ -193,13 +210,6 @@ public class AndoCli : IDisposable
 
             // Always start with a clean artifacts directory to avoid stale outputs.
             await dockerManager.CleanArtifactsAsync(container.Id);
-
-            // Step 3: Load and compile the build script using Roslyn.
-            // Use /workspace as the root path since that's where the project is mounted
-            // inside the container. This ensures paths in the script resolve correctly.
-            const string containerRootPath = "/workspace";
-            var scriptHost = new ScriptHost(_logger);
-            var context = await scriptHost.LoadScriptAsync(scriptPath, containerRootPath);
 
             // Switch the build context to use container execution.
             // All subsequent commands will run via 'docker exec'.
@@ -260,6 +270,38 @@ public class AndoCli : IDisposable
             }
             return 5;
         }
+    }
+
+    // Handles the 'verify' command which checks the build script for errors
+    // without executing it. Useful for CI validation and editor integration.
+    private async Task<int> VerifyCommandAsync()
+    {
+        var scriptPath = FindBuildScript();
+
+        if (scriptPath == null)
+        {
+            _logger.Error("No build.ando found in current directory.");
+            return 2;
+        }
+
+        _logger.Info($"Verifying: {scriptPath}");
+
+        var scriptHost = new ScriptHost(_logger);
+        var errors = await scriptHost.VerifyScriptAsync(scriptPath);
+
+        if (errors.Count == 0)
+        {
+            _logger.Info("Build script is valid.");
+            return 0;
+        }
+
+        _logger.Error("Build script has errors:");
+        foreach (var error in errors)
+        {
+            _logger.Error($"  {error}");
+        }
+
+        return 1;
     }
 
     // Handles the 'clean' command which removes build artifacts and caches.
@@ -352,16 +394,25 @@ public class AndoCli : IDisposable
         return $"ando-{dirName}-{hashPrefix}";
     }
 
-    // Gets the Docker image to use, either from --image flag or default.
-    // Default is the .NET SDK alpine image for minimal size.
-    private string GetDockerImage()
+    // Gets the Docker image to use.
+    // Priority: 1) --image CLI flag, 2) Options.UseImage() from script, 3) default
+    private string GetDockerImage(BuildOptions options)
     {
+        // CLI flag takes precedence (allows override for debugging).
         var imageIndex = Array.IndexOf(_args, "--image");
         if (imageIndex >= 0 && imageIndex + 1 < _args.Length)
         {
             return _args[imageIndex + 1];
         }
-        return "mcr.microsoft.com/dotnet/sdk:9.0-alpine";
+
+        // Script-specified image via Options.UseImage().
+        if (!string.IsNullOrEmpty(options.Image))
+        {
+            return options.Image;
+        }
+
+        // Default is Ubuntu for broad compatibility.
+        return "ubuntu:22.04";
     }
 
     // Simple flag detection helper.
@@ -374,6 +425,7 @@ public class AndoCli : IDisposable
         Console.WriteLine();
         Console.WriteLine("Commands:");
         Console.WriteLine("  run               Run the build script (default)");
+        Console.WriteLine("  verify            Check build script for errors without executing");
         Console.WriteLine("  clean             Remove artifacts, temp files, and containers");
         Console.WriteLine("  help              Show this help");
         Console.WriteLine();
@@ -431,5 +483,98 @@ public class AndoCli : IDisposable
     {
         return args.Contains("--no-color") ||
                Environment.GetEnvironmentVariable("NO_COLOR") != null;
+    }
+
+    // Checks for a .env file in the project directory and prompts the user
+    // to load it if found. This provides a convenient way to set environment
+    // variables for local development without exporting them in the shell.
+    private async Task PromptToLoadEnvFileAsync(string rootPath)
+    {
+        var envPath = Path.Combine(rootPath, ".env");
+        if (!File.Exists(envPath))
+            return;
+
+        // Parse the .env file to extract variable names and values.
+        var envVars = ParseEnvFile(envPath);
+        if (envVars.Count == 0)
+            return;
+
+        // Check if any variables are already set - if all are set, skip prompting.
+        var unsetVars = envVars.Where(kv => Environment.GetEnvironmentVariable(kv.Key) == null).ToList();
+        if (unsetVars.Count == 0)
+            return;
+
+        // Show the user which variables would be loaded.
+        _logger.Info("Found .env file with the following variables:");
+        foreach (var (key, value) in unsetVars)
+        {
+            // Mask sensitive values (tokens, secrets, passwords, keys).
+            var isSensitive = key.Contains("TOKEN", StringComparison.OrdinalIgnoreCase) ||
+                              key.Contains("SECRET", StringComparison.OrdinalIgnoreCase) ||
+                              key.Contains("PASSWORD", StringComparison.OrdinalIgnoreCase) ||
+                              key.Contains("KEY", StringComparison.OrdinalIgnoreCase);
+            var displayValue = isSensitive ? "********" : value;
+            _logger.Info($"  {key}={displayValue}");
+        }
+
+        // Prompt the user.
+        Console.Write("Load these environment variables? [Y/n] ");
+        var response = Console.ReadLine()?.Trim().ToLowerInvariant();
+
+        // Default to yes if user just presses Enter.
+        if (string.IsNullOrEmpty(response) || response == "y" || response == "yes")
+        {
+            foreach (var (key, value) in unsetVars)
+            {
+                Environment.SetEnvironmentVariable(key, value);
+            }
+            _logger.Info($"Loaded {unsetVars.Count} environment variable(s) from .env");
+        }
+        else
+        {
+            _logger.Info("Skipped loading .env file");
+        }
+
+        Console.WriteLine();
+        await Task.CompletedTask;
+    }
+
+    // Parses a .env file into key-value pairs.
+    // Supports:
+    // - KEY=VALUE format
+    // - Comments starting with #
+    // - Quoted values (single or double quotes)
+    // - Empty lines are ignored
+    private static Dictionary<string, string> ParseEnvFile(string path)
+    {
+        var result = new Dictionary<string, string>();
+
+        foreach (var line in File.ReadAllLines(path))
+        {
+            var trimmed = line.Trim();
+
+            // Skip empty lines and comments.
+            if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith('#'))
+                continue;
+
+            // Find the first = sign.
+            var equalsIndex = trimmed.IndexOf('=');
+            if (equalsIndex <= 0)
+                continue;
+
+            var key = trimmed[..equalsIndex].Trim();
+            var value = trimmed[(equalsIndex + 1)..].Trim();
+
+            // Remove surrounding quotes if present.
+            if ((value.StartsWith('"') && value.EndsWith('"')) ||
+                (value.StartsWith('\'') && value.EndsWith('\'')))
+            {
+                value = value[1..^1];
+            }
+
+            result[key] = value;
+        }
+
+        return result;
     }
 }
