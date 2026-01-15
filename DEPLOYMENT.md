@@ -384,7 +384,7 @@ services:
   # Ando CI Server
   # ---------------------------------------------------------------------------
   ando-server:
-    image: ghcr.io/yourname/ando-server:latest  # Or build locally (see below)
+    image: ghcr.io/aduggleby/ando-server:latest  # Or build locally (see below)
     # Uncomment to build from source instead of using pre-built image:
     # build:
     #   context: /path/to/ando

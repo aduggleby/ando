@@ -1,5 +1,6 @@
 import { defineConfig } from "astro/config";
 import tailwindcss from "@tailwindcss/vite";
+import rehypeExternalLinks from "rehype-external-links";
 
 export default defineConfig({
   output: "static",
@@ -11,6 +12,15 @@ export default defineConfig({
       },
       defaultColor: false,
     },
+    rehypePlugins: [
+      [
+        rehypeExternalLinks,
+        {
+          target: "_blank",
+          rel: ["noopener", "noreferrer"],
+        },
+      ],
+    ],
   },
   vite: {
     plugins: [tailwindcss()],

@@ -1,0 +1,72 @@
+---
+import { createHighlighter, type BundledLanguage } from "shiki";
+
+interface Props {
+  code: string;
+  lang?: BundledLanguage;
+  filename?: string;
+}
+
+const { code, lang = "csharp", filename } = Astro.props;
+
+// Create highlighter with dual themes
+const highlighter = await createHighlighter({
+  themes: ["github-light", "github-dark"],
+  langs: ["csharp", "shell", "bash"],
+});
+
+// Generate HTML with dual theme support using CSS variables
+const html = highlighter.codeToHtml(code, {
+  lang,
+  themes: {
+    light: "github-light",
+    dark: "github-dark",
+  },
+  defaultColor: false,
+});
+---
+
+<div class="code-block relative overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-700">
+  {
+    filename && (
+      <span class="absolute top-3 left-4 text-xs font-medium tracking-wider text-zinc-400 uppercase dark:text-zinc-500">
+        {filename}
+      </span>
+    )
+  }
+  <div class:list={["overflow-x-auto", filename ? "px-4 pt-10 pb-4" : "p-4"]} set:html={html} />
+</div>
+
+<style is:global>
+  .code-block pre {
+    margin: 0;
+    background: transparent !important;
+  }
+
+  .code-block code {
+    font-size: 0.875rem;
+    line-height: 1.625;
+  }
+
+  /* Light theme colors (default) */
+  .code-block {
+    background-color: rgb(250 250 250); /* zinc-50 */
+  }
+
+  /* Dark theme colors */
+  :global(.dark) .code-block {
+    background-color: rgb(24 24 27); /* zinc-900 */
+  }
+
+  /* Shiki dual theme: show light theme spans in light mode */
+  .shiki span {
+    color: var(--shiki-light);
+    background-color: var(--shiki-light-bg);
+  }
+
+  /* Shiki dual theme: show dark theme spans in dark mode */
+  :global(.dark) .shiki span {
+    color: var(--shiki-dark);
+    background-color: var(--shiki-dark-bg);
+  }
+</style>

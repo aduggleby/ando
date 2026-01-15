@@ -1,0 +1,28 @@
+---
+import BaseLayout from "./BaseLayout.astro";
+
+interface Props {
+  frontmatter: {
+    title: string;
+    description: string;
+  };
+}
+
+const { frontmatter } = Astro.props;
+const { title, description } = frontmatter;
+---
+
+<BaseLayout title={`${title} - ANDO`} description={description}>
+  <div class="max-w-3xl">
+    <section id="top" class="mb-8 md:mb-12">
+      <h1 class="mb-2 text-2xl font-bold text-zinc-900 sm:text-3xl dark:text-white">{title}</h1>
+    </section>
+
+    <div
+      id="content"
+      class="prose prose-zinc dark:prose-invert prose-headings:font-semibold prose-a:text-cyan-600 dark:prose-a:text-cyan-400 prose-code:rounded prose-code:bg-zinc-100 prose-code:px-1 prose-code:before:content-none prose-code:after:content-none dark:prose-code:bg-zinc-800 prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-800 max-w-none"
+    >
+      <slot />
+    </div>
+  </div>
+</BaseLayout>

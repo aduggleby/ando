@@ -1,11 +1,15 @@
 # ANDO
 
-ANDO allows you to write build and deployment scripts in plain C# with full IDE support, type safety, and IntelliSense. Scripts are executed using Roslyn C# scripting in isolated Docker containers for reproducible builds.
+A typed C# build and deployment system using Roslyn scripting.
 
 > From the Latin "andō" - to set in motion.
 
 [![Website](https://img.shields.io/badge/docs-andobuild.com-blue)](https://andobuild.com)
 [![GitHub](https://img.shields.io/github/stars/aduggleby/ando?style=social)](https://github.com/aduggleby/ando)
+
+## Overview
+
+ANDO allows you to write build and deployment scripts in plain C# with full IDE support, type safety, and IntelliSense. Scripts are executed using Roslyn C# scripting in isolated Docker containers for reproducible builds.
 
 - **Plain C#** - No custom syntax or DSLs. If you know C#, you know ANDO.
 - **Type-safe** - Compile-time errors catch mistakes before they run.
@@ -26,4 +30,4 @@ Full documentation is available at **[andobuild.com](https://andobuild.com)**.
 
 ## License
 
-[O'Sassy License](https://osaasy.dev/) - see [LICENSE](./LICENSE)
+O'Sassy License - see [LICENSE](./LICENSE)

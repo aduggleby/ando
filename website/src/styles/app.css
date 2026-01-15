@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -14,4 +15,18 @@ h4,
 h5,
 h6 {
   font-family: var(--font-serif);
+}
+
+/* Force dark theme for all code blocks (consistent appearance in light/dark mode) */
+.prose pre {
+  background-color: var(--shiki-dark-bg, #24292e) !important;
+}
+
+.prose pre code {
+  background-color: transparent !important;
+}
+
+/* Force Shiki dark theme colors for syntax highlighting */
+.prose pre span {
+  color: var(--shiki-dark) !important;
 }
