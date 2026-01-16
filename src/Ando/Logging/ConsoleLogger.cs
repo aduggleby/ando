@@ -25,15 +25,21 @@ namespace Ando.Logging;
 /// <summary>
 /// Production logger with colorized console output and file logging.
 /// Uses ANSI escape codes for colors and Unicode symbols for status indicators.
+/// Supports indentation for nested builds via ANDO_INDENT_LEVEL environment variable.
 /// </summary>
 public class ConsoleLogger : IBuildLogger, IDisposable
 {
     private readonly bool _useColor;
     private readonly StreamWriter? _logFile;
     private readonly HashSet<string> _secretValues;
+    private readonly int _indentLevel;
+    private readonly string _indentPrefix;
     private int _currentStep;
     private int _totalSteps;
     private bool _disposed;
+
+    // Environment variable for tracking nested build depth.
+    public const string IndentLevelEnvVar = "ANDO_INDENT_LEVEL";
 
     // ANSI color codes - using bold+color combinations for better
     // visibility across different terminal types including SSH sessions.
@@ -48,6 +54,11 @@ public class ConsoleLogger : IBuildLogger, IDisposable
     public LogLevel Verbosity { get; set; } = LogLevel.Normal;
 
     /// <summary>
+    /// Gets the current indent level (0 for top-level, 1+ for nested builds).
+    /// </summary>
+    public int IndentLevel => _indentLevel;
+
+    /// <summary>
     /// Creates a new console logger.
     /// </summary>
     /// <param name="useColor">Whether to use ANSI color codes in output.</param>
@@ -57,6 +68,16 @@ public class ConsoleLogger : IBuildLogger, IDisposable
     {
         _useColor = useColor;
         _secretValues = secretValues != null ? [..secretValues] : [];
+
+        // Read indent level from environment variable (set by parent build).
+        var indentStr = Environment.GetEnvironmentVariable(IndentLevelEnvVar);
+        _indentLevel = int.TryParse(indentStr, out var level) ? level : 0;
+
+        // Build indent prefix: vertical line with spacing for nested builds.
+        // Each level adds "│  " (vertical line + 2 spaces).
+        _indentPrefix = _indentLevel > 0
+            ? string.Concat(Enumerable.Repeat($"{Gray}│{Reset}  ", _indentLevel))
+            : "";
 
         // Set up log file if path provided.
         // File is cleared on each run to avoid growing indefinitely.
@@ -120,7 +141,7 @@ public class ConsoleLogger : IBuildLogger, IDisposable
         if (Verbosity == LogLevel.Quiet) return;
 
         Console.WriteLine();
-        Console.Write($"  {Cyan}▶{Reset}  {Gray}{stepCounter}{Reset}{stepName}{contextPart}");
+        Console.Write($"{_indentPrefix}  {Cyan}▶{Reset}  {Gray}{stepCounter}{Reset}{stepName}{contextPart}");
         Console.WriteLine();
     }
 
@@ -132,7 +153,7 @@ public class ConsoleLogger : IBuildLogger, IDisposable
 
         if (Verbosity == LogLevel.Quiet) return;
 
-        Console.WriteLine($"  {Green}✔{Reset}  {stepName}{contextPart}  {Gray}{FormatDuration(duration)}{Reset}");
+        Console.WriteLine($"{_indentPrefix}  {Green}✔{Reset}  {stepName}{contextPart}  {Gray}{FormatDuration(duration)}{Reset}");
     }
 
     public void StepFailed(string stepName, TimeSpan duration, string? message = null)
@@ -143,11 +164,11 @@ public class ConsoleLogger : IBuildLogger, IDisposable
             LogToFile($"  Error: {message}");
         }
 
-        Console.WriteLine($"  {Red}✖{Reset}  {stepName}  {Gray}{FormatDuration(duration)}{Reset}");
+        Console.WriteLine($"{_indentPrefix}  {Red}✖{Reset}  {stepName}  {Gray}{FormatDuration(duration)}{Reset}");
 
         if (message != null)
         {
-            Console.WriteLine($"     {Red}{message}{Reset}");
+            Console.WriteLine($"{_indentPrefix}     {Red}{message}{Reset}");
         }
     }
 
@@ -159,12 +180,35 @@ public class ConsoleLogger : IBuildLogger, IDisposable
         if (Verbosity < LogLevel.Normal) return;
 
         Console.WriteLine();
-        Console.Write($"  {Yellow}⊘{Reset}  {stepName} skipped");
+        Console.Write($"{_indentPrefix}  {Yellow}⊘{Reset}  {stepName} skipped");
         if (reason != null)
         {
             Console.Write($"  {Gray}({reason}){Reset}");
         }
         Console.WriteLine();
+    }
+
+    public void LogStep(string level, string message)
+    {
+        _currentStep++;
+        var stepCounter = _totalSteps > 0 ? $"[{_currentStep}/{_totalSteps}] " : "";
+        var redacted = RedactSecrets(message);
+
+        LogToFile($"▶ {stepCounter}{level}: {redacted}");
+
+        if (Verbosity == LogLevel.Quiet) return;
+
+        // Choose color based on level.
+        var levelColor = level switch
+        {
+            "Warning" => Yellow,
+            "Error" => Red,
+            "Debug" => Gray,
+            _ => Cyan // Info
+        };
+
+        Console.WriteLine();
+        Console.WriteLine($"{_indentPrefix}  {levelColor}▶{Reset}  {Gray}{stepCounter}{Reset}{level}: {LightGray}{redacted}{Reset}");
     }
 
     public void Info(string message)
@@ -173,7 +217,7 @@ public class ConsoleLogger : IBuildLogger, IDisposable
         LogToFile($"  {redacted}");
 
         if (Verbosity < LogLevel.Normal) return;
-        Console.WriteLine($"     {LightGray}{redacted}{Reset}");
+        Console.WriteLine($"{_indentPrefix}     {LightGray}{redacted}{Reset}");
     }
 
     public void Warning(string message)
@@ -182,7 +226,7 @@ public class ConsoleLogger : IBuildLogger, IDisposable
         LogToFile($"⚠ {redacted}");
 
         if (Verbosity < LogLevel.Minimal) return;
-        Console.WriteLine($"  {Yellow}⚠{Reset}  {redacted}");
+        Console.WriteLine($"{_indentPrefix}  {Yellow}⚠{Reset}  {redacted}");
     }
 
     public void Error(string message)
@@ -190,7 +234,7 @@ public class ConsoleLogger : IBuildLogger, IDisposable
         var redacted = RedactSecrets(message);
         LogToFile($"✖ ERROR: {redacted}");
 
-        Console.WriteLine($"  {Red}✖{Reset}  {redacted}");
+        Console.WriteLine($"{_indentPrefix}  {Red}✖{Reset}  {redacted}");
     }
 
     public void Debug(string message)
@@ -199,7 +243,7 @@ public class ConsoleLogger : IBuildLogger, IDisposable
         LogToFile($"  → {redacted}");
 
         if (Verbosity < LogLevel.Detailed) return;
-        Console.WriteLine($"     {Gray}→{Reset} {redacted}");
+        Console.WriteLine($"{_indentPrefix}     {Gray}→{Reset} {redacted}");
     }
 
     public void WorkflowStarted(string workflowName, string? scriptPath = null, int totalSteps = 0)
@@ -209,16 +253,20 @@ public class ConsoleLogger : IBuildLogger, IDisposable
 
         LogToFile("");
         LogToFile($"Workflow: {workflowName}");
-        if (scriptPath != null) LogToFile($"Script:   {Path.GetFileName(scriptPath)}");
+        if (scriptPath != null) LogToFile($"Script:   {scriptPath}");
         if (totalSteps > 0) LogToFile($"Steps:    {totalSteps}");
         LogToFile("");
 
         if (Verbosity == LogLevel.Quiet) return;
 
-        Console.WriteLine($"{Gray}────────────────────────────────────────────────────────────{Reset}");
+        Console.WriteLine($"{_indentPrefix}{Gray}────────────────────────────────────────────────────────────{Reset}");
+        if (scriptPath != null)
+        {
+            Console.WriteLine($"{_indentPrefix}  {Gray}Script:{Reset} {scriptPath}");
+        }
     }
 
-    public void WorkflowCompleted(string workflowName, TimeSpan duration, int stepsRun, int stepsFailed)
+    public void WorkflowCompleted(string workflowName, string? scriptPath, TimeSpan duration, int stepsRun, int stepsFailed)
     {
         LogToFile("");
         if (stepsFailed > 0)
@@ -234,20 +282,25 @@ public class ConsoleLogger : IBuildLogger, IDisposable
         if (Verbosity == LogLevel.Quiet) return;
 
         Console.WriteLine();
-        Console.WriteLine($"{Gray}────────────────────────────────────────────────────────────{Reset}");
+        Console.WriteLine($"{_indentPrefix}{Gray}────────────────────────────────────────────────────────────{Reset}");
         Console.WriteLine();
 
         if (stepsFailed > 0)
         {
-            Console.WriteLine($"  {Red}✖  FAILED{Reset}  {stepsFailed}/{stepsRun} steps failed  {Gray}{FormatDuration(duration)}{Reset}");
+            Console.WriteLine($"{_indentPrefix}  {Red}✖  FAILED{Reset}  {stepsFailed}/{stepsRun} steps failed  {Gray}{FormatDuration(duration)}{Reset}");
         }
         else
         {
-            Console.WriteLine($"  {Green}✔  SUCCESS{Reset}  {stepsRun} steps completed  {Gray}{FormatDuration(duration)}{Reset}");
+            Console.WriteLine($"{_indentPrefix}  {Green}✔  SUCCESS{Reset}  {stepsRun} steps completed  {Gray}{FormatDuration(duration)}{Reset}");
+        }
+
+        if (scriptPath != null)
+        {
+            Console.WriteLine($"{_indentPrefix}     {Gray}{scriptPath}{Reset}");
         }
 
         Console.WriteLine();
-        Console.WriteLine($"{Gray}────────────────────────────────────────────────────────────{Reset}");
+        Console.WriteLine($"{_indentPrefix}{Gray}────────────────────────────────────────────────────────────{Reset}");
         Console.WriteLine();
     }
 

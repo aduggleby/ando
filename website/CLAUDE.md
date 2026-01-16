@@ -45,7 +45,7 @@ All styling must be done inline using Tailwind classes. The project uses:
 
 <!-- Code blocks -->
 <div class="bg-zinc-900 rounded-xl border border-zinc-800 p-4 overflow-x-auto relative font-mono text-sm leading-relaxed">
-  <span class="absolute top-3 right-4 text-xs text-zinc-400 uppercase tracking-wider">build.ando</span>
+  <span class="absolute top-3 right-4 text-xs text-zinc-400 uppercase tracking-wider">build.csando</span>
   <pre class="m-0 whitespace-pre"><code class="text-zinc-200">...</code></pre>
 </div>
 

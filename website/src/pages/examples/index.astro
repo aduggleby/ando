@@ -1,0 +1,46 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+const examples = [
+  {
+    title: "Astro + Cloudflare Pages",
+    href: "/examples/astro",
+    description: "Build an Astro site and deploy to Cloudflare Pages with cache purging.",
+    tags: ["Node.js", "Cloudflare"],
+  },
+];
+---
+
+<BaseLayout title="Examples - ANDO" description="Real-world examples of ANDO build scripts.">
+  <div class="max-w-3xl">
+    <section id="top" class="mb-8 md:mb-12">
+      <h1 class="mb-2 text-2xl font-bold text-zinc-900 sm:text-3xl dark:text-white">Examples</h1>
+      <p class="text-zinc-500 dark:text-zinc-400">Real-world build scripts you can use as starting points.</p>
+    </section>
+
+    <section>
+      <div class="grid gap-4">
+        {
+          examples.map((example) => (
+            <a
+              href={example.href}
+              class="group block rounded-lg border border-zinc-200 p-5 transition-colors hover:border-cyan-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:border-cyan-500 dark:hover:bg-zinc-800/50"
+            >
+              <h2 class="mb-2 text-lg font-semibold text-zinc-900 group-hover:text-cyan-600 dark:text-white dark:group-hover:text-cyan-400">
+                {example.title}
+              </h2>
+              <p class="mb-3 text-sm text-zinc-600 dark:text-zinc-400">{example.description}</p>
+              <div class="flex flex-wrap gap-2">
+                {example.tags.map((tag) => (
+                  <span class="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </a>
+          ))
+        }
+      </div>
+    </section>
+  </div>
+</BaseLayout>

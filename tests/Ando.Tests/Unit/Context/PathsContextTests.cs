@@ -3,8 +3,8 @@
 //
 // Summary: Unit tests for PathsContext class.
 //
-// Tests verify root path initialization, artifacts path derivation,
-// and path combination behavior.
+// Tests verify root path initialization, temp path derivation,
+// and directory creation behavior.
 // =============================================================================
 
 using Ando.Context;
@@ -22,20 +22,6 @@ public class PathsContextTests
     }
 
     [Fact]
-    public void Src_IsSubdirectoryOfRoot()
-    {
-        var context = new PathsContext("/home/test");
-        Assert.Equal(Path.Combine("/home/test", "src"), context.Src.Value);
-    }
-
-    [Fact]
-    public void Artifacts_IsSubdirectoryOfRoot()
-    {
-        var context = new PathsContext("/home/test");
-        Assert.Equal(Path.Combine("/home/test", "artifacts"), context.Artifacts.Value);
-    }
-
-    [Fact]
     public void Temp_IsInAndoDirectory()
     {
         var context = new PathsContext("/home/test");
@@ -43,7 +29,7 @@ public class PathsContextTests
     }
 
     [Fact]
-    public void EnsureDirectoriesExist_CreatesDirectories()
+    public void EnsureDirectoriesExist_CreatesTempDirectory()
     {
         var tempRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         try
@@ -51,7 +37,6 @@ public class PathsContextTests
             var context = new PathsContext(tempRoot);
             context.EnsureDirectoriesExist();
 
-            Assert.True(Directory.Exists(context.Artifacts.Value));
             Assert.True(Directory.Exists(context.Temp.Value));
         }
         finally
@@ -73,7 +58,7 @@ public class PathsContextTests
             context.EnsureDirectoriesExist();
             context.EnsureDirectoriesExist(); // Should not throw
 
-            Assert.True(Directory.Exists(context.Artifacts.Value));
+            Assert.True(Directory.Exists(context.Temp.Value));
         }
         finally
         {

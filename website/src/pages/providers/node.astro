@@ -1,8 +1,8 @@
 ---
-import ProviderLayout from "../layouts/ProviderLayout.astro";
-import OperationsTable from "../components/OperationsTable.astro";
-import OperationDetails from "../components/OperationDetails.astro";
-import { getOperationsForProvider } from "../data/operations.js";
+import ProviderLayout from "../../layouts/ProviderLayout.astro";
+import OperationsTable from "../../components/OperationsTable.astro";
+import OperationDetails from "../../components/OperationDetails.astro";
+import { getOperationsForProvider } from "../../data/operations.js";
 
 const operations = getOperationsForProvider("Node");
 ---
@@ -39,7 +39,7 @@ const operations = getOperationsForProvider("Node");
     <div
       class="relative overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-900 p-4 font-mono text-sm leading-relaxed"
     >
-      <span class="absolute top-3 right-4 text-xs tracking-wider text-zinc-400 uppercase">build.ando</span>
+      <span class="absolute top-3 right-4 text-xs tracking-wider text-zinc-400 uppercase">build.csando</span>
       <pre
         class="m-0 whitespace-pre"><code class="text-zinc-200"><span class="text-slate-400 italic">// Install Node.js (includes npm)</span>
 <span class="text-sky-200">Node</span>.<span class="text-violet-300">Install</span>();
@@ -58,7 +58,7 @@ const operations = getOperationsForProvider("Node");
     <div
       class="relative overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-900 p-4 font-mono text-sm leading-relaxed"
     >
-      <span class="absolute top-3 right-4 text-xs tracking-wider text-zinc-400 uppercase">build.ando</span>
+      <span class="absolute top-3 right-4 text-xs tracking-wider text-zinc-400 uppercase">build.csando</span>
       <pre
         class="m-0 whitespace-pre"><code class="text-zinc-200"><span class="text-slate-400 italic">// Install Node.js 20 (previous LTS)</span>
 <span class="text-sky-200">Node</span>.<span class="text-violet-300">Install</span>(<span class="text-green-300">"20"</span>);

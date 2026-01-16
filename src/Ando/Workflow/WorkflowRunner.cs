@@ -51,6 +51,23 @@ public class WorkflowRunner(StepRegistry registry, IBuildLogger logger)
         // Execute each step sequentially.
         foreach (var step in registry.Steps)
         {
+            // Handle log steps specially - single line output, no completion message.
+            if (step.IsLogStep)
+            {
+                var levelName = step.LogLevel.ToString();
+                logger.LogStep(levelName, step.LogMessage ?? "");
+
+                // Log steps always succeed and have no execution.
+                stepResults.Add(new StepResult
+                {
+                    StepName = step.Name,
+                    Context = step.Context,
+                    Success = true,
+                    Duration = TimeSpan.Zero
+                });
+                continue;
+            }
+
             var stepStopwatch = Stopwatch.StartNew();
             logger.StepStarted(step.Name, step.Context);
 
@@ -119,6 +136,7 @@ public class WorkflowRunner(StepRegistry registry, IBuildLogger logger)
         // Log workflow completion with summary.
         logger.WorkflowCompleted(
             "build",
+            scriptPath,
             workflowStopwatch.Elapsed,
             stepResults.Count,
             stepResults.Count(s => !s.Success));

@@ -1,16 +1,15 @@
 // 0001-Simple: Hello World Example
 // Demonstrates basic project build and publish
 
-var App = DotnetProject("./src/HelloWorld.csproj");
+Ando.UseImage("mcr.microsoft.com/dotnet/sdk:9.0");
+
+var App = Dotnet.Project("./src/HelloWorld.csproj");
 
 // Output directory
 var output = Root / "dist";
 
-// Use Release configuration
-Options.UseConfiguration(Configuration.Release);
-
 Dotnet.Restore(App);
-Dotnet.Build(App);
+Dotnet.Build(App, o => o.Configuration = Configuration.Release);
 Dotnet.Publish(App, o => o
     .Output(output)
     .WithConfiguration(Configuration.Release));

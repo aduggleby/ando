@@ -9,7 +9,7 @@
 // Example usage:
 //   var db = Ef.DbContextFrom(project, "ApplicationDbContext");
 //   Ef.DatabaseUpdate(db);
-//   Ef.Script(db, Context.Paths.Artifacts / "migration.sql");
+//   Ef.Script(db, Root / "artifacts" / "migration.sql");
 //
 // Design Decisions:
 // - Created via EfOperations.DbContextFrom() factory method (internal constructor)

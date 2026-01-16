@@ -4,23 +4,22 @@
 // Summary: Provides Azure Bicep deployment operations for build scripts.
 //
 // BicepOperations handles deploying Azure infrastructure using Bicep templates.
-// Supports both resource group and subscription-level deployments, with optional
-// output capture to Context.Vars for use in subsequent build steps.
+// Supports both resource group and subscription-level deployments.
+// Returns BicepDeployment objects with strongly-typed access to outputs.
 //
 // Architecture:
 // - Resource group deployments use `az deployment group create`
 // - Subscription deployments use `az deployment sub create`
-// - Outputs are captured via JSON query and stored in VarsContext
+// - Outputs are captured via JSON query and stored in BicepDeployment.Outputs
 // - What-if preview uses the same commands with --what-if flag
 //
 // Design Decisions:
-// - Follows OperationsBase pattern but uses custom registration for output capture
-// - VarsContext is passed to enable output capture at execution time
+// - Deploy methods return BicepDeployment for strongly-typed output access
+// - Outputs are always captured (no opt-in needed)
 // - Deployment name defaults to template filename if not specified
 // - Parameters can be provided via file, inline, or both
 // =============================================================================
 
-using Ando.Context;
 using Ando.Execution;
 using Ando.Logging;
 using Ando.Steps;
@@ -31,56 +30,57 @@ namespace Ando.Operations;
 /// Provides Azure Bicep deployment operations for build scripts.
 /// Methods register steps in the workflow rather than executing immediately.
 /// </summary>
-public class BicepOperations : OperationsBase
+public class BicepOperations(StepRegistry registry, IBuildLogger logger, Func<ICommandExecutor> executorFactory)
+    : OperationsBase(registry, logger, executorFactory)
 {
-    private readonly VarsContext _vars;
-
-    public BicepOperations(StepRegistry registry, IBuildLogger logger,
-        Func<ICommandExecutor> executorFactory, VarsContext vars)
-        : base(registry, logger, executorFactory)
-    {
-        _vars = vars;
-    }
 
     /// <summary>
     /// Registers a step to deploy a Bicep template to a resource group.
+    /// Returns a BicepDeployment object for accessing deployment outputs.
     /// </summary>
     /// <param name="resourceGroup">Target resource group name.</param>
     /// <param name="templateFile">Path to the Bicep template file.</param>
     /// <param name="configure">Optional configuration for deployment options.</param>
-    public void DeployToResourceGroup(string resourceGroup, string templateFile,
+    /// <returns>A BicepDeployment object. Use deployment.Output("name") to get output references.</returns>
+    public BicepDeployment DeployToResourceGroup(string resourceGroup, string templateFile,
         Action<BicepDeployOptions>? configure = null)
     {
         var options = new BicepDeployOptions();
         configure?.Invoke(options);
 
-        var args = BuildDeploymentArgs(templateFile, options)
-            .Add("--resource-group", resourceGroup);
+        var deployment = new BicepDeployment();
+        var args = BuildDeploymentArgs(templateFile, options);
 
         RegisterDeploymentStep("Bicep.DeployToResourceGroup",
-            "az", ["deployment", "group", "create", .. args.Build()],
-            options, resourceGroup);
+            "az", ["deployment", "group", "create", "--resource-group", resourceGroup, .. args.Build()],
+            deployment, resourceGroup);
+
+        return deployment;
     }
 
     /// <summary>
     /// Registers a step to deploy a Bicep template at subscription scope.
     /// Useful for creating resource groups and subscription-level resources.
+    /// Returns a BicepDeployment object for accessing deployment outputs.
     /// </summary>
     /// <param name="location">Azure region for the deployment metadata.</param>
     /// <param name="templateFile">Path to the Bicep template file.</param>
     /// <param name="configure">Optional configuration for deployment options.</param>
-    public void DeployToSubscription(string location, string templateFile,
+    /// <returns>A BicepDeployment object. Use deployment.Output("name") to get output references.</returns>
+    public BicepDeployment DeployToSubscription(string location, string templateFile,
         Action<BicepDeployOptions>? configure = null)
     {
         var options = new BicepDeployOptions();
         configure?.Invoke(options);
 
-        var args = BuildDeploymentArgs(templateFile, options)
-            .Add("--location", location);
+        var deployment = new BicepDeployment();
+        var args = BuildDeploymentArgs(templateFile, options);
 
         RegisterDeploymentStep("Bicep.DeployToSubscription",
-            "az", ["deployment", "sub", "create", .. args.Build()],
-            options, location);
+            "az", ["deployment", "sub", "create", "--location", location, .. args.Build()],
+            deployment, location);
+
+        return deployment;
     }
 
     /// <summary>
@@ -123,6 +123,7 @@ public class BicepOperations : OperationsBase
 
     /// <summary>
     /// Builds the common arguments for deployment commands.
+    /// Always requests JSON output for capturing outputs.
     /// </summary>
     private static ArgumentBuilder BuildDeploymentArgs(string templateFile, BicepDeployOptions options)
     {
@@ -154,47 +155,29 @@ public class BicepOperations : OperationsBase
             args.Add("--mode", "Complete");
         }
 
-        // Request JSON output if we need to capture outputs
-        if (options.ShouldCaptureOutputs)
-        {
-            args.Add("--query", "properties.outputs");
-            args.Add("--output", "json");
-        }
-        else
-        {
-            // Suppress output if we're not capturing
-            args.Add("--output", "none");
-        }
+        // Always request JSON output for capturing outputs
+        args.Add("--query", "properties.outputs");
+        args.Add("--output", "json");
 
         return args;
     }
 
     /// <summary>
-    /// Registers a deployment step that optionally captures outputs.
+    /// Registers a deployment step that captures outputs to the BicepDeployment object.
     /// </summary>
     private void RegisterDeploymentStep(string stepName, string command, string[] args,
-        BicepDeployOptions options, string? context)
+        BicepDeployment deployment, string? context)
     {
-        if (options.ShouldCaptureOutputs)
+        Registry.Register(stepName, async () =>
         {
-            // Register a step that captures output to VarsContext
-            Registry.Register(stepName, async () =>
+            var result = await ExecutorFactory().ExecuteAsync(command, args);
+
+            if (result.Success && !string.IsNullOrEmpty(result.Output))
             {
-                var result = await ExecutorFactory().ExecuteAsync(command, args);
+                AzureOutputCapture.CaptureDeploymentOutputs(result.Output, deployment, Logger);
+            }
 
-                if (result.Success && !string.IsNullOrEmpty(result.Output))
-                {
-                    AzureOutputCapture.CaptureDeploymentOutputs(
-                        result.Output, _vars, options.OutputPrefix, Logger);
-                }
-
-                return result.Success;
-            }, context);
-        }
-        else
-        {
-            // Use standard command registration
-            RegisterCommand(stepName, command, args, context);
-        }
+            return result.Success;
+        }, context);
     }
 }

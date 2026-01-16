@@ -9,11 +9,11 @@
 // This example shows:
 // - Building a .NET web application
 // - Deploying Azure infrastructure (App Service + SQL Database)
-// - Running EF Core migrations against Azure SQL
+// - Running EF Core migrations against Azure SQL using deployment outputs
 // - Publishing the application for deployment
 
 // Define projects
-var WebApp = DotnetProject("./src/WebApp/WebApp.csproj");
+var WebApp = Dotnet.Project("./src/WebApp/WebApp.csproj");
 var DbContext = Ef.DbContextFrom(WebApp, "AppDbContext");
 
 // Ensure EF tools are available
@@ -27,35 +27,34 @@ Dotnet.Build(WebApp, o => o.Configuration = Configuration.Release);
 Azure.EnsureLoggedIn();
 
 // Configuration from environment or defaults
-var subscriptionId = Context.Vars.Env("AZURE_SUBSCRIPTION_ID");
+var subscriptionId = Env("AZURE_SUBSCRIPTION_ID", required: false);
 if (subscriptionId != null)
 {
     Azure.SetSubscription(subscriptionId);
 }
 
-var resourceGroup = Context.Vars.Env("AZURE_RESOURCE_GROUP") ?? "ando-fullstack-rg";
-var location = Context.Vars.Env("AZURE_LOCATION") ?? "eastus";
-var sqlAdminPassword = Context.Vars.EnvRequired("SQL_ADMIN_PASSWORD");
+var resourceGroup = Env("AZURE_RESOURCE_GROUP", required: false) ?? "ando-fullstack-rg";
+var location = Env("AZURE_LOCATION", required: false) ?? "eastus";
+var sqlAdminPassword = Env("SQL_ADMIN_PASSWORD");
 
 // Step 3: Create resource group
 Azure.CreateResourceGroup(resourceGroup, location);
 
 // Step 4: Deploy infrastructure (App Service + SQL Database)
-// Outputs are captured with "azure_" prefix to Context.Vars
-Bicep.DeployToResourceGroup(resourceGroup, "./infra/main.bicep", o => o
+// Returns a BicepDeployment with typed access to outputs
+var deployment = Bicep.DeployToResourceGroup(resourceGroup, "./infra/main.bicep", o => o
     .WithName("ando-fullstack-deployment")
     .WithParameter("location", location)
-    .WithParameter("sqlAdminPassword", sqlAdminPassword)
-    .CaptureOutputs("azure_"));
+    .WithParameter("sqlAdminPassword", sqlAdminPassword));
 
-// After deployment, we have:
-// - Context.Vars["azure_sqlConnectionString"] - SQL Server connection string
-// - Context.Vars["azure_webAppName"] - App Service name
-// - Context.Vars["azure_webAppUrl"] - App Service URL
+// After deployment, outputs are available via:
+// - deployment.Output("sqlConnectionString") - SQL Server connection string
+// - deployment.Output("webAppName") - App Service name
+// - deployment.Output("webAppUrl") - App Service URL
 
 // Step 5: Run EF migrations against Azure SQL
-// The connection string from Bicep deployment is used automatically
-Ef.DatabaseUpdate(DbContext, Context.Vars["azure_sqlConnectionString"]);
+// Pass the OutputRef directly - it resolves at execution time
+Ef.DatabaseUpdate(DbContext, deployment.Output("sqlConnectionString"));
 
 // Step 6: Publish the application
 var output = Root / "dist";

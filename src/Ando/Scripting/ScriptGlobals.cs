@@ -1,14 +1,14 @@
 // =============================================================================
 // ScriptGlobals.cs
 //
-// Summary: Global variables exposed to build.ando scripts.
+// Summary: Global variables exposed to build.csando scripts.
 //
 // ScriptGlobals defines what's available as global variables in build scripts.
 // This is the "API surface" that script authors interact with. All properties
 // here are accessible without qualification in scripts.
 //
-// Example build.ando script:
-//   var project = DotnetProject("./src/MyApp/MyApp.csproj");
+// Example build.csando script:
+//   var project = Dotnet.Project("./src/MyApp/MyApp.csproj");
 //   var frontend = Directory("./frontend");
 //   Dotnet.Restore(project);
 //   Dotnet.Build(project);
@@ -17,38 +17,33 @@
 //
 // Design Decisions:
 // - Properties are exposed directly as globals (no "Ando." prefix needed)
-// - Root is a shorthand for Context.Paths.Root to reduce verbosity
-// - DotnetProject and Directory are functions that create typed references
+// - Root and Temp are top-level path globals for common directories
+// - Directory is a function that creates typed references
 // - Operations (Dotnet, Ef, Npm) register steps when called
+// - Users use regular C# variables instead of a Vars dictionary
 // =============================================================================
 
 using Ando.Context;
 using Ando.Operations;
 using Ando.References;
-using Ando.Workflow;
 
 namespace Ando.Scripting;
 
 /// <summary>
-/// Global variables exposed to build.ando scripts.
+/// Global variables exposed to build.csando scripts.
 /// All properties are accessible as globals in script code.
 /// </summary>
 public class ScriptGlobals
 {
     /// <summary>
-    /// Unified context object with Paths and Vars properties.
-    /// </summary>
-    public BuildContextObject Context { get; }
-
-    /// <summary>
-    /// Build options (configuration, etc.).
-    /// </summary>
-    public BuildOptions Options { get; }
-
-    /// <summary>
-    /// Shorthand for Context.Paths.Root. Allows: Root / "dist"
+    /// Project root directory (where build.csando is located). Allows: Root / "dist"
     /// </summary>
     public BuildPath Root { get; }
+
+    /// <summary>
+    /// Temporary files directory (root/.ando/tmp). Allows: Temp / "cache"
+    /// </summary>
+    public BuildPath Temp { get; }
 
     /// <summary>
     /// Dotnet CLI operations (build, test, publish, etc.).
@@ -73,7 +68,8 @@ public class ScriptGlobals
 
     /// <summary>
     /// Azure Bicep deployment operations.
-    /// Usage: Bicep.DeployToResourceGroup("rg", "./main.bicep", o => o.CaptureOutputs())
+    /// Usage: var deployment = Bicep.DeployToResourceGroup("rg", "./main.bicep");
+    /// Access outputs: deployment.Output("sqlConnectionString")
     /// </summary>
     public BicepOperations Bicep { get; }
 
@@ -94,12 +90,6 @@ public class ScriptGlobals
     /// Usage: AppService.DeployZip("my-app", "./publish.zip", o => o.WithDeploymentSlot("staging"))
     /// </summary>
     public AppServiceOperations AppService { get; }
-
-    /// <summary>
-    /// Artifact operations for specifying which files to copy back to host.
-    /// Usage: Artifacts.CopyToHost("/workspace/dist", "./dist")
-    /// </summary>
-    public ArtifactOperations Artifacts { get; }
 
     /// <summary>
     /// Node.js installation operations (installs Node.js globally).
@@ -134,12 +124,6 @@ public class ScriptGlobals
     public AndoOperations Ando { get; }
 
     /// <summary>
-    /// Creates a .NET project reference from a path.
-    /// Usage: var app = DotnetProject("./src/MyApp/MyApp.csproj");
-    /// </summary>
-    public Func<string, ProjectRef> DotnetProject { get; }
-
-    /// <summary>
     /// Creates a directory reference from a path.
     /// Usage: var frontend = Directory("./frontend");
     /// Usage: var current = Directory(); // defaults to "."
@@ -147,15 +131,30 @@ public class ScriptGlobals
     public DirectoryRef Directory(string path = ".") => new DirectoryRef(path);
 
     /// <summary>
-    /// Current build configuration (Debug or Release).
+    /// Gets an environment variable value.
+    /// By default, throws if the variable is not set. Pass required: false to return null instead.
+    /// Usage: var apiKey = Env("API_KEY");
+    /// Usage: var optional = Env("OPTIONAL_VAR", required: false);
     /// </summary>
-    public Configuration Configuration => Options.Configuration;
+    /// <param name="name">Environment variable name.</param>
+    /// <param name="required">If true (default), throws when variable is not set. If false, returns null.</param>
+    /// <returns>The environment variable value, or null if not set and required is false.</returns>
+    public string? Env(string name, bool required = true)
+    {
+        var value = Environment.GetEnvironmentVariable(name);
+
+        if (required && string.IsNullOrEmpty(value))
+        {
+            throw new InvalidOperationException($"Required environment variable '{name}' is not set.");
+        }
+
+        return value;
+    }
 
     public ScriptGlobals(BuildContext buildContext)
     {
-        Context = buildContext.Context;
-        Options = buildContext.Options;
         Root = buildContext.Context.Paths.Root;
+        Temp = buildContext.Context.Paths.Temp;
         Dotnet = buildContext.Dotnet;
         Ef = buildContext.Ef;
         Npm = buildContext.Npm;
@@ -164,12 +163,10 @@ public class ScriptGlobals
         Cloudflare = buildContext.Cloudflare;
         Functions = buildContext.Functions;
         AppService = buildContext.AppService;
-        Artifacts = buildContext.Artifacts;
         Node = buildContext.Node;
         DotnetSdk = buildContext.DotnetSdk;
         Log = buildContext.Log;
         Nuget = buildContext.Nuget;
         Ando = buildContext.Ando;
-        DotnetProject = path => ProjectRef.From(path);
     }
 }

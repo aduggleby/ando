@@ -33,7 +33,7 @@ Options:
 ## Test Structure
 
 Each example contains:
-- `build.ando` - The ANDO build script
+- `build.csando` - The ANDO build script
 - `test.sh` - Verification script that:
   1. Runs `ando`
   2. Verifies expected outputs exist
@@ -42,8 +42,8 @@ Each example contains:
 ## Adding New Examples
 
 1. Create a numbered directory: `0003-MyExample/`
-2. Add a `build.ando` file
+2. Add a `build.csando` file
 3. Add a `test.sh` script that verifies the build
 4. Add a `README.md` documenting the example
 
-The test runner automatically discovers all examples with `build.ando` and `test.sh`.
+The test runner automatically discovers all examples with `build.csando` and `test.sh`.

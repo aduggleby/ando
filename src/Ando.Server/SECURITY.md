@@ -94,7 +94,7 @@ The current implementation assumes:
 - **Untrusted External Dependencies**: npm packages, Docker images, etc.
 
 For high-security environments, consider:
-- Requiring code review for build.ando files
+- Requiring code review for build.csando files
 - Scanning dependencies before builds
 - Running builds in ephemeral VMs instead of containers
 

@@ -34,6 +34,71 @@ public abstract class CommandExecutorBase : ICommandExecutor
         LogCommand(command, args, options);
 
         var startInfo = PrepareProcessStartInfo(command, args, options);
+
+        // Interactive mode: let the process inherit console streams for user input.
+        // Non-interactive mode: redirect streams for logging and output capture.
+        if (options.Interactive)
+        {
+            return await ExecuteInteractiveAsync(startInfo, options);
+        }
+        else
+        {
+            return await ExecuteWithRedirectionAsync(startInfo, options);
+        }
+    }
+
+    /// <summary>
+    /// Executes a command in interactive mode where the process inherits console streams.
+    /// Used for child builds that may prompt for user input.
+    /// </summary>
+    private async Task<CommandResult> ExecuteInteractiveAsync(ProcessStartInfo startInfo, CommandOptions options)
+    {
+        startInfo.UseShellExecute = false;
+        startInfo.RedirectStandardOutput = false;
+        startInfo.RedirectStandardError = false;
+        startInfo.RedirectStandardInput = false;
+
+        using var process = new Process { StartInfo = startInfo };
+
+        try
+        {
+            process.Start();
+
+            // Handle timeout. NoTimeout (-1) means wait indefinitely.
+            if (options.TimeoutMs != CommandOptions.NoTimeout)
+            {
+                await Task.WhenAny(
+                    process.WaitForExitAsync(),
+                    Task.Delay(options.TimeoutMs)
+                );
+
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    return CommandResult.Failed(-1, $"Command timed out after {options.TimeoutMs}ms");
+                }
+            }
+            else
+            {
+                await process.WaitForExitAsync();
+            }
+
+            return process.ExitCode == 0
+                ? CommandResult.Ok()
+                : CommandResult.Failed(process.ExitCode);
+        }
+        catch (Exception ex)
+        {
+            return CommandResult.Failed(-1, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Executes a command with stream redirection for logging and output capture.
+    /// Standard execution mode for most build commands.
+    /// </summary>
+    private async Task<CommandResult> ExecuteWithRedirectionAsync(ProcessStartInfo startInfo, CommandOptions options)
+    {
         startInfo.UseShellExecute = false;
         startInfo.RedirectStandardOutput = true;
         startInfo.RedirectStandardError = true;

@@ -2,13 +2,18 @@
 
 **Important:** Always address the user as "Mr. Ando".
 
+## Git Rules
+
+- **Never automatically git push** - Only push when explicitly asked
+- **Only git commit when explicitly asked** - Do not commit changes automatically
+
 ## Project Overview
 
-ANDO is a typed C# build system using Roslyn scripting. Build scripts (`build.ando` files) are real C# code executed via Roslyn in Docker containers.
+ANDO is a typed C# build system using Roslyn scripting. Build scripts (`build.csando` files) are real C# code executed via Roslyn in Docker containers.
 
 ## Key Architecture
 
-- **Roslyn Scripting** (`Microsoft.CodeAnalysis.CSharp.Scripting`) executes `build.ando` files
+- **Roslyn Scripting** (`Microsoft.CodeAnalysis.CSharp.Scripting`) executes `build.csando` files
 - **Step Registration Pattern**: Operations (Dotnet, Ef) register steps in a registry, WorkflowRunner executes them
 - **Docker Isolation**: All builds run in containers via `DockerManager` and `ContainerExecutor`
 
@@ -30,7 +35,7 @@ tests/Ando.Tests/   # Test project
   Integration/      # Integration tests (Category=Integration)
   E2E/              # End-to-end tests (Category=E2E)
   TestFixtures/     # Shared MockExecutor, TestLogger
-examples/           # Example projects with build.ando files
+examples/           # Example projects with build.csando files
 website/            # Documentation website (see website/CLAUDE.md)
 ```
 
@@ -128,9 +133,9 @@ dotnet publish src/Ando/Ando.csproj -c Release -r linux-x64 --self-contained -o 
 2. **Then update all related documentation and examples**:
 
 1. **Website documentation** (`website/src/data/operations.js`) - Update operation descriptions and examples
-2. **Website landing page** (`website/src/pages/index.astro`) - Update the example build.ando section
-3. **Example build.ando files** (`examples/*/build.ando`) - Update all example scripts
-4. **Main build.ando** (`build.ando`) - Update if affected
+2. **Website landing page** (`website/src/pages/index.astro`) - Update the example build.csando section
+3. **Example build.csando files** (`examples/*/build.csando`) - Update all example scripts
+4. **Main build.csando** (`build.csando`) - Update if affected
 5. **Test files** - Update test assertions and embedded scripts
 6. **CLAUDE.md files** - Update if instructions change
 

@@ -36,6 +36,13 @@ public class DotnetOperations(StepRegistry registry, IBuildLogger logger, Func<I
     : OperationsBase(registry, logger, executorFactory)
 {
     /// <summary>
+    /// Creates a .NET project reference from a path.
+    /// Usage: var app = Dotnet.Project("./src/MyApp/MyApp.csproj");
+    /// </summary>
+    /// <param name="path">Path to the .csproj file.</param>
+    public ProjectRef Project(string path) => ProjectRef.From(path);
+
+    /// <summary>
     /// Registers a 'dotnet restore' step to restore NuGet packages.
     /// </summary>
     public void Restore(ProjectRef project, Action<DotnetRestoreOptions>? configure = null)

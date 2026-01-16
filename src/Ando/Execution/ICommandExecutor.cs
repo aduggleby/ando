@@ -70,6 +70,14 @@ public class CommandOptions
     /// Commands exceeding this timeout are forcefully terminated.
     /// </summary>
     public int TimeoutMs { get; set; } = DefaultTimeoutMs;
+
+    /// <summary>
+    /// Whether the command requires interactive input.
+    /// When true, the process inherits the parent's console streams (stdin/stdout/stderr)
+    /// instead of redirecting them. This allows child processes to prompt for user input.
+    /// Output is not captured in this mode.
+    /// </summary>
+    public bool Interactive { get; set; } = false;
 }
 
 /// <summary>

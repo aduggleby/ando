@@ -1,5 +1,5 @@
 // =============================================================================
-// build.ando - ANDO CLI Build and Release Script
+// build.csando - ANDO CLI Build and Release Script
 //
 // Prerequisites:
 // - NUGET_API_KEY env var set (or enter when prompted for publishing)
@@ -21,8 +21,8 @@
 // - dist/packages/*.nupkg     - NuGet package for dotnet tool install
 // =============================================================================
 
-var project = DotnetProject("./src/Ando/Ando.csproj");
-var testProject = DotnetProject("./tests/Ando.Tests/Ando.Tests.csproj");
+var project = Dotnet.Project("./src/Ando/Ando.csproj");
+var testProject = Dotnet.Project("./tests/Ando.Tests/Ando.Tests.csproj");
 
 // Base output directory
 var distPath = Root / "dist";
@@ -54,9 +54,6 @@ foreach (var runtime in runtimes)
         .AsSingleFile());
 }
 
-// Copy the dist folder from container to host after build
-Artifacts.CopyToHost("dist", "./dist");
-
 // Create and push NuGet package for the dotnet tool
 Nuget.Pack(project);
 Nuget.EnsureAuthenticated();
@@ -64,3 +61,7 @@ Nuget.Push(project);
 
 // Build and deploy the documentation website
 Ando.Build(Directory("./website"));
+
+// Copy the dist folder from container to host both individuall and as a compressed archive
+Ando.CopyArtifactsToHost("dist", "./dist");
+Ando.CopyZippedArtifactsToHost("dist", "./dist/ando-binaries.zip");

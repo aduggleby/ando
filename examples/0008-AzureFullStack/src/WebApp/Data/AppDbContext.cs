@@ -7,7 +7,7 @@ namespace WebApp.Data;
 
 /// <summary>
 /// Application database context.
-/// Referenced in build.ando via: Ef.DbContextFrom(WebApp, "AppDbContext")
+/// Referenced in build.csando via: Ef.DbContextFrom(WebApp, "AppDbContext")
 /// </summary>
 public class AppDbContext : DbContext
 {

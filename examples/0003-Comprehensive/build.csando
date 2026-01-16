@@ -2,29 +2,25 @@
 // Demonstrates ALL Dotnet operations with advanced options
 //
 // This example shows:
-// - DotnetProject() for multiple projects
+// - Dotnet.Project() for multiple projects
 // - Root / "path" syntax for BuildPath
-// - Context.Paths.Artifacts usage
-// - Context.Vars["key"] usage
 // - Dotnet.Restore() with options
 // - Dotnet.Build() with configuration
 // - Dotnet.Test()
 // - Dotnet.Publish() with all options (runtime, self-contained, single-file)
 
+Ando.UseImage("mcr.microsoft.com/dotnet/sdk:9.0");
+
 // Define projects
-var App = DotnetProject("./src/WebApp/WebApp.csproj");
-var Tests = DotnetProject("./tests/WebApp.Tests/WebApp.Tests.csproj");
+var App = Dotnet.Project("./src/WebApp/WebApp.csproj");
+var Tests = Dotnet.Project("./tests/WebApp.Tests/WebApp.Tests.csproj");
 
-// Output paths using BuildPath syntax
+// Output path using BuildPath syntax
 var output = Root / "dist";
-var artifacts = Context.Paths.Artifacts;
 
-// Use Release configuration globally
-Options.UseConfiguration(Configuration.Release);
-
-// Set a custom variable for demonstration
-Context.Vars["BUILD_NUMBER"] = "123";
-Context.Vars["ENVIRONMENT"] = "production";
+// Use regular C# variables for custom values
+var buildNumber = "123";
+var environment = "production";
 
 // Step 1: Restore all dependencies
 Dotnet.Restore(App);

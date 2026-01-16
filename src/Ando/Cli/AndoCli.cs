@@ -53,7 +53,7 @@ public class AndoCli : IDisposable
 
         // Log file is created in the current directory alongside the build script.
         // This keeps logs associated with the project being built.
-        var logPath = Path.Combine(Environment.CurrentDirectory, "build.ando.log");
+        var logPath = Path.Combine(Environment.CurrentDirectory, "build.csando.log");
 
         // Color detection happens early so error messages can be properly formatted.
         // Respects both --no-color flag and NO_COLOR environment variable.
@@ -70,6 +70,7 @@ public class AndoCli : IDisposable
 
     // Displays the ANDO ASCII art logo and version.
     // Uses ANSI escape codes for color when supported.
+    // For nested builds, shows a compact header instead.
     private void PrintHeader()
     {
         var useColor = !IsNoColorRequested(_args);
@@ -77,13 +78,28 @@ public class AndoCli : IDisposable
         var gray = useColor ? "\u001b[2;37m" : "";
         var reset = useColor ? "\u001b[0m" : "";
 
-        Console.WriteLine();
-        Console.WriteLine($"{cyan}   _   _  _ ___   ___  {reset}");
-        Console.WriteLine($"{cyan}  /_\\ | \\| |   \\ / _ \\ {reset}");
-        Console.WriteLine($"{cyan} / _ \\| .` | |) | (_) |{reset}");
-        Console.WriteLine($"{cyan}/_/ \\_\\_|\\_|___/ \\___/ {reset}{gray}v{Version}{reset}");
-        Console.WriteLine();
-        Console.WriteLine($"Minimal & Fast Build System");
+        // Check if this is a nested build.
+        var indentStr = Environment.GetEnvironmentVariable(ConsoleLogger.IndentLevelEnvVar);
+        var indentLevel = int.TryParse(indentStr, out var level) ? level : 0;
+
+        if (indentLevel > 0)
+        {
+            // Nested build: print compact header with indent.
+            var indent = string.Concat(Enumerable.Repeat($"{gray}│{reset}  ", indentLevel));
+            Console.WriteLine();
+            Console.WriteLine($"{indent}{cyan}▶  ANDO{reset} {gray}(nested build){reset}");
+        }
+        else
+        {
+            // Top-level build: print full ASCII art header.
+            Console.WriteLine();
+            Console.WriteLine($"{cyan}   _   _  _ ___   ___  {reset}");
+            Console.WriteLine($"{cyan}  /_\\ | \\| |   \\ / _ \\ {reset}");
+            Console.WriteLine($"{cyan} / _ \\| .` | |) | (_) |{reset}");
+            Console.WriteLine($"{cyan}/_/ \\_\\_|\\_|___/ \\___/ {reset}{gray}v{Version}{reset}");
+            Console.WriteLine();
+            Console.WriteLine($"Minimal & Fast Build System");
+        }
         Console.WriteLine();
     }
 
@@ -136,19 +152,29 @@ public class AndoCli : IDisposable
         {
             // Step 1: Find the build script in the current directory.
             // Unlike tools that search parent directories, ANDO requires
-            // build.ando to be in the current working directory for clarity.
+            // build.csando to be in the current working directory for clarity.
             var scriptPath = FindBuildScript();
 
             if (scriptPath == null)
             {
+                // Check if user specified a custom file that wasn't found.
+                var customFile = GetBuildFileArgument();
+                if (customFile != null)
+                {
+                    // Error already logged in FindBuildScript.
+                    return 2;
+                }
+
                 // Provide a helpful getting-started example when no script exists.
-                _logger.Error("No build.ando found in current directory.");
+                _logger.Error("No build.csando found in current directory.");
                 _logger.Error("");
-                _logger.Error("Create a build.ando file to get started:");
+                _logger.Error("Create a build.csando file to get started:");
                 _logger.Error("");
-                _logger.Error("  var project = DotnetProject(\"./src/MyApp/MyApp.csproj\");");
+                _logger.Error("  var project = Dotnet.Project(\"./src/MyApp/MyApp.csproj\");");
                 _logger.Error("  Dotnet.Restore(project);");
                 _logger.Error("  Dotnet.Build(project);");
+                _logger.Error("");
+                _logger.Error("Or specify a build file: ando -f mybuild.csando");
                 _logger.Error("");
                 return 2;
             }
@@ -280,7 +306,12 @@ public class AndoCli : IDisposable
 
         if (scriptPath == null)
         {
-            _logger.Error("No build.ando found in current directory.");
+            var customFile = GetBuildFileArgument();
+            if (customFile == null)
+            {
+                _logger.Error("No build.csando found in current directory.");
+                    _logger.Error("Or specify a build file: ando verify -f mybuild.csando");
+            }
             return 2;
         }
 
@@ -325,7 +356,7 @@ public class AndoCli : IDisposable
             }
             else
             {
-                _logger.Warning("No build.ando found - cannot determine container name");
+                _logger.Warning("No build.csando found - cannot determine container name");
             }
         }
 
@@ -429,7 +460,13 @@ public class AndoCli : IDisposable
         Console.WriteLine("  clean             Remove artifacts, temp files, and containers");
         Console.WriteLine("  help              Show this help");
         Console.WriteLine();
+        Console.WriteLine("Examples:");
+        Console.WriteLine("  ando                          Run build.csando in current directory");
+        Console.WriteLine("  ando -f deploy.csando         Run a specific build file");
+        Console.WriteLine("  ando verify -f deploy.csando  Verify a specific build file");
+        Console.WriteLine();
         Console.WriteLine("Run Options:");
+        Console.WriteLine("  -f, --file <file> Use specific build file instead of build.csando");
         Console.WriteLine("  --verbosity <quiet|minimal|normal|detailed>");
         Console.WriteLine("  --no-color        Disable colored output");
         Console.WriteLine("  --cold            Always create fresh container");
@@ -448,13 +485,50 @@ public class AndoCli : IDisposable
         return 0;
     }
 
-    // Locates the build.ando file in the current directory.
-    // Returns null if not found - does not search parent directories
-    // to keep build behavior predictable and explicit.
+    // Locates the build script file.
+    // If --file is provided, uses that file.
+    // Otherwise looks for build.csando in the current directory.
+    // Returns null if not found.
     private string? FindBuildScript()
     {
-        var buildScript = Path.Combine(Environment.CurrentDirectory, "build.ando");
+        // Check if a custom build file was specified via --file or -f.
+        var customFile = GetBuildFileArgument();
+        if (customFile != null)
+        {
+            // Resolve relative to current directory.
+            var fullPath = Path.IsPathRooted(customFile)
+                ? customFile
+                : Path.Combine(Environment.CurrentDirectory, customFile);
+
+            if (File.Exists(fullPath))
+            {
+                return fullPath;
+            }
+
+            _logger.Error($"Build file not found: {customFile}");
+            return null;
+        }
+
+        // Default: look for build.csando in current directory.
+        var buildScript = Path.Combine(Environment.CurrentDirectory, "build.csando");
         return File.Exists(buildScript) ? buildScript : null;
+    }
+
+    // Gets the build file argument from --file or -f flag.
+    private string? GetBuildFileArgument()
+    {
+        var fileIndex = Array.IndexOf(_args, "--file");
+        if (fileIndex < 0)
+        {
+            fileIndex = Array.IndexOf(_args, "-f");
+        }
+
+        if (fileIndex >= 0 && fileIndex + 1 < _args.Length)
+        {
+            return _args[fileIndex + 1];
+        }
+
+        return null;
     }
 
     // Parses the --verbosity flag to determine log level.
@@ -485,6 +559,9 @@ public class AndoCli : IDisposable
                Environment.GetEnvironmentVariable("NO_COLOR") != null;
     }
 
+    // Environment variable to auto-load .env files without prompting (for sub-builds).
+    private const string AutoLoadEnvVar = "ANDO_AUTO_LOAD_ENV";
+
     // Checks for a .env file in the project directory and prompts the user
     // to load it if found. This provides a convenient way to set environment
     // variables for local development without exporting them in the shell.
@@ -504,36 +581,52 @@ public class AndoCli : IDisposable
         if (unsetVars.Count == 0)
             return;
 
-        // Show the user which variables would be loaded.
-        _logger.Info("Found .env file with the following variables:");
-        foreach (var (key, value) in unsetVars)
-        {
-            // Mask sensitive values (tokens, secrets, passwords, keys).
-            var isSensitive = key.Contains("TOKEN", StringComparison.OrdinalIgnoreCase) ||
-                              key.Contains("SECRET", StringComparison.OrdinalIgnoreCase) ||
-                              key.Contains("PASSWORD", StringComparison.OrdinalIgnoreCase) ||
-                              key.Contains("KEY", StringComparison.OrdinalIgnoreCase);
-            var displayValue = isSensitive ? "********" : value;
-            _logger.Info($"  {key}={displayValue}");
-        }
+        // Check if auto-load is enabled (set by parent build when user chose "always").
+        var autoLoad = Environment.GetEnvironmentVariable(AutoLoadEnvVar) == "1";
 
-        // Prompt the user.
-        Console.Write("Load these environment variables? [Y/n] ");
-        var response = Console.ReadLine()?.Trim().ToLowerInvariant();
-
-        // Default to yes if user just presses Enter.
-        if (string.IsNullOrEmpty(response) || response == "y" || response == "yes")
+        if (!autoLoad)
         {
+            // Show the user which variables would be loaded.
+            _logger.Info("Found .env file with the following variables:");
             foreach (var (key, value) in unsetVars)
             {
-                Environment.SetEnvironmentVariable(key, value);
+                // Mask sensitive values (tokens, secrets, passwords, keys).
+                var isSensitive = key.Contains("TOKEN", StringComparison.OrdinalIgnoreCase) ||
+                                  key.Contains("SECRET", StringComparison.OrdinalIgnoreCase) ||
+                                  key.Contains("PASSWORD", StringComparison.OrdinalIgnoreCase) ||
+                                  key.Contains("KEY", StringComparison.OrdinalIgnoreCase);
+                var displayValue = isSensitive ? "********" : value;
+                _logger.Info($"  {key}={displayValue}");
             }
-            _logger.Info($"Loaded {unsetVars.Count} environment variable(s) from .env");
+
+            // Prompt the user.
+            // Y = yes for this build only
+            // a = yes for this build and all sub-builds (auto-load)
+            // n = no
+            Console.Write("Load these environment variables? [(Y)es/(n)o/(a)lways] ");
+            var response = Console.ReadLine()?.Trim().ToLowerInvariant();
+
+            if (response == "n" || response == "no")
+            {
+                _logger.Info("Skipped loading .env file");
+                Console.WriteLine();
+                return;
+            }
+
+            // Enable auto-load for sub-builds if user chose "always".
+            if (response == "a" || response == "always")
+            {
+                Environment.SetEnvironmentVariable(AutoLoadEnvVar, "1");
+                _logger.Info("Enabled auto-load for this and all sub-builds");
+            }
         }
-        else
+
+        // Load the environment variables.
+        foreach (var (key, value) in unsetVars)
         {
-            _logger.Info("Skipped loading .env file");
+            Environment.SetEnvironmentVariable(key, value);
         }
+        _logger.Info($"Loaded {unsetVars.Count} environment variable(s) from .env");
 
         Console.WriteLine();
         await Task.CompletedTask;

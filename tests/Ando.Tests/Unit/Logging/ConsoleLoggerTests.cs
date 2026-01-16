@@ -122,7 +122,7 @@ public class ConsoleLoggerTests
         var output = CaptureOutput(() =>
         {
             var logger = new ConsoleLogger(useColor: false);
-            logger.WorkflowCompleted("ci", TimeSpan.FromMinutes(1), 5, 0);
+            logger.WorkflowCompleted("ci", "/path/to/build.csando", TimeSpan.FromMinutes(1), 5, 0);
         });
 
         output.ShouldContain("SUCCESS");
@@ -135,7 +135,7 @@ public class ConsoleLoggerTests
         var output = CaptureOutput(() =>
         {
             var logger = new ConsoleLogger(useColor: false);
-            logger.WorkflowCompleted("ci", TimeSpan.FromMinutes(1), 5, 2);
+            logger.WorkflowCompleted("ci", "/path/to/build.csando", TimeSpan.FromMinutes(1), 5, 2);
         });
 
         output.ShouldContain("FAILED");
@@ -201,7 +201,7 @@ public class ConsoleLoggerTests
         var output = CaptureOutput(() =>
         {
             var logger = new ConsoleLogger(useColor: false);
-            logger.WorkflowStarted("ci", "build.ando", totalSteps: 5);
+            logger.WorkflowStarted("ci", "build.csando", totalSteps: 5);
         });
 
         // Should write separator line
@@ -215,7 +215,7 @@ public class ConsoleLoggerTests
         {
             var logger = new ConsoleLogger(useColor: false);
             logger.Verbosity = LogLevel.Quiet;
-            logger.WorkflowStarted("ci", "build.ando", totalSteps: 5);
+            logger.WorkflowStarted("ci", "build.csando", totalSteps: 5);
         });
 
         output.Trim().ShouldBeEmpty();

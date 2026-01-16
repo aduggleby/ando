@@ -95,7 +95,7 @@ resource sqlDatabase 'Microsoft.Sql/servers/databases@2022-05-01-preview' = {
   }
 }
 
-// Outputs captured to Context.Vars with CaptureOutputs()
+// Outputs are available via BicepDeployment.Output("name")
 output webAppName string = webApp.name
 output webAppUrl string = 'https://${webApp.properties.defaultHostName}'
 output sqlServerName string = sqlServer.name

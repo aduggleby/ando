@@ -5,13 +5,12 @@
 //
 // BicepDeployOptions provides a fluent builder pattern for configuring
 // Bicep deployments. Options include deployment name, parameters (file or inline),
-// deployment mode, and output capture settings.
+// and deployment mode.
 //
 // Design Decisions:
 // - Fluent builder pattern (methods return `this`) for readable configuration
 // - Inline parameters stored in dictionary for easy argument building
-// - CaptureOutputs enables automatic population of Context.Vars from deployment outputs
-// - Prefix support for output capture prevents naming collisions
+// - Deployment outputs are always captured to the returned BicepDeployment object
 // =============================================================================
 
 namespace Ando.Operations;
@@ -49,12 +48,6 @@ public class BicepDeployOptions
 
     /// <summary>Deployment mode (Incremental or Complete).</summary>
     internal DeploymentMode Mode { get; private set; } = DeploymentMode.Incremental;
-
-    /// <summary>Whether to capture deployment outputs to Context.Vars.</summary>
-    internal bool ShouldCaptureOutputs { get; private set; }
-
-    /// <summary>Prefix for captured output variable names.</summary>
-    internal string? OutputPrefix { get; private set; }
 
     /// <summary>Azure App Service deployment slot name (e.g., "staging", "preview").</summary>
     internal string? DeploymentSlot { get; private set; }
@@ -100,20 +93,6 @@ public class BicepDeployOptions
     public BicepDeployOptions WithMode(DeploymentMode mode)
     {
         Mode = mode;
-        return this;
-    }
-
-    /// <summary>
-    /// Enables capturing deployment outputs to Context.Vars.
-    /// Outputs are stored with their original names, optionally prefixed.
-    /// </summary>
-    /// <param name="prefix">Optional prefix for output variable names.
-    /// For example, prefix "azure_" would store output "sqlConnectionString"
-    /// as Context.Vars["azure_sqlConnectionString"].</param>
-    public BicepDeployOptions CaptureOutputs(string? prefix = null)
-    {
-        ShouldCaptureOutputs = true;
-        OutputPrefix = prefix;
         return this;
     }
 

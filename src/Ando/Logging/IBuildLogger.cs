@@ -77,6 +77,14 @@ public interface IStepLogger
 
     /// <summary>Logs that a step was skipped (e.g., condition not met).</summary>
     void StepSkipped(string stepName, string? reason = null);
+
+    /// <summary>
+    /// Logs a log step as a single line with the message inline.
+    /// Format: "▶ [1/5] Info: message"
+    /// </summary>
+    /// <param name="level">Log level (Info, Warning, Error, Debug).</param>
+    /// <param name="message">The message to display.</param>
+    void LogStep(string level, string message);
 }
 
 /// <summary>
@@ -89,7 +97,7 @@ public interface IWorkflowLogger
     void WorkflowStarted(string workflowName, string? scriptPath = null, int totalSteps = 0);
 
     /// <summary>Logs that a workflow has completed.</summary>
-    void WorkflowCompleted(string workflowName, TimeSpan duration, int stepsRun, int stepsFailed);
+    void WorkflowCompleted(string workflowName, string? scriptPath, TimeSpan duration, int stepsRun, int stepsFailed);
 }
 
 /// <summary>

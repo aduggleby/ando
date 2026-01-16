@@ -20,7 +20,7 @@ This won't cover all your needs probably, you're free to use an AI or your own s
 
 When you run ando, the CLI:
 
-  1. Loads your build.ando file as C# source
+  1. Loads your build.csando file as C# source
   2. Uses Microsoft.CodeAnalysis.CSharp.Scripting to compile it
   3. If compilation fails (type errors, missing methods, etc.), you get errors before anything executes
   4. Only after successful compilation does it run the workflow

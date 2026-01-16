@@ -124,7 +124,7 @@ public class BuildContext
         // Create operations container with an executor factory lambda.
         // The factory ensures operations always get the current executor,
         // even if it's changed after script loading.
-        Operations = new BuildOperations(StepRegistry, Logger, () => Executor, Context.Vars, TranslateContainerToHostPath);
+        Operations = new BuildOperations(StepRegistry, Logger, () => Executor, TranslateContainerToHostPath, Options);
     }
 
     /// <summary>
@@ -193,6 +193,8 @@ public class BuildContext
         }
 
         // Use the host root path for copying artifacts back to the host filesystem.
+        // Copy both regular artifacts and zipped artifacts.
         await Artifacts.CopyToHostAsync(_containerId, _hostRootPath, Logger);
+        await Artifacts.CopyZippedToHostAsync(_containerId, _hostRootPath, Logger);
     }
 }

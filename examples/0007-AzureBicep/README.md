@@ -22,7 +22,7 @@ This example demonstrates how to use ANDO's Azure and Bicep operations to deploy
 2. Optionally sets the target subscription
 3. Creates a resource group (if it doesn't exist)
 4. Deploys a storage account using Bicep
-5. Captures deployment outputs to `Context.Vars`
+5. Returns a `BicepDeployment` with typed output access
 
 ## Running the Example
 
@@ -39,14 +39,20 @@ export AZURE_LOCATION="westeurope"
 ando
 ```
 
-## Output Capture
+## Output Access
 
-After deployment, the following values are available in `Context.Vars`:
-- `storageAccountName` - The generated storage account name
-- `storageAccountId` - The Azure resource ID
-- `blobEndpoint` - The blob storage endpoint URL
+After deployment, outputs are available via the `BicepDeployment` object:
 
-These can be used in subsequent build steps (e.g., deploying an application that uses the storage account).
+```csharp
+var deployment = Bicep.DeployToResourceGroup(resourceGroup, "./infra/main.bicep", ...);
+
+// Access outputs
+deployment.Output("storageAccountName")  // The generated storage account name
+deployment.Output("storageAccountId")    // The Azure resource ID
+deployment.Output("blobEndpoint")        // The blob storage endpoint URL
+```
+
+These can be passed to subsequent build steps (e.g., database migrations).
 
 ## Cleanup
 

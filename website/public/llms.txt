@@ -6,7 +6,7 @@
 
 ```
 dotnet tool install -g ando
-echo 'Log.Info("Hello, World!");' > build.ando
+echo 'Log.Info("Hello, World!");' > build.csando
 ando run
 ```
 
@@ -17,9 +17,18 @@ ando run
 - `ando clean` - Remove artifacts, temp files, and containers
 - `ando help` - Show available commands
 
+### Run Options
+
+- `-f, --file <file>` - Use a specific build file instead of build.csando
+- `--verbosity <level>` - Set output verbosity (quiet|minimal|normal|detailed)
+- `--no-color` - Disable colored output
+- `--cold` - Always create a fresh container (ignore warm cache)
+- `--image <image>` - Use a custom Docker image
+- `--dind` - Mount Docker socket for Docker-in-Docker builds
+
 ## Key Facts
 
-- File: `build.ando` (C# code, no .cs extension)
+- File: `build.csando` (C# code, no .cs extension)
 - Execution: All builds run in Docker containers
 - No `using` statements needed - namespaces are pre-imported
 - Operations register steps that execute in order
@@ -29,9 +38,8 @@ ando run
 | Variable | Type | Description |
 |----------|------|-------------|
 | Root | BuildPath | Project root directory. Supports `/` operator for paths. |
-| Configuration | Configuration | Build configuration (Debug or Release). |
-| Options | BuildOptions | Build options like image, configuration. |
-| Context | BuildContextObject | Access to Paths and Vars properties. |
+| Temp | BuildPath | Temporary files directory (root/.ando/tmp). Supports `/` operator for paths. |
+| Env | Function | Get environment variable. Throws if not set by default. Use Env("NAME", required: false) to return null. |
 | Dotnet | DotnetOperations | .NET CLI operations (build, test, publish). |
 | Ef | EfOperations | Entity Framework Core operations. |
 | Npm | NpmOperations | npm operations (install, run, ci). |
@@ -43,15 +51,13 @@ ando run
 | Functions | FunctionsOperations | Azure Functions deployments. |
 | Cloudflare | CloudflareOperations | Cloudflare Pages deployments. |
 | Nuget | NugetOperations | NuGet package operations (pack, push). |
-| Ando | AndoOperations | Nested build operations. |
-| Artifacts | ArtifactOperations | Copy files from container to host. |
+| Ando | AndoOperations | Build configuration, artifacts, and nested builds. |
 | Log | LogOperations | Logging (Info, Warning, Error, Debug). |
 
 ## Global Functions
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| DotnetProject(path) | ProjectRef | Create a .NET project reference from a .csproj path. |
 | Directory(path?) | DirectoryRef | Create a directory reference. Defaults to "." if no path. |
 
 ## Common Patterns
@@ -64,7 +70,7 @@ var distDir = Directory("./frontend") / "dist";
 
 ### .NET Build + Test + Publish
 ```csharp
-var project = DotnetProject("./src/MyApp/MyApp.csproj");
+var project = Dotnet.Project("./src/MyApp/MyApp.csproj");
 
 Dotnet.Restore(project);
 Dotnet.Build(project);
@@ -97,13 +103,28 @@ Cloudflare.PagesDeploy(Directory("./website") / "dist", "my-project");
 
 ### Copy Artifacts to Host
 ```csharp
-Artifacts.CopyToHost("/workspace/dist", "./dist");
+// Copy build outputs from container to host after build completes
+Ando.CopyArtifactsToHost("dist", "./dist");
+
+// Copy as compressed archive (faster for many small files)
+Ando.CopyZippedArtifactsToHost("dist", "./output");              // Creates ./output/artifacts.tar.gz
+Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.tar.gz"); // Specific .tar.gz filename
+Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");    // Zip format
+```
+
+### Set Docker Image
+```csharp
+// Use a specific Docker image for the build
+Ando.UseImage("mcr.microsoft.com/dotnet/sdk:9.0");
 ```
 
 ### Nested Builds
 ```csharp
 // Run a child build in a subdirectory (own container, own .env)
 Ando.Build(Directory("./website"));
+
+// Run a specific build file
+Ando.Build(Directory("./website") / "deploy.csando");
 
 // With options
 Ando.Build(Directory("./api"), o => o.WithDind().ColdStart());
@@ -112,14 +133,14 @@ Ando.Build(Directory("./api"), o => o.WithDind().ColdStart());
 ## All Operations
 
 ### Ando
-- DotnetProject(path) - Creates a reference to a .NET project file (.csproj)
 - Directory(path?) - Creates a reference to a directory
-- Root - The root path of the project
-- Context - Access to Paths and Vars
-- Options - Build options configuration
-- Configuration - Build configuration enum
+- Root - The root path of the project (where build.csando is located)
+- Temp - Temporary files directory (root/.ando/tmp)
+- Env(name, required?) - Get environment variable. Throws if not set by default. Pass required: false to return null.
+- Ando.UseImage(image) - Set the Docker image for the build container
+- Ando.CopyArtifactsToHost(containerPath, hostPath) - Copy files from container to host after build
+- Ando.CopyZippedArtifactsToHost(containerPath, hostPath) - Create archive and copy from container to host. Supports .tar.gz (default) and .zip. If hostPath is a directory, creates artifacts.tar.gz.
 - Ando.Build(directory, options?) - Run a nested build in a subdirectory (new container, isolated context)
-- Artifacts.CopyToHost(src, dest) - Copy files from container to host
 - Log.Info(message) - Log informational message
 - Log.Warning(message) - Log warning message
 - Log.Error(message) - Log error message
@@ -132,6 +153,7 @@ Ando.Build(Directory("./api"), o => o.WithDind().ColdStart());
 - DotnetSdk.Install(version?) - Install .NET SDK globally (default: 9.0)
 
 ### Dotnet
+- Dotnet.Project(path) - Create a .NET project reference from a .csproj path
 - Dotnet.Restore(project) - Restore NuGet packages
 - Dotnet.Build(project) - Compile a project
 - Dotnet.Test(project) - Run unit tests
@@ -140,7 +162,8 @@ Ando.Build(Directory("./api"), o => o.WithDind().ColdStart());
 
 ### Ef
 - Ef.DbContextFrom(project, contextName?) - Reference a DbContext
-- Ef.DatabaseUpdate(context) - Apply pending migrations
+- Ef.DatabaseUpdate(context, connectionString?) - Apply pending migrations
+- Ef.DatabaseUpdate(context, outputRef) - Apply migrations with connection from deployment output
 - Ef.AddMigration(context, name) - Create a new migration
 - Ef.Script(context, outputPath) - Generate SQL migration script
 - Ef.RemoveMigration(context) - Remove the last migration
@@ -163,10 +186,14 @@ Ando.Build(Directory("./api"), o => o.WithDind().ColdStart());
 - Azure.DeleteResourceGroup(name) - Delete resource group
 
 ### Bicep
-- Bicep.DeployToResourceGroup(rg, template, options?) - Deploy to resource group
-- Bicep.DeployToSubscription(location, template, options?) - Deploy at subscription scope
+- Bicep.DeployToResourceGroup(rg, template, options?) - Deploy to resource group, returns BicepDeployment
+- Bicep.DeployToSubscription(location, template, options?) - Deploy at subscription scope, returns BicepDeployment
 - Bicep.WhatIf(rg, template, options?) - Preview deployment
 - Bicep.Build(template, output?) - Compile Bicep to ARM JSON
+
+BicepDeployment objects provide typed access to deployment outputs:
+- deployment.Output("name") - Returns OutputRef that resolves at execution time
+- deployment.GetOutput("name") - Gets output value directly (call during step execution)
 
 ### Cloudflare
 - Cloudflare.EnsureAuthenticated() - Verify Cloudflare credentials
@@ -207,7 +234,7 @@ Ando.Build(Directory("./api"), o => o.WithDind().ColdStart());
 1. Build scripts are C# - use C# syntax including var, lambdas, string interpolation
 2. No semicolons needed at end of lines (but they work if included)
 3. Operations execute in the order they are called
-4. Use DotnetProject() for .csproj files, Directory() for folders
+4. Use Dotnet.Project() for .csproj files, Directory() for folders
 5. The `/` operator concatenates paths: Root / "src" / "app"
 6. Options are configured via fluent lambdas: o => o.Output(...).WithRuntime(...)
 7. Always call EnsureAuthenticated() before cloud operations

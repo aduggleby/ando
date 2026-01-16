@@ -30,10 +30,9 @@ This example demonstrates a complete deployment workflow: building an applicatio
 1. Restore and build the .NET web application
 2. Verify Azure CLI authentication
 3. Create resource group (if needed)
-4. Deploy infrastructure via Bicep
-5. Capture deployment outputs (connection string, URLs)
-6. Run EF Core migrations against Azure SQL
-7. Publish application to `./dist`
+4. Deploy infrastructure via Bicep (returns `BicepDeployment`)
+5. Run EF Core migrations using deployment outputs
+6. Publish application to `./dist`
 
 ## Running the Example
 
@@ -52,18 +51,24 @@ export AZURE_LOCATION="westeurope"
 ando
 ```
 
-## Output Variables
+## Output Access
 
-After deployment, these values are captured in `Context.Vars` (with `azure_` prefix):
+Deployment outputs are available via the `BicepDeployment` object:
 
-| Variable | Description |
-|----------|-------------|
-| `azure_webAppName` | App Service name |
-| `azure_webAppUrl` | App Service URL |
-| `azure_sqlServerName` | SQL Server name |
-| `azure_sqlServerFqdn` | SQL Server FQDN |
-| `azure_sqlDatabaseName` | Database name |
-| `azure_sqlConnectionString` | Full connection string |
+```csharp
+var deployment = Bicep.DeployToResourceGroup(resourceGroup, "./infra/main.bicep", ...);
+
+// Pass outputs to other operations
+Ef.DatabaseUpdate(DbContext, deployment.Output("sqlConnectionString"));
+
+// Available outputs:
+// deployment.Output("webAppName")          - App Service name
+// deployment.Output("webAppUrl")           - App Service URL
+// deployment.Output("sqlServerName")       - SQL Server name
+// deployment.Output("sqlServerFqdn")       - SQL Server FQDN
+// deployment.Output("sqlDatabaseName")     - Database name
+// deployment.Output("sqlConnectionString") - Full connection string
+```
 
 ## Deploying the Application
 

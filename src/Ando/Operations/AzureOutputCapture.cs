@@ -1,11 +1,11 @@
 // =============================================================================
 // AzureOutputCapture.cs
 //
-// Summary: Parses Azure deployment outputs and stores them in VarsContext.
+// Summary: Parses Azure deployment outputs and stores them in BicepDeployment.
 //
 // AzureOutputCapture handles the JSON output from Azure CLI deployment commands
-// and extracts the deployment outputs into Context.Vars for use in subsequent
-// build steps (e.g., passing a SQL connection string to EF migrations).
+// and extracts the deployment outputs into a BicepDeployment object for use in
+// subsequent build steps (e.g., passing a SQL connection string to EF migrations).
 //
 // Azure deployment outputs have this structure:
 // {
@@ -18,30 +18,28 @@
 // Design Decisions:
 // - Uses System.Text.Json for parsing (no external dependencies)
 // - Flattens nested output structure to simple key-value pairs
-// - Supports optional prefix to prevent naming collisions
+// - Stores outputs in BicepDeployment._outputs dictionary
 // - Handles SecureString outputs by using the value directly (already in JSON)
 // - Logs captured outputs for debugging visibility
 // =============================================================================
 
 using System.Text.Json;
-using Ando.Context;
 using Ando.Logging;
 
 namespace Ando.Operations;
 
 /// <summary>
-/// Parses Azure deployment outputs and stores them in VarsContext.
+/// Parses Azure deployment outputs and stores them in BicepDeployment.
 /// </summary>
 public static class AzureOutputCapture
 {
     /// <summary>
-    /// Parses deployment outputs from Azure CLI JSON output and stores in VarsContext.
+    /// Parses deployment outputs from Azure CLI JSON output and stores in BicepDeployment.
     /// </summary>
     /// <param name="jsonOutput">Raw JSON output from az deployment command.</param>
-    /// <param name="vars">VarsContext to store outputs in.</param>
-    /// <param name="prefix">Optional prefix for output variable names.</param>
+    /// <param name="deployment">BicepDeployment to store outputs in.</param>
     /// <param name="logger">Logger for debug output.</param>
-    public static void CaptureDeploymentOutputs(string jsonOutput, VarsContext vars, string? prefix, IBuildLogger logger)
+    public static void CaptureDeploymentOutputs(string jsonOutput, BicepDeployment deployment, IBuildLogger logger)
     {
         if (string.IsNullOrWhiteSpace(jsonOutput))
         {
@@ -72,16 +70,15 @@ public static class AzureOutputCapture
 
                 if (outputValue != null)
                 {
-                    var varName = prefix != null ? $"{prefix}{outputName}" : outputName;
-                    vars[varName] = outputValue;
+                    deployment._outputs[outputName] = outputValue;
                     capturedCount++;
-                    logger.Debug($"  Captured output: {varName}");
+                    logger.Debug($"  Captured output: {outputName}");
                 }
             }
 
             if (capturedCount > 0)
             {
-                logger.Info($"Captured {capturedCount} deployment output(s) to Context.Vars");
+                logger.Info($"Captured {capturedCount} deployment output(s)");
             }
             else
             {

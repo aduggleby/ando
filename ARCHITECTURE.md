@@ -7,12 +7,12 @@ This document describes the internal architecture of ANDO, how components intera
 ANDO follows a pipeline architecture with Docker-based isolated execution:
 
 ```
-build.ando → ScriptHost → BuildContext → StepRegistry → DockerManager → ContainerExecutor → Results
+build.csando → ScriptHost → BuildContext → StepRegistry → DockerManager → ContainerExecutor → Results
            (compile)    (globals)      (steps)        (container)     (execute)
 ```
 
-1. **ScriptHost** compiles `build.ando` using Roslyn C# Scripting
-2. **ScriptGlobals** exposes the API (`Dotnet`, `Ef`, `Npm`, `Project`, etc.) to the script
+1. **ScriptHost** compiles `build.csando` using Roslyn C# Scripting
+2. **ScriptGlobals** exposes the API (`Dotnet`, `Ef`, `Npm`, etc.) to the script
 3. **Operations** register **BuildSteps** into the **StepRegistry**
 4. **DockerManager** creates/manages the build container
 5. **ContainerExecutor** runs commands inside the container via `docker exec`
@@ -27,7 +27,7 @@ build.ando → ScriptHost → BuildContext → StepRegistry → DockerManager �
 │  ┌───────────────────────────────────────────────────────────────┐  │
 │  │                         AndoCli                                │  │
 │  │  - Parses arguments                                           │  │
-│  │  - Finds build.ando                                           │  │
+│  │  - Finds build.csando                                           │  │
 │  │  - Checks Docker availability                                 │  │
 │  │  - Manages container lifecycle                                │  │
 │  │  - Orchestrates execution                                     │  │
@@ -40,12 +40,12 @@ build.ando → ScriptHost → BuildContext → StepRegistry → DockerManager �
 │  ┌─────────────────────┐    ┌─────────────────────────────────────┐ │
 │  │     ScriptHost      │───▶│           ScriptGlobals             │ │
 │  │                     │    │                                     │ │
-│  │  - Loads build.ando │    │  - Context (paths & vars)           │ │
-│  │  - Roslyn compile   │    │  - Dotnet (operations)              │ │
-│  │  - Injects globals  │    │  - Ef (operations)                  │ │
-│  └─────────────────────┘    │  - Npm (operations)                 │ │
-│                             │  - Project (helper)                 │ │
-│                             │  - Workflow() method                │ │
+│  │  - Loads build.csando │    │  - Root, Temp (paths)               │ │
+│  │  - Roslyn compile   │    │  - Env() (environment variables)    │ │
+│  │  - Injects globals  │    │  - Dotnet (operations)              │ │
+│  └─────────────────────┘    │  - Ef (operations)                  │ │
+│                             │  - Npm (operations)                 │ │
+│                             │  - Env() function                   │ │
 │                             └─────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────┘
                                    │
@@ -57,7 +57,7 @@ build.ando → ScriptHost → BuildContext → StepRegistry → DockerManager �
 │  │               │  │               │  │                         │  │
 │  │  - Context    │  │  - Steps[]    │  │  - Sequential execute   │  │
 │  │    - Paths    │  │  - Register() │  │  - Fail-fast            │  │
-│  │    - Vars     │  │  - Clear()    │  │  - Timing               │  │
+│  │  - Executor   │  │  - Clear()    │  │  - Timing               │  │
 │  │  - Executor   │  │               │  │  - Result collection    │  │
 │  │  - Workflows  │  │               │  │                         │  │
 │  └───────────────┘  └───────────────┘  └─────────────────────────┘  │
@@ -99,7 +99,6 @@ build.ando → ScriptHost → BuildContext → StepRegistry → DockerManager �
 │  │  - ProjectRef   │  │  - BuildContext │  │  - IBuildLogger     │  │
 │  │  - EfContextRef │  │    Object       │  │  - ConsoleLogger    │  │
 │  │                 │  │  - PathsContext │  │                     │  │
-│  │                 │  │  - VarsContext  │  │                     │  │
 │  │                 │  │  - BuildPath    │  │                     │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────┘
@@ -109,7 +108,7 @@ build.ando → ScriptHost → BuildContext → StepRegistry → DockerManager �
 
 ### 1. ScriptHost (`Scripting/ScriptHost.cs`)
 
-Responsible for compiling and executing `build.ando` files using Roslyn C# Scripting.
+Responsible for compiling and executing `build.csando` files using Roslyn C# Scripting.
 
 ```csharp
 public class ScriptHost
@@ -138,46 +137,37 @@ public class ScriptHost
 
 ### 2. ScriptGlobals (`Scripting/ScriptGlobals.cs`)
 
-The API surface exposed to `build.ando` scripts. Properties on this class become global variables in the script.
+The API surface exposed to `build.csando` scripts. Properties on this class become global variables in the script.
 
 ```csharp
 public class ScriptGlobals
 {
-    public BuildContextObject Context { get; }    // Context.Paths, Context.Vars
-    public DotnetOperations Dotnet { get; }       // Dotnet.Build(), Dotnet.Test()
+    public BuildPath Root { get; }                // Root / "dist"
+    public BuildPath Temp { get; }                // Temp / "cache"
+    public string? Env(string name, bool required = true);  // Environment variables
+    public DotnetOperations Dotnet { get; }       // Dotnet.Project(), Dotnet.Build()
     public EfOperations Ef { get; }               // Ef.DatabaseUpdate()
     public NpmOperations Npm { get; }             // Npm.Install(), Npm.Run()
-    public ProjectHelper Project { get; }         // Project.From("path")
 
-    public void Workflow(string name, Action<WorkflowConfig>? configure = null)
-    {
-        _buildContext.Workflow(name, configure);
-    }
+    public string? Env(string name, bool required = true);  // Env("API_KEY")
+    public DirectoryRef Directory(string path = ".");       // Directory("./frontend")
 }
 ```
 
-### 3. Unified Context Object (`Context/BuildContextObject.cs`)
+### 3. Environment Variables
 
-Provides access to paths and variables in a clean, unified way:
+The `Env()` function provides access to environment variables:
 
 ```csharp
-public class BuildContextObject
-{
-    public PathsContext Paths { get; }   // Paths.Root, Paths.Artifacts, etc.
-    public VarsContext Vars { get; }     // Vars["key"], Vars.Env("NAME")
-
-    public BuildContextObject(string rootPath)
-    {
-        Paths = new PathsContext(rootPath);
-        Vars = new VarsContext();
-    }
-}
+// In ScriptGlobals
+public string? Env(string name, bool required = true);
 ```
 
-**Usage in build.ando:**
+**Usage in build.csando:**
 ```csharp
-Context.Vars["environment"] = Context.Vars.Env("ASPNETCORE_ENVIRONMENT") ?? "Production";
-var output = Context.Paths.Artifacts / "publish";
+var environment = Env("ASPNETCORE_ENVIRONMENT", required: false) ?? "Production";
+var apiKey = Env("API_KEY");  // Throws if not set
+var output = Root / "dist";
 ```
 
 ### 4. Execution Infrastructure
@@ -301,7 +291,7 @@ public class DotnetOperations
 1. CLI starts
    │
    ▼
-2. Find build.ando (search upward from cwd)
+2. Find build.csando (search upward from cwd)
    │
    ▼
 3. Check Docker availability
@@ -350,7 +340,7 @@ public class DotnetOperations
 │                         Host Machine                             │
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │                      ANDO CLI                              │  │
-│  │  - Parses build.ando                                      │  │
+│  │  - Parses build.csando                                      │  │
 │  │  - Manages Docker container lifecycle                     │  │
 │  │  - Streams output from container                          │  │
 │  └───────────────────────────────────────────────────────────┘  │
@@ -500,7 +490,6 @@ Add the new operations to `BuildContext`:
 // Scripting/BuildContext.cs
 public class BuildContext
 {
-    public BuildContextObject Context { get; }
     public DotnetOperations Dotnet { get; }
     public EfOperations Ef { get; }
     public NpmOperations Npm { get; }
@@ -508,7 +497,6 @@ public class BuildContext
 
     public BuildContext(string rootPath, IBuildLogger logger)
     {
-        Context = new BuildContextObject(rootPath);
         StepRegistry = new StepRegistry();
         Logger = logger;
         Executor = new ProcessRunner(logger);
@@ -527,7 +515,6 @@ public class BuildContext
 // Scripting/ScriptGlobals.cs
 public class ScriptGlobals
 {
-    public BuildContextObject Context { get; }
     public DotnetOperations Dotnet { get; }
     public EfOperations Ef { get; }
     public NpmOperations Npm { get; }
@@ -541,20 +528,16 @@ public class ScriptGlobals
 }
 ```
 
-### Step 6: Usage in build.ando
+### Step 6: Usage in build.csando
 
 ```csharp
-var WebApi = Project.From("./src/WebApi/WebApi.csproj");
+var WebApi = Dotnet.Project("./src/WebApi/WebApi.csproj");
 var ApiImage = Docker.Image("myregistry/webapi", "1.0.0");
-
-Workflow("ci", w => {
-    w.Configuration = Configuration.Release;
-});
 
 Dotnet.Restore(WebApi);
 Dotnet.Build(WebApi);
 Dotnet.Test(WebApi);
-Dotnet.Publish(WebApi, o => o.Output(Context.Paths.Artifacts / "publish"));
+Dotnet.Publish(WebApi, o => o.Output(Root / "dist"));
 
 Docker.Build(ApiImage, o => o
     .WithDockerfile("./src/WebApi/Dockerfile")

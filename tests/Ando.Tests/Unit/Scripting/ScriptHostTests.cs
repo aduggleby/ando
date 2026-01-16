@@ -9,7 +9,6 @@
 
 using Ando.Scripting;
 using Ando.Tests.TestFixtures;
-using Ando.Workflow;
 
 namespace Ando.Tests.Unit.Scripting;
 
@@ -24,7 +23,7 @@ public class ScriptHostTests
         var host = new ScriptHost(_logger);
 
         await Assert.ThrowsAsync<FileNotFoundException>(
-            () => host.LoadScriptAsync("/nonexistent/build.ando", "/nonexistent"));
+            () => host.LoadScriptAsync("/nonexistent/build.csando", "/nonexistent"));
     }
 
     [Fact]
@@ -32,12 +31,12 @@ public class ScriptHostTests
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
-        var scriptPath = Path.Combine(tempDir, "build.ando");
+        var scriptPath = Path.Combine(tempDir, "build.csando");
 
         try
         {
             await File.WriteAllTextAsync(scriptPath, """
-                var project = DotnetProject("./src/Test/Test.csproj");
+                var project = Dotnet.Project("./src/Test/Test.csproj");
                 Dotnet.Build(project);
                 """);
 
@@ -58,18 +57,20 @@ public class ScriptHostTests
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
-        var scriptPath = Path.Combine(tempDir, "build.ando");
+        var scriptPath = Path.Combine(tempDir, "build.csando");
 
         try
         {
+            // Verify Root.Value is accessible and correct
             await File.WriteAllTextAsync(scriptPath, """
-                Context.Vars["rootPath"] = Context.Paths.Root.Value;
+                var rootPath = Root.Value;
+                if (rootPath == null) throw new Exception("Root.Value is null");
                 """);
 
             var host = new ScriptHost(_logger);
             var context = await host.LoadScriptAsync(scriptPath, tempDir);
 
-            Assert.Equal(tempDir, context.Context.Vars["rootPath"]);
+            Assert.Equal(tempDir, context.Context.Paths.Root.Value);
         }
         finally
         {
@@ -78,22 +79,22 @@ public class ScriptHostTests
     }
 
     [Fact]
-    public async Task LoadScriptAsync_ExposesOptions()
+    public async Task LoadScriptAsync_ExposesAndoOperations()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
-        var scriptPath = Path.Combine(tempDir, "build.ando");
+        var scriptPath = Path.Combine(tempDir, "build.csando");
 
         try
         {
             await File.WriteAllTextAsync(scriptPath, """
-                Options.UseConfiguration(Configuration.Release);
+                Ando.UseImage("mcr.microsoft.com/dotnet/sdk:9.0");
                 """);
 
             var host = new ScriptHost(_logger);
             var context = await host.LoadScriptAsync(scriptPath, tempDir);
 
-            Assert.Equal(Configuration.Release, context.Options.Configuration);
+            Assert.Equal("mcr.microsoft.com/dotnet/sdk:9.0", context.Options.Image);
         }
         finally
         {
@@ -106,20 +107,22 @@ public class ScriptHostTests
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
-        var scriptPath = Path.Combine(tempDir, "build.ando");
+        var scriptPath = Path.Combine(tempDir, "build.csando");
 
         try
         {
+            // Test that Root / "subdir" path combining works
             await File.WriteAllTextAsync(scriptPath, """
                 var distPath = Root / "dist";
-                Context.Vars["distPath"] = distPath.Value;
+                var expected = System.IO.Path.Combine(Root.Value, "dist");
+                if (distPath.Value != expected) throw new Exception($"Expected {expected} but got {distPath.Value}");
                 """);
 
             var host = new ScriptHost(_logger);
             var context = await host.LoadScriptAsync(scriptPath, tempDir);
 
-            var expectedPath = Path.Combine(tempDir, "dist");
-            Assert.Equal(expectedPath, context.Context.Vars["distPath"]);
+            // Script completed without throwing, path combining works
+            Assert.NotNull(context);
         }
         finally
         {
@@ -132,7 +135,7 @@ public class ScriptHostTests
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
-        var scriptPath = Path.Combine(tempDir, "build.ando");
+        var scriptPath = Path.Combine(tempDir, "build.csando");
 
         try
         {
@@ -156,7 +159,7 @@ public class ScriptHostTests
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
-        var scriptPath = Path.Combine(tempDir, "build.ando");
+        var scriptPath = Path.Combine(tempDir, "build.csando");
 
         try
         {
@@ -168,7 +171,6 @@ public class ScriptHostTests
             context.ShouldNotBeNull();
             context.StepRegistry.ShouldNotBeNull();
             context.Context.ShouldNotBeNull();
-            context.Options.ShouldNotBeNull();
         }
         finally
         {
@@ -181,19 +183,21 @@ public class ScriptHostTests
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
-        var scriptPath = Path.Combine(tempDir, "build.ando");
+        var scriptPath = Path.Combine(tempDir, "build.csando");
 
         try
         {
+            // Test that Dotnet.Project() returns a correctly named ProjectRef
             await File.WriteAllTextAsync(scriptPath, """
-                var project = DotnetProject("./src/MyApp/MyApp.csproj");
-                Context.Vars["projectName"] = project.Name;
+                var project = Dotnet.Project("./src/MyApp/MyApp.csproj");
+                if (project.Name != "MyApp") throw new Exception($"Expected MyApp but got {project.Name}");
                 """);
 
             var host = new ScriptHost(_logger);
             var context = await host.LoadScriptAsync(scriptPath, tempDir);
 
-            Assert.Equal("MyApp", context.Context.Vars["projectName"]);
+            // Script completed without throwing, project name extraction works
+            Assert.NotNull(context);
         }
         finally
         {
@@ -206,19 +210,21 @@ public class ScriptHostTests
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
-        var scriptPath = Path.Combine(tempDir, "build.ando");
+        var scriptPath = Path.Combine(tempDir, "build.csando");
 
         try
         {
+            // Test that Directory() returns a correctly named DirectoryRef
             await File.WriteAllTextAsync(scriptPath, """
                 var frontend = Directory("./frontend");
-                Context.Vars["dirName"] = frontend.Name;
+                if (frontend.Name != "frontend") throw new Exception($"Expected frontend but got {frontend.Name}");
                 """);
 
             var host = new ScriptHost(_logger);
             var context = await host.LoadScriptAsync(scriptPath, tempDir);
 
-            Assert.Equal("frontend", context.Context.Vars["dirName"]);
+            // Script completed without throwing, directory name extraction works
+            Assert.NotNull(context);
         }
         finally
         {

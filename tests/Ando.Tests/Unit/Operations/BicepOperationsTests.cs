@@ -7,7 +7,7 @@
 // - DeployToResourceGroup registers correct steps with proper arguments
 // - DeployToSubscription uses --location instead of --resource-group
 // - Options (parameters, deployment name, mode) are translated to CLI flags
-// - Output capture parses JSON and stores in VarsContext
+// - Deploy methods return BicepDeployment with captured outputs
 // - WhatIf adds --what-if flag
 // - Build generates correct bicep build command
 //
@@ -15,7 +15,6 @@
 // and TestLogger to verify logging behavior.
 // =============================================================================
 
-using Ando.Context;
 using Ando.Operations;
 using Ando.Steps;
 using Ando.Tests.TestFixtures;
@@ -28,10 +27,9 @@ public class BicepOperationsTests
     private readonly StepRegistry _registry = new();
     private readonly TestLogger _logger = new();
     private readonly MockExecutor _executor = new();
-    private readonly VarsContext _vars = new();
 
     private BicepOperations CreateBicep() =>
-        new BicepOperations(_registry, _logger, () => _executor, _vars);
+        new BicepOperations(_registry, _logger, () => _executor);
 
     [Fact]
     public void DeployToResourceGroup_RegistersStep()
@@ -43,6 +41,17 @@ public class BicepOperationsTests
         Assert.Single(_registry.Steps);
         Assert.Equal("Bicep.DeployToResourceGroup", _registry.Steps[0].Name);
         Assert.Equal("my-rg", _registry.Steps[0].Context);
+    }
+
+    [Fact]
+    public void DeployToResourceGroup_ReturnsBicepDeployment()
+    {
+        var bicep = CreateBicep();
+
+        var deployment = bicep.DeployToResourceGroup("my-rg", "./main.bicep");
+
+        Assert.NotNull(deployment);
+        Assert.IsType<BicepDeployment>(deployment);
     }
 
     [Fact]
@@ -120,11 +129,10 @@ public class BicepOperationsTests
     }
 
     [Fact]
-    public async Task DeployToResourceGroup_WithCaptureOutputs_QueriesOutputs()
+    public async Task DeployToResourceGroup_AlwaysQueriesOutputs()
     {
         var bicep = CreateBicep();
-        bicep.DeployToResourceGroup("test-rg", "./main.bicep",
-            o => o.CaptureOutputs());
+        bicep.DeployToResourceGroup("test-rg", "./main.bicep");
 
         await _registry.Steps[0].Execute();
 
@@ -136,7 +144,7 @@ public class BicepOperationsTests
     }
 
     [Fact]
-    public async Task DeployToResourceGroup_WithCaptureOutputs_StoresOutputsInVars()
+    public async Task DeployToResourceGroup_CapturesOutputsToBicepDeployment()
     {
         var bicep = CreateBicep();
         _executor.SimulatedOutput = """
@@ -152,35 +160,37 @@ public class BicepOperationsTests
             }
             """;
 
-        bicep.DeployToResourceGroup("test-rg", "./main.bicep",
-            o => o.CaptureOutputs());
+        var deployment = bicep.DeployToResourceGroup("test-rg", "./main.bicep");
 
         await _registry.Steps[0].Execute();
 
-        Assert.Equal("mystorageaccount123", _vars["storageAccountName"]);
-        Assert.Equal("DefaultEndpointsProtocol=https;...", _vars["connectionString"]);
+        Assert.Equal("mystorageaccount123", deployment.GetOutput("storageAccountName"));
+        Assert.Equal("DefaultEndpointsProtocol=https;...", deployment.GetOutput("connectionString"));
     }
 
     [Fact]
-    public async Task DeployToResourceGroup_WithCaptureOutputsPrefix_AppliesPrefix()
+    public async Task DeployToResourceGroup_OutputRefResolvesAfterExecution()
     {
         var bicep = CreateBicep();
         _executor.SimulatedOutput = """
             {
-                "sqlServer": {
+                "sqlConnectionString": {
                     "type": "String",
-                    "value": "myserver.database.windows.net"
+                    "value": "Server=myserver.database.windows.net;..."
                 }
             }
             """;
 
-        bicep.DeployToResourceGroup("test-rg", "./main.bicep",
-            o => o.CaptureOutputs("azure_"));
+        var deployment = bicep.DeployToResourceGroup("test-rg", "./main.bicep");
+        var outputRef = deployment.Output("sqlConnectionString");
+
+        // Before execution, output should be null
+        Assert.Null(outputRef.Resolve());
 
         await _registry.Steps[0].Execute();
 
-        Assert.Equal("myserver.database.windows.net", _vars["azure_sqlServer"]);
-        Assert.Null(_vars["sqlServer"]); // Without prefix should not exist
+        // After execution, output should be available
+        Assert.Equal("Server=myserver.database.windows.net;...", outputRef.Resolve());
     }
 
     [Fact]
@@ -193,6 +203,17 @@ public class BicepOperationsTests
         Assert.Single(_registry.Steps);
         Assert.Equal("Bicep.DeployToSubscription", _registry.Steps[0].Name);
         Assert.Equal("eastus", _registry.Steps[0].Context);
+    }
+
+    [Fact]
+    public void DeployToSubscription_ReturnsBicepDeployment()
+    {
+        var bicep = CreateBicep();
+
+        var deployment = bicep.DeployToSubscription("eastus", "./main.bicep");
+
+        Assert.NotNull(deployment);
+        Assert.IsType<BicepDeployment>(deployment);
     }
 
     [Fact]
@@ -298,8 +319,7 @@ public class BicepOperationsTests
             .WithName("my-deployment")
             .WithParameterFile("./params.json")
             .WithParameter("env", "prod")
-            .WithMode(DeploymentMode.Incremental)
-            .CaptureOutputs("deploy_"));
+            .WithMode(DeploymentMode.Incremental));
 
         await _registry.Steps[0].Execute();
 

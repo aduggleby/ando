@@ -1,14 +1,14 @@
 ---
-import ProviderLayout from "../layouts/ProviderLayout.astro";
-import OperationsTable from "../components/OperationsTable.astro";
-import OperationDetails from "../components/OperationDetails.astro";
-import CodeBlock from "../components/CodeBlock.astro";
-import { getOperationsForProvider } from "../data/operations.js";
+import ProviderLayout from "../../layouts/ProviderLayout.astro";
+import OperationsTable from "../../components/OperationsTable.astro";
+import OperationDetails from "../../components/OperationDetails.astro";
+import CodeBlock from "../../components/CodeBlock.astro";
+import { getOperationsForProvider } from "../../data/operations.js";
 
 const operations = getOperationsForProvider("AppService");
 
 const exampleCode = `// Build and publish the web app
-var WebApp = DotnetProject("./src/WebApp/WebApp.csproj");
+var WebApp = Dotnet.Project("./src/WebApp/WebApp.csproj");
 Dotnet.Publish(WebApp, o => o
   .Output(Root / "publish")
   .WithConfiguration(Configuration.Release));
@@ -42,6 +42,6 @@ AppService.DeployZip("my-web-app", Root / "app.zip", "my-rg", o => o
   <section id="example" class="mb-8">
     <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Example</h2>
     <p class="mb-4 text-zinc-500 dark:text-zinc-400">Deploy a web app with zero-downtime using deployment slots.</p>
-    <CodeBlock code={exampleCode} lang="csharp" filename="build.ando" />
+    <CodeBlock code={exampleCode} lang="csharp" filename="build.csando" />
   </section>
 </ProviderLayout>

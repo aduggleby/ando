@@ -3,7 +3,7 @@
 //
 // Summary: End-to-end tests that run example projects.
 //
-// Tests execute actual build.ando scripts in Docker containers.
+// Tests execute actual build.csando scripts in Docker containers.
 // Dynamically discovers and runs all examples in the examples/ directory.
 // These tests are skipped if Docker is not available.
 // =============================================================================
@@ -104,7 +104,7 @@ public class ExampleProjectTests : IDisposable
 
             foreach (var dir in Directory.GetDirectories(examplesRoot))
             {
-                var buildScript = Path.Combine(dir, "build.ando");
+                var buildScript = Path.Combine(dir, "build.csando");
                 var dirName = Path.GetFileName(dir);
 
                 if (File.Exists(buildScript) && !ExcludedExamples.Contains(dirName))
@@ -148,7 +148,7 @@ public class ExampleProjectTests : IDisposable
         exitCode.ShouldBe(0, $"Example '{exampleName}' failed to build");
 
         // Verify the dist directory was created if publish is used
-        var buildScript = await File.ReadAllTextAsync(Path.Combine(projectDir, "build.ando"));
+        var buildScript = await File.ReadAllTextAsync(Path.Combine(projectDir, "build.csando"));
         if (buildScript.Contains("Dotnet.Publish"))
         {
             var distDir = Path.Combine(projectDir, "dist");
@@ -191,7 +191,7 @@ public class ExampleProjectTests : IDisposable
         try
         {
             await File.WriteAllTextAsync(
-                Path.Combine(tempDir, "build.ando"),
+                Path.Combine(tempDir, "build.csando"),
                 """
                 this is not valid C# syntax !!!
                 """);
@@ -215,7 +215,7 @@ public class ExampleProjectTests : IDisposable
     {
         // This test doesn't require Docker - it just tests the clean command
         var firstExample = Directory.GetDirectories(_examplesRoot)
-            .FirstOrDefault(d => File.Exists(Path.Combine(d, "build.ando")));
+            .FirstOrDefault(d => File.Exists(Path.Combine(d, "build.csando")));
 
         if (firstExample == null)
         {

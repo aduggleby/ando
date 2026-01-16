@@ -12,7 +12,7 @@
 //       .WithRuntime("linux-x64")
 //       .AsSelfContained()
 //       .AsSingleFile()
-//       .Output(Context.Paths.Artifacts / "app"));
+//       .Output(Root / "dist"));
 //
 // Design Decisions:
 // - Fluent builder pattern for readable, chainable configuration

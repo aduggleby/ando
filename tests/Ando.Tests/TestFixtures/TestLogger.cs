@@ -43,6 +43,7 @@ public class TestLogger : IBuildLogger
     public List<StepCompletedEvent> StepsCompleted { get; } = new();
     public List<StepFailedEvent> StepsFailed { get; } = new();
     public List<StepSkippedEvent> StepsSkipped { get; } = new();
+    public List<LogStepEvent> LogSteps { get; } = new();
 
     // Captured workflow events
     public List<string> WorkflowsStarted { get; } = new();
@@ -92,14 +93,20 @@ public class TestLogger : IBuildLogger
         StepsSkipped.Add(new StepSkippedEvent(stepName, reason));
     }
 
+    public void LogStep(string level, string message)
+    {
+        LogSteps.Add(new LogStepEvent(level, message));
+        AllMessages.Add($"[{level.ToUpper()}] {message}");
+    }
+
     public void WorkflowStarted(string workflowName, string? scriptPath = null, int totalSteps = 0)
     {
         WorkflowsStarted.Add(workflowName);
     }
 
-    public void WorkflowCompleted(string workflowName, TimeSpan duration, int stepsRun, int stepsFailed)
+    public void WorkflowCompleted(string workflowName, string? scriptPath, TimeSpan duration, int stepsRun, int stepsFailed)
     {
-        WorkflowsCompleted.Add(new WorkflowCompletedEvent(workflowName, duration, stepsRun, stepsFailed));
+        WorkflowsCompleted.Add(new WorkflowCompletedEvent(workflowName, scriptPath, duration, stepsRun, stepsFailed));
     }
 
     /// <summary>
@@ -116,6 +123,7 @@ public class TestLogger : IBuildLogger
         StepsCompleted.Clear();
         StepsFailed.Clear();
         StepsSkipped.Clear();
+        LogSteps.Clear();
         WorkflowsStarted.Clear();
         WorkflowsCompleted.Clear();
     }
@@ -125,5 +133,6 @@ public class TestLogger : IBuildLogger
     public record StepCompletedEvent(string StepName, TimeSpan Duration, string? Context);
     public record StepFailedEvent(string StepName, TimeSpan Duration, string? Message);
     public record StepSkippedEvent(string StepName, string? Reason);
-    public record WorkflowCompletedEvent(string WorkflowName, TimeSpan Duration, int StepsRun, int StepsFailed);
+    public record LogStepEvent(string Level, string Message);
+    public record WorkflowCompletedEvent(string WorkflowName, string? ScriptPath, TimeSpan Duration, int StepsRun, int StepsFailed);
 }

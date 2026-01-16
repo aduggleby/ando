@@ -2,10 +2,12 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 import CodeBlock from "../components/CodeBlock.astro";
 import { getOperationsGroupedByProvider, operations, getAnchorId } from "../data/operations.js";
+import { getProviderLinks } from "../data/providers.js";
 
 type Operation = { group: string; name: string; desc: string; examples?: string[] };
 const groupedOperations = getOperationsGroupedByProvider() as [string, Operation[]][];
 const totalOperations = operations.length;
+const providerLinks = getProviderLinks();
 
 const commands = [
   { cmd: "ando", desc: "Run the build script (same as 'ando run')." },
@@ -15,54 +17,34 @@ const commands = [
   { cmd: "ando help", desc: "Show available commands and options." },
 ];
 
-// Provider metadata for linking (sorted alphabetically)
-const providerLinks: Record<string, { href: string; label: string }> = {
-  Ando: { href: "/ando", label: "Ando" },
-  AppService: { href: "/appservice", label: "App Service" },
-  Azure: { href: "/azure", label: "Azure" },
-  Bicep: { href: "/bicep", label: "Bicep" },
-  Cloudflare: { href: "/cloudflare", label: "Cloudflare" },
-  Dotnet: { href: "/dotnet", label: "Dotnet" },
-  DotnetSdk: { href: "/dotnetsdk", label: "DotnetSdk" },
-  Ef: { href: "/ef", label: "EF Core" },
-  Functions: { href: "/functions", label: "Functions" },
-  Node: { href: "/node", label: "Node" },
-  Npm: { href: "/npm", label: "Npm" },
-  Nuget: { href: "/nuget", label: "NuGet" },
-};
-
 const gettingStartedCode = `# Install ANDO
 dotnet tool install -g ando
 
 # Create a hello world build script
-echo 'Log.Info("Hello, World!");' > build.ando
+echo 'Log.Info("Hello, World!");' > build.csando
 
 # Run the build script
 ando run`;
 
 const exampleBuildCode = `// Project and directory references
-var WebApi = DotnetProject("./src/WebApi/WebApi.csproj");
+var WebApi = Dotnet.Project("./src/WebApi/WebApi.csproj");
 var Frontend = Directory("./frontend");
 
 // Backend build and publish
 Dotnet.Restore(WebApi);
 Dotnet.Build(WebApi);
 Dotnet.Test(WebApi);
-Dotnet.Publish(WebApi, o => o
-  .Output(Root / "artifacts" / "api"));
+Dotnet.Publish(WebApi, o => o.Output(Root / "dist" / "api"));
 
-// Deploy backend to Azure App Service
-Azure.EnsureAuthenticated();
-Artifact.Zip(Root / "artifacts" / "api", Root / "artifacts" / "api.zip");
-AppService.DeployWithSwap("my-webapi", Root / "artifacts" / "api.zip");
-
-// Frontend build and deploy
+// Frontend build
+Node.Install();
 Npm.Ci(Frontend);
 Npm.Run(Frontend, "build");
 
 // Deploy frontend to Cloudflare Pages
 Cloudflare.EnsureAuthenticated();
-Cloudflare.PagesDeploy(Frontend / "dist", "my-frontend");`;
+Cloudflare.PagesDeploy(Frontend / "dist", "my-frontend");
+Cloudflare.PurgeCache("example.com");`;
 ---
 
 <BaseLayout
@@ -71,11 +53,12 @@ Cloudflare.PagesDeploy(Frontend / "dist", "my-frontend");`;
 >
   <section id="top" class="mb-10 md:mb-16">
     <div class="mb-4 pt-24">
-      <span
-        class="inline-flex items-center rounded-full bg-cyan-100 px-3 py-1 text-sm font-medium text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400"
+      <a
+        href="/changelog"
+        class="inline-flex items-center rounded-full bg-cyan-100 px-3 py-1 text-sm font-medium text-cyan-800 hover:bg-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-400 dark:hover:bg-cyan-900/50"
       >
-        v0.9.1 — First stable release
-      </span>
+        v0.9.3
+      </a>
     </div>
     <h1 class="mb-4 max-w-4xl text-3xl font-bold text-zinc-900 sm:mb-6 sm:text-8xl dark:text-white">
       Build and deploy with a familiar syntax
@@ -132,11 +115,11 @@ Cloudflare.PagesDeploy(Frontend / "dist", "my-frontend");`;
   </section>
 
   <section id="build" class="mb-10 md:mb-16">
-    <h2 class="mb-2 text-xl font-bold text-zinc-900 sm:text-2xl dark:text-white">Example build.ando</h2>
+    <h2 class="mb-2 text-xl font-bold text-zinc-900 sm:text-2xl dark:text-white">Example build.csando</h2>
     <p class="mb-4 text-zinc-500 sm:mb-6 dark:text-zinc-400">
       C# code defines projects, tools, workflow settings, and operations. Compose builds with nested scripts.
     </p>
-    <CodeBlock code={exampleBuildCode} lang="csharp" filename="build.ando" />
+    <CodeBlock code={exampleBuildCode} lang="csharp" filename="build.csando" />
   </section>
 
   <section id="ops" class="mb-10 md:mb-16">

@@ -6,7 +6,7 @@ A minimal example demonstrating ANDO basics.
 
 ```
 0001-Simple/
-├── build.ando      # Build script
+├── build.csando      # Build script
 ├── src/
 │   ├── HelloWorld.csproj
 │   └── Program.cs
@@ -16,10 +16,10 @@ A minimal example demonstrating ANDO basics.
 ## Build Script
 
 ```csharp
-var App = Project.From("./src/HelloWorld.csproj");
+var App = Dotnet.Project("./src/HelloWorld.csproj");
 
-var outputDir = Context.Vars.Env("ANDO_OUTPUT_DIR") ?? "dist";
-var output = Context.Paths.Root / outputDir;
+var outputDir = Env("ANDO_OUTPUT_DIR", required: false) ?? "dist";
+var output = Root / outputDir;
 
 Dotnet.Restore(App);
 Dotnet.Build(App);

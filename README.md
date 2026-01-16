@@ -16,7 +16,7 @@ ANDO allows you to write build and deployment scripts in plain C# with full IDE 
 
 | Project | Description |
 |---------|-------------|
-| **Ando** (`src/Ando`) | CLI tool that parses and executes `build.ando` scripts. Installed as a dotnet tool. |
+| **Ando** (`src/Ando`) | CLI tool that parses and executes `build.csando` scripts. Installed as a dotnet tool. |
 | **Ando.Server** (`src/Ando.Server`) | CI/CD server with GitHub webhook integration, real-time build logs via SignalR, and artifact management. |
 | **Website** (`website/`) | Documentation site built with Astro. Deployed at [andobuild.com](https://andobuild.com). |
 

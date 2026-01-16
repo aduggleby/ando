@@ -1,23 +1,10 @@
 ---
+import { providers } from "../data/providers.js";
+
 const navLinks = [
   { href: "/#cli", label: "Commands" },
-  { href: "/#build", label: "Example" },
+  { href: "/examples", label: "Examples" },
   { href: "/#ops", label: "Operations" },
-];
-
-const sortedProviders = [
-  { href: "/ando", label: "Ando" },
-  { href: "/appservice", label: "App Service" },
-  { href: "/azure", label: "Azure" },
-  { href: "/bicep", label: "Bicep" },
-  { href: "/cloudflare", label: "Cloudflare" },
-  { href: "/dotnet", label: "Dotnet" },
-  { href: "/dotnetsdk", label: "DotnetSdk" },
-  { href: "/ef", label: "EF Core" },
-  { href: "/functions", label: "Functions" },
-  { href: "/node", label: "Node" },
-  { href: "/npm", label: "Npm" },
-  { href: "/nuget", label: "NuGet" },
 ];
 ---
 
@@ -65,7 +52,7 @@ const sortedProviders = [
           class="invisible absolute top-full right-0 z-50 mt-2 w-40 rounded-lg border border-zinc-200 bg-white py-2 opacity-0 shadow-lg transition-all group-hover:visible group-hover:opacity-100 dark:border-zinc-700 dark:bg-zinc-800"
         >
           {
-            sortedProviders.map(({ href, label }) => (
+            providers.map(({ href, label }) => (
               <a
                 href={href}
                 class="block px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-cyan-600 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-cyan-400"
@@ -108,7 +95,7 @@ const sortedProviders = [
       </div>
       <div class="grid grid-cols-2 gap-2">
         {
-          sortedProviders.map(({ href, label }) => (
+          providers.map(({ href, label }) => (
             <a href={href} class="text-sm text-zinc-600 hover:text-cyan-600 dark:text-zinc-300">
               {label}
             </a>

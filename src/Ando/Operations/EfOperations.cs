@@ -60,6 +60,22 @@ public class EfOperations(StepRegistry registry, IBuildLogger logger, Func<IComm
     }
 
     /// <summary>
+    /// Registers a step to apply pending migrations to the database.
+    /// Uses a connection string from a Bicep deployment output.
+    /// </summary>
+    /// <param name="context">DbContext reference.</param>
+    /// <param name="connectionString">Connection string output from a Bicep deployment.</param>
+    public void DatabaseUpdate(EfContextRef context, OutputRef connectionString)
+    {
+        RegisterCommand("Ef.DatabaseUpdate", "dotnet",
+            () => new ArgumentBuilder()
+                .Add("ef", "database", "update", "--project", context.Project.Path)
+                .AddIf(context.ContextName != "default", "--context", context.ContextName)
+                .AddIfNotNull("--connection", connectionString.Resolve()),
+            context.ToString());
+    }
+
+    /// <summary>
     /// Registers a step to create a new migration.
     /// </summary>
     /// <param name="context">DbContext reference.</param>

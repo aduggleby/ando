@@ -11,8 +11,10 @@
 // - Ef.Script() for generating SQL scripts
 // - Ef.RemoveMigration() for removing migrations
 
+Ando.UseImage("mcr.microsoft.com/dotnet/sdk:9.0");
+
 // Reference the data project and DbContext
-var DataProject = DotnetProject("./src/DataProject/DataProject.csproj");
+var DataProject = Dotnet.Project("./src/DataProject/DataProject.csproj");
 var DbContext = Ef.DbContextFrom(DataProject, "AppDbContext");
 
 // Ensure EF tools are installed

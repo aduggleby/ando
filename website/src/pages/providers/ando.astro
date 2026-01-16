@@ -1,0 +1,95 @@
+---
+import ProviderLayout from "../../layouts/ProviderLayout.astro";
+import OperationsTable from "../../components/OperationsTable.astro";
+import CodeBlock from "../../components/CodeBlock.astro";
+import { getOperationsForProvider } from "../../data/operations.js";
+
+const allOperations = getOperationsForProvider("Ando");
+
+// Separate operations into three categories
+const globals = allOperations.filter((op) => !op.name.startsWith("Log.") && !op.name.startsWith("Ando."));
+const logOperations = allOperations.filter((op) => op.name.startsWith("Log."));
+const andoOperations = allOperations.filter((op) => op.name.startsWith("Ando."));
+
+const globalsCode = `// Directory reference
+var frontend = Directory("./frontend");
+
+// Path construction with / operator
+var output = Root / "dist";
+var cache = Temp / "build-cache";
+
+// Access environment variables
+var dbUrl = Env("DATABASE_URL");
+var apiKey = Env("API_KEY", required: false);
+
+// Use regular C# variables for custom values
+var buildNumber = "123";`;
+
+const logCode = `// Informational messages (visible at Normal verbosity)
+Log.Info("Starting build process...");
+
+// Warnings (visible at Minimal verbosity and above)
+Log.Warning("Cache directory not found, rebuilding from scratch");
+
+// Errors (always visible)
+Log.Error("Build failed: missing dependency");
+
+// Debug messages (only visible at Detailed verbosity)
+Log.Debug($"Processing file: {filePath}");`;
+
+const andoCode = `// Set the Docker image for the build container
+Ando.UseImage("mcr.microsoft.com/dotnet/sdk:9.0");
+
+// Copy artifacts from container to host after build
+Ando.CopyArtifactsToHost("dist", "./dist");
+
+// Copy as compressed archive (faster for many small files)
+Ando.CopyZippedArtifactsToHost("dist", "./output");  // Creates ./output/artifacts.tar.gz
+Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.tar.gz");  // Specific filename
+Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");     // Zip format
+
+// Run a child build in a subdirectory
+Ando.Build(Directory("./website"));
+
+// Run a specific build file
+Ando.Build(Directory("./website") / "deploy.csando");
+
+// Child build with Docker-in-Docker enabled
+Ando.Build(Directory("./integration-tests"), o => o.WithDind());`;
+---
+
+<ProviderLayout title="Ando" provider="Ando" description="Globals and helpers available in all build.csando scripts.">
+  <section id="globals">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Globals</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      These globals are available in all build.csando scripts without any prefix or import.
+    </p>
+    <OperationsTable operations={globals} />
+    <div class="mt-4">
+      <CodeBlock code={globalsCode} lang="csharp" />
+    </div>
+  </section>
+
+  <section id="log">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Log</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      Logging operations for outputting messages during the build. Visibility depends on verbosity level.
+    </p>
+    <OperationsTable operations={logOperations} />
+    <div class="mt-4">
+      <CodeBlock code={logCode} lang="csharp" />
+    </div>
+  </section>
+
+  <section id="ando">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Ando</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      Build configuration, artifact copying, and nested builds. Use these to set the Docker image, copy outputs to host,
+      and run child build scripts.
+    </p>
+    <OperationsTable operations={andoOperations} />
+    <div class="mt-4">
+      <CodeBlock code={andoCode} lang="csharp" />
+    </div>
+  </section>
+</ProviderLayout>

@@ -5,16 +5,15 @@
 //
 // Tests verify that:
 // - All properties are correctly initialized from BuildContext
-// - Project() creates correct ProjectRef instances
+// - Dotnet.Project() creates correct ProjectRef instances
 // - Directory() creates correct DirectoryRef instances
-// - Configuration exposes the correct value from Options
+// - Env() correctly retrieves environment variables
 // =============================================================================
 
 using Ando.Operations;
 using Ando.References;
 using Ando.Scripting;
 using Ando.Tests.TestFixtures;
-using Ando.Workflow;
 
 namespace Ando.Tests.Unit.Scripting;
 
@@ -34,41 +33,19 @@ public class ScriptGlobalsTests
     {
         var globals = CreateGlobals();
 
-        globals.Context.ShouldNotBeNull();
-        globals.Options.ShouldNotBeNull();
-        globals.Root.Value.ShouldNotBeNullOrEmpty(); // BuildPath is a struct
+        globals.Root.Value.ShouldNotBeNullOrEmpty();
         globals.Dotnet.ShouldNotBeNull();
         globals.Ef.ShouldNotBeNull();
         globals.Npm.ShouldNotBeNull();
-        globals.Artifacts.ShouldNotBeNull();
-        globals.DotnetProject.ShouldNotBeNull();
+        globals.Ando.ShouldNotBeNull();
     }
 
     [Fact]
-    public void Context_ReturnsContextObject()
-    {
-        var globals = CreateGlobals("/my/project");
-
-        globals.Context.ShouldNotBeNull();
-        globals.Context.Paths.ShouldNotBeNull();
-        globals.Context.Vars.ShouldNotBeNull();
-    }
-
-    [Fact]
-    public void Options_ReturnsBuildOptions()
-    {
-        var globals = CreateGlobals();
-
-        globals.Options.ShouldNotBeNull();
-        globals.Options.ShouldBeOfType<BuildOptions>();
-    }
-
-    [Fact]
-    public void Root_MatchesContextPathsRoot()
+    public void Root_ReturnsProjectRoot()
     {
         var globals = CreateGlobals("/my/project/root");
 
-        globals.Root.Value.ShouldBe(globals.Context.Paths.Root.Value);
+        globals.Root.Value.ShouldBe("/my/project/root");
     }
 
     [Fact]
@@ -99,39 +76,20 @@ public class ScriptGlobalsTests
     }
 
     [Fact]
-    public void Artifacts_ReturnsArtifactOperations()
+    public void Ando_ReturnsAndoOperations()
     {
         var globals = CreateGlobals();
 
-        globals.Artifacts.ShouldNotBeNull();
-        globals.Artifacts.ShouldBeOfType<ArtifactOperations>();
+        globals.Ando.ShouldNotBeNull();
+        globals.Ando.ShouldBeOfType<AndoOperations>();
     }
 
     [Fact]
-    public void Configuration_ReturnsOptionsConfiguration()
+    public void Dotnet_Project_CreatesProjectRef()
     {
         var globals = CreateGlobals();
 
-        // Default configuration
-        globals.Configuration.ShouldBe(Configuration.Debug);
-    }
-
-    [Fact]
-    public void Configuration_ReflectsOptionsChanges()
-    {
-        var globals = CreateGlobals();
-
-        globals.Options.UseConfiguration(Configuration.Release);
-
-        globals.Configuration.ShouldBe(Configuration.Release);
-    }
-
-    [Fact]
-    public void DotnetProject_CreatesProjectRef()
-    {
-        var globals = CreateGlobals();
-
-        var project = globals.DotnetProject("./src/MyApp/MyApp.csproj");
+        var project = globals.Dotnet.Project("./src/MyApp/MyApp.csproj");
 
         project.ShouldNotBeNull();
         project.ShouldBeOfType<ProjectRef>();
@@ -139,11 +97,11 @@ public class ScriptGlobalsTests
     }
 
     [Fact]
-    public void DotnetProject_ExtractsProjectName()
+    public void Dotnet_Project_ExtractsProjectName()
     {
         var globals = CreateGlobals();
 
-        var project = globals.DotnetProject("./src/MyWebApp/MyWebApp.csproj");
+        var project = globals.Dotnet.Project("./src/MyWebApp/MyWebApp.csproj");
 
         project.Name.ShouldBe("MyWebApp");
     }
@@ -179,5 +137,41 @@ public class ScriptGlobalsTests
 
         dir.ShouldNotBeNull();
         dir.Path.ShouldBe(".");
+    }
+
+    [Fact]
+    public void Env_ReturnsEnvironmentVariable()
+    {
+        var globals = CreateGlobals();
+        Environment.SetEnvironmentVariable("TEST_SCRIPT_GLOBALS_VAR", "test-value");
+
+        try
+        {
+            var value = globals.Env("TEST_SCRIPT_GLOBALS_VAR");
+
+            value.ShouldBe("test-value");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TEST_SCRIPT_GLOBALS_VAR", null);
+        }
+    }
+
+    [Fact]
+    public void Env_ThrowsWhenRequiredVariableNotSet()
+    {
+        var globals = CreateGlobals();
+
+        Should.Throw<InvalidOperationException>(() => globals.Env("NONEXISTENT_TEST_VAR_12345"));
+    }
+
+    [Fact]
+    public void Env_ReturnsNullWhenNotRequiredAndNotSet()
+    {
+        var globals = CreateGlobals();
+
+        var value = globals.Env("NONEXISTENT_TEST_VAR_12345", required: false);
+
+        value.ShouldBeNull();
     }
 }

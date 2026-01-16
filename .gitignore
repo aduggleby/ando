@@ -7,7 +7,6 @@ out/
 
 # IDE
 .vs/
-.vscode/
 .idea/
 *.user
 *.suo
@@ -62,3 +61,13 @@ publish-to-nas.sh
 .parcel-cache/
 **/.vite/
 **/.astro/
+
+# Ando
+.csando.log
+.csando/
+
+# Syncthing conflicts
+*.sync-conflict-*
+
+# Wrangler
+.wrangler/

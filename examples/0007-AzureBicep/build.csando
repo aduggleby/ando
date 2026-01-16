@@ -11,32 +11,33 @@
 // - Azure.SetSubscription() to select the target subscription
 // - Azure.CreateResourceGroup() to create a resource group
 // - Bicep.DeployToResourceGroup() to deploy infrastructure
-// - CaptureOutputs() to store deployment outputs in Context.Vars
+// - BicepDeployment.Output() to get strongly-typed deployment outputs
 
 // Verify we're logged in to Azure
 Azure.EnsureLoggedIn();
 
 // Set subscription (optional - uses default if not specified)
-var subscriptionId = Context.Vars.Env("AZURE_SUBSCRIPTION_ID");
+var subscriptionId = Env("AZURE_SUBSCRIPTION_ID", required: false);
 if (subscriptionId != null)
 {
     Azure.SetSubscription(subscriptionId);
 }
 
 // Configuration from environment or defaults
-var resourceGroup = Context.Vars.Env("AZURE_RESOURCE_GROUP") ?? "ando-demo-rg";
-var location = Context.Vars.Env("AZURE_LOCATION") ?? "eastus";
+var resourceGroup = Env("AZURE_RESOURCE_GROUP", required: false) ?? "ando-demo-rg";
+var location = Env("AZURE_LOCATION", required: false) ?? "eastus";
 
 // Create resource group if needed
 Azure.CreateResourceGroup(resourceGroup, location);
 
 // Deploy the storage account using Bicep
-Bicep.DeployToResourceGroup(resourceGroup, "./infra/main.bicep", o => o
+// Returns a BicepDeployment object with typed access to outputs
+var deployment = Bicep.DeployToResourceGroup(resourceGroup, "./infra/main.bicep", o => o
     .WithName("ando-storage-deployment")
     .WithParameter("location", location)
-    .WithParameter("storageAccountNamePrefix", "andodemo")
-    .CaptureOutputs());
+    .WithParameter("storageAccountNamePrefix", "andodemo"));
 
-// After deployment, Context.Vars["storageAccountName"] contains the storage account name
-// Context.Vars["storageAccountId"] contains the resource ID
-// Context.Vars["blobEndpoint"] contains the blob endpoint URL
+// Access deployment outputs using the Output() method:
+// - deployment.Output("storageAccountName") returns an OutputRef that resolves after deployment
+// - deployment.Output("storageAccountId") returns the resource ID
+// - deployment.Output("blobEndpoint") returns the blob endpoint URL

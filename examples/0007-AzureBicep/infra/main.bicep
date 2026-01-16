@@ -34,7 +34,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   }
 }
 
-// Outputs are captured to Context.Vars when CaptureOutputs() is used
+// Outputs are available via BicepDeployment.Output("name")
 output storageAccountName string = storageAccount.name
 output storageAccountId string = storageAccount.id
 output blobEndpoint string = storageAccount.properties.primaryEndpoints.blob

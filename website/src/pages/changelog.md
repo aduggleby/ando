@@ -19,7 +19,7 @@ dotnet tool update -g ando
 ando --version
 ```
 
-## 0.9.1
+## 0.9.3
 
 **2026-01-16**
 

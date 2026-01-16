@@ -7,33 +7,34 @@
 // This is useful for debugging, providing progress information, and displaying
 // custom messages during build execution.
 //
-// Usage in build.ando:
+// Usage in build.csando:
 //   Log.Info("Starting deployment...");
 //   Log.Warning("Cache is stale, rebuilding");
 //   Log.Error("Failed to connect to server");
 //   Log.Debug("Connection string: ...");
 //
 // Design Decisions:
-// - Simple wrapper around IBuildLogger for script access
+// - Registers log steps that render as single lines: "▶ [1/5] Info: message"
 // - Exposes standard log levels: Info, Warning, Error, Debug
-// - No step registration needed - logs immediately during script execution
+// - Steps execute in order with other build steps
 // =============================================================================
 
-using Ando.Logging;
+using Ando.Steps;
 
 namespace Ando.Operations;
 
 /// <summary>
 /// Provides logging operations for build scripts.
 /// Allows scripts to output messages at different log levels.
+/// Logs are registered as special log steps that render as single lines.
 /// </summary>
 public class LogOperations
 {
-    private readonly IBuildLogger _logger;
+    private readonly IStepRegistry _registry;
 
-    public LogOperations(IBuildLogger logger)
+    public LogOperations(IStepRegistry registry)
     {
-        _logger = logger;
+        _registry = registry;
     }
 
     /// <summary>
@@ -43,7 +44,12 @@ public class LogOperations
     /// <param name="message">The message to log.</param>
     public void Info(string message)
     {
-        _logger.Info(message);
+        _registry.Register(new BuildStep("Log.Info", () => Task.FromResult(true))
+        {
+            IsLogStep = true,
+            LogLevel = LogStepLevel.Info,
+            LogMessage = message
+        });
     }
 
     /// <summary>
@@ -53,7 +59,12 @@ public class LogOperations
     /// <param name="message">The message to log.</param>
     public void Warning(string message)
     {
-        _logger.Warning(message);
+        _registry.Register(new BuildStep("Log.Warning", () => Task.FromResult(true))
+        {
+            IsLogStep = true,
+            LogLevel = LogStepLevel.Warning,
+            LogMessage = message
+        });
     }
 
     /// <summary>
@@ -63,7 +74,12 @@ public class LogOperations
     /// <param name="message">The message to log.</param>
     public void Error(string message)
     {
-        _logger.Error(message);
+        _registry.Register(new BuildStep("Log.Error", () => Task.FromResult(true))
+        {
+            IsLogStep = true,
+            LogLevel = LogStepLevel.Error,
+            LogMessage = message
+        });
     }
 
     /// <summary>
@@ -73,6 +89,11 @@ public class LogOperations
     /// <param name="message">The message to log.</param>
     public void Debug(string message)
     {
-        _logger.Debug(message);
+        _registry.Register(new BuildStep("Log.Debug", () => Task.FromResult(true))
+        {
+            IsLogStep = true,
+            LogLevel = LogStepLevel.Debug,
+            LogMessage = message
+        });
     }
 }

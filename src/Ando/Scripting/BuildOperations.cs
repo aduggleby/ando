@@ -18,11 +18,11 @@
 // - Factory pattern for executor supports swapping execution strategy
 // =============================================================================
 
-using Ando.Context;
 using Ando.Execution;
 using Ando.Logging;
 using Ando.Operations;
 using Ando.Steps;
+using Ando.Workflow;
 
 namespace Ando.Scripting;
 
@@ -57,8 +57,8 @@ public class BuildOperations
     /// <summary>Azure App Service deployment operations.</summary>
     public AppServiceOperations AppService { get; }
 
-    /// <summary>Artifact operations for copying files to host.</summary>
-    public ArtifactOperations Artifacts { get; }
+    /// <summary>Artifact operations for copying files to host (internal use).</summary>
+    internal ArtifactOperations Artifacts { get; }
 
     /// <summary>Node.js installation operations (installs Node.js globally).</summary>
     public NodeInstallOperations Node { get; }
@@ -72,7 +72,7 @@ public class BuildOperations
     /// <summary>NuGet package operations (pack, push).</summary>
     public NugetOperations Nuget { get; }
 
-    /// <summary>ANDO operations for nested builds.</summary>
+    /// <summary>ANDO operations for image configuration, artifacts, and nested builds.</summary>
     public AndoOperations Ando { get; }
 
     /// <summary>
@@ -81,28 +81,28 @@ public class BuildOperations
     /// <param name="registry">Step registry for operations to register steps.</param>
     /// <param name="logger">Logger for operations to use.</param>
     /// <param name="executorFactory">Factory to get current executor.</param>
-    /// <param name="vars">Variables context for operations that need it.</param>
     /// <param name="containerToHostPath">Function to translate container paths to host paths.</param>
+    /// <param name="buildOptions">Build options for configuring the current build.</param>
     public BuildOperations(
         StepRegistry registry,
         IBuildLogger logger,
         Func<ICommandExecutor> executorFactory,
-        VarsContext vars,
-        Func<string, string> containerToHostPath)
+        Func<string, string> containerToHostPath,
+        BuildOptions buildOptions)
     {
         Dotnet = new DotnetOperations(registry, logger, executorFactory);
         Ef = new EfOperations(registry, logger, executorFactory);
         Npm = new NpmOperations(registry, logger, executorFactory);
         Azure = new AzureOperations(registry, logger, executorFactory);
-        Bicep = new BicepOperations(registry, logger, executorFactory, vars);
+        Bicep = new BicepOperations(registry, logger, executorFactory);
         Cloudflare = new CloudflareOperations(registry, logger, executorFactory);
         Functions = new FunctionsOperations(registry, logger, executorFactory);
         AppService = new AppServiceOperations(registry, logger, executorFactory);
         Artifacts = new ArtifactOperations(logger);
         Node = new NodeInstallOperations(registry, logger, executorFactory);
         DotnetSdk = new DotnetInstallOperations(registry, logger, executorFactory);
-        Log = new LogOperations(logger);
+        Log = new LogOperations(registry);
         Nuget = new NugetOperations(registry, logger, executorFactory);
-        Ando = new AndoOperations(registry, logger, containerToHostPath);
+        Ando = new AndoOperations(registry, logger, containerToHostPath, buildOptions, Artifacts);
     }
 }

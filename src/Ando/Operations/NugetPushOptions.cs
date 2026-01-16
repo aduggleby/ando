@@ -7,9 +7,10 @@
 // of push options. Each method returns 'this' to allow chaining.
 //
 // Example usage:
+//   var apiKey = Env("NUGET_API_KEY");
 //   Nuget.Push("./packages/MyPackage.1.0.0.nupkg", o => o
 //       .ToNuGetOrg()
-//       .WithApiKey(Context.Vars["NUGET_API_KEY"])
+//       .WithApiKey(apiKey)
 //       .SkipDuplicates());
 //
 // Design Decisions:

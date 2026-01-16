@@ -12,11 +12,24 @@
 // =============================================================================
 
 export const operations = [
+  // Top-level operations (globals available in build.csando)
   {
     group: "Ando",
-    name: "DotnetProject",
-    desc: "Creates a reference to a .NET project file (.csproj). Used with Dotnet and Ef operations.",
-    examples: ['var app = DotnetProject("./src/MyApp/MyApp.csproj");', "Dotnet.Build(app);"],
+    name: "Root",
+    desc: "The root path of the project (where build.csando is located). Supports path combining with the <code>/</code> operator.",
+    examples: ['var output = Root / "dist";', "Dotnet.Publish(app, o => o.Output(output));"],
+  },
+  {
+    group: "Ando",
+    name: "Temp",
+    desc: "Temporary files directory (root/.ando/tmp). Supports path combining with the <code>/</code> operator. Use for caches, intermediate files, etc.",
+    examples: ['var cache = Temp / "cache";', 'var intermediate = Temp / "build-output";'],
+  },
+  {
+    group: "Ando",
+    name: "Env",
+    desc: "Gets an environment variable. By default throws if not set. Pass <code>required: false</code> to return null instead.",
+    examples: ['var apiKey = Env("API_KEY");', 'var optional = Env("OPTIONAL_VAR", required: false);'],
   },
   {
     group: "Ando",
@@ -28,47 +41,44 @@ export const operations = [
       'Cloudflare.PagesDeploy(frontend / "dist", "my-site");',
     ],
   },
+  // Ando.* operations
   {
     group: "Ando",
-    name: "Root",
-    desc: "The root path of the project (where build.ando is located). Supports path combining with the <code>/</code> operator.",
-    examples: ['var output = Root / "dist";', "Dotnet.Publish(app, o => o.Output(output));"],
-  },
-  {
-    group: "Ando",
-    name: "Context",
-    desc: "Provides access to build context including paths and variables. Use <code>Context.Paths</code> for path helpers and <code>Context.Vars</code> for build variables.",
+    name: "Ando.UseImage",
+    desc: "Set the Docker image for the current build container. Must be called before build steps execute.",
     examples: [
-      "var artifacts = Context.Paths.Artifacts;",
-      'Context.Vars["BUILD_NUMBER"] = "123";',
-      'var apiKey = Context.Vars.Env("API_KEY");',
-      'var required = Context.Vars.EnvRequired("DATABASE_URL");',
+      'Ando.UseImage("ubuntu:24.04");',
+      'Ando.UseImage("mcr.microsoft.com/dotnet/sdk:9.0");',
+      'Ando.UseImage("node:22");',
     ],
   },
   {
     group: "Ando",
-    name: "Options",
-    desc: "Build options for configuring the workflow. Set configuration, Docker image, and other build-wide settings.",
+    name: "Ando.CopyArtifactsToHost",
+    desc: "Register files to copy from the container to the host after the build completes. The first parameter is the path inside the container (relative to /workspace or absolute), and the second is the destination on the host (relative to project root or absolute).",
+    examples: ['Ando.CopyArtifactsToHost("dist", "./dist");', 'Ando.CopyArtifactsToHost("bin/Release", "./output");'],
+  },
+  {
+    group: "Ando",
+    name: "Ando.CopyZippedArtifactsToHost",
+    desc: "Register files to be archived and copied from the container to the host after the build completes. Creates a single archive file for faster transfer of many small files. Supports <code>.tar.gz</code> (default) and <code>.zip</code> formats. If the destination is a directory, creates <code>artifacts.tar.gz</code> in that directory.",
     examples: [
-      "Options.UseConfiguration(Configuration.Release);",
-      'Options.UseImage("mcr.microsoft.com/dotnet/sdk:9.0");',
+      'Ando.CopyZippedArtifactsToHost("dist", "./output");',
+      'Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.tar.gz");',
+      'Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");',
     ],
   },
   {
     group: "Ando",
-    name: "Configuration",
-    desc: "Enum for build configuration. Returns the current configuration set via <code>Options.UseConfiguration()</code>.",
+    name: "Ando.Build",
+    desc: "Run a nested build script. Accepts a directory (runs build.csando in that directory) or a specific .csando file path. The child build runs in its own isolated container with its own <code>.env</code> file and context.",
     examples: [
-      "Options.UseConfiguration(Configuration.Release);",
-      "if (Configuration == Configuration.Release) { ... }",
+      'Ando.Build(Directory("./website"));',
+      'Ando.Build(Directory("./website") / "deploy.csando");',
+      'Ando.Build(Directory("./api"), o => o.WithDind());',
     ],
   },
-  {
-    group: "Ando",
-    name: "Artifacts",
-    desc: "Operations for copying build artifacts from the container to the host after the build completes.",
-    examples: ['Artifacts.CopyToHost("dist", "./dist");', 'Artifacts.CopyToHost("/workspace/publish", "./publish");'],
-  },
+  // Log.* operations
   {
     group: "Ando",
     name: "Log.Info",
@@ -94,16 +104,6 @@ export const operations = [
     examples: ['Log.Debug("Connection string: ...");', 'Log.Debug("Processing item 5 of 10");'],
   },
   {
-    group: "Ando",
-    name: "Ando.Build",
-    desc: "Run a nested build script in a subdirectory. The child build runs in its own isolated container with its own <code>.env</code> file and context.",
-    examples: [
-      'Ando.Build(Directory("./website"));',
-      'Ando.Build(Directory("./api"), o => o.WithDind());',
-      'Ando.Build(Directory("./frontend"), o => o.ColdStart());',
-    ],
-  },
-  {
     group: "Node",
     name: "Node.Install",
     desc: "Install Node.js globally in the container. Skips installation if already present (for warm containers).",
@@ -114,6 +114,12 @@ export const operations = [
     name: "DotnetSdk.Install",
     desc: "Install .NET SDK globally in the container. Skips installation if already present (for warm containers).",
     examples: ["DotnetSdk.Install(); // Installs .NET SDK 9.0", 'DotnetSdk.Install("8.0"); // Installs .NET SDK 8.0'],
+  },
+  {
+    group: "Dotnet",
+    name: "Dotnet.Project",
+    desc: "Creates a reference to a .NET project file (.csproj). Used with Dotnet and Ef operations.",
+    examples: ['var app = Dotnet.Project("./src/MyApp/MyApp.csproj");', "Dotnet.Build(app);"],
   },
   {
     group: "Dotnet",
@@ -157,8 +163,12 @@ export const operations = [
   {
     group: "Ef",
     name: "Ef.DatabaseUpdate",
-    desc: "Apply pending EF Core migrations to the database.",
-    examples: ["Ef.DatabaseUpdate(db);", 'Ef.DatabaseUpdate(db, connectionString: "Server=...");'],
+    desc: "Apply pending EF Core migrations to the database. Can accept a connection string or an <code>OutputRef</code> from a Bicep deployment.",
+    examples: [
+      "Ef.DatabaseUpdate(db);",
+      'Ef.DatabaseUpdate(db, connectionString: "Server=...");',
+      'Ef.DatabaseUpdate(db, deployment.Output("sqlConnectionString"));',
+    ],
   },
   {
     group: "Ef",
@@ -275,19 +285,19 @@ export const operations = [
   {
     group: "Bicep",
     name: "Bicep.DeployToResourceGroup",
-    desc: "Deploy a Bicep template to a resource group.",
+    desc: 'Deploy a Bicep template to a resource group. Returns a <code>BicepDeployment</code> with typed access to outputs via <code>deployment.Output("name")</code>.',
     examples: [
-      'Bicep.DeployToResourceGroup("my-rg", "./infra/main.bicep");',
-      'Bicep.DeployToResourceGroup("my-rg", "./main.bicep", o => o\n  .WithParameterFile("./params.json")\n  .WithDeploymentSlot("staging")\n  .CaptureOutputs());',
+      'var deployment = Bicep.DeployToResourceGroup("my-rg", "./infra/main.bicep");',
+      'var deployment = Bicep.DeployToResourceGroup("my-rg", "./main.bicep", o => o\n  .WithParameterFile("./params.json")\n  .WithDeploymentSlot("staging"));\nEf.DatabaseUpdate(db, deployment.Output("sqlConnectionString"));',
     ],
   },
   {
     group: "Bicep",
     name: "Bicep.DeployToSubscription",
-    desc: "Deploy a Bicep template at subscription scope.",
+    desc: 'Deploy a Bicep template at subscription scope. Returns a <code>BicepDeployment</code> with typed access to outputs via <code>deployment.Output("name")</code>.',
     examples: [
-      'Bicep.DeployToSubscription("eastus", "./infra/sub.bicep");',
-      'Bicep.DeployToSubscription("eastus", "./sub.bicep", o => o\n  .WithParameter("environment", "prod")\n  .CaptureOutputs("infra_"));',
+      'var deployment = Bicep.DeployToSubscription("eastus", "./infra/sub.bicep");',
+      'var deployment = Bicep.DeployToSubscription("eastus", "./sub.bicep", o => o\n  .WithParameter("environment", "prod"));\nvar resourceGroup = deployment.Output("resourceGroupName");',
     ],
   },
   {
@@ -476,14 +486,14 @@ export const operations = [
     group: "Nuget",
     name: "Nuget.EnsureAuthenticated",
     desc: "Ensures NuGet API key is available for publishing. Prompts interactively if <code>NUGET_API_KEY</code> environment variable is not set. Call before Push.",
-    examples: ['var app = DotnetProject("./src/MyLib/MyLib.csproj");\nNuget.EnsureAuthenticated();\nNuget.Push(app);'],
+    examples: ['var app = Dotnet.Project("./src/MyLib/MyLib.csproj");\nNuget.EnsureAuthenticated();\nNuget.Push(app);'],
   },
   {
     group: "Nuget",
     name: "Nuget.Pack",
     desc: "Create a NuGet package from a project. <b>Defaults:</b> Release config, output to <code>bin/Release</code>.",
     examples: [
-      'var app = DotnetProject("./src/MyLib/MyLib.csproj");\nNuget.Pack(app);',
+      'var app = Dotnet.Project("./src/MyLib/MyLib.csproj");\nNuget.Pack(app);',
       'Nuget.Pack(app, o => o.WithVersion("1.0.0"));',
     ],
   },
@@ -492,7 +502,7 @@ export const operations = [
     name: "Nuget.Push",
     desc: "Push packages to a feed. Pass a ProjectRef to push from <code>bin/Release/*.nupkg</code>, or a path/glob. <b>Defaults:</b> NuGet.org, skip duplicates (won't fail if version already exists).",
     examples: [
-      'var app = DotnetProject("./src/MyLib/MyLib.csproj");\nNuget.Pack(app);\nNuget.EnsureAuthenticated();\nNuget.Push(app);',
+      'var app = Dotnet.Project("./src/MyLib/MyLib.csproj");\nNuget.Pack(app);\nNuget.EnsureAuthenticated();\nNuget.Push(app);',
       'Nuget.Push("./packages/MyLib.1.0.0.nupkg");',
     ],
   },
@@ -516,6 +526,7 @@ export function getAllOperationsSorted() {
 }
 
 // Get operations grouped by provider, sorted alphabetically
+// Note: Ando group preserves array order (top-level, then Ando.*, then Log.*)
 export function getOperationsGroupedByProvider() {
   const grouped = {};
   for (const op of operations) {
@@ -524,9 +535,11 @@ export function getOperationsGroupedByProvider() {
     }
     grouped[op.group].push(op);
   }
-  // Sort operations within each group by name
+  // Sort operations within each group by name, except Ando which preserves array order
   for (const group of Object.keys(grouped)) {
-    grouped[group].sort((a, b) => a.name.localeCompare(b.name));
+    if (group !== "Ando") {
+      grouped[group].sort((a, b) => a.name.localeCompare(b.name));
+    }
   }
   // Return as array of [provider, operations] pairs, sorted by provider
   return Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0]));

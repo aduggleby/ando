@@ -1,5 +1,5 @@
 // =============================================================================
-// build.ando - ANDO Documentation Website Deployment
+// build.csando - ANDO Documentation Website Deployment
 //
 // Prerequisites:
 // - CLOUDFLARE_API_TOKEN env var set (or enter when prompted)

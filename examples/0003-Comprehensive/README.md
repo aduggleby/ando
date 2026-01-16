@@ -6,8 +6,7 @@ This example demonstrates a comprehensive Dotnet workflow using ANDO.
 
 - **Multiple projects**: WebApp and WebApp.Tests
 - **BuildPath syntax**: `Root / "dist"` for path combination
-- **Context paths**: `Context.Paths.Artifacts` for output
-- **Context variables**: `Context.Vars["BUILD_NUMBER"]` for custom data
+- **C# variables**: Regular variables for custom data
 - **All Dotnet operations**:
   - `Dotnet.Restore()` - Restore NuGet packages
   - `Dotnet.Build()` - Build with configuration

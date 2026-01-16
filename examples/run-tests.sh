@@ -43,7 +43,7 @@ echo ""
 # Step 3: Discover examples
 EXAMPLES=()
 for dir in "$SCRIPT_DIR"/0*/; do
-    if [ -f "$dir/build.ando" ] && [ -f "$dir/test.sh" ]; then
+    if [ -f "$dir/build.csando" ] && [ -f "$dir/test.sh" ]; then
         EXAMPLES+=("$(basename "$dir")")
     fi
 done

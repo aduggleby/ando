@@ -1,7 +1,7 @@
 // =============================================================================
 // ScriptHost.cs
 //
-// Summary: Roslyn-based script host for loading and executing build.ando files.
+// Summary: Roslyn-based script host for loading and executing build.csando files.
 //
 // ScriptHost uses Microsoft.CodeAnalysis.CSharp.Scripting (Roslyn) to compile
 // and execute build scripts at runtime. Scripts are real C# code with access
@@ -28,7 +28,7 @@ using Ando.Logging;
 namespace Ando.Scripting;
 
 /// <summary>
-/// Roslyn-based script host for loading and executing build.ando files.
+/// Roslyn-based script host for loading and executing build.csando files.
 /// Scripts are C# code that registers build steps for later execution.
 /// </summary>
 public class ScriptHost(IBuildLogger logger)
@@ -37,7 +37,7 @@ public class ScriptHost(IBuildLogger logger)
     /// Loads and executes a build script, returning the configured build context.
     /// The script registers steps in the StepRegistry but doesn't execute them.
     /// </summary>
-    /// <param name="scriptPath">Path to the build.ando file.</param>
+    /// <param name="scriptPath">Path to the build.csando file.</param>
     /// <param name="rootPath">Project root directory.</param>
     /// <returns>BuildContext with registered steps ready for execution.</returns>
     public async Task<BuildContext> LoadScriptAsync(string scriptPath, string rootPath)
@@ -101,7 +101,7 @@ public class ScriptHost(IBuildLogger logger)
     /// Verifies a build script compiles without errors, without executing it.
     /// Returns compilation diagnostics if any errors are found.
     /// </summary>
-    /// <param name="scriptPath">Path to the build.ando file.</param>
+    /// <param name="scriptPath">Path to the build.csando file.</param>
     /// <returns>List of compilation error messages, empty if script is valid.</returns>
     public async Task<List<string>> VerifyScriptAsync(string scriptPath)
     {

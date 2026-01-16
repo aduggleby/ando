@@ -6,7 +6,7 @@ Demonstrates building a console application that depends on a class library.
 
 ```
 0002-Library/
-├── build.ando
+├── build.csando
 ├── src/
 │   ├── Greeter.Lib/           # Class library
 │   │   ├── Greeter.Lib.csproj
@@ -20,10 +20,10 @@ Demonstrates building a console application that depends on a class library.
 ## Build Script
 
 ```csharp
-var Library = Project.From("./src/Greeter.Lib/Greeter.Lib.csproj");
-var Console = Project.From("./src/Greeter.Console/Greeter.Console.csproj");
+var Library = Dotnet.Project("./src/Greeter.Lib/Greeter.Lib.csproj");
+var Console = Dotnet.Project("./src/Greeter.Console/Greeter.Console.csproj");
 
-var output = Context.Paths.Root / "dist";
+var output = Root / "dist";
 
 // Build library first
 Dotnet.Restore(Library);
