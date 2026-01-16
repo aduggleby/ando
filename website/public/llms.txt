@@ -43,6 +43,7 @@ ando run
 | Functions | FunctionsOperations | Azure Functions deployments. |
 | Cloudflare | CloudflareOperations | Cloudflare Pages deployments. |
 | Nuget | NugetOperations | NuGet package operations (pack, push). |
+| Ando | AndoOperations | Nested build operations. |
 | Artifacts | ArtifactOperations | Copy files from container to host. |
 | Log | LogOperations | Logging (Info, Warning, Error, Debug). |
 
@@ -99,6 +100,15 @@ Cloudflare.PagesDeploy(Directory("./website") / "dist", "my-project");
 Artifacts.CopyToHost("/workspace/dist", "./dist");
 ```
 
+### Nested Builds
+```csharp
+// Run a child build in a subdirectory (own container, own .env)
+Ando.Build(Directory("./website"));
+
+// With options
+Ando.Build(Directory("./api"), o => o.WithDind().ColdStart());
+```
+
 ## All Operations
 
 ### Ando
@@ -108,6 +118,7 @@ Artifacts.CopyToHost("/workspace/dist", "./dist");
 - Context - Access to Paths and Vars
 - Options - Build options configuration
 - Configuration - Build configuration enum
+- Ando.Build(directory, options?) - Run a nested build in a subdirectory (new container, isolated context)
 - Artifacts.CopyToHost(src, dest) - Copy files from container to host
 - Log.Info(message) - Log informational message
 - Log.Warning(message) - Log warning message

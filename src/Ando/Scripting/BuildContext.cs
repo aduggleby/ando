@@ -97,14 +97,21 @@ public class BuildContext
     /// <summary>NuGet package operations (pack, push).</summary>
     public NugetOperations Nuget => Operations.Nuget;
 
+    /// <summary>ANDO operations for nested builds.</summary>
+    public AndoOperations Ando => Operations.Ando;
+
     // Docker manager, container ID, and host root path for artifact copying.
     // Set after container is created via SetDockerManager().
     private DockerManager? _dockerManager;
     private string? _containerId;
     private string? _hostRootPath;
 
+    // Container root path for path translation.
+    private readonly string _containerRootPath;
+
     public BuildContext(string rootPath, IBuildLogger logger)
     {
+        _containerRootPath = rootPath;
         Context = new BuildContextObject(rootPath);
         Options = new BuildOptions();
         StepRegistry = new StepRegistry();
@@ -117,7 +124,37 @@ public class BuildContext
         // Create operations container with an executor factory lambda.
         // The factory ensures operations always get the current executor,
         // even if it's changed after script loading.
-        Operations = new BuildOperations(StepRegistry, Logger, () => Executor, Context.Vars);
+        Operations = new BuildOperations(StepRegistry, Logger, () => Executor, Context.Vars, TranslateContainerToHostPath);
+    }
+
+    /// <summary>
+    /// Translates a container path to a host path.
+    /// Used by Ando.Build to run child builds on the host.
+    /// </summary>
+    private string TranslateContainerToHostPath(string containerPath)
+    {
+        // If no host root configured, return path as-is (local mode).
+        if (string.IsNullOrEmpty(_hostRootPath))
+        {
+            return containerPath;
+        }
+
+        // If path starts with container root, translate to host path.
+        if (containerPath.StartsWith(_containerRootPath))
+        {
+            var relativePath = containerPath[_containerRootPath.Length..].TrimStart('/', '\\');
+            return Path.Combine(_hostRootPath, relativePath);
+        }
+
+        // For relative paths, combine with host root.
+        if (!Path.IsPathRooted(containerPath))
+        {
+            return Path.Combine(_hostRootPath, containerPath);
+        }
+
+        // Return unchanged for other absolute paths (may not work correctly).
+        Logger.Warning($"Cannot translate path '{containerPath}' - returning unchanged");
+        return containerPath;
     }
 
     /// <summary>

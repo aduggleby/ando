@@ -10,7 +10,7 @@ ANDO allows you to write build and deployment scripts in plain C# with full IDE 
 - **Plain C#** - No custom syntax or DSLs. If you know C#, you know ANDO.
 - **Type-safe** - Compile-time errors catch mistakes before they run.
 - **Containerized** - Every build runs in Docker for isolation and reproducibility.
-- **Single file** - One `build.ando` file defines your entire workflow.
+- **Composable** - Run nested builds with `Ando.Build()` for modular workflows.
 
 ## Projects
 

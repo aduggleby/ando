@@ -127,6 +127,13 @@ public class ScriptGlobals
     public NugetOperations Nuget { get; }
 
     /// <summary>
+    /// ANDO operations for nested builds.
+    /// Usage: Ando.Build(Directory("./website"))
+    /// Usage: Ando.Build(Directory("./website"), o => o.WithDind())
+    /// </summary>
+    public AndoOperations Ando { get; }
+
+    /// <summary>
     /// Creates a .NET project reference from a path.
     /// Usage: var app = DotnetProject("./src/MyApp/MyApp.csproj");
     /// </summary>
@@ -162,6 +169,7 @@ public class ScriptGlobals
         DotnetSdk = buildContext.DotnetSdk;
         Log = buildContext.Log;
         Nuget = buildContext.Nuget;
+        Ando = buildContext.Ando;
         DotnetProject = path => ProjectRef.From(path);
     }
 }

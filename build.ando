@@ -14,6 +14,7 @@
 // 6. Creates a NuGet package for the dotnet tool
 // 7. Pushes to NuGet.org (if NUGET_API_KEY is set)
 // 8. Copies artifacts to host
+// 9. Builds and deploys the documentation website
 //
 // Output:
 // - dist/{runtime}/ando[.exe] - Platform-specific executables
@@ -60,3 +61,6 @@ Artifacts.CopyToHost("dist", "./dist");
 Nuget.Pack(project);
 Nuget.EnsureAuthenticated();
 Nuget.Push(project);
+
+// Build and deploy the documentation website
+Ando.Build(Directory("./website"));

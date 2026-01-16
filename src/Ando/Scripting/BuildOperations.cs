@@ -72,6 +72,9 @@ public class BuildOperations
     /// <summary>NuGet package operations (pack, push).</summary>
     public NugetOperations Nuget { get; }
 
+    /// <summary>ANDO operations for nested builds.</summary>
+    public AndoOperations Ando { get; }
+
     /// <summary>
     /// Creates all operation instances.
     /// </summary>
@@ -79,11 +82,13 @@ public class BuildOperations
     /// <param name="logger">Logger for operations to use.</param>
     /// <param name="executorFactory">Factory to get current executor.</param>
     /// <param name="vars">Variables context for operations that need it.</param>
+    /// <param name="containerToHostPath">Function to translate container paths to host paths.</param>
     public BuildOperations(
         StepRegistry registry,
         IBuildLogger logger,
         Func<ICommandExecutor> executorFactory,
-        VarsContext vars)
+        VarsContext vars,
+        Func<string, string> containerToHostPath)
     {
         Dotnet = new DotnetOperations(registry, logger, executorFactory);
         Ef = new EfOperations(registry, logger, executorFactory);
@@ -98,5 +103,6 @@ public class BuildOperations
         DotnetSdk = new DotnetInstallOperations(registry, logger, executorFactory);
         Log = new LogOperations(logger);
         Nuget = new NugetOperations(registry, logger, executorFactory);
+        Ando = new AndoOperations(registry, logger, containerToHostPath);
     }
 }

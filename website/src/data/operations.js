@@ -94,6 +94,16 @@ export const operations = [
     examples: ['Log.Debug("Connection string: ...");', 'Log.Debug("Processing item 5 of 10");'],
   },
   {
+    group: "Ando",
+    name: "Ando.Build",
+    desc: "Run a nested build script in a subdirectory. The child build runs in its own isolated container with its own <code>.env</code> file and context.",
+    examples: [
+      'Ando.Build(Directory("./website"));',
+      'Ando.Build(Directory("./api"), o => o.WithDind());',
+      'Ando.Build(Directory("./frontend"), o => o.ColdStart());',
+    ],
+  },
+  {
     group: "Node",
     name: "Node.Install",
     desc: "Install Node.js globally in the container. Skips installation if already present (for warm containers).",
