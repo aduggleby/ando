@@ -467,6 +467,7 @@ public class AndoCli : IDisposable
         Console.WriteLine();
         Console.WriteLine("Run Options:");
         Console.WriteLine("  -f, --file <file> Use specific build file instead of build.csando");
+        Console.WriteLine("  --read-env        Load .env file without prompting (also applies to sub-builds)");
         Console.WriteLine("  --verbosity <quiet|minimal|normal|detailed>");
         Console.WriteLine("  --no-color        Disable colored output");
         Console.WriteLine("  --cold            Always create fresh container");
@@ -581,8 +582,16 @@ public class AndoCli : IDisposable
         if (unsetVars.Count == 0)
             return;
 
-        // Check if auto-load is enabled (set by parent build when user chose "always").
-        var autoLoad = Environment.GetEnvironmentVariable(AutoLoadEnvVar) == "1";
+        // Check if auto-load is enabled:
+        // 1. --read-env CLI flag was passed
+        // 2. ANDO_AUTO_LOAD_ENV=1 (set by parent build when user chose "always")
+        var autoLoad = HasFlag("--read-env") || Environment.GetEnvironmentVariable(AutoLoadEnvVar) == "1";
+
+        // If --read-env was passed, also enable for sub-builds.
+        if (HasFlag("--read-env"))
+        {
+            Environment.SetEnvironmentVariable(AutoLoadEnvVar, "1");
+        }
 
         if (!autoLoad)
         {

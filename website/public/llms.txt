@@ -44,7 +44,6 @@ ando run
 | Ef | EfOperations | Entity Framework Core operations. |
 | Npm | NpmOperations | npm operations (install, run, ci). |
 | Node | NodeInstallOperations | Node.js installation. |
-| DotnetSdk | DotnetInstallOperations | .NET SDK installation. |
 | Azure | AzureOperations | Azure CLI authentication. |
 | Bicep | BicepOperations | Azure Bicep deployments. |
 | AppService | AppServiceOperations | Azure App Service deployments. |
@@ -149,10 +148,8 @@ Ando.Build(Directory("./api"), o => o.WithDind().ColdStart());
 ### Node
 - Node.Install(version?) - Install Node.js globally (default: v22)
 
-### DotnetSdk
-- DotnetSdk.Install(version?) - Install .NET SDK globally (default: 9.0)
-
 ### Dotnet
+- Dotnet.SdkInstall(version?) - Install .NET SDK globally (default: 9.0). Use for base images without .NET.
 - Dotnet.Project(path) - Create a .NET project reference from a .csproj path
 - Dotnet.Restore(project) - Restore NuGet packages
 - Dotnet.Build(project) - Compile a project

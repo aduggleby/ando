@@ -6,7 +6,6 @@ export const providers = [
   { id: "Bicep", href: "/providers/bicep", label: "Bicep" },
   { id: "Cloudflare", href: "/providers/cloudflare", label: "Cloudflare" },
   { id: "Dotnet", href: "/providers/dotnet", label: "Dotnet" },
-  { id: "DotnetSdk", href: "/providers/dotnetsdk", label: "DotnetSdk" },
   { id: "Ef", href: "/providers/ef", label: "EF Core" },
   { id: "Functions", href: "/providers/functions", label: "Functions" },
   { id: "Node", href: "/providers/node", label: "Node" },

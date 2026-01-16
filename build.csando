@@ -28,7 +28,7 @@ var testProject = Dotnet.Project("./tests/Ando.Tests/Ando.Tests.csproj");
 var distPath = Root / "dist";
 
 // Install .NET SDK
-DotnetSdk.Install();
+Dotnet.SdkInstall();
 
 // Restore dependencies
 Dotnet.Restore(project);

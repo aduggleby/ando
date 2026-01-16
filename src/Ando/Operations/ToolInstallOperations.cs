@@ -3,9 +3,9 @@
 //
 // Summary: Operations for installing development tools globally in the container.
 //
-// These operations install tools like Node.js, npm, and .NET SDK into the build
-// container. They are designed to work with base images like Ubuntu that don't
-// have these tools pre-installed.
+// These operations install tools like Node.js and npm into the build container.
+// They are designed to work with base images like Ubuntu that don't have these
+// tools pre-installed.
 //
 // Architecture:
 // - Each Install method registers a step that runs installation commands
@@ -15,8 +15,8 @@
 // Design Decisions:
 // - Uses standard package managers and official install scripts for reliability
 // - Node.js installed via NodeSource for version control
-// - .NET SDK installed via Microsoft's official install script
 // - npm comes with Node.js but can be upgraded separately
+// - .NET SDK installation moved to Dotnet.SdkInstall() in DotnetOperations
 // =============================================================================
 
 using Ando.Execution;
@@ -71,36 +71,5 @@ public class NpmInstallOperations(StepRegistry registry, IBuildLogger logger, Fu
             () => new ArgumentBuilder()
                 .Add("install", "-g", $"npm@{version}"),
             version);
-    }
-}
-
-/// <summary>
-/// Operations for installing .NET SDK globally in the container.
-/// </summary>
-public class DotnetInstallOperations(StepRegistry registry, IBuildLogger logger, Func<ICommandExecutor> executorFactory)
-    : OperationsBase(registry, logger, executorFactory)
-{
-    /// <summary>
-    /// Installs .NET SDK globally using Microsoft's install script.
-    /// </summary>
-    /// <param name="version">SDK version (e.g., "9.0", "8.0"). Defaults to "9.0".</param>
-    public void Install(string version = "9.0")
-    {
-        // Install .NET SDK via Microsoft's official install script.
-        // First checks if the correct version is already installed (for warm containers).
-        // If not, installs dependencies (curl, ca-certificates, libicu for globalization),
-        // then runs the install script.
-        // Creates symlink in /usr/local/bin so dotnet is available in PATH for subsequent commands.
-        RegisterCommand("DotnetSdk.Install", "bash",
-            () => new ArgumentBuilder()
-                .Add("-c")
-                .Add($"if command -v dotnet >/dev/null && dotnet --version | grep -q '^{version}\\.'; then " +
-                     $"echo '.NET SDK {version} already installed'; " +
-                     $"else " +
-                     $"apt-get update && apt-get install -y curl ca-certificates libicu70 && " +
-                     $"curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel {version} && " +
-                     "ln -sf $HOME/.dotnet/dotnet /usr/local/bin/dotnet; " +
-                     $"fi"),
-            $"v{version}");
     }
 }

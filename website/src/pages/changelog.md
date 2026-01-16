@@ -28,8 +28,7 @@ First public release.
 **Providers:**
 
 - **Ando** - Core operations (Log, Artifacts, Context)
-- **Dotnet** - Build, test, publish .NET projects
-- **DotnetSdk** - Install .NET SDK in containers
+- **Dotnet** - Build, test, publish .NET projects (includes SdkInstall)
 - **Ef** - Entity Framework Core migrations
 - **Npm** - npm install, ci, run, build, test
 - **Node** - Install Node.js in containers

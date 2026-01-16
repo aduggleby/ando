@@ -98,12 +98,6 @@ public class ScriptGlobals
     public NodeInstallOperations Node { get; }
 
     /// <summary>
-    /// .NET SDK installation operations (installs SDK globally).
-    /// Usage: DotnetSdk.Install() or DotnetSdk.Install("8.0")
-    /// </summary>
-    public DotnetInstallOperations DotnetSdk { get; }
-
-    /// <summary>
     /// Logging operations for build script output.
     /// Usage: Log.Info("message"), Log.Warning("message"), Log.Error("message"), Log.Debug("message")
     /// </summary>
@@ -164,7 +158,6 @@ public class ScriptGlobals
         Functions = buildContext.Functions;
         AppService = buildContext.AppService;
         Node = buildContext.Node;
-        DotnetSdk = buildContext.DotnetSdk;
         Log = buildContext.Log;
         Nuget = buildContext.Nuget;
         Ando = buildContext.Ando;

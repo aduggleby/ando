@@ -88,9 +88,6 @@ public class BuildContext
     /// <summary>Node.js installation operations (installs Node.js globally).</summary>
     public NodeInstallOperations Node => Operations.Node;
 
-    /// <summary>.NET SDK installation operations (installs SDK globally).</summary>
-    public DotnetInstallOperations DotnetSdk => Operations.DotnetSdk;
-
     /// <summary>Logging operations for build script output.</summary>
     public LogOperations Log => Operations.Log;
 

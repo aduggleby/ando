@@ -123,6 +123,31 @@ public class DotnetOperations(StepRegistry registry, IBuildLogger logger, Func<I
     {
         return new DotnetTool(packageId, version, ExecutorFactory, Logger);
     }
+
+    /// <summary>
+    /// Installs .NET SDK globally using Microsoft's install script.
+    /// Use this when building in a base image that doesn't have .NET pre-installed.
+    /// </summary>
+    /// <param name="version">SDK version (e.g., "9.0", "8.0"). Defaults to "9.0".</param>
+    public void SdkInstall(string version = "9.0")
+    {
+        // Install .NET SDK via Microsoft's official install script.
+        // First checks if the correct version is already installed (for warm containers).
+        // If not, installs dependencies (curl, ca-certificates, libicu for globalization),
+        // then runs the install script.
+        // Creates symlink in /usr/local/bin so dotnet is available in PATH for subsequent commands.
+        RegisterCommand("Dotnet.SdkInstall", "bash",
+            () => new ArgumentBuilder()
+                .Add("-c")
+                .Add($"if command -v dotnet >/dev/null && dotnet --version | grep -q '^{version}\\.'; then " +
+                     $"echo '.NET SDK {version} already installed'; " +
+                     $"else " +
+                     $"apt-get update && apt-get install -y curl ca-certificates libicu70 && " +
+                     $"curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel {version} && " +
+                     "ln -sf $HOME/.dotnet/dotnet /usr/local/bin/dotnet; " +
+                     $"fi"),
+            $"v{version}");
+    }
 }
 
 /// <summary>

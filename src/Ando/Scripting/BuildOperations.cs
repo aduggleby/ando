@@ -63,9 +63,6 @@ public class BuildOperations
     /// <summary>Node.js installation operations (installs Node.js globally).</summary>
     public NodeInstallOperations Node { get; }
 
-    /// <summary>.NET SDK installation operations (installs SDK globally).</summary>
-    public DotnetInstallOperations DotnetSdk { get; }
-
     /// <summary>Logging operations for build script output.</summary>
     public LogOperations Log { get; }
 
@@ -100,7 +97,6 @@ public class BuildOperations
         AppService = new AppServiceOperations(registry, logger, executorFactory);
         Artifacts = new ArtifactOperations(logger);
         Node = new NodeInstallOperations(registry, logger, executorFactory);
-        DotnetSdk = new DotnetInstallOperations(registry, logger, executorFactory);
         Log = new LogOperations(registry);
         Nuget = new NugetOperations(registry, logger, executorFactory);
         Ando = new AndoOperations(registry, logger, containerToHostPath, buildOptions, Artifacts);

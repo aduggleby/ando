@@ -110,10 +110,10 @@ export const operations = [
     examples: ["Node.Install(); // Installs Node.js v22 (current LTS)", 'Node.Install("20"); // Installs Node.js v20'],
   },
   {
-    group: "DotnetSdk",
-    name: "DotnetSdk.Install",
-    desc: "Install .NET SDK globally in the container. Skips installation if already present (for warm containers).",
-    examples: ["DotnetSdk.Install(); // Installs .NET SDK 9.0", 'DotnetSdk.Install("8.0"); // Installs .NET SDK 8.0'],
+    group: "Dotnet",
+    name: "Dotnet.SdkInstall",
+    desc: "Install .NET SDK globally in the container. Skips installation if already present (for warm containers). Use when building on base images like Ubuntu that don't have .NET pre-installed.",
+    examples: ["Dotnet.SdkInstall(); // Installs .NET SDK 9.0", 'Dotnet.SdkInstall("8.0"); // Installs .NET SDK 8.0'],
   },
   {
     group: "Dotnet",
