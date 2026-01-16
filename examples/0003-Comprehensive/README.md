@@ -27,9 +27,5 @@ The publish step demonstrates all available options:
 ## Running
 
 ```bash
-# Local execution
-ando --local
-
-# Docker execution
 ando
 ```

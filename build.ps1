@@ -13,4 +13,4 @@ if (Test-Path "dist") {
 }
 
 Write-Host "Building ANDO..."
-dotnet run --project src/Ando/Ando.csproj -- run --local @args
+dotnet run --project src/Ando/Ando.csproj -- @args

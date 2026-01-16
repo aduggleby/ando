@@ -1,0 +1,66 @@
+---
+import ProviderLayout from "../layouts/ProviderLayout.astro";
+import OperationsTable from "../components/OperationsTable.astro";
+import OperationDetails from "../components/OperationDetails.astro";
+import CodeBlock from "../components/CodeBlock.astro";
+import { getOperationsForProvider } from "../data/operations.js";
+
+const operations = getOperationsForProvider("Nuget");
+
+const exampleCode = `// Define project reference
+var App = DotnetProject("./src/MyLib/MyLib.csproj");
+
+// Build the project
+Dotnet.Build(App);
+
+// Create NuGet package (outputs to bin/Release)
+Nuget.Pack(App);
+
+// Authenticate and push to NuGet.org
+// Defaults: nuget.org, skips if version already exists
+Nuget.EnsureAuthenticated();
+Nuget.Push(App);`;
+---
+
+<ProviderLayout
+  title="NuGet"
+  provider="Nuget"
+  description="Create and publish NuGet packages to nuget.org or private feeds."
+>
+  <section id="operations" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Operations</h2>
+    <OperationsTable operations={operations} />
+  </section>
+
+  <section id="details" class="mb-8">
+    <h2 class="mb-6 text-xl font-bold text-zinc-900 dark:text-white">Operation Details</h2>
+    <OperationDetails operations={operations} />
+  </section>
+
+  <section id="authentication" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Authentication</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      NuGet.org requires an API key for publishing packages. You can generate one at
+      <a
+        href="https://www.nuget.org/account/apikeys"
+        target="_blank"
+        class="text-cyan-600 hover:underline dark:text-cyan-400">nuget.org/account/apikeys</a
+      >.
+    </p>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      For CI/CD, set the <code
+        class="rounded border border-zinc-200 bg-zinc-100 px-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+        >NUGET_API_KEY</code
+      > environment variable and access it via <code
+        class="rounded border border-zinc-200 bg-zinc-100 px-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+        >Context.Vars["NUGET_API_KEY"]</code
+      >.
+    </p>
+  </section>
+
+  <section id="example" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Example</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">Build a library and publish to NuGet.org.</p>
+    <CodeBlock code={exampleCode} lang="csharp" filename="build.ando" />
+  </section>
+</ProviderLayout>

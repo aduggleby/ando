@@ -462,6 +462,30 @@ export const operations = [
     desc: "Stop an app service.",
     examples: ['AppService.Stop("my-app");', 'AppService.Stop("my-app", slot: "staging");'],
   },
+  {
+    group: "Nuget",
+    name: "Nuget.EnsureAuthenticated",
+    desc: "Ensures NuGet API key is available for publishing. Prompts interactively if <code>NUGET_API_KEY</code> environment variable is not set. Call before Push.",
+    examples: ['var app = DotnetProject("./src/MyLib/MyLib.csproj");\nNuget.EnsureAuthenticated();\nNuget.Push(app);'],
+  },
+  {
+    group: "Nuget",
+    name: "Nuget.Pack",
+    desc: "Create a NuGet package from a project. <b>Defaults:</b> Release config, output to <code>bin/Release</code>.",
+    examples: [
+      'var app = DotnetProject("./src/MyLib/MyLib.csproj");\nNuget.Pack(app);',
+      'Nuget.Pack(app, o => o.WithVersion("1.0.0"));',
+    ],
+  },
+  {
+    group: "Nuget",
+    name: "Nuget.Push",
+    desc: "Push packages to a feed. Pass a ProjectRef to push from <code>bin/Release/*.nupkg</code>, or a path/glob. <b>Defaults:</b> NuGet.org, skip duplicates (won't fail if version already exists).",
+    examples: [
+      'var app = DotnetProject("./src/MyLib/MyLib.csproj");\nNuget.Pack(app);\nNuget.EnsureAuthenticated();\nNuget.Push(app);',
+      'Nuget.Push("./packages/MyLib.1.0.0.nupkg");',
+    ],
+  },
 ];
 
 // Get unique provider names sorted alphabetically

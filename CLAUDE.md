@@ -10,8 +10,7 @@ ANDO is a typed C# build system using Roslyn scripting. Build scripts (`build.an
 
 - **Roslyn Scripting** (`Microsoft.CodeAnalysis.CSharp.Scripting`) executes `build.ando` files
 - **Step Registration Pattern**: Operations (Dotnet, Ef) register steps in a registry, WorkflowRunner executes them
-- **Docker Isolation**: Builds run in containers via `DockerManager` and `ContainerExecutor`
-- **Local Mode**: `--local` flag skips Docker for faster iteration
+- **Docker Isolation**: All builds run in containers via `DockerManager` and `ContainerExecutor`
 
 ## Directory Structure
 
@@ -105,8 +104,8 @@ dotnet publish src/Ando/Ando.csproj -c Release -r linux-x64 --self-contained -o 
 ## Key Interfaces
 
 - `ICommandExecutor`: Interface for executing shell commands
-  - `ProcessRunner`: Local execution
-  - `ContainerExecutor`: Docker exec
+  - `ProcessRunner`: Host execution (for Docker CLI commands)
+  - `ContainerExecutor`: Docker exec (for build commands in container)
   - `MockExecutor`: Test double
 
 - `IBuildLogger`: Logging interface

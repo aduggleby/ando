@@ -3,9 +3,9 @@ set -e
 
 echo "=== Testing 0001-Simple ==="
 
-# Run the build (--local since we're already in a container)
-echo "Running: ando run build --local"
-ando run build --local
+# Run the build
+echo "Running: ando"
+ando
 
 # Verify output exists
 if [ ! -f "dist/HelloWorld" ] && [ ! -f "dist/HelloWorld.exe" ]; then

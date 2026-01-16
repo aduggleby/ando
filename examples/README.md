@@ -35,7 +35,7 @@ Options:
 Each example contains:
 - `build.ando` - The ANDO build script
 - `test.sh` - Verification script that:
-  1. Runs `ando run build --local`
+  1. Runs `ando`
   2. Verifies expected outputs exist
   3. Runs the built executable and checks output
 

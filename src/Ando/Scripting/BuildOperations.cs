@@ -69,6 +69,9 @@ public class BuildOperations
     /// <summary>Logging operations for build script output.</summary>
     public LogOperations Log { get; }
 
+    /// <summary>NuGet package operations (pack, push).</summary>
+    public NugetOperations Nuget { get; }
+
     /// <summary>
     /// Creates all operation instances.
     /// </summary>
@@ -94,5 +97,6 @@ public class BuildOperations
         Node = new NodeInstallOperations(registry, logger, executorFactory);
         DotnetSdk = new DotnetInstallOperations(registry, logger, executorFactory);
         Log = new LogOperations(logger);
+        Nuget = new NugetOperations(registry, logger, executorFactory);
     }
 }

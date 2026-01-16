@@ -35,9 +35,5 @@ Npm.Build();       // npm run build
 ## Running
 
 ```bash
-# Local execution (requires Node.js)
-ando --local
-
-# Docker execution
 ando
 ```

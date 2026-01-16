@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>ando</AssemblyName>
-    <Version>0.1.0</Version>
+    <Version>0.9.1</Version>
     <!-- Required for Roslyn scripting to work with single-file publishing -->
     <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
 
@@ -15,14 +15,19 @@
     <ToolCommandName>ando</ToolCommandName>
 
     <!-- Package metadata -->
-    <PackageId>Ando</PackageId>
+    <PackageId>ando</PackageId>
     <Authors>Alex Duggleby</Authors>
     <Description>A typed C# build system using Roslyn scripting. Write build scripts as real C# code.</Description>
     <PackageProjectUrl>https://github.com/aduggleby/ando</PackageProjectUrl>
     <RepositoryUrl>https://github.com/aduggleby/ando</RepositoryUrl>
     <PackageTags>build;automation;roslyn;scripting;dotnet</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="5.0.0" />

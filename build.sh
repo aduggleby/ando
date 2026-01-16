@@ -12,4 +12,4 @@ echo "Cleaning dist directory..."
 rm -rf dist/*
 
 echo "Building ANDO..."
-dotnet run --project src/Ando/Ando.csproj -- run --local "$@"
+dotnet run --project src/Ando/Ando.csproj -- "$@"

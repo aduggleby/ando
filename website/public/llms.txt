@@ -42,6 +42,7 @@ ando run
 | AppService | AppServiceOperations | Azure App Service deployments. |
 | Functions | FunctionsOperations | Azure Functions deployments. |
 | Cloudflare | CloudflareOperations | Cloudflare Pages deployments. |
+| Nuget | NugetOperations | NuGet package operations (pack, push). |
 | Artifacts | ArtifactOperations | Copy files from container to host. |
 | Log | LogOperations | Logging (Info, Warning, Error, Debug). |
 
@@ -183,6 +184,12 @@ Artifacts.CopyToHost("/workspace/dist", "./dist");
 - AppService.Restart(name, rg?, slot?) - Restart app service
 - AppService.Start(name, rg?, slot?) - Start app service
 - AppService.Stop(name, rg?, slot?) - Stop app service
+
+### Nuget
+- Nuget.EnsureAuthenticated() - Ensure API key is available (prompts if NUGET_API_KEY not set)
+- Nuget.Pack(project, options?) - Create NuGet package (default: Release config, outputs to bin/Release)
+- Nuget.Push(project, options?) - Push packages from bin/Release/*.nupkg (default: nuget.org, skips duplicates)
+- Nuget.Push(path, options?) - Push package from path/glob (default: nuget.org, skips duplicates)
 
 ## Tips for Writing Build Scripts
 

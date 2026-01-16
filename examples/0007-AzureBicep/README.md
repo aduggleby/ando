@@ -31,12 +31,12 @@ This example demonstrates how to use ANDO's Azure and Bicep operations to deploy
 az login
 
 # Run with defaults
-ando --local
+ando
 
 # Or with custom configuration
 export AZURE_RESOURCE_GROUP="my-custom-rg"
 export AZURE_LOCATION="westeurope"
-ando --local
+ando
 ```
 
 ## Output Capture

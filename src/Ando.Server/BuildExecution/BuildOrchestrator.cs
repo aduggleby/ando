@@ -437,7 +437,7 @@ public class BuildOrchestrator : IBuildOrchestrator
         startInfo.ArgumentList.Add("--project");
         startInfo.ArgumentList.Add("/ando"); // Ando would be installed in container
         startInfo.ArgumentList.Add("run");
-        startInfo.ArgumentList.Add("--local"); // Use local mode inside container
+        startInfo.ArgumentList.Add("--dind"); // Enable Docker-in-Docker for nested builds
 
         using var process = Process.Start(startInfo);
         if (process == null)

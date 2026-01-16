@@ -33,14 +33,9 @@ Artifacts.CopyToHost("/workspace/bin/Release/app", "./output/app");
 ## Running
 
 ```bash
-# Docker execution (required for artifacts)
 ando
-
-# Local execution (artifacts are no-op)
-ando --local
 ```
 
 ## Note
 
 This example requires Docker and is not included in automated E2E tests.
-Artifact copying only works in container mode; in local mode, artifacts are a no-op.

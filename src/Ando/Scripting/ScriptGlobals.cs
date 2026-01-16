@@ -120,6 +120,13 @@ public class ScriptGlobals
     public LogOperations Log { get; }
 
     /// <summary>
+    /// NuGet package operations (pack and push).
+    /// Usage: Nuget.Pack(project, o => o.WithConfiguration(Configuration.Release))
+    /// Usage: Nuget.Push("./pkg/MyPackage.1.0.0.nupkg", o => o.ToNuGetOrg().WithApiKey(apiKey))
+    /// </summary>
+    public NugetOperations Nuget { get; }
+
+    /// <summary>
     /// Creates a .NET project reference from a path.
     /// Usage: var app = DotnetProject("./src/MyApp/MyApp.csproj");
     /// </summary>
@@ -154,6 +161,7 @@ public class ScriptGlobals
         Node = buildContext.Node;
         DotnetSdk = buildContext.DotnetSdk;
         Log = buildContext.Log;
+        Nuget = buildContext.Nuget;
         DotnetProject = path => ProjectRef.From(path);
     }
 }

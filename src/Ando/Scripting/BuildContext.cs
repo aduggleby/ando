@@ -94,6 +94,9 @@ public class BuildContext
     /// <summary>Logging operations for build script output.</summary>
     public LogOperations Log => Operations.Log;
 
+    /// <summary>NuGet package operations (pack, push).</summary>
+    public NugetOperations Nuget => Operations.Nuget;
+
     // Docker manager, container ID, and host root path for artifact copying.
     // Set after container is created via SetDockerManager().
     private DockerManager? _dockerManager;

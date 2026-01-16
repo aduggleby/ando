@@ -28,6 +28,7 @@ const providerLinks: Record<string, { href: string; label: string }> = {
   Functions: { href: "/functions", label: "Functions" },
   Node: { href: "/node", label: "Node" },
   Npm: { href: "/npm", label: "Npm" },
+  Nuget: { href: "/nuget", label: "NuGet" },
 };
 
 const gettingStartedCode = `# Install ANDO
@@ -69,7 +70,14 @@ Cloudflare.PagesDeploy(Frontend / "dist", "my-frontend");`;
   description="ANDO is a typed build and deployment system. No YAML, no DSLs, no ceremony."
 >
   <section id="top" class="mb-10 md:mb-16">
-    <h1 class="mb-4 max-w-4xl pt-24 text-3xl font-bold text-zinc-900 sm:mb-6 sm:text-8xl dark:text-white">
+    <div class="mb-4 pt-24">
+      <span
+        class="inline-flex items-center rounded-full bg-cyan-100 px-3 py-1 text-sm font-medium text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400"
+      >
+        v0.9.1 — First stable release
+      </span>
+    </div>
+    <h1 class="mb-4 max-w-4xl text-3xl font-bold text-zinc-900 sm:mb-6 sm:text-8xl dark:text-white">
       Build and deploy with a familiar syntax
     </h1>
     <blockquote

@@ -1,10 +1,11 @@
 // =============================================================================
 // ProcessRunner.cs
 //
-// Summary: Executes commands locally as child processes with real-time output.
+// Summary: Executes commands on the host machine as child processes.
 //
-// ProcessRunner is the default ICommandExecutor implementation that runs commands
-// directly on the host machine. Used in --local mode and for Docker commands.
+// ProcessRunner is the ICommandExecutor implementation that runs commands
+// directly on the host machine. Used for Docker CLI commands (docker run,
+// docker exec, etc.) that must run on the host to manage containers.
 // Provides real-time output streaming for responsive build feedback.
 //
 // Design Decisions:
@@ -20,8 +21,8 @@ using Ando.Logging;
 namespace Ando.Execution;
 
 /// <summary>
-/// Executes commands locally as child processes with real-time output streaming.
-/// This is the default executor used in --local mode and for Docker CLI commands.
+/// Executes commands on the host machine as child processes with real-time output streaming.
+/// Used for Docker CLI commands that must run on the host to manage containers.
 /// </summary>
 public class ProcessRunner(IBuildLogger logger) : CommandExecutorBase(logger)
 {

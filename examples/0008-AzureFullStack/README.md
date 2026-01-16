@@ -49,7 +49,7 @@ export AZURE_RESOURCE_GROUP="my-app-rg"
 export AZURE_LOCATION="westeurope"
 
 # Run the build
-ando --local
+ando
 ```
 
 ## Output Variables
