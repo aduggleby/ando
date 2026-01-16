@@ -19,10 +19,23 @@ dotnet tool update -g ando
 ando --version
 ```
 
-## 1.0.0
+## 0.9.1
 
-**2026-01-15**
+**2026-01-16**
 
-- Initial release
+First public release.
 
+**Providers:**
 
+- **Ando** - Core operations (Log, Artifacts, Context)
+- **Dotnet** - Build, test, publish .NET projects
+- **DotnetSdk** - Install .NET SDK in containers
+- **Ef** - Entity Framework Core migrations
+- **Npm** - npm install, ci, run, build, test
+- **Node** - Install Node.js in containers
+- **NuGet** - Pack and push NuGet packages
+- **Azure** - Azure CLI authentication and subscription management
+- **Bicep** - Deploy Azure infrastructure with Bicep templates
+- **AppService** - Deploy to Azure App Service with slot swapping
+- **Functions** - Deploy to Azure Functions
+- **Cloudflare** - Deploy to Cloudflare Pages
