@@ -76,7 +76,7 @@ else
         </div>
     </div>
 
-    <div class="projects-grid" id="projects-grid">
+    <div class="projects-grid mt-6" id="projects-grid">
         @foreach (var project in Model.Projects)
         {
             var statusClass = project.LastBuildStatus?.ToString().ToLower() ?? "none";
