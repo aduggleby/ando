@@ -20,6 +20,24 @@
     </div>
 </div>
 
+@if (!Model.IsProfileValid)
+{
+    <div class="alert alert-error">
+        <strong>Invalid Profile</strong>
+        <p>The selected profile <code>@Model.Profile</code> no longer exists in this repository's build.csando file.</p>
+        <p>Builds will not run until a valid profile is selected or the profile setting is cleared.</p>
+    </div>
+}
+
+@if (Model.MissingSecrets.Count > 0)
+{
+    <div class="alert alert-warning">
+        <strong>Configuration Required</strong>
+        <p>This project is missing required secrets: <code>@string.Join("</code>, <code>", Model.MissingSecrets)</code></p>
+        <p>Builds will not run until all required secrets are configured.</p>
+    </div>
+}
+
 @if (TempData["Success"] != null)
 {
     <div class="alert alert-success">@TempData["Success"]</div>
@@ -67,6 +85,55 @@
                 <span class="form-hint">Custom Docker image for builds. Leave empty to use the default.</span>
             </div>
 
+            <div class="form-group">
+                <label for="profile">Build Profile</label>
+                @if (Model.AvailableProfiles.Count > 0)
+                {
+                    <select id="profile" name="profile" class="@(!Model.IsProfileValid ? "input-error" : "")">
+                        <option value="">None (default build)</option>
+                        @foreach (var profile in Model.AvailableProfiles)
+                        {
+                            var isSelected = Model.Profile == profile;
+                            <option value="@profile" selected="@isSelected">@profile</option>
+                        }
+                    </select>
+                    <span class="form-hint">
+                        Select a build profile to run. Profiles are defined with <code>DefineProfile("name")</code> in your build.csando file.
+                    </span>
+                }
+                else
+                {
+                    <select id="profile" name="profile" disabled>
+                        <option value="">No profiles available</option>
+                    </select>
+                    <span class="form-hint">
+                        No profiles detected. Add <code>DefineProfile("name")</code> to your build.csando to enable profile selection.
+                    </span>
+                }
+            </div>
+
+            <div class="form-group">
+                <div class="flex items-center justify-between">
+                    <label>Detected Required Secrets</label>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="refreshSecrets()">Refresh</button>
+                </div>
+                @if (!string.IsNullOrEmpty(Model.RequiredSecrets))
+                {
+                    <div class="detected-secrets">
+                        @foreach (var secret in Model.RequiredSecrets.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                        {
+                            <code class="secret-tag">@secret</code>
+                        }
+                    </div>
+                    <span class="form-hint">These environment variables were automatically detected from your build.csando file. Configure them in the Secrets section below.</span>
+                }
+                else
+                {
+                    <p class="empty-message mt-2">No required secrets detected in build.csando.</p>
+                    <span class="form-hint">Environment variables used via <code>Env("VAR_NAME")</code> in your build script will appear here.</span>
+                }
+            </div>
+
             <h3>Notifications</h3>
 
             <div class="form-group">
@@ -99,36 +166,29 @@
 
         @if (Model.SecretNames.Count > 0)
         {
-            <table class="secrets-table">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var name in Model.SecretNames)
-                    {
-                        <tr>
-                            <td>
-                                <code class="secret-name">@name</code>
-                                <button type="button" class="btn-icon" onclick="copySecretName('@name')" title="Copy name">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                                    </svg>
-                                </button>
-                            </td>
-                            <td>
-                                <form method="post" action="/projects/@Model.Id/secrets/@name/delete"
-                                      onsubmit="return confirm('Delete secret @name?');">
-                                    @Html.AntiForgeryToken()
-                                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                                </form>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+            <div class="secrets-list">
+                @foreach (var name in Model.SecretNames)
+                {
+                    <div class="secret-row">
+                        <code class="secret-name">@name</code>
+                        <button type="button" class="btn-icon" onclick="copySecretName('@name')" title="Copy name">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                            </svg>
+                        </button>
+                        <span class="secret-value-masked">••••••••••••</span>
+                        <form method="post" action="/projects/@Model.Id/secrets/@name/delete" class="inline-form"
+                              onsubmit="return confirm('Delete secret @name?');">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn-icon btn-icon-danger" title="Delete secret">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </button>
+                        </form>
+                    </div>
+                }
+            </div>
         }
         else
         {
@@ -166,6 +226,34 @@
                     <button type="submit" class="btn btn-primary">Add</button>
                 </div>
             </div>
+        </form>
+
+        <h3 class="mt-8">Bulk Import</h3>
+        <p class="section-description">
+            Upload a .env file or paste content to import multiple secrets at once.
+            Existing secrets with matching names will be updated.
+        </p>
+
+        <div class="form-group">
+            <label for="envFileUpload">Upload .env file</label>
+            <div class="file-upload-wrapper">
+                <input type="file" id="envFileUpload" accept=".env,.txt" onchange="loadEnvFile(this)" />
+                <span class="form-hint">Select a .env file to load its contents into the text area below.</span>
+            </div>
+        </div>
+
+        <form method="post" action="/projects/@Model.Id/secrets/bulk" class="bulk-import-form">
+            @Html.AntiForgeryToken()
+            <div class="form-group">
+                <label for="bulkContent">Or paste .env content</label>
+                <textarea id="bulkContent" name="content" rows="6"
+                          placeholder="# Paste .env content here&#10;NUGET_API_KEY=your-api-key&#10;DEPLOY_TOKEN=your-token&#10;DATABASE_URL=&quot;connection-string&quot;"></textarea>
+                <span class="form-hint">
+                    Format: KEY=value (one per line). Lines starting with # are ignored.
+                    Values can be quoted with single or double quotes.
+                </span>
+            </div>
+            <button type="submit" class="btn btn-secondary">Import Secrets</button>
         </form>
     </div>
 
@@ -282,4 +370,36 @@ function formatSecretName(input) {
         input.value = formatted;
     }
 }
+
+// Refresh detected secrets
+function refreshSecrets() {
+    document.getElementById('refresh-secrets-form').submit();
+}
+
+// Load .env file contents into the bulk import textarea
+function loadEnvFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const textarea = document.getElementById('bulkContent');
+        if (textarea) {
+            textarea.value = e.target.result;
+            // Highlight the textarea to show it was populated
+            textarea.focus();
+            textarea.classList.add('file-loaded');
+            setTimeout(() => textarea.classList.remove('file-loaded'), 2000);
+        }
+    };
+    reader.onerror = function() {
+        alert('Failed to read file. Please try again or paste the content manually.');
+    };
+    reader.readAsText(file);
+}
 </script>
+
+<!-- Hidden form for refresh secrets (outside the main settings form to avoid nesting) -->
+<form id="refresh-secrets-form" method="post" action="/projects/@Model.Id/refresh-secrets" style="display: none;">
+    @Html.AntiForgeryToken()
+</form>

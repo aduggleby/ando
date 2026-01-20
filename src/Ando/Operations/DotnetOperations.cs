@@ -24,6 +24,7 @@ using Ando.Execution;
 using Ando.Logging;
 using Ando.References;
 using Ando.Steps;
+using Ando.Utilities;
 using Ando.Workflow;
 
 namespace Ando.Operations;
@@ -32,9 +33,18 @@ namespace Ando.Operations;
 /// Provides .NET CLI operations for build scripts.
 /// Methods register steps in the workflow rather than executing immediately.
 /// </summary>
-public class DotnetOperations(StepRegistry registry, IBuildLogger logger, Func<ICommandExecutor> executorFactory)
+public class DotnetOperations(
+    StepRegistry registry,
+    IBuildLogger logger,
+    Func<ICommandExecutor> executorFactory,
+    DotnetSdkEnsurer? sdkEnsurer = null)
     : OperationsBase(registry, logger, executorFactory)
 {
+    private readonly DotnetSdkEnsurer? _sdkEnsurer = sdkEnsurer;
+
+    // Helper to get the ensurer as a Func<Task>? for RegisterCommandWithEnsurer.
+    private Func<Task>? GetEnsurer() =>
+        _sdkEnsurer != null ? () => _sdkEnsurer.EnsureInstalledAsync() : null;
     /// <summary>
     /// Creates a .NET project reference from a path.
     /// Usage: var app = Dotnet.Project("./src/MyApp/MyApp.csproj");
@@ -50,11 +60,12 @@ public class DotnetOperations(StepRegistry registry, IBuildLogger logger, Func<I
         var options = new DotnetRestoreOptions();
         configure?.Invoke(options);
 
-        RegisterCommand("Dotnet.Restore", "dotnet",
+        RegisterCommandWithEnsurer("Dotnet.Restore", "dotnet",
             () => new ArgumentBuilder()
                 .Add("restore", project.Path)
                 .AddFlag(options.NoCache, "--no-cache")
                 .AddIfNotNull("-r", options.Runtime),
+            GetEnsurer(),
             project.Name);
     }
 
@@ -66,11 +77,12 @@ public class DotnetOperations(StepRegistry registry, IBuildLogger logger, Func<I
         var options = new DotnetBuildOptions();
         configure?.Invoke(options);
 
-        RegisterCommand("Dotnet.Build", "dotnet",
+        RegisterCommandWithEnsurer("Dotnet.Build", "dotnet",
             () => new ArgumentBuilder()
                 .Add("build", project.Path)
                 .AddIfNotNull("-c", options.Configuration?.ToString())
                 .AddFlag(options.NoRestore, "--no-restore"),
+            GetEnsurer(),
             project.Name);
     }
 
@@ -82,13 +94,14 @@ public class DotnetOperations(StepRegistry registry, IBuildLogger logger, Func<I
         var options = new DotnetTestOptions();
         configure?.Invoke(options);
 
-        RegisterCommand("Dotnet.Test", "dotnet",
+        RegisterCommandWithEnsurer("Dotnet.Test", "dotnet",
             () => new ArgumentBuilder()
                 .Add("test", project.Path)
                 .AddIfNotNull("-c", options.Configuration?.ToString())
                 .AddFlag(options.NoRestore, "--no-restore")
                 .AddFlag(options.NoBuild, "--no-build")
                 .AddIfNotNull("--filter", options.Filter),
+            GetEnsurer(),
             project.Name);
     }
 
@@ -100,7 +113,7 @@ public class DotnetOperations(StepRegistry registry, IBuildLogger logger, Func<I
         var options = new DotnetPublishOptions();
         configure?.Invoke(options);
 
-        RegisterCommand("Dotnet.Publish", "dotnet",
+        RegisterCommandWithEnsurer("Dotnet.Publish", "dotnet",
             () => new ArgumentBuilder()
                 .Add("publish", project.Path)
                 .AddIfNotNull("-c", options.Configuration?.ToString())
@@ -111,6 +124,7 @@ public class DotnetOperations(StepRegistry registry, IBuildLogger logger, Func<I
                 .AddIf(options.SelfContained == false, "--no-self-contained")
                 .AddIfNotNull("-r", options.Runtime)
                 .AddFlag(options.SingleFile, "-p:PublishSingleFile=true"),
+            GetEnsurer(),
             project.Name);
     }
 
@@ -125,12 +139,123 @@ public class DotnetOperations(StepRegistry registry, IBuildLogger logger, Func<I
     }
 
     /// <summary>
+    /// Bumps the version in a .csproj file and returns a reference to the new version.
+    /// The version is updated when the step executes, and the VersionRef is resolved then.
+    /// </summary>
+    /// <param name="project">The project to bump the version in.</param>
+    /// <param name="bump">Which version component to increment (default: Patch).</param>
+    /// <returns>A VersionRef that resolves to the new version when the step executes.</returns>
+    public VersionRef BumpVersion(ProjectRef project, VersionBump bump = VersionBump.Patch)
+    {
+        var versionRef = new VersionRef($"Dotnet.BumpVersion({project.Name})");
+
+        Registry.Register("Dotnet.BumpVersion", async () =>
+        {
+            // Read the .csproj file.
+            var csprojPath = project.Path;
+            if (!File.Exists(csprojPath))
+            {
+                Logger.Error($"Project file not found: {csprojPath}");
+                return false;
+            }
+
+            var content = await File.ReadAllTextAsync(csprojPath);
+
+            // Parse current version from <Version>x.y.z</Version>.
+            var versionMatch = System.Text.RegularExpressions.Regex.Match(
+                content, @"<Version>(\d+)\.(\d+)\.(\d+)</Version>");
+
+            if (!versionMatch.Success)
+            {
+                Logger.Error($"No <Version>x.y.z</Version> found in {csprojPath}");
+                return false;
+            }
+
+            var major = int.Parse(versionMatch.Groups[1].Value);
+            var minor = int.Parse(versionMatch.Groups[2].Value);
+            var patch = int.Parse(versionMatch.Groups[3].Value);
+
+            // Bump version according to specified level.
+            var (newMajor, newMinor, newPatch) = bump switch
+            {
+                VersionBump.Major => (major + 1, 0, 0),
+                VersionBump.Minor => (major, minor + 1, 0),
+                VersionBump.Patch => (major, minor, patch + 1),
+                _ => (major, minor, patch + 1)
+            };
+
+            var newVersion = $"{newMajor}.{newMinor}.{newPatch}";
+
+            // Replace version in content.
+            var newContent = System.Text.RegularExpressions.Regex.Replace(
+                content,
+                @"<Version>\d+\.\d+\.\d+</Version>",
+                $"<Version>{newVersion}</Version>");
+
+            // Write back to file.
+            await File.WriteAllTextAsync(csprojPath, newContent);
+
+            // Resolve the version reference so subsequent steps can use it.
+            versionRef.Resolve(newVersion);
+
+            Logger.Info($"Version bumped: {major}.{minor}.{patch} → {newVersion}");
+            return true;
+        }, project.Name);
+
+        return versionRef;
+    }
+
+    /// <summary>
+    /// Reads the current version from a .csproj file.
+    /// Returns a VersionRef that resolves when the step executes.
+    /// </summary>
+    /// <param name="project">The project to read the version from.</param>
+    /// <returns>A VersionRef that resolves to the current version.</returns>
+    public VersionRef ReadVersion(ProjectRef project)
+    {
+        var versionRef = new VersionRef($"Dotnet.ReadVersion({project.Name})");
+
+        Registry.Register("Dotnet.ReadVersion", async () =>
+        {
+            var csprojPath = project.Path;
+            if (!File.Exists(csprojPath))
+            {
+                Logger.Error($"Project file not found: {csprojPath}");
+                return false;
+            }
+
+            var content = await File.ReadAllTextAsync(csprojPath);
+
+            var versionMatch = System.Text.RegularExpressions.Regex.Match(
+                content, @"<Version>(\d+\.\d+\.\d+)</Version>");
+
+            if (!versionMatch.Success)
+            {
+                Logger.Error($"No <Version>x.y.z</Version> found in {csprojPath}");
+                return false;
+            }
+
+            var version = versionMatch.Groups[1].Value;
+            versionRef.Resolve(version);
+
+            Logger.Debug($"Read version: {version}");
+            return true;
+        }, project.Name);
+
+        return versionRef;
+    }
+
+    /// <summary>
     /// Installs .NET SDK globally using Microsoft's install script.
     /// Use this when building in a base image that doesn't have .NET pre-installed.
+    /// Calling this method disables automatic SDK installation for subsequent operations.
     /// </summary>
-    /// <param name="version">SDK version (e.g., "9.0", "8.0"). Defaults to "9.0".</param>
-    public void SdkInstall(string version = "9.0")
+    /// <param name="version">SDK version (e.g., "10.0", "9.0"). Defaults to "10.0".</param>
+    public void SdkInstall(string version = "10.0")
     {
+        // Mark manual install to disable auto-install for subsequent operations.
+        _sdkEnsurer?.MarkManualInstallCalled();
+
         // Install .NET SDK via Microsoft's official install script.
         // First checks if the correct version is already installed (for warm containers).
         // If not, installs dependencies (curl, ca-certificates, libicu for globalization),

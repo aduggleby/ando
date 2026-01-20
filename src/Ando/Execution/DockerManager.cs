@@ -54,9 +54,23 @@ public class ContainerConfig
     public string Name { get; set; } = "ando-build";
 
     /// <summary>
-    /// Project root directory. Files will be copied (not mounted) to /workspace.
+    /// Project root directory for Docker volume mounts. In DinD mode, this is the
+    /// HOST filesystem path that the Docker daemon uses for volume mounts.
     /// </summary>
     public required string ProjectRoot { get; set; }
+
+    /// <summary>
+    /// Local project root for file operations (tar, directory checks).
+    /// In normal mode, this equals ProjectRoot. In DinD mode, this is the actual
+    /// path inside the current container (e.g., /workspace) while ProjectRoot
+    /// is the host path for Docker mounts.
+    /// </summary>
+    public string? LocalProjectRoot { get; set; }
+
+    /// <summary>
+    /// Gets the path to use for local file operations.
+    /// </summary>
+    public string GetLocalProjectRoot() => LocalProjectRoot ?? ProjectRoot;
 
     /// <summary>
     /// Whether to mount Docker socket for Docker-in-Docker support.
@@ -190,7 +204,7 @@ public class DockerManager
             // For warm containers, re-copy project files to ensure fresh build state.
             // This maintains isolation while preserving cached dependencies.
             _logger.Info($"Syncing project files to container...");
-            await CopyProjectToContainerAsync(existing.Id, config.ProjectRoot);
+            await CopyProjectToContainerAsync(existing.Id, config.GetLocalProjectRoot());
 
             return existing;
         }
@@ -208,15 +222,23 @@ public class DockerManager
         _logger.Info($"  Image: {config.Image}");
         _logger.Info($"  Project files will be copied (isolated mode)");
 
-        // Ensure cache directories exist on host before mounting.
-        var cacheDir = Path.Combine(config.ProjectRoot, ".ando", "cache");
-        var nugetCacheDir = Path.Combine(cacheDir, "nuget");
-        var npmCacheDir = Path.Combine(cacheDir, "npm");
-        Directory.CreateDirectory(nugetCacheDir);
-        Directory.CreateDirectory(npmCacheDir);
+        // Ensure cache directories exist on local filesystem.
+        // Use local path for directory operations since we're inside the current process/container.
+        var localRoot = config.GetLocalProjectRoot();
+        var localCacheDir = Path.Combine(localRoot, ".ando", "cache");
+        var localNugetCacheDir = Path.Combine(localCacheDir, "nuget");
+        var localNpmCacheDir = Path.Combine(localCacheDir, "npm");
+        Directory.CreateDirectory(localNugetCacheDir);
+        Directory.CreateDirectory(localNpmCacheDir);
 
-        _logger.Debug($"  Created host cache directory: {nugetCacheDir}");
-        _logger.Debug($"  Created host cache directory: {npmCacheDir}");
+        // For Docker volume mounts, use the HOST path (ProjectRoot) which Docker can access.
+        // In DinD mode, this differs from the local path used above for directory creation.
+        var hostCacheDir = Path.Combine(config.ProjectRoot, ".ando", "cache");
+        var hostNugetCacheDir = Path.Combine(hostCacheDir, "nuget");
+        var hostNpmCacheDir = Path.Combine(hostCacheDir, "npm");
+
+        _logger.Debug($"  Local cache directory: {localNugetCacheDir}");
+        _logger.Debug($"  Host cache directory for mount: {hostNugetCacheDir}");
 
         // Build the docker run command arguments.
         // Note: Project root is NOT mounted - files are copied in for isolation.
@@ -229,8 +251,9 @@ public class DockerManager
             "--entrypoint", "tail",            // Override entrypoint to keep alive
             // Mount only cache directories for warm container performance.
             // These persist NuGet packages and npm modules across builds.
-            "-v", $"{nugetCacheDir}:/workspace/.ando/cache/nuget",
-            "-v", $"{npmCacheDir}:/workspace/.ando/cache/npm",
+            // Use HOST paths for volume mounts (Docker needs actual host paths).
+            "-v", $"{hostNugetCacheDir}:/workspace/.ando/cache/nuget",
+            "-v", $"{hostNpmCacheDir}:/workspace/.ando/cache/npm",
             // Configure environment variables for package manager caches.
             "-e", "NUGET_PACKAGES=/workspace/.ando/cache/nuget",
             "-e", "npm_config_cache=/workspace/.ando/cache/npm",
@@ -289,8 +312,9 @@ public class DockerManager
         await ExecuteInContainerAsync(containerId, "mkdir", ["-p", "/workspace"]);
 
         // Copy project files into the container.
+        // Use local path since tar operates on local files.
         _logger.Info($"Copying project files to container...");
-        await CopyProjectToContainerAsync(containerId, config.ProjectRoot);
+        await CopyProjectToContainerAsync(containerId, config.GetLocalProjectRoot());
 
         return new ContainerInfo(containerId, config.Name, true);
     }

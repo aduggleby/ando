@@ -19,7 +19,7 @@ public class CleanupOldBuildsJobTests : IDisposable
 {
     private readonly Data.AndoDbContext _db;
     private readonly CleanupOldBuildsJob _job;
-    private readonly User _testUser;
+    private readonly ApplicationUser _testUser;
     private readonly Project _testProject;
 
     // Match the job's internal constants
@@ -32,7 +32,7 @@ public class CleanupOldBuildsJobTests : IDisposable
         _job = new CleanupOldBuildsJob(_db, NullLogger<CleanupOldBuildsJob>.Instance);
 
         // Create test data
-        _testUser = new User
+        _testUser = new ApplicationUser
         {
             GitHubId = 12345,
             GitHubLogin = "testuser",

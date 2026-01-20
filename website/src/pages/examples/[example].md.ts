@@ -93,6 +93,89 @@ Cloudflare.PurgeCache("example.com");`,
       },
     ],
   },
+  "dotnet-tool": {
+    title: ".NET CLI Tool + NuGet",
+    description: "Build a .NET CLI tool for multiple platforms, create a NuGet package, and publish with profiles.",
+    overview:
+      "This example demonstrates building a .NET CLI tool installable via `dotnet tool install`. It publishes self-contained executables for multiple platforms and uses profiles for conditional NuGet publishing.",
+    steps: [
+      "Installs .NET SDK in the container",
+      "Restores, builds, and tests the project",
+      "Publishes self-contained executables for multiple platforms",
+      "Creates a NuGet package for the dotnet tool",
+      "**(with -p push)** Publishes to NuGet.org and deploys docs",
+      "Copies artifacts to the host machine",
+    ],
+    buildCode: `// Define profiles
+var push = DefineProfile("push");
+
+var project = Dotnet.Project("./src/Ando/Ando.csproj");
+var testProject = Dotnet.Project("./tests/Ando.Tests/Ando.Tests.csproj");
+var distPath = Root / "dist";
+
+// Build workflow
+Dotnet.SdkInstall();
+Dotnet.Restore(project);
+Dotnet.Build(project);
+Dotnet.Test(testProject);
+
+// Publish for multiple platforms
+var runtimes = new[] { "win-x64", "linux-x64", "osx-x64", "osx-arm64" };
+foreach (var runtime in runtimes)
+{
+    Dotnet.Publish(project, o => o
+        .WithRuntime(runtime)
+        .Output(distPath / runtime)
+        .AsSelfContained()
+        .AsSingleFile());
+}
+
+// Create NuGet package
+Nuget.Pack(project);
+
+// Push to NuGet.org (only with -p push)
+if (push)
+{
+    Nuget.EnsureAuthenticated();
+    Nuget.Push(project);
+    Ando.Build(Directory("./website"));
+}
+
+// Copy artifacts to host
+Ando.CopyArtifactsToHost("dist", "./dist");
+Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");`,
+    prerequisites: [
+      "`NUGET_API_KEY` environment variable (or enter when prompted) - only needed for push profile",
+      "A .NET project configured as a tool (with PackAsTool in .csproj)",
+    ],
+    operations: [
+      {
+        name: "DefineProfile()",
+        href: "/providers/ando#defineprofile",
+        purpose: "Creates a profile for conditional execution",
+      },
+      {
+        name: "Dotnet.Publish()",
+        href: "/providers/dotnet#publish",
+        purpose: "Creates self-contained executables",
+      },
+      {
+        name: "Nuget.Pack()",
+        href: "/providers/nuget#pack",
+        purpose: "Creates a NuGet package",
+      },
+      {
+        name: "Nuget.Push()",
+        href: "/providers/nuget#push",
+        purpose: "Publishes to NuGet.org",
+      },
+      {
+        name: "Ando.Build()",
+        href: "/providers/ando#build",
+        purpose: "Runs a nested build script",
+      },
+    ],
+  },
 };
 
 export const getStaticPaths: GetStaticPaths = () => {

@@ -1,31 +1,38 @@
 // =============================================================================
 // build.csando - ANDO CLI Build and Release Script
 //
-// Prerequisites:
-// - NUGET_API_KEY env var set (or enter when prompted for publishing)
+// Profiles:
+// - (default): Build, test, publish executables, create NuGet package
+// - push: Also pushes to NuGet.org and deploys the documentation website
 //
-// This script:
-// 1. Installs .NET SDK
-// 2. Restores NuGet packages
-// 3. Builds the project in Release configuration
-// 4. Runs unit tests
-// 5. Publishes self-contained single-file executables for 6 platforms:
-//    win-x64, win-arm64, linux-x64, linux-arm64, osx-x64, osx-arm64
-// 6. Creates a NuGet package for the dotnet tool
-// 7. Pushes to NuGet.org (if NUGET_API_KEY is set)
-// 8. Copies artifacts to host
-// 9. Builds and deploys the documentation website
+// Usage:
+//   ando              # Build and test only
+//   ando -p push      # Build, test, and push to NuGet.org + deploy docs
+//
+// Prerequisites:
+// - NUGET_API_KEY env var set (or enter when prompted) for push profile
 //
 // Output:
 // - dist/{runtime}/ando[.exe] - Platform-specific executables
 // - dist/packages/*.nupkg     - NuGet package for dotnet tool install
+// - ando-server:{version}     - Docker image (push profile only)
 // =============================================================================
+
+// Define profiles
+var push = DefineProfile("push");
 
 var project = Dotnet.Project("./src/Ando/Ando.csproj");
 var testProject = Dotnet.Project("./tests/Ando.Tests/Ando.Tests.csproj");
 
 // Base output directory
 var distPath = Root / "dist";
+
+// Bump version when pushing (before builds get the new version)
+VersionRef? version = null;
+if (push)
+{
+    version = Dotnet.BumpVersion(project);
+}
 
 // Install .NET SDK
 Dotnet.SdkInstall();
@@ -54,14 +61,27 @@ foreach (var runtime in runtimes)
         .AsSingleFile());
 }
 
-// Create and push NuGet package for the dotnet tool
+// Create NuGet package for the dotnet tool
 Nuget.Pack(project);
-Nuget.EnsureAuthenticated();
-Nuget.Push(project);
 
-// Build and deploy the documentation website
-Ando.Build(Directory("./website"));
+// Push to NuGet.org and deploy website (only with -p push)
+if (push)
+{
+    Nuget.EnsureAuthenticated();
+    Nuget.Push(project);
 
-// Copy the dist folder from container to host both individuall and as a compressed archive
+    // Build server Docker image with version tag
+    Docker.Build("./src/Ando.Server/Dockerfile", "ando-server", version!, o => o
+        .WithContext("."));
+
+    // Tag the git repo with the version
+    Git.Tag(version!);
+    Git.PushTags();
+
+    // Build and deploy the documentation website
+    Ando.Build(Directory("./website"));
+}
+
+// Copy the dist folder from container to host both individually and as a compressed archive
 Ando.CopyArtifactsToHost("dist", "./dist");
 Ando.CopyZippedArtifactsToHost("dist", "./dist/ando-binaries.zip");

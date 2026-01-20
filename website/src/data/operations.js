@@ -106,14 +106,14 @@ export const operations = [
   {
     group: "Node",
     name: "Node.Install",
-    desc: "Install Node.js globally in the container. Skips installation if already present (for warm containers).",
+    desc: "Install Node.js globally in the container. Skips installation if already present (for warm containers). Calling this method disables automatic Node.js installation for subsequent npm operations. <em>Note: Npm operations (Ci, Install, Run, Test, Build) automatically install Node.js if not present.</em>",
     examples: ["Node.Install(); // Installs Node.js v22 (current LTS)", 'Node.Install("20"); // Installs Node.js v20'],
   },
   {
     group: "Dotnet",
     name: "Dotnet.SdkInstall",
-    desc: "Install .NET SDK globally in the container. Skips installation if already present (for warm containers). Use when building on base images like Ubuntu that don't have .NET pre-installed.",
-    examples: ["Dotnet.SdkInstall(); // Installs .NET SDK 9.0", 'Dotnet.SdkInstall("8.0"); // Installs .NET SDK 8.0'],
+    desc: "Install .NET SDK globally in the container. Skips installation if already present (for warm containers). Calling this method disables automatic SDK installation for subsequent operations. <em>Note: Dotnet operations (Build, Test, Restore, Publish) automatically install the SDK if not present.</em>",
+    examples: ["Dotnet.SdkInstall(); // Installs .NET SDK 10.0", 'Dotnet.SdkInstall("9.0"); // Installs .NET SDK 9.0'],
   },
   {
     group: "Dotnet",
@@ -124,25 +124,25 @@ export const operations = [
   {
     group: "Dotnet",
     name: "Dotnet.Restore",
-    desc: "Restore NuGet packages for a project.",
+    desc: "Restore NuGet packages for a project. Automatically installs .NET SDK if not present.",
     examples: ["Dotnet.Restore(App);", "Dotnet.Restore(App, o => o.NoCache = true);"],
   },
   {
     group: "Dotnet",
     name: "Dotnet.Build",
-    desc: "Compile a project with optional configuration.",
+    desc: "Compile a project with optional configuration. Automatically installs .NET SDK if not present.",
     examples: ["Dotnet.Build(App);", "Dotnet.Build(App, o => o.Configuration = Configuration.Release);"],
   },
   {
     group: "Dotnet",
     name: "Dotnet.Test",
-    desc: "Run unit tests for a project.",
+    desc: "Run unit tests for a project. Automatically installs .NET SDK if not present.",
     examples: ["Dotnet.Test(Tests);", 'Dotnet.Test(Tests, o => o.Filter = "Category=Unit");'],
   },
   {
     group: "Dotnet",
     name: "Dotnet.Publish",
-    desc: "Create deployment artifacts with full publish options.",
+    desc: "Create deployment artifacts with full publish options. Automatically installs .NET SDK if not present.",
     examples: [
       "Dotnet.Publish(App);",
       'Dotnet.Publish(App, o => o\n  .Output(Root / "dist")\n  .WithConfiguration(Configuration.Release)\n  .WithRuntime("linux-x64")\n  .AsSelfContained()\n  .AsSingleFile());',
@@ -194,31 +194,31 @@ export const operations = [
   {
     group: "Npm",
     name: "Npm.Install",
-    desc: "Run 'npm install' to install dependencies.",
+    desc: "Run 'npm install' to install dependencies. Automatically installs Node.js if not present.",
     examples: ['var frontend = Directory("./frontend");', "Npm.Install(frontend);"],
   },
   {
     group: "Npm",
     name: "Npm.Ci",
-    desc: "Run 'npm ci' for clean, reproducible installs (preferred for CI).",
+    desc: "Run 'npm ci' for clean, reproducible installs (preferred for CI). Automatically installs Node.js if not present.",
     examples: ['var frontend = Directory("./frontend");', "Npm.Ci(frontend);"],
   },
   {
     group: "Npm",
     name: "Npm.Run",
-    desc: "Run an npm script from package.json.",
+    desc: "Run an npm script from package.json. Automatically installs Node.js if not present.",
     examples: ['var frontend = Directory("./frontend");', 'Npm.Run(frontend, "build");', 'Npm.Run(frontend, "lint");'],
   },
   {
     group: "Npm",
     name: "Npm.Test",
-    desc: "Run 'npm test'.",
+    desc: "Run 'npm test'. Automatically installs Node.js if not present.",
     examples: ['var frontend = Directory("./frontend");', "Npm.Test(frontend);"],
   },
   {
     group: "Npm",
     name: "Npm.Build",
-    desc: "Run 'npm run build'.",
+    desc: "Run 'npm run build'. Automatically installs Node.js if not present.",
     examples: ['var frontend = Directory("./frontend");', "Npm.Build(frontend);"],
   },
   {
@@ -504,6 +504,124 @@ export const operations = [
     examples: [
       'var app = Dotnet.Project("./src/MyLib/MyLib.csproj");\nNuget.Pack(app);\nNuget.EnsureAuthenticated();\nNuget.Push(app);',
       'Nuget.Push("./packages/MyLib.1.0.0.nupkg");',
+    ],
+  },
+  // Profile operations
+  {
+    group: "Ando",
+    name: "DefineProfile",
+    desc: "Defines a build profile that can be activated via CLI. Returns a <code>Profile</code> object that evaluates to <code>true</code> when active. Use <code>-p</code> or <code>--profile</code> CLI flag to activate.",
+    examples: [
+      'var release = DefineProfile("release");\nvar push = DefineProfile("push");\n\nDotnet.Build(app);\n\nif (release) {\n  Git.Tag(version);\n  GitHub.CreateRelease(o => o.WithTag(version));\n}',
+      "// CLI usage:\n// ando -p release\n// ando -p push,release",
+    ],
+  },
+  // Version operations
+  {
+    group: "Dotnet",
+    name: "Dotnet.BumpVersion",
+    desc: "Bumps the version in a .csproj file. Returns a <code>VersionRef</code> that resolves to the new version at execution time. Default bump is patch (1.0.0 → 1.0.1).",
+    examples: [
+      "var version = Dotnet.BumpVersion(app); // patch bump",
+      "var version = Dotnet.BumpVersion(app, VersionBump.Minor); // 1.0.0 → 1.1.0",
+      "var version = Dotnet.BumpVersion(app, VersionBump.Major); // 1.0.0 → 2.0.0",
+    ],
+  },
+  {
+    group: "Dotnet",
+    name: "Dotnet.ReadVersion",
+    desc: "Reads the current version from a .csproj file. Returns a <code>VersionRef</code> that resolves at execution time.",
+    examples: ["var version = Dotnet.ReadVersion(app);"],
+  },
+  {
+    group: "Npm",
+    name: "Npm.BumpVersion",
+    desc: "Bumps the version in package.json using <code>npm version</code>. Returns a <code>VersionRef</code> that resolves to the new version at execution time.",
+    examples: [
+      'var frontend = Directory("./frontend");\nvar version = Npm.BumpVersion(frontend); // patch bump',
+      "var version = Npm.BumpVersion(frontend, VersionBump.Minor);",
+    ],
+  },
+  {
+    group: "Npm",
+    name: "Npm.ReadVersion",
+    desc: "Reads the current version from package.json. Returns a <code>VersionRef</code> that resolves at execution time.",
+    examples: ['var frontend = Directory("./frontend");\nvar version = Npm.ReadVersion(frontend);'],
+  },
+  // Git operations
+  {
+    group: "Git",
+    name: "Git.Tag",
+    desc: "Creates a git tag. Supports string tags or <code>VersionRef</code> (automatically prefixed with 'v'). By default creates annotated tags.",
+    examples: [
+      'Git.Tag("v1.0.0");',
+      "var version = Dotnet.BumpVersion(app);\nGit.Tag(version); // Creates tag like v1.0.0",
+      'Git.Tag(version, o => o.WithMessage("Release notes here"));',
+      "Git.Tag(version, o => o.AsLightweight()); // Lightweight tag",
+    ],
+  },
+  {
+    group: "Git",
+    name: "Git.Push",
+    desc: "Pushes the current branch to the remote repository.",
+    examples: ["Git.Push();", 'Git.Push(o => o.ToRemote("upstream"));', "Git.Push(o => o.WithUpstream()); // -u flag"],
+  },
+  {
+    group: "Git",
+    name: "Git.PushTags",
+    desc: "Pushes all tags to the remote repository.",
+    examples: ["Git.PushTags();", 'Git.PushTags("upstream");'],
+  },
+  {
+    group: "Git",
+    name: "Git.Add",
+    desc: "Adds files to the git staging area.",
+    examples: ['Git.Add("."); // Add all', 'Git.Add("src/", "tests/");'],
+  },
+  {
+    group: "Git",
+    name: "Git.Commit",
+    desc: "Commits staged changes with a message.",
+    examples: ['Git.Commit("Release v1.0.0");', 'Git.Commit("Empty commit", o => o.WithAllowEmpty());'],
+  },
+  // GitHub operations
+  {
+    group: "GitHub",
+    name: "GitHub.CreatePr",
+    desc: "Creates a GitHub pull request using the gh CLI. Requires GitHub authentication via <code>GITHUB_TOKEN</code> env var or <code>gh auth login</code>.",
+    examples: [
+      'GitHub.CreatePr(o => o\n  .WithTitle("Add new feature")\n  .WithBody("Description here")\n  .WithBase("main"));',
+      'GitHub.CreatePr(o => o.WithTitle("Fix bug").AsDraft());',
+    ],
+  },
+  {
+    group: "GitHub",
+    name: "GitHub.CreateRelease",
+    desc: "Creates a GitHub release. Supports <code>VersionRef</code> for dynamic versioning. Automatically prefixes version with 'v'.",
+    examples: [
+      'GitHub.CreateRelease(o => o.WithTag("v1.0.0"));',
+      "var version = Dotnet.BumpVersion(app);\nGitHub.CreateRelease(o => o\n  .WithTag(version)\n  .WithGeneratedNotes());",
+      'GitHub.CreateRelease(o => o\n  .WithTag(version)\n  .WithNotes("## Changes\\n- Fixed bug")\n  .AsPrerelease());',
+    ],
+  },
+  {
+    group: "GitHub",
+    name: "GitHub.PushImage",
+    desc: "Pushes a Docker image to GitHub Container Registry (ghcr.io). The image must already be built locally. Automatically handles authentication using <code>GITHUB_TOKEN</code> or gh CLI config.",
+    examples: [
+      'GitHub.PushImage("myapp", o => o.WithTag("latest"));',
+      'var version = Dotnet.BumpVersion(app);\nDocker.Build("Dockerfile", "myapp", version);\nGitHub.PushImage("myapp", o => o\n  .WithTag(version)\n  .WithOwner("my-org"));',
+    ],
+  },
+  // Docker operations
+  {
+    group: "Docker",
+    name: "Docker.Build",
+    desc: "Builds a Docker image from a Dockerfile. Supports <code>VersionRef</code> for dynamic tagging.",
+    examples: [
+      'Docker.Build("Dockerfile", o => o.WithTag("myapp:latest"));',
+      'var version = Dotnet.BumpVersion(app);\nDocker.Build("Dockerfile", "myapp", version);',
+      'Docker.Build("./src/MyApp/Dockerfile", o => o\n  .WithTag("myapp:v1.0.0")\n  .WithBuildArg("VERSION", "1.0.0")\n  .WithPlatform("linux/amd64"));',
     ],
   },
 ];

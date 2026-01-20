@@ -106,6 +106,47 @@ dotnet test tests/Ando.Tests/Ando.Tests.csproj
 dotnet publish src/Ando/Ando.csproj -c Release -r linux-x64 --self-contained -o dist
 ```
 
+## Ando.Server Deployment (Hetzner)
+
+The Ando.Server is deployed to a Hetzner VPS at `138.199.223.171`. The server runs using rootless Docker under the `ando` user.
+
+### Deployment Steps
+
+```bash
+# 1. Build the Docker image locally
+docker build -t ando-server:latest -f src/Ando.Server/Dockerfile .
+
+# 2. Push the image to the server (loads into root docker)
+docker save ando-server:latest | gzip | ssh -i ~/.ssh/id_claude root@138.199.223.171 "gunzip | docker load"
+
+# 3. Load the image into ando user's rootless docker
+ssh -i ~/.ssh/id_claude root@138.199.223.171 "docker save ando-server:latest | sudo -u ando XDG_RUNTIME_DIR=/run/user/1000 DOCKER_HOST=unix:///run/user/1000/docker.sock docker load"
+
+# 4. Restart the services using docker-compose
+ssh -i ~/.ssh/id_claude root@138.199.223.171 "sudo -u ando XDG_RUNTIME_DIR=/run/user/1000 DOCKER_HOST=unix:///run/user/1000/docker.sock docker compose -f /opt/ando/docker-compose.yml up -d"
+
+# 5. Verify the deployment
+ssh -i ~/.ssh/id_claude root@138.199.223.171 "sudo -u ando XDG_RUNTIME_DIR=/run/user/1000 DOCKER_HOST=unix:///run/user/1000/docker.sock docker ps"
+```
+
+### Server Configuration
+
+- **Docker Compose file**: `/opt/ando/docker-compose.yml`
+- **Environment config**: `/opt/ando/config/.env`
+- **GitHub App key**: `/opt/ando/config/github-app.pem`
+- **Data directories**:
+  - `/opt/ando/data/artifacts` - Build artifacts
+  - `/opt/ando/data/repos` - Cloned repositories
+  - `/opt/ando/data/keys` - Data protection keys
+  - `/opt/ando/data/sqldata` - SQL Server data
+
+### Important Notes
+
+- The server uses **rootless Docker** under the `ando` user (UID 1000)
+- The docker socket is at `/run/user/1000/docker.sock`
+- SQL Server runs in a separate container (`ando-sqlserver`)
+- The web server listens on `127.0.0.1:8080` (proxied by Caddy)
+
 ## Key Interfaces
 
 - `ICommandExecutor`: Interface for executing shell commands
@@ -140,6 +181,14 @@ dotnet publish src/Ando/Ando.csproj -c Release -r linux-x64 --self-contained -o 
 6. **CLAUDE.md files** - Update if instructions change
 
 Run `npm run build` in the website directory to verify documentation builds correctly.
+
+## Version Bumping
+
+When bumping the version in `src/Ando/Ando.csproj`:
+
+1. **Update the version** - Change the `<Version>` element in the csproj file
+2. **Add changelog entry** - Add an entry to `website/src/pages/changelog.astro` describing the changes
+3. **Update index.astro** - Update the version number shown on `website/src/pages/index.astro` if displayed
 
 ## Documentation Standards
 

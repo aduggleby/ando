@@ -38,9 +38,13 @@ public class AuthorizationTests : IDisposable
             cancellationRegistry,
             NullLogger<BuildService>.Instance);
 
+        var mockSecretsDetector = new Mock<IRequiredSecretsDetector>();
+        var mockProfileDetector = new Mock<IProfileDetector>();
         _projectService = new ProjectService(
             _db,
             _encryptionService,
+            mockSecretsDetector.Object,
+            mockProfileDetector.Object,
             NullLogger<ProjectService>.Instance);
     }
 
@@ -248,9 +252,9 @@ public class AuthorizationTests : IDisposable
     // Helpers
     // -------------------------------------------------------------------------
 
-    private async Task<User> CreateUserAsync(string login)
+    private async Task<ApplicationUser> CreateUserAsync(string login)
     {
-        var user = new User
+        var user = new ApplicationUser
         {
             GitHubId = Random.Shared.Next(1, 100000),
             GitHubLogin = login,
@@ -262,7 +266,7 @@ public class AuthorizationTests : IDisposable
         return user;
     }
 
-    private async Task<Project> CreateProjectAsync(User owner, string repoName = "test-repo")
+    private async Task<Project> CreateProjectAsync(ApplicationUser owner, string repoName = "test-repo")
     {
         var project = new Project
         {

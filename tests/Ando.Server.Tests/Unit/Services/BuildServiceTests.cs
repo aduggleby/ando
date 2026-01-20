@@ -478,9 +478,9 @@ public class BuildServiceTests : IDisposable
     // Helpers
     // -------------------------------------------------------------------------
 
-    private async Task<User> CreateTestUserAsync(string login = "testuser")
+    private async Task<ApplicationUser> CreateTestUserAsync(string login = "testuser")
     {
-        var user = new User
+        var user = new ApplicationUser
         {
             GitHubId = Random.Shared.Next(1, 100000),
             GitHubLogin = login,
@@ -491,7 +491,7 @@ public class BuildServiceTests : IDisposable
         return user;
     }
 
-    private async Task<Project> CreateTestProjectAsync(User? owner = null)
+    private async Task<Project> CreateTestProjectAsync(ApplicationUser? owner = null)
     {
         owner ??= await CreateTestUserAsync();
 

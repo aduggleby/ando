@@ -25,6 +25,7 @@
 
 using Ando.Context;
 using Ando.Operations;
+using Ando.Profiles;
 using Ando.References;
 
 namespace Ando.Scripting;
@@ -118,11 +119,52 @@ public class ScriptGlobals
     public AndoOperations Ando { get; }
 
     /// <summary>
+    /// Git version control operations.
+    /// Usage: Git.Tag(version), Git.Push(), Git.PushTags()
+    /// </summary>
+    public GitOperations Git { get; }
+
+    /// <summary>
+    /// GitHub operations (PRs, releases, container registry).
+    /// Usage: GitHub.CreatePr(o => o.WithTitle("..."))
+    /// Usage: GitHub.CreateRelease(o => o.WithTag(version))
+    /// Usage: GitHub.PushImage("myapp", o => o.WithTag(version))
+    /// </summary>
+    public GitHubOperations GitHub { get; }
+
+    /// <summary>
+    /// Docker operations (build images).
+    /// Usage: Docker.Build("Dockerfile", o => o.WithTag("myapp:v1.0.0"))
+    /// </summary>
+    public DockerOperations Docker { get; }
+
+    /// <summary>
+    /// Legacy .NET SDK installation operations.
+    /// Use Dotnet.SdkInstall() instead for new scripts.
+    /// Usage: DotnetSdk.Install() or DotnetSdk.Install("9.0")
+    /// </summary>
+    [Obsolete("Use Dotnet.SdkInstall() instead.")]
+    public DotnetSdkOperations DotnetSdk { get; }
+
+    /// <summary>
     /// Creates a directory reference from a path.
     /// Usage: var frontend = Directory("./frontend");
     /// Usage: var current = Directory(); // defaults to "."
     /// </summary>
     public DirectoryRef Directory(string path = ".") => new DirectoryRef(path);
+
+    // Profile registry for DefineProfile.
+    private readonly ProfileRegistry _profileRegistry;
+
+    /// <summary>
+    /// Defines a build profile that can be activated via CLI.
+    /// Usage: var release = DefineProfile("release");
+    /// Then: if (release) { Git.Tag(version); }
+    /// Activate via: ando -p release
+    /// </summary>
+    /// <param name="name">The profile name.</param>
+    /// <returns>A Profile that evaluates to true when active.</returns>
+    public Profile DefineProfile(string name) => _profileRegistry.Define(name);
 
     /// <summary>
     /// Gets an environment variable value.
@@ -161,5 +203,14 @@ public class ScriptGlobals
         Log = buildContext.Log;
         Nuget = buildContext.Nuget;
         Ando = buildContext.Ando;
+        Git = buildContext.Operations.Git;
+        GitHub = buildContext.Operations.GitHub;
+        Docker = buildContext.Operations.Docker;
+        _profileRegistry = buildContext.ProfileRegistry;
+
+        // Legacy backward compatibility.
+#pragma warning disable CS0618 // Suppress obsolete warning for internal initialization
+        DotnetSdk = buildContext.Operations.DotnetSdk;
+#pragma warning restore CS0618
     }
 }

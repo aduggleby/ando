@@ -21,7 +21,9 @@
 using Ando.Execution;
 using Ando.Logging;
 using Ando.Operations;
+using Ando.Profiles;
 using Ando.Steps;
+using Ando.Utilities;
 using Ando.Workflow;
 
 namespace Ando.Scripting;
@@ -72,6 +74,22 @@ public class BuildOperations
     /// <summary>ANDO operations for image configuration, artifacts, and nested builds.</summary>
     public AndoOperations Ando { get; }
 
+    /// <summary>npm global tool installation operations (upgrade npm version).</summary>
+    public NpmInstallOperations NpmGlobal { get; }
+
+    /// <summary>Git version control operations (tag, push).</summary>
+    public GitOperations Git { get; }
+
+    /// <summary>GitHub operations (PRs, releases, container registry).</summary>
+    public GitHubOperations GitHub { get; }
+
+    /// <summary>Docker operations (build images).</summary>
+    public DockerOperations Docker { get; }
+
+    /// <summary>Legacy .NET SDK installation operations. Use Dotnet.SdkInstall() instead.</summary>
+    [Obsolete("Use Dotnet.SdkInstall() instead.")]
+    public DotnetSdkOperations DotnetSdk { get; }
+
     /// <summary>
     /// Creates all operation instances.
     /// </summary>
@@ -80,25 +98,48 @@ public class BuildOperations
     /// <param name="executorFactory">Factory to get current executor.</param>
     /// <param name="containerToHostPath">Function to translate container paths to host paths.</param>
     /// <param name="buildOptions">Build options for configuring the current build.</param>
+    /// <param name="profileRegistry">Profile registry for passing profiles to sub-builds.</param>
     public BuildOperations(
         StepRegistry registry,
         IBuildLogger logger,
         Func<ICommandExecutor> executorFactory,
         Func<string, string> containerToHostPath,
-        BuildOptions buildOptions)
+        BuildOptions buildOptions,
+        ProfileRegistry profileRegistry)
     {
-        Dotnet = new DotnetOperations(registry, logger, executorFactory);
+        // Create shared HttpClient and version resolver for SDK auto-install.
+        var httpClient = new HttpClient();
+        var versionResolver = new VersionResolver(httpClient, logger);
+
+        // Create SDK ensurers that auto-install required runtimes.
+        var dotnetEnsurer = new DotnetSdkEnsurer(versionResolver, executorFactory, logger);
+        var nodeEnsurer = new NodeSdkEnsurer(versionResolver, executorFactory, logger);
+
+        // Initialize operations with their respective ensurers.
+        Dotnet = new DotnetOperations(registry, logger, executorFactory, dotnetEnsurer);
         Ef = new EfOperations(registry, logger, executorFactory);
-        Npm = new NpmOperations(registry, logger, executorFactory);
+        Npm = new NpmOperations(registry, logger, executorFactory, nodeEnsurer);
         Azure = new AzureOperations(registry, logger, executorFactory);
         Bicep = new BicepOperations(registry, logger, executorFactory);
         Cloudflare = new CloudflareOperations(registry, logger, executorFactory);
         Functions = new FunctionsOperations(registry, logger, executorFactory);
         AppService = new AppServiceOperations(registry, logger, executorFactory);
         Artifacts = new ArtifactOperations(logger);
-        Node = new NodeInstallOperations(registry, logger, executorFactory);
+        Node = new NodeInstallOperations(registry, logger, executorFactory, nodeEnsurer);
+        NpmGlobal = new NpmInstallOperations(registry, logger, executorFactory, nodeEnsurer);
         Log = new LogOperations(registry);
         Nuget = new NugetOperations(registry, logger, executorFactory);
-        Ando = new AndoOperations(registry, logger, containerToHostPath, buildOptions, Artifacts);
+        Ando = new AndoOperations(registry, logger, containerToHostPath, buildOptions, Artifacts, profileRegistry);
+
+        // Initialize Git, GitHub, and Docker operations.
+        var gitHubAuthHelper = new GitHubAuthHelper(logger);
+        Git = new GitOperations(registry, logger, executorFactory);
+        GitHub = new GitHubOperations(registry, logger, executorFactory, gitHubAuthHelper);
+        Docker = new DockerOperations(registry, logger, executorFactory);
+
+        // Legacy backward compatibility wrapper.
+#pragma warning disable CS0618 // Suppress obsolete warning for internal initialization
+        DotnetSdk = new DotnetSdkOperations(Dotnet);
+#pragma warning restore CS0618
     }
 }

@@ -1,0 +1,188 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import CodeBlock from "../../components/CodeBlock.astro";
+
+const buildCode = `// Define profiles
+var push = DefineProfile("push");
+
+var project = Dotnet.Project("./src/Ando/Ando.csproj");
+var testProject = Dotnet.Project("./tests/Ando.Tests/Ando.Tests.csproj");
+var distPath = Root / "dist";
+
+// Build workflow
+Dotnet.SdkInstall();
+Dotnet.Restore(project);
+Dotnet.Build(project);
+Dotnet.Test(testProject);
+
+// Publish for multiple platforms
+var runtimes = new[] { "win-x64", "linux-x64", "osx-x64", "osx-arm64" };
+foreach (var runtime in runtimes)
+{
+    Dotnet.Publish(project, o => o
+        .WithRuntime(runtime)
+        .Output(distPath / runtime)
+        .AsSelfContained()
+        .AsSingleFile());
+}
+
+// Create NuGet package
+Nuget.Pack(project);
+
+// Push to NuGet.org (only with -p push)
+if (push)
+{
+    Nuget.EnsureAuthenticated();
+    Nuget.Push(project);
+    Ando.Build(Directory("./website"));
+}
+
+// Copy artifacts to host
+Ando.CopyArtifactsToHost("dist", "./dist");
+Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");`;
+---
+
+<BaseLayout
+  title=".NET Tool Example - ANDO"
+  description="Build a .NET CLI tool and publish to NuGet.org."
+  alternateMarkdownUrl="/examples/dotnet-tool.md"
+>
+  <div class="max-w-3xl">
+    <section id="top" class="mb-8 md:mb-12">
+      <div class="mb-4">
+        <a
+          href="/examples"
+          class="text-sm text-zinc-500 hover:text-cyan-600 dark:text-zinc-400 dark:hover:text-cyan-400"
+          >&larr; All Examples</a
+        >
+      </div>
+      <h1 class="mb-2 text-2xl font-bold text-zinc-900 sm:text-3xl dark:text-white">.NET CLI Tool + NuGet</h1>
+      <p class="text-zinc-500 dark:text-zinc-400">
+        Build a .NET CLI tool for multiple platforms, create a NuGet package, and publish with profiles.
+      </p>
+    </section>
+
+    <section class="mb-10">
+      <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Overview</h2>
+      <p class="mb-4 text-zinc-600 dark:text-zinc-400">
+        This example demonstrates building a .NET CLI tool installable via
+        <code class="rounded bg-zinc-100 px-1.5 text-sm dark:bg-zinc-800">dotnet tool install</code>. It publishes
+        self-contained executables for multiple platforms and uses profiles for conditional NuGet publishing.
+      </p>
+      <p class="text-zinc-600 dark:text-zinc-400">The workflow performs these steps:</p>
+      <ol class="mt-3 list-inside list-decimal space-y-2 text-zinc-600 dark:text-zinc-400">
+        <li>Installs .NET SDK in the container</li>
+        <li>Restores, builds, and tests the project</li>
+        <li>Publishes self-contained executables for multiple platforms</li>
+        <li>Creates a NuGet package for the dotnet tool</li>
+        <li>
+          <strong>(with -p push)</strong> Publishes to NuGet.org and deploys docs
+        </li>
+        <li>Copies artifacts to the host machine</li>
+      </ol>
+    </section>
+
+    <section class="mb-10">
+      <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Build Script</h2>
+      <CodeBlock code={buildCode} lang="csharp" filename="build.csando" />
+    </section>
+
+    <section class="mb-10">
+      <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Using Profiles</h2>
+      <p class="mb-4 text-zinc-600 dark:text-zinc-400">
+        This script uses <code class="rounded bg-zinc-100 px-1.5 text-sm dark:bg-zinc-800">DefineProfile</code> for conditional
+        execution. By default it builds and tests. With the
+        <code class="rounded bg-zinc-100 px-1.5 text-sm dark:bg-zinc-800">push</code> profile, it also publishes to NuGet.org.
+      </p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-zinc-200 dark:border-zinc-700">
+              <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Command</th>
+              <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Behavior</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="border-b border-zinc-100 dark:border-zinc-800">
+              <td class="px-3 py-3"><code class="rounded bg-zinc-100 px-1.5 text-sm dark:bg-zinc-800">ando</code></td>
+              <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400"
+                >Build, test, create NuGet package, copy artifacts</td
+              >
+            </tr>
+            <tr class="border-b border-zinc-100 dark:border-zinc-800">
+              <td class="px-3 py-3"
+                ><code class="rounded bg-zinc-100 px-1.5 text-sm dark:bg-zinc-800">ando -p push</code></td
+              >
+              <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400"
+                >All of the above + push to NuGet.org + deploy docs</td
+              >
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="mb-10">
+      <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Key Operations</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-zinc-200 dark:border-zinc-700">
+              <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Operation</th
+              >
+              <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="border-b border-zinc-100 dark:border-zinc-800">
+              <td class="px-3 py-3">
+                <a href="/providers/ando#defineprofile" class="text-cyan-600 hover:underline dark:text-cyan-400"
+                  >DefineProfile()</a
+                >
+              </td>
+              <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">Creates a profile for conditional execution</td>
+            </tr>
+            <tr class="border-b border-zinc-100 dark:border-zinc-800">
+              <td class="px-3 py-3">
+                <a href="/providers/dotnet#publish" class="text-cyan-600 hover:underline dark:text-cyan-400"
+                  >Dotnet.Publish()</a
+                >
+              </td>
+              <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">Creates self-contained executables</td>
+            </tr>
+            <tr class="border-b border-zinc-100 dark:border-zinc-800">
+              <td class="px-3 py-3">
+                <a href="/providers/nuget#pack" class="text-cyan-600 hover:underline dark:text-cyan-400">Nuget.Pack()</a
+                >
+              </td>
+              <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">Creates a NuGet package</td>
+            </tr>
+            <tr class="border-b border-zinc-100 dark:border-zinc-800">
+              <td class="px-3 py-3">
+                <a href="/providers/nuget#push" class="text-cyan-600 hover:underline dark:text-cyan-400">Nuget.Push()</a
+                >
+              </td>
+              <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">Publishes to NuGet.org</td>
+            </tr>
+            <tr class="border-b border-zinc-100 dark:border-zinc-800">
+              <td class="px-3 py-3">
+                <a href="/providers/ando#build" class="text-cyan-600 hover:underline dark:text-cyan-400">Ando.Build()</a
+                >
+              </td>
+              <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">Runs a nested build script</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="mb-10">
+      <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Running the Build</h2>
+      <CodeBlock
+        code="# Build and test only\nando\n\n# Build, test, and push to NuGet.org\nando -p push"
+        lang="shell"
+        filename="shell"
+      />
+    </section>
+  </div>
+</BaseLayout>

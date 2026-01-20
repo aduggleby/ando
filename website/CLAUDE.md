@@ -85,28 +85,28 @@ For code examples, use these Tailwind text colors:
 website/
 ├── src/
 │   ├── components/
-│   │   └── OperationsTable.astro  # Reusable operations table
+│   │   └── OperationsTable.astro    # Reusable operations table
 │   ├── data/
-│   │   └── operations.js          # Operations data by provider
+│   │   ├── operations.js            # Operations data by provider
+│   │   └── providers.js             # Provider metadata for navigation
 │   ├── layouts/
-│   │   └── ProviderLayout.astro   # Layout for provider pages
+│   │   └── ProviderLayout.astro     # Layout for provider pages
 │   ├── pages/
-│   │   ├── index.astro            # Main landing page
-│   │   ├── dotnet.astro           # Provider pages
-│   │   ├── ef.astro
-│   │   ├── npm.astro
-│   │   ├── node.astro
-│   │   ├── dotnetsdk.astro
-│   │   ├── azure.astro
-│   │   ├── bicep.astro
-│   │   ├── cloudflare.astro
-│   │   ├── functions.astro
-│   │   └── appservice.astro
+│   │   ├── index.astro              # Main landing page
+│   │   └── providers/               # Provider documentation pages
+│   │       ├── [provider].md.ts     # Dynamic markdown endpoints for LLMs
+│   │       ├── ando.astro
+│   │       ├── azure.astro
+│   │       ├── docker.astro
+│   │       ├── git.astro
+│   │       ├── github.astro
+│   │       └── ...                  # Other provider pages
 │   └── styles/
-│       └── app.css                # Tailwind import only
-├── public/                        # Static assets
-├── astro.config.mjs               # Astro + Tailwind Vite config
-└── package.json                   # Dependencies
+│       └── app.css                  # Tailwind import only
+├── public/
+│   └── llms.txt                     # LLM-friendly documentation
+├── astro.config.mjs                 # Astro + Tailwind Vite config
+└── package.json                     # Dependencies
 ```
 
 ## Development
@@ -137,12 +137,14 @@ Operations are defined in `src/data/operations.js` grouped by provider. Each ope
 
 ### Adding a New Provider
 
-1. Add operations to `src/data/operations.js`
-2. Create a new page in `src/pages/{provider}.astro` using `ProviderLayout`
-3. Add the provider to `sortedProviders` array in:
-   - `src/pages/index.astro` (navigation dropdown)
-   - `src/layouts/ProviderLayout.astro` (navigation dropdown)
-4. Keep providers sorted alphabetically
+**IMPORTANT: Every provider page must have a corresponding markdown endpoint for LLM consumption.**
+
+1. Add operations to `src/data/operations.js` with the provider group name
+2. Add the provider to `src/data/providers.js` (alphabetically sorted)
+3. Create a new page in `src/pages/providers/{provider}.astro` using `ProviderLayout`
+4. Add a description for the provider in `src/pages/providers/[provider].md.ts` (the `providerDescriptions` object)
+5. Update `public/llms.txt` with the new provider documentation link and operations
+6. Keep providers sorted alphabetically everywhere
 
 ### Updating Documentation
 

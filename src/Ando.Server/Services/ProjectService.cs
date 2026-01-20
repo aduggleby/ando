@@ -25,15 +25,21 @@ public class ProjectService : IProjectService
 {
     private readonly AndoDbContext _db;
     private readonly IEncryptionService _encryption;
+    private readonly IRequiredSecretsDetector _secretsDetector;
+    private readonly IProfileDetector _profileDetector;
     private readonly ILogger<ProjectService> _logger;
 
     public ProjectService(
         AndoDbContext db,
         IEncryptionService encryption,
+        IRequiredSecretsDetector secretsDetector,
+        IProfileDetector profileDetector,
         ILogger<ProjectService> logger)
     {
         _db = db;
         _encryption = encryption;
+        _secretsDetector = secretsDetector;
+        _profileDetector = profileDetector;
         _logger = logger;
     }
 
@@ -71,13 +77,14 @@ public class ProjectService : IProjectService
         string defaultBranch,
         long? installationId = null)
     {
-        // Check if project already exists for this repo
+        // Check if project already exists for this repo AND owner.
+        // Different users can add the same repo as separate projects.
         var existing = await _db.Projects
-            .FirstOrDefaultAsync(p => p.GitHubRepoId == gitHubRepoId);
+            .FirstOrDefaultAsync(p => p.GitHubRepoId == gitHubRepoId && p.OwnerId == ownerId);
 
         if (existing != null)
         {
-            throw new InvalidOperationException($"Project already exists for repository {repoFullName}");
+            throw new InvalidOperationException($"You have already added repository {repoFullName}");
         }
 
         var project = new Project
@@ -99,6 +106,13 @@ public class ProjectService : IProjectService
             "Created project {ProjectId} for {Repo} (owner: {OwnerId})",
             project.Id, repoFullName, ownerId);
 
+        // Auto-detect required secrets and profiles from build.csando
+        if (installationId.HasValue)
+        {
+            await DetectAndUpdateRequiredSecretsAsync(project.Id);
+            await DetectAndUpdateProfilesAsync(project.Id);
+        }
+
         return project;
     }
 
@@ -109,6 +123,7 @@ public class ProjectService : IProjectService
         bool enablePrBuilds,
         int timeoutMinutes,
         string? dockerImage,
+        string? profile,
         bool notifyOnFailure,
         string? notificationEmail)
     {
@@ -122,6 +137,8 @@ public class ProjectService : IProjectService
         project.EnablePrBuilds = enablePrBuilds;
         project.TimeoutMinutes = Math.Max(1, Math.Min(60, timeoutMinutes));
         project.DockerImage = string.IsNullOrWhiteSpace(dockerImage) ? null : dockerImage.Trim();
+        project.Profile = string.IsNullOrWhiteSpace(profile) ? null : profile.Trim();
+        // Note: RequiredSecrets and AvailableProfiles are auto-detected from build.csando, not set manually
         project.NotifyOnFailure = notifyOnFailure;
         project.NotificationEmail = string.IsNullOrWhiteSpace(notificationEmail) ? null : notificationEmail.Trim();
 
@@ -206,5 +223,82 @@ public class ProjectService : IProjectService
             .Select(s => s.Name)
             .OrderBy(n => n)
             .ToListAsync();
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<string>> DetectAndUpdateRequiredSecretsAsync(int projectId)
+    {
+        var project = await _db.Projects.FindAsync(projectId);
+        if (project == null || !project.InstallationId.HasValue)
+        {
+            _logger.LogWarning("Cannot detect secrets: project {ProjectId} not found or no installation", projectId);
+            return [];
+        }
+
+        try
+        {
+            var detectedSecrets = await _secretsDetector.DetectRequiredSecretsAsync(
+                project.InstallationId.Value,
+                project.RepoFullName,
+                project.DefaultBranch);
+
+            // Update the project's required secrets
+            var newRequiredSecrets = detectedSecrets.Count > 0
+                ? string.Join(", ", detectedSecrets)
+                : null;
+
+            if (project.RequiredSecrets != newRequiredSecrets)
+            {
+                project.RequiredSecrets = newRequiredSecrets;
+                await _db.SaveChangesAsync();
+
+                _logger.LogInformation(
+                    "Updated required secrets for project {ProjectId}: {Secrets}",
+                    projectId,
+                    newRequiredSecrets ?? "(none)");
+            }
+
+            return detectedSecrets;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error detecting secrets for project {ProjectId}", projectId);
+            return [];
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<string>> DetectAndUpdateProfilesAsync(int projectId)
+    {
+        var project = await _db.Projects.FindAsync(projectId);
+        if (project == null || !project.InstallationId.HasValue)
+        {
+            _logger.LogWarning("Cannot detect profiles: project {ProjectId} not found or no installation", projectId);
+            return [];
+        }
+
+        try
+        {
+            var detectedProfiles = await _profileDetector.DetectProfilesAsync(
+                project.InstallationId.Value,
+                project.RepoFullName,
+                project.DefaultBranch);
+
+            // Update the project's available profiles
+            project.SetAvailableProfiles(detectedProfiles);
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation(
+                "Updated available profiles for project {ProjectId}: {Profiles}",
+                projectId,
+                detectedProfiles.Count > 0 ? string.Join(", ", detectedProfiles) : "(none)");
+
+            return detectedProfiles;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error detecting profiles for project {ProjectId}", projectId);
+            return [];
+        }
     }
 }

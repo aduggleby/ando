@@ -15,11 +15,13 @@ using Ando.Server.Controllers;
 using Ando.Server.Configuration;
 using Ando.Server.Data;
 using Ando.Server.Models;
+using Ando.Server.Services;
 using Ando.Server.Tests.TestFixtures;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Moq;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -41,10 +43,12 @@ public class WebhooksControllerTests : IDisposable
             WebhookSecret = "test-webhook-secret"
         };
 
+        var mockProjectService = new Mock<IProjectService>();
         _controller = new WebhooksController(
             _db,
             Options.Create(_settings),
             _buildService,
+            mockProjectService.Object,
             NullLogger<WebhooksController>.Instance);
 
         // Set up default HTTP context
@@ -362,7 +366,7 @@ public class WebhooksControllerTests : IDisposable
         string branchFilter = "main",
         bool enablePrBuilds = false)
     {
-        var user = new User
+        var user = new ApplicationUser
         {
             GitHubId = 12345,
             GitHubLogin = "testuser",

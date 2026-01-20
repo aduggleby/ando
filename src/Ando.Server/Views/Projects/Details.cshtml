@@ -8,14 +8,30 @@
         <a href="/projects">Projects</a> / <span>@Model.RepoFullName</span>
     </div>
     <div class="header-actions">
-        <form method="post" action="/projects/@Model.Id/build" class="inline-form">
-            @Html.AntiForgeryToken()
-            <button type="submit" class="btn btn-primary">Trigger Build</button>
-        </form>
+        @if (Model.IsConfigured)
+        {
+            <form method="post" action="/projects/@Model.Id/build" class="inline-form">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-primary">Trigger Build</button>
+            </form>
+        }
+        else
+        {
+            <button type="button" class="btn btn-primary" disabled title="Configure required secrets first">Trigger Build</button>
+        }
         <a href="/projects/@Model.Id/settings" class="btn btn-secondary">Settings</a>
         <a href="@Model.RepoUrl" target="_blank" class="btn btn-secondary">GitHub</a>
     </div>
 </div>
+
+@if (!Model.IsConfigured)
+{
+    <div class="alert alert-warning">
+        <strong>Configuration Required</strong>
+        <p>This project is missing required secrets: <code>@string.Join("</code>, <code>", Model.MissingSecrets)</code></p>
+        <p>Builds cannot run until all required secrets are configured. <a href="/projects/@Model.Id/settings">Go to Settings</a></p>
+    </div>
+}
 
 @if (TempData["Success"] != null)
 {

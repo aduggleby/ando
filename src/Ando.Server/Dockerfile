@@ -60,7 +60,7 @@ WORKDIR /app
 COPY --from=build /app .
 
 # Create directories for data volumes
-RUN mkdir -p /data/artifacts /data/repos
+RUN mkdir -p /data/artifacts /data/repos /data/keys
 
 # Expose HTTP port
 EXPOSE 8080

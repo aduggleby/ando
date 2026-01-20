@@ -129,7 +129,7 @@ public class ProjectTests
     public void GetNotificationEmail_WithOverride_ReturnsOverride()
     {
         // Arrange
-        var owner = new User { Email = "owner@example.com" };
+        var owner = new ApplicationUser { Email = "owner@example.com" };
         var project = new Project
         {
             Owner = owner,
@@ -144,7 +144,7 @@ public class ProjectTests
     public void GetNotificationEmail_WithoutOverride_ReturnsOwnerEmail()
     {
         // Arrange
-        var owner = new User { Email = "owner@example.com" };
+        var owner = new ApplicationUser { Email = "owner@example.com" };
         var project = new Project
         {
             Owner = owner,
@@ -159,7 +159,7 @@ public class ProjectTests
     public void GetNotificationEmail_WithNoEmails_ReturnsNull()
     {
         // Arrange
-        var owner = new User { Email = null };
+        var owner = new ApplicationUser { Email = null };
         var project = new Project
         {
             Owner = owner,
@@ -174,7 +174,7 @@ public class ProjectTests
     public void GetNotificationEmail_WithEmptyOverride_ReturnsEmpty()
     {
         // Arrange - empty string is a valid override (disables notifications)
-        var owner = new User { Email = "owner@example.com" };
+        var owner = new ApplicationUser { Email = "owner@example.com" };
         var project = new Project
         {
             Owner = owner,

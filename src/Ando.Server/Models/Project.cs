@@ -86,6 +86,24 @@ public class Project
     /// </summary>
     public string? DockerImage { get; set; }
 
+    /// <summary>
+    /// Comma-separated list of required environment variable names.
+    /// Builds are blocked until all required secrets are configured.
+    /// </summary>
+    public string? RequiredSecrets { get; set; }
+
+    /// <summary>
+    /// The selected build profile to use. Null means no profile (default build).
+    /// Must match one of the profiles in AvailableProfiles.
+    /// </summary>
+    public string? Profile { get; set; }
+
+    /// <summary>
+    /// Comma-separated list of available profile names detected from build.csando.
+    /// Updated when the repo is connected and on each build.
+    /// </summary>
+    public string? AvailableProfiles { get; set; }
+
     // -------------------------------------------------------------------------
     // Notification Settings
     // -------------------------------------------------------------------------
@@ -141,5 +159,94 @@ public class Project
     public string? GetNotificationEmail()
     {
         return NotificationEmail ?? Owner.Email;
+    }
+
+    /// <summary>
+    /// Gets the list of required secret names.
+    /// </summary>
+    public IReadOnlyList<string> GetRequiredSecretNames()
+    {
+        if (string.IsNullOrWhiteSpace(RequiredSecrets))
+            return [];
+
+        return RequiredSecrets
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Gets the list of required secrets that are not yet configured.
+    /// Uses the Secrets navigation property (must be loaded).
+    /// </summary>
+    public IReadOnlyList<string> GetMissingSecrets()
+    {
+        var required = GetRequiredSecretNames();
+        if (required.Count == 0)
+            return [];
+
+        var configured = Secrets.Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return required.Where(r => !configured.Contains(r)).ToList();
+    }
+
+    /// <summary>
+    /// Gets the list of required secrets that are not in the provided list.
+    /// Use when Secrets navigation property is not loaded.
+    /// </summary>
+    public IReadOnlyList<string> GetMissingSecretsFrom(IEnumerable<string> configuredSecretNames)
+    {
+        var required = GetRequiredSecretNames();
+        if (required.Count == 0)
+            return [];
+
+        var configured = configuredSecretNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return required.Where(r => !configured.Contains(r)).ToList();
+    }
+
+    /// <summary>
+    /// Checks if all required secrets are configured.
+    /// </summary>
+    public bool IsConfigured => GetMissingSecrets().Count == 0;
+
+    /// <summary>
+    /// Gets the list of available profile names.
+    /// </summary>
+    public IReadOnlyList<string> GetAvailableProfileNames()
+    {
+        if (string.IsNullOrWhiteSpace(AvailableProfiles))
+            return [];
+
+        return AvailableProfiles
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order()
+            .ToList();
+    }
+
+    /// <summary>
+    /// Checks if the selected profile is valid.
+    /// A null profile is always valid (uses default build).
+    /// A non-null profile must exist in AvailableProfiles.
+    /// </summary>
+    public bool IsProfileValid()
+    {
+        if (string.IsNullOrWhiteSpace(Profile))
+            return true;
+
+        var available = GetAvailableProfileNames();
+        return available.Contains(Profile, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Updates the available profiles from a detected list.
+    /// </summary>
+    public void SetAvailableProfiles(IEnumerable<string> profiles)
+    {
+        var sorted = profiles
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order();
+
+        AvailableProfiles = sorted.Any() ? string.Join(",", sorted) : null;
     }
 }

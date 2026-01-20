@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "mcp-server-playwright",
+      "args": ["--browser", "chromium", "--headless"],
+      "env": {
+        "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH": "/usr/bin/chromium"
+      }
+    }
+  }
+}

@@ -507,7 +507,7 @@ public class WebhookIntegrationTests : IAsyncLifetime, IDisposable
         string branchFilter = "main",
         bool enablePrBuilds = false)
     {
-        var user = new User
+        var user = new ApplicationUser
         {
             GitHubId = Random.Shared.Next(1, 100000),
             GitHubLogin = $"testuser_{Guid.NewGuid():N}",

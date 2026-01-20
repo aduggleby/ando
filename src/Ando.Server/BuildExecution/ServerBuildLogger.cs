@@ -10,7 +10,7 @@
 // - Writes each log entry immediately to database (no batching)
 // - Broadcasts via SignalR for real-time UI updates
 // - Uses sequence numbers for ordering
-// - Thread-safe via Interlocked operations
+// - Thread-safe via lock around DbContext (DbContext is not thread-safe)
 // =============================================================================
 
 using Ando.Logging;
@@ -34,6 +34,7 @@ public class ServerBuildLogger : IBuildLogger
     private readonly IHubContext<BuildLogHub> _hubContext;
     private readonly CancellationToken _cancellationToken;
     private int _sequence = 0;
+    private readonly object _dbLock = new();
 
     public AndoLogLevel Verbosity { get; set; } = AndoLogLevel.Normal;
 
@@ -113,11 +114,23 @@ public class ServerBuildLogger : IBuildLogger
         LogEntry(LogEntryType.Info, $"Starting build: {workflowName} ({totalSteps} steps)");
     }
 
-    public void WorkflowCompleted(string workflowName, TimeSpan duration, int stepsRun, int stepsFailed)
+    public void WorkflowCompleted(string workflowName, string? scriptPath, TimeSpan duration, int stepsRun, int stepsFailed)
     {
         var status = stepsFailed > 0 ? "failed" : "succeeded";
         LogEntry(LogEntryType.Info,
             $"Build {status}: {stepsRun} steps completed, {stepsFailed} failed in {duration.TotalSeconds:F1}s");
+    }
+
+    public void LogStep(string level, string message)
+    {
+        var type = level.ToLowerInvariant() switch
+        {
+            "warning" => LogEntryType.Warning,
+            "error" => LogEntryType.Error,
+            "debug" => LogEntryType.Debug,
+            _ => LogEntryType.Info
+        };
+        LogEntry(type, message);
     }
 
     /// <summary>
@@ -145,20 +158,25 @@ public class ServerBuildLogger : IBuildLogger
 
         try
         {
-            _db.BuildLogEntries.Add(entry);
-            _db.SaveChanges();
+            // Synchronize database access - DbContext is not thread-safe
+            lock (_dbLock)
+            {
+                _db.BuildLogEntries.Add(entry);
+                _db.SaveChanges();
+            }
 
-            // Broadcast to SignalR clients watching this build
+            // Broadcast to SignalR clients watching this build.
+            // Use explicit camelCase property names to match JavaScript expectations.
             var groupName = BuildLogHub.GetGroupName(_buildId);
             _hubContext.Clients.Group(groupName)
                 .SendAsync("LogEntry", new
                 {
-                    entry.Id,
-                    entry.Sequence,
-                    Type = entry.Type.ToString(),
-                    entry.Message,
-                    entry.StepName,
-                    entry.Timestamp
+                    id = entry.Id,
+                    sequence = entry.Sequence,
+                    type = entry.Type.ToString(),
+                    message = entry.Message,
+                    stepName = entry.StepName,
+                    timestamp = entry.Timestamp
                 }, _cancellationToken);
         }
         catch (OperationCanceledException)

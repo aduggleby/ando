@@ -44,6 +44,7 @@ public interface IProjectService
 
     /// <summary>
     /// Updates project settings.
+    /// Note: RequiredSecrets and AvailableProfiles are auto-detected from build.csando and not set manually.
     /// </summary>
     Task<bool> UpdateProjectSettingsAsync(
         int projectId,
@@ -51,6 +52,7 @@ public interface IProjectService
         bool enablePrBuilds,
         int timeoutMinutes,
         string? dockerImage,
+        string? profile,
         bool notifyOnFailure,
         string? notificationEmail);
 
@@ -73,4 +75,18 @@ public interface IProjectService
     /// Gets secret names (not values) for a project.
     /// </summary>
     Task<IReadOnlyList<string>> GetSecretNamesAsync(int projectId);
+
+    /// <summary>
+    /// Updates the required secrets list for a project by detecting them from the build script.
+    /// </summary>
+    /// <param name="projectId">Project ID.</param>
+    /// <returns>The list of detected required secrets.</returns>
+    Task<IReadOnlyList<string>> DetectAndUpdateRequiredSecretsAsync(int projectId);
+
+    /// <summary>
+    /// Updates the available profiles list for a project by detecting them from the build script.
+    /// </summary>
+    /// <param name="projectId">Project ID.</param>
+    /// <returns>The list of detected available profiles.</returns>
+    Task<IReadOnlyList<string>> DetectAndUpdateProfilesAsync(int projectId);
 }

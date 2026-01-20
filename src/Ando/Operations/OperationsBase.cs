@@ -93,4 +93,84 @@ public abstract class OperationsBase
             return result.Success;
         }, context);
     }
+
+    /// <summary>
+    /// Registers a step that runs an ensurer before executing a command with string array args.
+    /// The ensurer is called at execution time to auto-install required SDKs/runtimes.
+    /// </summary>
+    protected void RegisterCommandWithEnsurer(
+        string stepName,
+        string command,
+        string[] args,
+        Func<Task>? ensurer,
+        string? context = null,
+        string? workingDirectory = null,
+        Dictionary<string, string>? environment = null)
+    {
+        Registry.Register(stepName, async () =>
+        {
+            // Run ensurer first (auto-install SDK/runtime if needed).
+            if (ensurer != null)
+            {
+                await ensurer();
+            }
+
+            var options = new CommandOptions();
+            if (workingDirectory != null)
+            {
+                options.WorkingDirectory = workingDirectory;
+            }
+            if (environment != null)
+            {
+                foreach (var (key, value) in environment)
+                {
+                    options.Environment[key] = value;
+                }
+            }
+            var result = await ExecutorFactory().ExecuteAsync(command, args, options);
+            return result.Success;
+        }, context);
+    }
+
+    /// <summary>
+    /// Registers a step that runs an ensurer before executing a command with builder args.
+    /// The ensurer is called at execution time to auto-install required SDKs/runtimes.
+    /// The buildArgs function is also called at execution time, not registration time.
+    /// </summary>
+    protected void RegisterCommandWithEnsurer(
+        string stepName,
+        string command,
+        Func<ArgumentBuilder> buildArgs,
+        Func<Task>? ensurer,
+        string? context = null,
+        string? workingDirectory = null,
+        Dictionary<string, string>? environment = null)
+    {
+        Registry.Register(stepName, async () =>
+        {
+            // Run ensurer first (auto-install SDK/runtime if needed).
+            if (ensurer != null)
+            {
+                await ensurer();
+            }
+
+            // Build arguments at execution time, not registration time.
+            var args = buildArgs().Build();
+
+            var options = new CommandOptions();
+            if (workingDirectory != null)
+            {
+                options.WorkingDirectory = workingDirectory;
+            }
+            if (environment != null)
+            {
+                foreach (var (key, value) in environment)
+                {
+                    options.Environment[key] = value;
+                }
+            }
+            var result = await ExecutorFactory().ExecuteAsync(command, args, options);
+            return result.Success;
+        }, context);
+    }
 }

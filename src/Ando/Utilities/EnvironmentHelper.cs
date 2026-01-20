@@ -71,6 +71,7 @@ public static class EnvironmentHelper
     /// Gets a required environment variable, prompting the user if not set.
     /// After prompting, sets the environment variable for the current process
     /// so subsequent calls and child processes can use it.
+    /// In non-interactive mode (CI/server), throws an exception instead of prompting.
     /// </summary>
     /// <param name="name">Environment variable name.</param>
     /// <param name="description">Description shown in the prompt.</param>
@@ -82,6 +83,15 @@ public static class EnvironmentHelper
         if (!string.IsNullOrEmpty(value))
         {
             return value;
+        }
+
+        // Check if we're in a non-interactive environment (CI/server).
+        // Console.IsInputRedirected is true when stdin is not a terminal.
+        if (Console.IsInputRedirected || !Environment.UserInteractive)
+        {
+            throw new InvalidOperationException(
+                $"Environment variable '{name}' ({description}) is required but not set. " +
+                $"Set this variable in your CI/CD environment or project secrets.");
         }
 
         // Prompt the user for the value.

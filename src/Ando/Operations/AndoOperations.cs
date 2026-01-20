@@ -22,6 +22,7 @@
 // =============================================================================
 
 using Ando.Logging;
+using Ando.Profiles;
 using Ando.References;
 using Ando.Steps;
 using Ando.Workflow;
@@ -38,6 +39,7 @@ public class AndoOperations
     private readonly Func<string, string> _containerToHostPath;
     private readonly BuildOptions _buildOptions;
     private readonly ArtifactOperations _artifactOperations;
+    private readonly ProfileRegistry _profileRegistry;
 
     /// <summary>
     /// Creates a new AndoOperations instance.
@@ -47,18 +49,21 @@ public class AndoOperations
     /// <param name="containerToHostPath">Function to translate container paths to host paths.</param>
     /// <param name="buildOptions">Build options for configuring the current build.</param>
     /// <param name="artifactOperations">Artifact operations for copying files to host.</param>
+    /// <param name="profileRegistry">Profile registry for passing profiles to sub-builds.</param>
     public AndoOperations(
         StepRegistry registry,
         IBuildLogger logger,
         Func<string, string> containerToHostPath,
         BuildOptions buildOptions,
-        ArtifactOperations artifactOperations)
+        ArtifactOperations artifactOperations,
+        ProfileRegistry profileRegistry)
     {
         _registry = registry;
         _logger = logger;
         _containerToHostPath = containerToHostPath;
         _buildOptions = buildOptions;
         _artifactOperations = artifactOperations;
+        _profileRegistry = profileRegistry;
     }
 
     /// <summary>
@@ -164,6 +169,14 @@ public class AndoOperations
             if (buildFileArg != null)
             {
                 argsList.InsertRange(0, new[] { "-f", buildFileArg });
+            }
+
+            // Pass active profiles to child build.
+            var activeProfiles = _profileRegistry.ActiveProfiles;
+            if (activeProfiles.Count > 0)
+            {
+                argsList.Add("-p");
+                argsList.Add(string.Join(",", activeProfiles));
             }
 
             var args = argsList.ToArray();

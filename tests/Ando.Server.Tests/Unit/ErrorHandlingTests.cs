@@ -271,9 +271,13 @@ public class ErrorHandlingTests : IDisposable
         // Arrange
         var user = await CreateTestUserAsync();
         var encryptionService = new MockEncryptionService();
+        var mockSecretsDetector = new Mock<IRequiredSecretsDetector>();
+        var mockProfileDetector = new Mock<IProfileDetector>();
         var service = new ProjectService(
             _db,
             encryptionService,
+            mockSecretsDetector.Object,
+            mockProfileDetector.Object,
             NullLogger<ProjectService>.Instance);
 
         // Create first project
@@ -299,9 +303,13 @@ public class ErrorHandlingTests : IDisposable
     {
         // Arrange
         var encryptionService = new MockEncryptionService();
+        var mockSecretsDetector = new Mock<IRequiredSecretsDetector>();
+        var mockProfileDetector = new Mock<IProfileDetector>();
         var service = new ProjectService(
             _db,
             encryptionService,
+            mockSecretsDetector.Object,
+            mockProfileDetector.Object,
             NullLogger<ProjectService>.Instance);
 
         // Act
@@ -316,9 +324,13 @@ public class ErrorHandlingTests : IDisposable
     {
         // Arrange
         var encryptionService = new MockEncryptionService();
+        var mockSecretsDetector = new Mock<IRequiredSecretsDetector>();
+        var mockProfileDetector = new Mock<IProfileDetector>();
         var service = new ProjectService(
             _db,
             encryptionService,
+            mockSecretsDetector.Object,
+            mockProfileDetector.Object,
             NullLogger<ProjectService>.Instance);
 
         // Act
@@ -327,6 +339,7 @@ public class ErrorHandlingTests : IDisposable
             "main",
             false,
             15,
+            null,
             null,
             false,
             null);
@@ -343,9 +356,13 @@ public class ErrorHandlingTests : IDisposable
         var project = await CreateTestProjectAsync(user);
 
         var encryptionService = new MockEncryptionService();
+        var mockSecretsDetector = new Mock<IRequiredSecretsDetector>();
+        var mockProfileDetector = new Mock<IProfileDetector>();
         var service = new ProjectService(
             _db,
             encryptionService,
+            mockSecretsDetector.Object,
+            mockProfileDetector.Object,
             NullLogger<ProjectService>.Instance);
 
         // Act
@@ -442,10 +459,12 @@ public class ErrorHandlingTests : IDisposable
 
     private WebhooksController CreateWebhooksController(MockBuildService buildService)
     {
+        var mockProjectService = new Mock<IProjectService>();
         var controller = new WebhooksController(
             _db,
             Options.Create(_gitHubSettings),
             buildService,
+            mockProjectService.Object,
             NullLogger<WebhooksController>.Instance);
 
         controller.ControllerContext = new ControllerContext
@@ -456,9 +475,9 @@ public class ErrorHandlingTests : IDisposable
         return controller;
     }
 
-    private async Task<User> CreateTestUserAsync(string login = "testuser")
+    private async Task<ApplicationUser> CreateTestUserAsync(string login = "testuser")
     {
-        var user = new User
+        var user = new ApplicationUser
         {
             GitHubId = Random.Shared.Next(1, 100000),
             GitHubLogin = login,
@@ -469,7 +488,7 @@ public class ErrorHandlingTests : IDisposable
         return user;
     }
 
-    private async Task<Project> CreateTestProjectAsync(User? owner = null)
+    private async Task<Project> CreateTestProjectAsync(ApplicationUser? owner = null)
     {
         owner ??= await CreateTestUserAsync();
 

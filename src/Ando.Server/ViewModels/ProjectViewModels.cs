@@ -98,6 +98,10 @@ public class ProjectListItem
     public DateTime? LastBuildAt { get; init; }
     public BuildStatus? LastBuildStatus { get; init; }
     public int TotalBuilds { get; init; }
+
+    // Configuration status
+    public bool IsConfigured { get; init; } = true;
+    public int MissingSecretsCount { get; init; }
 }
 
 /// <summary>
@@ -117,6 +121,10 @@ public class ProjectDetailsViewModel
 
     public IReadOnlyList<BuildListItem> RecentBuilds { get; init; } = [];
     public int TotalBuilds { get; init; }
+
+    // Configuration status
+    public bool IsConfigured { get; init; } = true;
+    public IReadOnlyList<string> MissingSecrets { get; init; } = [];
 }
 
 /// <summary>
@@ -141,23 +149,19 @@ public class BuildListItem
 
 /// <summary>
 /// View model for the create project page.
+/// Shows a form for manual repository entry.
 /// </summary>
 public class CreateProjectViewModel
 {
-    public IReadOnlyList<AvailableRepository> Repositories { get; init; } = [];
-}
+    /// <summary>
+    /// Pre-filled repository name (owner/repo) for retry after error.
+    /// </summary>
+    public string? RepoFullName { get; init; }
 
-/// <summary>
-/// A repository available for connection.
-/// </summary>
-public class AvailableRepository
-{
-    public long GitHubRepoId { get; init; }
-    public string FullName { get; init; } = "";
-    public string HtmlUrl { get; init; } = "";
-    public string DefaultBranch { get; init; } = "";
-    public bool IsPrivate { get; init; }
-    public bool AlreadyConnected { get; init; }
+    /// <summary>
+    /// Error message if repo lookup failed.
+    /// </summary>
+    public string? ErrorMessage { get; init; }
 }
 
 /// <summary>
@@ -174,16 +178,30 @@ public class ProjectSettingsViewModel
     public int TimeoutMinutes { get; init; }
     public string? DockerImage { get; init; }
 
+    // Profile settings
+    public string? Profile { get; init; }
+    public IReadOnlyList<string> AvailableProfiles { get; init; } = [];
+    public bool IsProfileValid { get; init; } = true;
+
+    // Required secrets (comma-separated list of required env var names)
+    public string? RequiredSecrets { get; init; }
+
     // Notification settings
     public bool NotifyOnFailure { get; init; }
     public string? NotificationEmail { get; init; }
 
     // Secrets (names only, never values)
     public IReadOnlyList<string> SecretNames { get; init; } = [];
+
+    // Configuration status
+    public IReadOnlyList<string> MissingSecrets { get; init; } = [];
+    public bool IsConfigured => MissingSecrets.Count == 0 && IsProfileValid;
 }
 
 /// <summary>
 /// Form model for updating project settings.
+/// Note: RequiredSecrets and AvailableProfiles are auto-detected from build.csando
+/// and not user-editable.
 /// </summary>
 public class ProjectSettingsFormModel
 {
@@ -191,6 +209,7 @@ public class ProjectSettingsFormModel
     public bool EnablePrBuilds { get; set; }
     public int TimeoutMinutes { get; set; } = 15;
     public string? DockerImage { get; set; }
+    public string? Profile { get; set; }
     public bool NotifyOnFailure { get; set; } = true;
     public string? NotificationEmail { get; set; }
 }
@@ -202,4 +221,17 @@ public class AddSecretFormModel
 {
     public string Name { get; set; } = "";
     public string Value { get; set; } = "";
+}
+
+/// <summary>
+/// Form model for bulk importing secrets from .env format.
+/// </summary>
+public class BulkSecretsFormModel
+{
+    /// <summary>
+    /// Raw .env file content to parse and import.
+    /// Expected format: KEY=value (one per line).
+    /// Lines starting with # are ignored as comments.
+    /// </summary>
+    public string Content { get; set; } = "";
 }

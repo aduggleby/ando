@@ -188,7 +188,7 @@
                     {
                         <span class="log-step">[@entry.StepName]</span>
                     }
-                    <span class="log-message">@entry.Message</span>
+                    <span class="log-message" data-raw="@Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(entry.Message))"></span>
                 </div>
             }
         </div>
@@ -202,12 +202,20 @@
 </div>
 
 @section Scripts {
+    <script src="/js/build-logs.js"></script>
+    <script>
+        // Parse ANSI codes in existing log entries on page load
+        // Decode from base64 to preserve whitespace (browsers normalize spaces in HTML)
+        document.querySelectorAll('.log-message[data-raw]').forEach(el => {
+            const raw = atob(el.dataset.raw);
+            el.innerHTML = parseAnsi(raw);
+        });
+    </script>
     @if (Model.IsLive)
     {
         <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
-        <script src="/js/build-logs.js"></script>
         <script>
-            initializeBuildLogs(@Model.Id, @Model.LogEntries.LastOrDefault()?.Sequence ?? 0, {
+            initializeBuildLogs(@Model.Id, @(Model.LogEntries.LastOrDefault()?.Sequence ?? 0), {
                 stepsTotal: @Model.StepsTotal,
                 stepsCompleted: @Model.StepsCompleted,
                 stepsFailed: @Model.StepsFailed

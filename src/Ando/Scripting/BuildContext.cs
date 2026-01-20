@@ -26,6 +26,7 @@ using Ando.Context;
 using Ando.Execution;
 using Ando.Logging;
 using Ando.Operations;
+using Ando.Profiles;
 using Ando.Steps;
 using Ando.Workflow;
 
@@ -48,6 +49,9 @@ public class BuildContext
 
     /// <summary>Registry of steps to execute.</summary>
     public StepRegistry StepRegistry { get; }
+
+    /// <summary>Registry for build profiles.</summary>
+    public ProfileRegistry ProfileRegistry { get; }
 
     /// <summary>Logger for build output.</summary>
     public IBuildLogger Logger { get; }
@@ -112,6 +116,7 @@ public class BuildContext
         Context = new BuildContextObject(rootPath);
         Options = new BuildOptions();
         StepRegistry = new StepRegistry();
+        ProfileRegistry = new ProfileRegistry();
         Logger = logger;
 
         // Default to local process execution.
@@ -121,7 +126,7 @@ public class BuildContext
         // Create operations container with an executor factory lambda.
         // The factory ensures operations always get the current executor,
         // even if it's changed after script loading.
-        Operations = new BuildOperations(StepRegistry, Logger, () => Executor, TranslateContainerToHostPath, Options);
+        Operations = new BuildOperations(StepRegistry, Logger, () => Executor, TranslateContainerToHostPath, Options, ProfileRegistry);
     }
 
     /// <summary>

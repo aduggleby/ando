@@ -258,6 +258,108 @@ public class GitHubService : IGitHubService
         return await GetRepositoriesAsync(accessToken, "user/repos?per_page=100&affiliation=owner");
     }
 
+    /// <inheritdoc />
+    public async Task<(long InstallationId, GitHubRepository Repository)?> GetRepositoryInstallationAsync(string repoFullName)
+    {
+        try
+        {
+            var jwt = _authenticator.GenerateJwt();
+
+            // First, get the installation for this repo
+            var installationRequest = new HttpRequestMessage(HttpMethod.Get, $"repos/{repoFullName}/installation");
+            installationRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+            var installationResponse = await _httpClient.SendAsync(installationRequest);
+
+            if (!installationResponse.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "No GitHub App installation found for {Repo}: {Status}",
+                    repoFullName, installationResponse.StatusCode);
+                return null;
+            }
+
+            var installationContent = await installationResponse.Content.ReadAsStringAsync();
+            using var installationDoc = JsonDocument.Parse(installationContent);
+            var installationId = installationDoc.RootElement.GetProperty("id").GetInt64();
+
+            // Now get the repo info using the installation token
+            var token = await GetInstallationTokenAsync(installationId);
+            if (string.IsNullOrEmpty(token))
+            {
+                return null;
+            }
+
+            var repoRequest = new HttpRequestMessage(HttpMethod.Get, $"repos/{repoFullName}");
+            repoRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var repoResponse = await _httpClient.SendAsync(repoRequest);
+
+            if (!repoResponse.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Failed to get repository info for {Repo}: {Status}", repoFullName, repoResponse.StatusCode);
+                return null;
+            }
+
+            var repoContent = await repoResponse.Content.ReadAsStringAsync();
+            using var repoDoc = JsonDocument.Parse(repoContent);
+            var repo = repoDoc.RootElement;
+            var owner = repo.GetProperty("owner");
+
+            var repository = new GitHubRepository(
+                Id: repo.GetProperty("id").GetInt64(),
+                FullName: repo.GetProperty("full_name").GetString() ?? "",
+                HtmlUrl: repo.GetProperty("html_url").GetString() ?? "",
+                CloneUrl: repo.GetProperty("clone_url").GetString() ?? "",
+                DefaultBranch: repo.TryGetProperty("default_branch", out var db) ? db.GetString() ?? "main" : "main",
+                IsPrivate: repo.TryGetProperty("private", out var priv) && priv.GetBoolean(),
+                OwnerId: owner.GetProperty("id").GetInt64(),
+                OwnerLogin: owner.GetProperty("login").GetString() ?? ""
+            );
+
+            return (installationId, repository);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting repository installation for {Repo}", repoFullName);
+            return null;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<string?> GetBranchHeadShaAsync(long installationId, string repoFullName, string branch)
+    {
+        try
+        {
+            var token = await GetInstallationTokenAsync(installationId);
+            if (string.IsNullOrEmpty(token))
+            {
+                return null;
+            }
+
+            var request = new HttpRequestMessage(HttpMethod.Get, $"repos/{repoFullName}/branches/{branch}");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var response = await _httpClient.SendAsync(request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Failed to get branch {Branch} for {Repo}: {Status}", branch, repoFullName, response.StatusCode);
+                return null;
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(content);
+
+            return doc.RootElement.GetProperty("commit").GetProperty("sha").GetString();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting branch head SHA for {Repo}/{Branch}", repoFullName, branch);
+            return null;
+        }
+    }
+
     /// <summary>
     /// Gets repositories from a GitHub API endpoint.
     /// </summary>
@@ -381,4 +483,62 @@ public class GitHubService : IGitHubService
         CommitStatusState.Error => "Build error",
         _ => "Unknown status"
     };
+
+    /// <inheritdoc />
+    public async Task<string?> GetFileContentAsync(long installationId, string repoFullName, string filePath, string? branch = null)
+    {
+        try
+        {
+            var token = await GetInstallationTokenAsync(installationId);
+            if (string.IsNullOrEmpty(token))
+            {
+                return null;
+            }
+
+            // Build the endpoint URL
+            var endpoint = $"repos/{repoFullName}/contents/{filePath}";
+            if (!string.IsNullOrEmpty(branch))
+            {
+                endpoint += $"?ref={Uri.EscapeDataString(branch)}";
+            }
+
+            var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var response = await _httpClient.SendAsync(request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    _logger.LogDebug("File not found: {Repo}/{Path}", repoFullName, filePath);
+                }
+                else
+                {
+                    _logger.LogWarning("Failed to get file content for {Repo}/{Path}: {Status}", repoFullName, filePath, response.StatusCode);
+                }
+                return null;
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(content);
+
+            // GitHub returns base64-encoded content
+            var encodedContent = doc.RootElement.GetProperty("content").GetString();
+            if (string.IsNullOrEmpty(encodedContent))
+            {
+                return null;
+            }
+
+            // Decode base64 (GitHub includes newlines in the encoding)
+            var base64Clean = encodedContent.Replace("\n", "").Replace("\r", "");
+            var bytes = Convert.FromBase64String(base64Clean);
+            return System.Text.Encoding.UTF8.GetString(bytes);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting file content for {Repo}/{Path}", repoFullName, filePath);
+            return null;
+        }
+    }
 }

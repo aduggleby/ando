@@ -28,8 +28,8 @@ public class BuildsControllerValidationTests : IDisposable
     private readonly Mock<IBuildService> _buildService;
     private readonly Mock<IProjectService> _projectService;
     private readonly BuildsController _controller;
-    private readonly User _testUser;
-    private readonly User _otherUser;
+    private readonly ApplicationUser _testUser;
+    private readonly ApplicationUser _otherUser;
     private readonly Project _testProject;
     private readonly Project _otherProject;
 
@@ -46,7 +46,7 @@ public class BuildsControllerValidationTests : IDisposable
             NullLogger<BuildsController>.Instance);
 
         // Create test user
-        _testUser = new User
+        _testUser = new ApplicationUser
         {
             GitHubId = 12345,
             GitHubLogin = "testuser",
@@ -56,7 +56,7 @@ public class BuildsControllerValidationTests : IDisposable
         _db.Users.Add(_testUser);
 
         // Create another user (for ownership tests)
-        _otherUser = new User
+        _otherUser = new ApplicationUser
         {
             GitHubId = 67890,
             GitHubLogin = "otheruser",

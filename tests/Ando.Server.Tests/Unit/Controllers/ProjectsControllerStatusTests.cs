@@ -13,6 +13,7 @@
 // =============================================================================
 
 using System.Security.Claims;
+using Ando.Server.Configuration;
 using Ando.Server.Controllers;
 using Ando.Server.GitHub;
 using Ando.Server.Models;
@@ -24,6 +25,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace Ando.Server.Tests.Unit.Controllers;
@@ -35,7 +37,7 @@ public class ProjectsControllerStatusTests : IDisposable
     private readonly Mock<IBuildService> _buildService;
     private readonly Mock<IGitHubService> _gitHubService;
     private readonly ProjectsController _controller;
-    private readonly User _testUser;
+    private readonly ApplicationUser _testUser;
 
     public ProjectsControllerStatusTests()
     {
@@ -44,15 +46,17 @@ public class ProjectsControllerStatusTests : IDisposable
         _buildService = new Mock<IBuildService>();
         _gitHubService = new Mock<IGitHubService>();
 
+        var gitHubSettings = Options.Create(new GitHubSettings());
         _controller = new ProjectsController(
             _db,
             _projectService.Object,
             _buildService.Object,
             _gitHubService.Object,
+            gitHubSettings,
             NullLogger<ProjectsController>.Instance);
 
         // Create test user
-        _testUser = new User
+        _testUser = new ApplicationUser
         {
             Id = 1,
             GitHubId = 12345,

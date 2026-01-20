@@ -91,6 +91,33 @@ public interface IGitHubService
     /// </summary>
     /// <param name="accessToken">User's OAuth access token.</param>
     Task<IReadOnlyList<GitHubRepository>> GetUserRepositoriesAsync(string accessToken);
+
+    /// <summary>
+    /// Gets the GitHub App installation ID for a repository.
+    /// Uses the App's JWT to authenticate.
+    /// </summary>
+    /// <param name="repoFullName">Repository full name (owner/repo).</param>
+    /// <returns>Installation ID and repository info, or null if not installed.</returns>
+    Task<(long InstallationId, GitHubRepository Repository)?> GetRepositoryInstallationAsync(string repoFullName);
+
+    /// <summary>
+    /// Gets the latest commit SHA for a branch.
+    /// </summary>
+    /// <param name="installationId">GitHub App installation ID.</param>
+    /// <param name="repoFullName">Repository full name (owner/repo).</param>
+    /// <param name="branch">Branch name.</param>
+    /// <returns>Commit SHA, or null if not found.</returns>
+    Task<string?> GetBranchHeadShaAsync(long installationId, string repoFullName, string branch);
+
+    /// <summary>
+    /// Gets the content of a file from a repository.
+    /// </summary>
+    /// <param name="installationId">GitHub App installation ID.</param>
+    /// <param name="repoFullName">Repository full name (owner/repo).</param>
+    /// <param name="filePath">Path to the file within the repository.</param>
+    /// <param name="branch">Branch or commit ref (optional, defaults to default branch).</param>
+    /// <returns>File content, or null if not found.</returns>
+    Task<string?> GetFileContentAsync(long installationId, string repoFullName, string filePath, string? branch = null);
 }
 
 /// <summary>

@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>ando</AssemblyName>
-    <Version>0.9.3</Version>
+    <Version>0.9.4</Version>
     <!-- Required for Roslyn scripting to work with single-file publishing -->
     <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
 
@@ -27,6 +27,10 @@
 
   <ItemGroup>
     <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ando.Tests" />
   </ItemGroup>
 
   <ItemGroup>

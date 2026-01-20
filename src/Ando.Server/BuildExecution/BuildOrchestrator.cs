@@ -46,6 +46,7 @@ public class BuildOrchestrator : IBuildOrchestrator
     private readonly IGitHubService _gitHubService;
     private readonly IEmailService _emailService;
     private readonly IEncryptionService _encryption;
+    private readonly IProfileDetector _profileDetector;
     private readonly IHubContext<BuildLogHub> _hubContext;
     private readonly CancellationTokenRegistry _cancellationRegistry;
     private readonly BuildSettings _buildSettings;
@@ -57,6 +58,7 @@ public class BuildOrchestrator : IBuildOrchestrator
         IGitHubService gitHubService,
         IEmailService emailService,
         IEncryptionService encryption,
+        IProfileDetector profileDetector,
         IHubContext<BuildLogHub> hubContext,
         CancellationTokenRegistry cancellationRegistry,
         IOptions<BuildSettings> buildSettings,
@@ -67,6 +69,7 @@ public class BuildOrchestrator : IBuildOrchestrator
         _gitHubService = gitHubService;
         _emailService = emailService;
         _encryption = encryption;
+        _profileDetector = profileDetector;
         _hubContext = hubContext;
         _cancellationRegistry = cancellationRegistry;
         _buildSettings = buildSettings.Value;
@@ -95,6 +98,35 @@ public class BuildOrchestrator : IBuildOrchestrator
 
         var project = build.Project;
 
+        // Validate and update profile configuration
+        if (project.InstallationId.HasValue)
+        {
+            var detectedProfiles = await _profileDetector.DetectProfilesAsync(
+                project.InstallationId.Value,
+                project.RepoFullName,
+                build.Branch);
+
+            // Update available profiles in the project
+            project.SetAvailableProfiles(detectedProfiles);
+            await db.SaveChangesAsync(cancellationToken);
+
+            // Validate selected profile still exists
+            if (!string.IsNullOrWhiteSpace(project.Profile) && !project.IsProfileValid())
+            {
+                build.Status = BuildStatus.Failed;
+                build.ErrorMessage = $"Invalid profile configuration: Profile '{project.Profile}' no longer exists in build.csando. " +
+                    $"Available profiles: {(detectedProfiles.Count > 0 ? string.Join(", ", detectedProfiles) : "(none)")}. " +
+                    "Please update the project settings to select a valid profile or clear the profile setting.";
+                build.FinishedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync(cancellationToken);
+
+                _logger.LogWarning(
+                    "Build {BuildId} failed due to invalid profile '{Profile}' in project {ProjectId}",
+                    buildId, project.Profile, project.Id);
+                return;
+            }
+        }
+
         // Create linked cancellation token for timeout and manual cancellation
         var timeoutMinutes = Math.Min(project.TimeoutMinutes, _buildSettings.MaxTimeoutMinutes);
         using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(timeoutMinutes));
@@ -107,7 +139,13 @@ public class BuildOrchestrator : IBuildOrchestrator
         var buildLogger = new ServerBuildLogger(db, buildId, _hubContext, linkedCts.Token);
 
         string? containerId = null;
-        var repoPath = Path.Combine(_buildSettings.ReposPath, project.Id.ToString(), build.CommitSha[..8]);
+        var shortSha = build.CommitSha.Length >= 8 ? build.CommitSha[..8] : build.CommitSha;
+
+        // Two paths needed:
+        // - repoPathHost: HOST filesystem path for Docker volume mounts
+        // - repoPathServer: Path as seen inside the server container for git operations
+        var repoPathHost = Path.Combine(_buildSettings.ReposPath, project.Id.ToString(), shortSha);
+        var repoPathServer = Path.Combine(_buildSettings.GetReposPathForServer(), project.Id.ToString(), shortSha);
 
         try
         {
@@ -131,17 +169,17 @@ public class BuildOrchestrator : IBuildOrchestrator
             buildLogger.Info($"Starting build for {project.RepoFullName}");
             buildLogger.Info($"Branch: {build.Branch}, Commit: {build.ShortCommitSha}");
 
-            // Step 1: Clone or fetch repository
+            // Step 1: Clone or fetch repository (uses server-internal path)
             buildLogger.Info("Preparing repository...");
-            var repoReady = await PrepareRepositoryAsync(project, build, repoPath, linkedCts.Token);
+            var repoReady = await PrepareRepositoryAsync(project, build, repoPathServer, linkedCts.Token);
             if (!repoReady)
             {
                 throw new Exception("Failed to prepare repository");
             }
 
-            // Step 2: Create build container
+            // Step 2: Create build container (uses host path for Docker volume mount)
             buildLogger.Info("Creating build container...");
-            containerId = await CreateBuildContainerAsync(project, repoPath, linkedCts.Token);
+            containerId = await CreateBuildContainerAsync(project, repoPathHost, linkedCts.Token);
             if (string.IsNullOrEmpty(containerId))
             {
                 throw new Exception("Failed to create build container");
@@ -151,8 +189,12 @@ public class BuildOrchestrator : IBuildOrchestrator
 
             // Step 3: Execute build
             buildLogger.Info("Executing build script...");
+            if (!string.IsNullOrWhiteSpace(project.Profile))
+            {
+                buildLogger.Info($"Using profile: {project.Profile}");
+            }
             var buildResult = await ExecuteBuildInContainerAsync(
-                containerId, project, build, buildLogger, linkedCts.Token);
+                containerId, project.Profile, build, buildLogger, linkedCts.Token);
 
             // Step 4: Collect artifacts
             if (buildResult.success)
@@ -255,32 +297,45 @@ public class BuildOrchestrator : IBuildOrchestrator
         string repoPath,
         CancellationToken cancellationToken)
     {
+        _logger.LogInformation("PrepareRepository: Starting for path {RepoPath}", repoPath);
+
         if (!project.InstallationId.HasValue)
         {
             _logger.LogWarning("No installation ID for project {ProjectId}", project.Id);
             return false;
         }
 
-        if (Directory.Exists(repoPath))
+        _logger.LogInformation("PrepareRepository: InstallationId={InstallationId}", project.InstallationId.Value);
+
+        var dirExists = Directory.Exists(repoPath);
+        _logger.LogInformation("PrepareRepository: Directory exists={DirExists}", dirExists);
+
+        if (dirExists)
         {
             // Fetch and checkout
-            return await _gitHubService.FetchAndCheckoutAsync(
+            _logger.LogInformation("PrepareRepository: Calling FetchAndCheckout");
+            var result = await _gitHubService.FetchAndCheckoutAsync(
                 project.InstallationId.Value,
                 project.RepoFullName,
                 build.Branch,
                 build.CommitSha,
                 repoPath);
+            _logger.LogInformation("PrepareRepository: FetchAndCheckout returned {Result}", result);
+            return result;
         }
         else
         {
             // Clone
+            _logger.LogInformation("PrepareRepository: Calling Clone");
             Directory.CreateDirectory(Path.GetDirectoryName(repoPath)!);
-            return await _gitHubService.CloneRepositoryAsync(
+            var result = await _gitHubService.CloneRepositoryAsync(
                 project.InstallationId.Value,
                 project.RepoFullName,
                 build.Branch,
                 build.CommitSha,
                 repoPath);
+            _logger.LogInformation("PrepareRepository: Clone returned {Result}", result);
+            return result;
         }
     }
 
@@ -349,10 +404,13 @@ public class BuildOrchestrator : IBuildOrchestrator
         string repoPath,
         CancellationToken cancellationToken)
     {
+        _logger.LogInformation("CreateBuildContainer: Starting for repo path {RepoPath}", repoPath);
+
         // Ensure the isolated build network exists
         await EnsureBuildNetworkAsync(cancellationToken);
 
         var image = project.DockerImage ?? _buildSettings.DefaultDockerImage;
+        _logger.LogInformation("CreateBuildContainer: Using image {Image}", image);
 
         var startInfo = new ProcessStartInfo
         {
@@ -373,7 +431,7 @@ public class BuildOrchestrator : IBuildOrchestrator
         startInfo.ArgumentList.Add("-v");
         startInfo.ArgumentList.Add($"{repoPath}:/workspace");
         startInfo.ArgumentList.Add("-v");
-        startInfo.ArgumentList.Add("/var/run/docker.sock:/var/run/docker.sock");
+        startInfo.ArgumentList.Add($"{_buildSettings.DockerSocketPath}:/var/run/docker.sock");
         startInfo.ArgumentList.Add("-w");
         startInfo.ArgumentList.Add("/workspace");
 
@@ -385,15 +443,26 @@ public class BuildOrchestrator : IBuildOrchestrator
             startInfo.ArgumentList.Add($"{secret.Name}={decryptedValue}");
         }
 
+        // Set ANDO_HOST_ROOT for Docker-in-Docker path mapping.
+        // When ando CLI runs with --dind inside this container, it needs to know
+        // the actual HOST path (not /workspace) for creating nested container volume mounts.
+        startInfo.ArgumentList.Add("-e");
+        startInfo.ArgumentList.Add($"ANDO_HOST_ROOT={repoPath}");
+
         startInfo.ArgumentList.Add("--entrypoint");
         startInfo.ArgumentList.Add("tail");
         startInfo.ArgumentList.Add(image);
         startInfo.ArgumentList.Add("-f");
         startInfo.ArgumentList.Add("/dev/null");
 
+        // Log the full command for debugging
+        var cmdArgs = string.Join(" ", startInfo.ArgumentList.Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
+        _logger.LogInformation("CreateBuildContainer: Running docker {Args}", cmdArgs);
+
         using var process = Process.Start(startInfo);
         if (process == null)
         {
+            _logger.LogError("CreateBuildContainer: Failed to start docker process");
             return null;
         }
 
@@ -402,11 +471,12 @@ public class BuildOrchestrator : IBuildOrchestrator
         if (process.ExitCode != 0)
         {
             var error = await process.StandardError.ReadToEndAsync(cancellationToken);
-            _logger.LogError("Failed to create container: {Error}", error);
+            _logger.LogError("CreateBuildContainer: Failed (exit code {ExitCode}): {Error}", process.ExitCode, error);
             return null;
         }
 
         var containerId = (await process.StandardOutput.ReadToEndAsync(cancellationToken)).Trim();
+        _logger.LogInformation("CreateBuildContainer: Success, container ID={ContainerId}", containerId);
         return containerId;
     }
 
@@ -416,7 +486,7 @@ public class BuildOrchestrator : IBuildOrchestrator
     private async Task<(bool success, int stepsTotal, int stepsCompleted, int stepsFailed, string? error)>
         ExecuteBuildInContainerAsync(
             string containerId,
-            Project project,
+            string? profile,
             Build build,
             ServerBuildLogger logger,
             CancellationToken cancellationToken)
@@ -433,11 +503,21 @@ public class BuildOrchestrator : IBuildOrchestrator
         startInfo.ArgumentList.Add("exec");
         startInfo.ArgumentList.Add(containerId);
         startInfo.ArgumentList.Add("dotnet");
-        startInfo.ArgumentList.Add("run");
-        startInfo.ArgumentList.Add("--project");
-        startInfo.ArgumentList.Add("/ando"); // Ando would be installed in container
+        startInfo.ArgumentList.Add("/ando/ando.dll");
         startInfo.ArgumentList.Add("run");
         startInfo.ArgumentList.Add("--dind"); // Enable Docker-in-Docker for nested builds
+        startInfo.ArgumentList.Add("--read-env"); // Auto-load .env files without prompting (non-interactive)
+
+        // Add profile flag if a profile is selected
+        if (!string.IsNullOrWhiteSpace(profile))
+        {
+            startInfo.ArgumentList.Add("-p");
+            startInfo.ArgumentList.Add(profile);
+        }
+
+        // Log the command for debugging
+        var cmdArgs = string.Join(" ", startInfo.ArgumentList.Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
+        _logger.LogInformation("ExecuteBuild: Running docker {Args}", cmdArgs);
 
         using var process = Process.Start(startInfo);
         if (process == null)
@@ -474,6 +554,7 @@ public class BuildOrchestrator : IBuildOrchestrator
         await Task.WhenAll(outputTask, errorTask);
 
         var success = process.ExitCode == 0;
+        _logger.LogInformation("ExecuteBuild: Completed with exit code {ExitCode}", process.ExitCode);
 
         // TODO: Parse step counts from output or get from build log
         return (success, 0, 0, success ? 0 : 1, success ? null : "Build failed");
@@ -570,10 +651,13 @@ public class BuildOrchestrator : IBuildOrchestrator
     /// <summary>
     /// Gets the URL for viewing a build.
     /// </summary>
-    private static string GetBuildUrl(Build build)
+    private string? GetBuildUrl(Build build)
     {
-        // TODO: Get base URL from configuration
-        return $"/builds/{build.Id}";
+        if (string.IsNullOrEmpty(_buildSettings.BaseUrl))
+        {
+            return null;
+        }
+        return $"{_buildSettings.BaseUrl.TrimEnd('/')}/builds/{build.Id}";
     }
 
     /// <summary>

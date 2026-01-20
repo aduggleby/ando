@@ -20,7 +20,7 @@ public class CleanupArtifactsJobTests : IDisposable
     private readonly Data.AndoDbContext _db;
     private readonly CleanupArtifactsJob _job;
     private readonly string _tempDir;
-    private readonly User _testUser;
+    private readonly ApplicationUser _testUser;
     private readonly Project _testProject;
     private readonly Build _testBuild;
 
@@ -32,7 +32,7 @@ public class CleanupArtifactsJobTests : IDisposable
         Directory.CreateDirectory(_tempDir);
 
         // Create test data
-        _testUser = new User
+        _testUser = new ApplicationUser
         {
             GitHubId = 12345,
             GitHubLogin = "testuser",

@@ -33,6 +33,19 @@ namespace Ando.Scripting;
 /// </summary>
 public class ScriptHost(IBuildLogger logger)
 {
+    // Active profiles from CLI, set before loading script.
+    private List<string> _activeProfiles = [];
+
+    /// <summary>
+    /// Sets the active profiles from CLI arguments.
+    /// Call this before LoadScriptAsync to ensure profiles are available.
+    /// </summary>
+    /// <param name="profiles">Profile names from CLI (e.g., from -p push,release).</param>
+    public void SetActiveProfiles(IEnumerable<string> profiles)
+    {
+        _activeProfiles = profiles.ToList();
+    }
+
     /// <summary>
     /// Loads and executes a build script, returning the configured build context.
     /// The script registers steps in the StepRegistry but doesn't execute them.
@@ -49,6 +62,9 @@ public class ScriptHost(IBuildLogger logger)
 
         // Create the build context that holds all state and operations.
         var context = new BuildContext(rootPath, logger);
+
+        // Set active profiles before script execution so DefineProfile can check state.
+        context.ProfileRegistry.SetActiveProfiles(_activeProfiles);
 
         // ScriptGlobals exposes ANDO API as global variables in the script.
         var globals = new ScriptGlobals(context);
@@ -71,6 +87,7 @@ public class ScriptHost(IBuildLogger logger)
                 "System.Threading.Tasks",
                 "System.Collections.Generic",
                 "Ando.Context",
+                "Ando.Profiles",
                 "Ando.References",
                 "Ando.Operations",
                 "Ando.Workflow",
@@ -131,6 +148,7 @@ public class ScriptHost(IBuildLogger logger)
                 "System.Threading.Tasks",
                 "System.Collections.Generic",
                 "Ando.Context",
+                "Ando.Profiles",
                 "Ando.References",
                 "Ando.Operations",
                 "Ando.Workflow",

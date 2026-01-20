@@ -111,6 +111,34 @@ public class MockGitHubService : IGitHubService
     {
         return Task.FromResult<IReadOnlyList<GitHubRepository>>(MockRepositories);
     }
+
+    public Task<(long InstallationId, GitHubRepository Repository)?> GetRepositoryInstallationAsync(string repoFullName)
+    {
+        var repo = MockRepositories.FirstOrDefault(r => r.FullName == repoFullName);
+        if (repo != null)
+        {
+            return Task.FromResult<(long InstallationId, GitHubRepository Repository)?>((MockInstallationId, repo));
+        }
+        return Task.FromResult<(long InstallationId, GitHubRepository Repository)?>(null);
+    }
+
+    public long MockInstallationId { get; set; } = 12345;
+    public string? MockBranchHeadSha { get; set; } = "abc123";
+    public Dictionary<string, string> MockFileContents { get; set; } = [];
+
+    public Task<string?> GetBranchHeadShaAsync(long installationId, string repoFullName, string branch)
+    {
+        return Task.FromResult(MockBranchHeadSha);
+    }
+
+    public Task<string?> GetFileContentAsync(long installationId, string repoFullName, string filePath, string? branch = null)
+    {
+        if (MockFileContents.TryGetValue(filePath, out var content))
+        {
+            return Task.FromResult<string?>(content);
+        }
+        return Task.FromResult<string?>(null);
+    }
 }
 
 public record CommitStatusCall(

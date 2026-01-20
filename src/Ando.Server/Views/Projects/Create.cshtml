@@ -20,50 +20,133 @@
 }
 
 <div class="section">
-    <h2>Select a Repository</h2>
-    <p class="section-description">Choose a repository you own to set up automated builds.</p>
+    <h2>Connect a GitHub Repository</h2>
+    <p class="section-description">
+        Enter the repository you want to connect. The Ando GitHub App must be installed on the repository.
+    </p>
 
-    @if (Model.Repositories.Count == 0)
+    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
     {
-        <div class="empty-state">
-            <h3>No repositories found</h3>
-            <p>We couldn't find any repositories you own. Make sure you have at least one repository on GitHub.</p>
-            <a href="https://github.com/new" target="_blank" class="btn btn-primary">Create Repository</a>
-        </div>
+        <div class="alert alert-error">@Model.ErrorMessage</div>
     }
-    else
-    {
-        <div class="repos-grid">
-            @foreach (var repo in Model.Repositories)
-            {
-                <div class="repo-card @(repo.AlreadyConnected ? "repo-connected" : "")">
-                    <div class="repo-header">
-                        <span class="repo-name">@repo.FullName</span>
-                        @if (repo.IsPrivate)
-                        {
-                            <span class="private-badge">Private</span>
-                        }
-                    </div>
-                    <div class="repo-meta">
-                        <span>Default branch: @repo.DefaultBranch</span>
-                    </div>
-                    <div class="repo-actions">
-                        @if (repo.AlreadyConnected)
-                        {
-                            <span class="connected-badge">Already Connected</span>
-                        }
-                        else
-                        {
-                            <form method="post" action="/projects/create">
-                                @Html.AntiForgeryToken()
-                                <input type="hidden" name="gitHubRepoId" value="@repo.GitHubRepoId" />
-                                <button type="submit" class="btn btn-primary">Connect</button>
-                            </form>
-                        }
-                        <a href="@repo.HtmlUrl" target="_blank" class="btn btn-secondary btn-sm">View on GitHub</a>
-                    </div>
-                </div>
-            }
+
+    <form method="post" action="/projects/create" class="create-form">
+        @Html.AntiForgeryToken()
+
+        <div class="form-group">
+            <label for="repoFullName">Repository</label>
+            <input type="text"
+                   id="repoFullName"
+                   name="repoFullName"
+                   value="@Model.RepoFullName"
+                   placeholder="owner/repo (e.g., octocat/hello-world)"
+                   class="form-input"
+                   required
+                   autocomplete="off" />
+            <small class="form-hint">
+                Enter the repository as <code>owner/repo</code> or paste the full GitHub URL.
+            </small>
         </div>
-    }
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Connect Repository</button>
+            <a href="/projects" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+
+    <div class="help-section">
+        <h3>Don't see your repository?</h3>
+        <p>Make sure the Ando GitHub App is installed on your repository:</p>
+        <ol>
+            <li>Go to your repository's Settings on GitHub</li>
+            <li>Click "GitHub Apps" in the sidebar</li>
+            <li>Configure the "Ando" app to have access to your repository</li>
+        </ol>
+    </div>
 </div>
+
+<style>
+    .create-form {
+        max-width: 500px;
+        margin-bottom: 2rem;
+    }
+
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+        color: var(--text-primary);
+    }
+
+    .form-input {
+        width: 100%;
+        padding: 0.75rem;
+        font-size: 1rem;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        background: var(--input-bg);
+        color: var(--text-primary);
+    }
+
+    .form-input:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+
+    .form-hint {
+        display: block;
+        margin-top: 0.5rem;
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+    }
+
+    .form-hint code {
+        background: var(--code-bg);
+        padding: 0.125rem 0.375rem;
+        border-radius: 4px;
+        font-family: monospace;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 1rem;
+    }
+
+    .help-section {
+        margin-top: 2rem;
+        padding: 1.5rem;
+        background: var(--card-bg);
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+    }
+
+    .help-section h3 {
+        margin: 0 0 1rem 0;
+        font-size: 1rem;
+        color: var(--text-primary);
+    }
+
+    .help-section p {
+        margin: 0 0 1rem 0;
+        color: var(--text-secondary);
+    }
+
+    .help-section ol {
+        margin: 0;
+        padding-left: 1.5rem;
+        color: var(--text-secondary);
+    }
+
+    .help-section li {
+        margin-bottom: 0.5rem;
+    }
+
+    .help-section li:last-child {
+        margin-bottom: 0;
+    }
+</style>

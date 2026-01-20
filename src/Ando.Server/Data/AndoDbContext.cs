@@ -123,6 +123,9 @@ public class AndoDbContext : IdentityDbContext<ApplicationUser, ApplicationRole,
             entity.Property(e => e.DockerImage)
                 .HasMaxLength(500);
 
+            entity.Property(e => e.RequiredSecrets)
+                .HasMaxLength(1000);
+
             entity.Property(e => e.NotificationEmail)
                 .HasMaxLength(255);
 

@@ -13,6 +13,8 @@
 // =============================================================================
 
 using System.Security.Claims;
+using System.Text.Json;
+using Ando.Server.Configuration;
 using Ando.Server.Data;
 using Ando.Server.GitHub;
 using Ando.Server.Models;
@@ -21,6 +23,7 @@ using Ando.Server.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Ando.Server.Controllers;
 
@@ -35,6 +38,7 @@ public class ProjectsController : Controller
     private readonly IProjectService _projectService;
     private readonly IBuildService _buildService;
     private readonly IGitHubService _gitHubService;
+    private readonly GitHubSettings _gitHubSettings;
     private readonly ILogger<ProjectsController> _logger;
 
     public ProjectsController(
@@ -42,12 +46,14 @@ public class ProjectsController : Controller
         IProjectService projectService,
         IBuildService buildService,
         IGitHubService gitHubService,
+        IOptions<GitHubSettings> gitHubSettings,
         ILogger<ProjectsController> logger)
     {
         _db = db;
         _projectService = projectService;
         _buildService = buildService;
         _gitHubService = gitHubService;
+        _gitHubSettings = gitHubSettings.Value;
         _logger = logger;
     }
 
@@ -77,6 +83,13 @@ public class ProjectsController : Controller
                 .Where(b => b.ProjectId == project.Id)
                 .CountAsync();
 
+            // Load secrets to check configuration status
+            var secrets = await _db.ProjectSecrets
+                .Where(s => s.ProjectId == project.Id)
+                .Select(s => s.Name)
+                .ToListAsync();
+            var missingSecrets = project.GetMissingSecretsFrom(secrets);
+
             projectItems.Add(new ProjectListItem
             {
                 Id = project.Id,
@@ -85,7 +98,9 @@ public class ProjectsController : Controller
                 CreatedAt = project.CreatedAt,
                 LastBuildAt = project.LastBuildAt,
                 LastBuildStatus = lastBuild?.Status,
-                TotalBuilds = buildCount
+                TotalBuilds = buildCount,
+                IsConfigured = missingSecrets.Count == 0,
+                MissingSecretsCount = missingSecrets.Count
             });
         }
 
@@ -190,6 +205,10 @@ public class ProjectsController : Controller
         var recentBuilds = await _buildService.GetBuildsForProjectAsync(id, 0, 20);
         var totalBuilds = await _db.Builds.CountAsync(b => b.ProjectId == id);
 
+        // Get configuration status
+        var secretNames = await _projectService.GetSecretNamesAsync(id);
+        var missingSecrets = project.GetMissingSecretsFrom(secretNames);
+
         var viewModel = new ProjectDetailsViewModel
         {
             Id = project.Id,
@@ -202,6 +221,8 @@ public class ProjectsController : Controller
             CreatedAt = project.CreatedAt,
             LastBuildAt = project.LastBuildAt,
             TotalBuilds = totalBuilds,
+            IsConfigured = missingSecrets.Count == 0,
+            MissingSecrets = missingSecrets,
             RecentBuilds = recentBuilds.Select(b => new BuildListItem
             {
                 Id = b.Id,
@@ -227,70 +248,81 @@ public class ProjectsController : Controller
     // -------------------------------------------------------------------------
 
     /// <summary>
-    /// Shows the create project page with available repositories.
+    /// Shows the create project page with a form for manual repository entry.
     /// </summary>
     [HttpGet("create")]
-    public async Task<IActionResult> Create()
+    public IActionResult Create(string? repo = null, string? error = null)
     {
-        var userId = GetCurrentUserId();
-        var user = await _db.Users.FindAsync(userId);
-
-        if (user?.GitHubAccessToken == null)
-        {
-            return RedirectToAction("Login", "Auth");
-        }
-
-        // Get user's repositories from GitHub
-        var repos = await _gitHubService.GetUserRepositoriesAsync(user.GitHubAccessToken);
-
-        // Get already connected repo IDs
-        var connectedRepoIds = await _db.Projects
-            .Where(p => p.OwnerId == userId)
-            .Select(p => p.GitHubRepoId)
-            .ToListAsync();
-
         var viewModel = new CreateProjectViewModel
         {
-            Repositories = repos
-                .OrderBy(r => r.FullName)
-                .Select(r => new AvailableRepository
-                {
-                    GitHubRepoId = r.Id,
-                    FullName = r.FullName,
-                    HtmlUrl = r.HtmlUrl,
-                    DefaultBranch = r.DefaultBranch,
-                    IsPrivate = r.IsPrivate,
-                    AlreadyConnected = connectedRepoIds.Contains(r.Id)
-                }).ToList()
+            RepoFullName = repo,
+            ErrorMessage = error
         };
-
         return View(viewModel);
     }
 
     /// <summary>
-    /// Creates a new project from a GitHub repository.
+    /// Creates a new project from a GitHub repository URL or name.
+    /// Uses the GitHub App installation to access the repository.
     /// </summary>
     [HttpPost("create")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(long gitHubRepoId)
+    public async Task<IActionResult> Create(string repoFullName)
     {
         var userId = GetCurrentUserId();
-        var user = await _db.Users.FindAsync(userId);
 
-        if (user?.GitHubAccessToken == null)
+        // Validate and normalize input
+        repoFullName = repoFullName?.Trim() ?? "";
+
+        // Parse GitHub URL if provided (e.g., https://github.com/owner/repo)
+        if (repoFullName.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase))
         {
-            return RedirectToAction("Login", "Auth");
+            var uri = new Uri(repoFullName);
+            repoFullName = uri.AbsolutePath.TrimStart('/').TrimEnd('/');
+            // Remove .git suffix if present
+            if (repoFullName.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+            {
+                repoFullName = repoFullName[..^4];
+            }
         }
 
-        // Get repository info from GitHub
-        var repos = await _gitHubService.GetUserRepositoriesAsync(user.GitHubAccessToken);
-        var repo = repos.FirstOrDefault(r => r.Id == gitHubRepoId);
-
-        if (repo == null)
+        // Validate format (owner/repo)
+        var parts = repoFullName.Split('/');
+        if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
         {
-            TempData["Error"] = "Repository not found or you don't have access to it.";
-            return RedirectToAction("Create");
+            return RedirectToAction("Create", new
+            {
+                repo = repoFullName,
+                error = "Invalid repository format. Please enter as 'owner/repo' (e.g., 'octocat/hello-world')."
+            });
         }
+
+        // Look up the repository via GitHub App
+        var result = await _gitHubService.GetRepositoryInstallationAsync(repoFullName);
+
+        if (result == null)
+        {
+            // App not installed - redirect to GitHub to install it
+            if (!string.IsNullOrEmpty(_gitHubSettings.AppName))
+            {
+                // Store the repo name in session for the callback
+                HttpContext.Session.SetString("PendingRepo", repoFullName);
+
+                // Redirect to GitHub App installation page
+                var installUrl = $"https://github.com/apps/{_gitHubSettings.AppName}/installations/new";
+                return Redirect(installUrl);
+            }
+
+            // Fallback if AppName not configured
+            return RedirectToAction("Create", new
+            {
+                repo = repoFullName,
+                error = $"Repository '{repoFullName}' not found or the Ando GitHub App is not installed. " +
+                        "Please install the app on your repository first."
+            });
+        }
+
+        var (installationId, repo) = result.Value;
 
         try
         {
@@ -299,15 +331,77 @@ public class ProjectsController : Controller
                 repo.Id,
                 repo.FullName,
                 repo.HtmlUrl,
-                repo.DefaultBranch);
+                repo.DefaultBranch,
+                installationId);
 
-            TempData["Success"] = $"Project {repo.FullName} created successfully.";
+            TempData["Success"] = $"Project {repo.FullName} connected successfully. Pushes to the '{repo.DefaultBranch}' branch will now trigger builds.";
             return RedirectToAction("Details", new { id = project.Id });
         }
         catch (InvalidOperationException ex)
         {
-            TempData["Error"] = ex.Message;
+            return RedirectToAction("Create", new
+            {
+                repo = repoFullName,
+                error = ex.Message
+            });
+        }
+    }
+
+    /// <summary>
+    /// Callback from GitHub after app installation.
+    /// GitHub redirects here after the user installs the app on their repository.
+    /// </summary>
+    [HttpGet("github-callback")]
+    public async Task<IActionResult> GitHubCallback(long? installation_id = null)
+    {
+        // Get the pending repo from session
+        var pendingRepo = HttpContext.Session.GetString("PendingRepo");
+        HttpContext.Session.Remove("PendingRepo");
+
+        if (string.IsNullOrEmpty(pendingRepo))
+        {
+            // No pending repo - just redirect to create page
+            TempData["Success"] = "GitHub App installed successfully. You can now connect your repositories.";
             return RedirectToAction("Create");
+        }
+
+        // Try to connect the repository now that the app is installed
+        var result = await _gitHubService.GetRepositoryInstallationAsync(pendingRepo);
+
+        if (result == null)
+        {
+            // Still can't access - maybe they didn't grant access to this specific repo
+            return RedirectToAction("Create", new
+            {
+                repo = pendingRepo,
+                error = $"GitHub App installed, but repository '{pendingRepo}' is not accessible. " +
+                        "Please ensure you granted access to this specific repository during installation."
+            });
+        }
+
+        var userId = GetCurrentUserId();
+        var (installationId, repo) = result.Value;
+
+        try
+        {
+            var project = await _projectService.CreateProjectAsync(
+                userId,
+                repo.Id,
+                repo.FullName,
+                repo.HtmlUrl,
+                repo.DefaultBranch,
+                installationId);
+
+            TempData["Success"] = $"Project {repo.FullName} connected successfully. Pushes to the '{repo.DefaultBranch}' branch will now trigger builds.";
+            return RedirectToAction("Details", new { id = project.Id });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return RedirectToAction("Create", new
+            {
+                repo = pendingRepo,
+                error = ex.Message
+            });
         }
     }
 
@@ -330,6 +424,7 @@ public class ProjectsController : Controller
         }
 
         var secretNames = await _projectService.GetSecretNamesAsync(id);
+        var missingSecrets = project.GetMissingSecretsFrom(secretNames);
 
         var viewModel = new ProjectSettingsViewModel
         {
@@ -339,9 +434,14 @@ public class ProjectsController : Controller
             EnablePrBuilds = project.EnablePrBuilds,
             TimeoutMinutes = project.TimeoutMinutes,
             DockerImage = project.DockerImage,
+            Profile = project.Profile,
+            AvailableProfiles = project.GetAvailableProfileNames(),
+            IsProfileValid = project.IsProfileValid(),
+            RequiredSecrets = project.RequiredSecrets,
             NotifyOnFailure = project.NotifyOnFailure,
             NotificationEmail = project.NotificationEmail,
-            SecretNames = secretNames
+            SecretNames = secretNames,
+            MissingSecrets = missingSecrets
         };
 
         return View(viewModel);
@@ -368,10 +468,53 @@ public class ProjectsController : Controller
             form.EnablePrBuilds,
             form.TimeoutMinutes,
             form.DockerImage,
+            form.Profile,
             form.NotifyOnFailure,
             form.NotificationEmail);
 
         TempData["Success"] = "Settings updated successfully.";
+        return RedirectToAction("Settings", new { id });
+    }
+
+    /// <summary>
+    /// Manually triggers re-detection of required secrets and profiles from build.csando.
+    /// </summary>
+    [HttpPost("{id:int}/refresh-secrets")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RefreshSecrets(int id)
+    {
+        var userId = GetCurrentUserId();
+        var project = await _projectService.GetProjectForUserAsync(id, userId);
+
+        if (project == null)
+        {
+            return View("NotFound");
+        }
+
+        var detectedSecrets = await _projectService.DetectAndUpdateRequiredSecretsAsync(id);
+        var detectedProfiles = await _projectService.DetectAndUpdateProfilesAsync(id);
+
+        var messages = new List<string>();
+
+        if (detectedSecrets.Count > 0)
+        {
+            messages.Add($"{detectedSecrets.Count} required secret{(detectedSecrets.Count == 1 ? "" : "s")}: {string.Join(", ", detectedSecrets)}");
+        }
+
+        if (detectedProfiles.Count > 0)
+        {
+            messages.Add($"{detectedProfiles.Count} profile{(detectedProfiles.Count == 1 ? "" : "s")}: {string.Join(", ", detectedProfiles)}");
+        }
+
+        if (messages.Count > 0)
+        {
+            TempData["Success"] = $"Detected {string.Join("; ", messages)}";
+        }
+        else
+        {
+            TempData["Success"] = "No required secrets or profiles detected in build.csando.";
+        }
+
         return RedirectToAction("Settings", new { id });
     }
 
@@ -430,6 +573,96 @@ public class ProjectsController : Controller
         return RedirectToAction("Settings", new { id });
     }
 
+    /// <summary>
+    /// Bulk imports secrets from .env file format.
+    /// Parses KEY=value lines, ignoring comments (#) and empty lines.
+    /// </summary>
+    [HttpPost("{id:int}/secrets/bulk")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> BulkImportSecrets(int id, BulkSecretsFormModel form)
+    {
+        var userId = GetCurrentUserId();
+        var project = await _projectService.GetProjectForUserAsync(id, userId);
+
+        if (project == null)
+        {
+            return View("NotFound");
+        }
+
+        if (string.IsNullOrWhiteSpace(form.Content))
+        {
+            TempData["Error"] = "No content provided.";
+            return RedirectToAction("Settings", new { id });
+        }
+
+        var lines = form.Content.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries);
+        var imported = 0;
+        var errors = new List<string>();
+
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+
+            // Skip empty lines and comments
+            if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith('#'))
+                continue;
+
+            // Parse KEY=value format
+            var equalsIndex = trimmed.IndexOf('=');
+            if (equalsIndex <= 0)
+            {
+                errors.Add($"Invalid format: {trimmed[..Math.Min(20, trimmed.Length)]}...");
+                continue;
+            }
+
+            var name = trimmed[..equalsIndex].Trim();
+            var value = trimmed[(equalsIndex + 1)..].Trim();
+
+            // Remove surrounding quotes from value if present
+            if (value.Length >= 2 &&
+                ((value.StartsWith('"') && value.EndsWith('"')) ||
+                 (value.StartsWith('\'') && value.EndsWith('\''))))
+            {
+                value = value[1..^1];
+            }
+
+            // Normalize name to uppercase
+            name = name.ToUpperInvariant().Replace('-', '_');
+
+            // Validate secret name
+            if (!System.Text.RegularExpressions.Regex.IsMatch(name, @"^[A-Z_][A-Z0-9_]*$"))
+            {
+                errors.Add($"Invalid name: {name}");
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(value))
+            {
+                errors.Add($"Empty value for: {name}");
+                continue;
+            }
+
+            await _projectService.SetSecretAsync(id, name, value);
+            imported++;
+        }
+
+        if (errors.Count > 0)
+        {
+            TempData["Error"] = $"Imported {imported} secrets. Errors: {string.Join(", ", errors.Take(3))}" +
+                (errors.Count > 3 ? $" and {errors.Count - 3} more..." : "");
+        }
+        else if (imported > 0)
+        {
+            TempData["Success"] = $"Imported {imported} secret{(imported == 1 ? "" : "s")} successfully.";
+        }
+        else
+        {
+            TempData["Error"] = "No valid secrets found in the input.";
+        }
+
+        return RedirectToAction("Settings", new { id });
+    }
+
     // -------------------------------------------------------------------------
     // Delete Project
     // -------------------------------------------------------------------------
@@ -474,17 +707,49 @@ public class ProjectsController : Controller
             return View("NotFound");
         }
 
-        // Get the latest commit SHA for the branch
-        // For now, we'll use a placeholder - in production this would call GitHub API
+        // Re-detect required secrets from the build script (catches new env vars)
+        await _projectService.DetectAndUpdateRequiredSecretsAsync(id);
+
+        // Reload to get updated RequiredSecrets
+        await _db.Entry(project).ReloadAsync();
+
+        // Check if project is properly configured
+        var secretNames = await _projectService.GetSecretNamesAsync(id);
+        var missingSecrets = project.GetMissingSecretsFrom(secretNames);
+
+        if (missingSecrets.Count > 0)
+        {
+            TempData["Error"] = $"Cannot start build: missing required secrets: {string.Join(", ", missingSecrets)}. Configure them in project settings.";
+            return RedirectToAction("Details", new { id });
+        }
+
         var targetBranch = branch ?? project.DefaultBranch;
+
+        // Get the latest commit SHA for the branch from GitHub
+        string commitSha = "HEAD";
+        string commitMessage = "Manual build trigger";
+
+        if (project.InstallationId.HasValue)
+        {
+            var sha = await _gitHubService.GetBranchHeadShaAsync(
+                project.InstallationId.Value,
+                project.RepoFullName,
+                targetBranch);
+
+            if (!string.IsNullOrEmpty(sha))
+            {
+                commitSha = sha;
+                commitMessage = $"Manual build of {targetBranch}";
+            }
+        }
 
         // Queue a manual build
         var buildId = await _buildService.QueueBuildAsync(
             id,
-            "HEAD", // Placeholder - would be actual commit SHA
+            commitSha,
             targetBranch,
             BuildTrigger.Manual,
-            "Manual build trigger",
+            commitMessage,
             User.Identity?.Name);
 
         return RedirectToAction("Details", "Builds", new { id = buildId });

@@ -24,6 +24,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using Ando.Execution;
 using Ando.Logging;
+using Ando.Profiles;
 using Ando.Scripting;
 using Ando.Workflow;
 
@@ -180,7 +181,13 @@ public class AndoCli : IDisposable
             }
 
             // Get the host path for Docker configuration.
-            var hostRootPath = Path.GetDirectoryName(scriptPath) ?? Environment.CurrentDirectory;
+            // When running in Docker-in-Docker mode (--dind), ANDO_HOST_ROOT environment variable
+            // can override the host path. This is needed because paths inside the outer container
+            // don't match the actual host filesystem paths that Docker needs for volume mounts.
+            var defaultHostRoot = Path.GetDirectoryName(scriptPath) ?? Environment.CurrentDirectory;
+            var hostRootPath = HasFlag("--dind")
+                ? Environment.GetEnvironmentVariable("ANDO_HOST_ROOT") ?? defaultHostRoot
+                : defaultHostRoot;
 
             // Check for .env file and offer to load it.
             await PromptToLoadEnvFileAsync(hostRootPath);
@@ -191,7 +198,31 @@ public class AndoCli : IDisposable
             // inside the container. This ensures paths in the script resolve correctly.
             const string containerRootPath = "/workspace";
             var scriptHost = new ScriptHost(_logger);
+
+            // Parse and set active profiles before loading script.
+            // This allows DefineProfile() calls to check activation state.
+            var profiles = GetProfiles();
+            scriptHost.SetActiveProfiles(profiles);
+
             var context = await scriptHost.LoadScriptAsync(scriptPath, containerRootPath);
+
+            // Validate profiles after script loading.
+            // This ensures all requested profiles were defined in the script.
+            try
+            {
+                context.ProfileRegistry.Validate();
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.Error(ex.Message);
+                return 4;
+            }
+
+            // Log active profiles if any.
+            if (profiles.Count > 0)
+            {
+                _logger.Info($"Profiles: {string.Join(", ", profiles)}");
+            }
 
             // Step 3: Set up Docker container for isolated execution.
             // All ANDO builds run in Docker containers for reproducibility.
@@ -213,10 +244,14 @@ public class AndoCli : IDisposable
             // Container name includes MD5 hash of build script for uniqueness.
             var containerName = GetContainerName(hostRootPath, scriptPath);
             _logger.Info($"Container: {containerName}");
+
+            // In DinD mode, ProjectRoot is the HOST path (for Docker volume mounts)
+            // but LocalProjectRoot is the actual path inside this container (for file ops like tar).
             var containerConfig = new ContainerConfig
             {
                 Name = containerName,
                 ProjectRoot = hostRootPath,
+                LocalProjectRoot = HasFlag("--dind") ? defaultHostRoot : null,
                 Image = GetDockerImage(context.Options),
                 MountDockerSocket = HasFlag("--dind"),  // For building Docker images
             };
@@ -449,6 +484,33 @@ public class AndoCli : IDisposable
     // Simple flag detection helper.
     private bool HasFlag(string flag) => _args.Contains(flag);
 
+    // Parses -p/--profile flags from command line.
+    // Supports: -p release, --profile release, -p push,release (comma-separated)
+    private List<string> GetProfiles()
+    {
+        var profiles = new List<string>();
+
+        for (var i = 0; i < _args.Length; i++)
+        {
+            if ((_args[i] == "-p" || _args[i] == "--profile") && i + 1 < _args.Length)
+            {
+                // Support comma-separated profiles: -p push,release
+                var value = _args[i + 1];
+                profiles.AddRange(value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+                i++; // Skip the value on next iteration
+            }
+        }
+
+        return profiles;
+    }
+
+    // Gets the profiles as a comma-separated string for passing to sub-builds.
+    private string? GetProfilesArgument()
+    {
+        var profiles = GetProfiles();
+        return profiles.Count > 0 ? string.Join(",", profiles) : null;
+    }
+
     // Displays usage information and available commands/options.
     private int HelpCommand()
     {
@@ -467,6 +529,9 @@ public class AndoCli : IDisposable
         Console.WriteLine();
         Console.WriteLine("Run Options:");
         Console.WriteLine("  -f, --file <file> Use specific build file instead of build.csando");
+        Console.WriteLine("  -p, --profile <name>");
+        Console.WriteLine("                    Activate build profiles (comma-separated for multiple)");
+        Console.WriteLine("                    Example: -p release or -p push,release");
         Console.WriteLine("  --read-env        Load .env file without prompting (also applies to sub-builds)");
         Console.WriteLine("  --verbosity <quiet|minimal|normal|detailed>");
         Console.WriteLine("  --no-color        Disable colored output");

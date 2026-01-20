@@ -1,0 +1,344 @@
+---
+import ProviderLayout from "../layouts/ProviderLayout.astro";
+---
+
+<ProviderLayout
+  title="CI Server"
+  provider="CI Server"
+  description="Self-hosted CI/CD server for ANDO build scripts with GitHub integration."
+>
+  <section id="overview" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Overview</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      The ANDO CI Server is a self-hosted continuous integration server that runs your
+      <code class="rounded border border-zinc-200 bg-zinc-100 px-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+        >build.csando</code
+      > scripts automatically when you push to GitHub. It provides a web interface for monitoring builds, viewing logs, and
+      managing projects.
+    </p>
+
+    <div class="mb-6 grid gap-4 md:grid-cols-2">
+      <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800">
+        <h3 class="mb-2 font-semibold text-zinc-900 dark:text-white">GitHub App Integration</h3>
+        <p class="text-sm text-zinc-500 dark:text-zinc-400">
+          Installs as a GitHub App for secure access to your repositories. Receives webhooks on push events and reports
+          build status back to GitHub.
+        </p>
+      </div>
+      <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800">
+        <h3 class="mb-2 font-semibold text-zinc-900 dark:text-white">Rootless Docker</h3>
+        <p class="text-sm text-zinc-500 dark:text-zinc-400">
+          Runs under rootless Docker for enhanced security. Build containers are isolated and cannot escape to the host
+          system.
+        </p>
+      </div>
+      <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800">
+        <h3 class="mb-2 font-semibold text-zinc-900 dark:text-white">Automatic HTTPS</h3>
+        <p class="text-sm text-zinc-500 dark:text-zinc-400">
+          Caddy reverse proxy automatically obtains and renews Let's Encrypt certificates. No manual certificate
+          management required.
+        </p>
+      </div>
+      <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800">
+        <h3 class="mb-2 font-semibold text-zinc-900 dark:text-white">Email Notifications</h3>
+        <p class="text-sm text-zinc-500 dark:text-zinc-400">
+          Get notified when builds fail. Supports Resend, Azure Communication Services, and SMTP providers.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section id="install" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Installation</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      Install the CI Server on an Ubuntu server with a single command. The script will guide you through the
+      configuration process.
+    </p>
+
+    <div
+      class="relative overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-900 p-4 font-mono text-sm leading-relaxed"
+    >
+      <span class="absolute top-3 right-4 text-xs tracking-wider text-zinc-400 uppercase">shell</span>
+      <pre
+        class="m-0 whitespace-pre"><code class="text-zinc-200">curl -fsSL https://andobuild.com/server-install.sh | bash -s user@your-server-ip</code></pre>
+    </div>
+
+    <p class="mt-4 text-sm text-zinc-500 dark:text-zinc-400">Or download and run the script manually:</p>
+
+    <div
+      class="relative mt-2 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-900 p-4 font-mono text-sm leading-relaxed"
+    >
+      <span class="absolute top-3 right-4 text-xs tracking-wider text-zinc-400 uppercase">shell</span>
+      <pre
+        class="m-0 whitespace-pre"><code class="text-zinc-200"><span class="text-slate-400 italic"># Download the script</span>
+curl -fsSL https://andobuild.com/server-install.sh -o install-ando-server.sh
+chmod +x install-ando-server.sh
+
+<span class="text-slate-400 italic"># Run it (optionally specify an SSH key)</span>
+./install-ando-server.sh user@your-server-ip
+./install-ando-server.sh user@your-server-ip ~/.ssh/id_rsa</code></pre>
+    </div>
+  </section>
+
+  <section id="prerequisites" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Prerequisites</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">Before running the installer, you'll need:</p>
+
+    <div class="mb-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800">
+      <h3 class="mb-2 font-semibold text-zinc-900 dark:text-white">1. Ubuntu Server</h3>
+      <p class="text-sm text-zinc-500 dark:text-zinc-400">
+        A fresh Ubuntu 22.04+ server with SSH access. The script installs all dependencies automatically.
+      </p>
+    </div>
+
+    <div class="mb-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800">
+      <h3 class="mb-2 font-semibold text-zinc-900 dark:text-white">2. Domain Name</h3>
+      <p class="text-sm text-zinc-500 dark:text-zinc-400">
+        A domain name pointing to your server's IP address (e.g.,
+        <code class="rounded border border-zinc-200 bg-zinc-100 px-1 text-xs dark:border-zinc-600 dark:bg-zinc-700"
+          >ci.example.com</code
+        >). Required for HTTPS certificates.
+      </p>
+    </div>
+
+    <div class="mb-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800">
+      <h3 class="mb-2 font-semibold text-zinc-900 dark:text-white">3. GitHub App</h3>
+      <p class="mb-2 text-sm text-zinc-500 dark:text-zinc-400">
+        Create a GitHub App at
+        <a
+          href="https://github.com/settings/apps/new"
+          class="text-cyan-600 hover:underline dark:text-cyan-400"
+          target="_blank">github.com/settings/apps/new</a
+        >. You'll need:
+      </p>
+      <ul class="ml-4 list-disc text-sm text-zinc-500 dark:text-zinc-400">
+        <li>App ID and App Name</li>
+        <li>Client ID and Client Secret</li>
+        <li>Webhook Secret</li>
+        <li>Private key (.pem file)</li>
+      </ul>
+    </div>
+
+    <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800">
+      <h3 class="mb-2 font-semibold text-zinc-900 dark:text-white">4. Local Docker</h3>
+      <p class="text-sm text-zinc-500 dark:text-zinc-400">
+        Docker installed on your local machine. The installer builds the server image locally and transfers it to the
+        server.
+      </p>
+    </div>
+  </section>
+
+  <section id="github-app" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">GitHub App Configuration</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      When creating your GitHub App, configure it with these settings:
+    </p>
+
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-zinc-200 dark:border-zinc-700">
+          <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Setting</th>
+          <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3 font-medium">Homepage URL</td>
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400"
+            ><code class="rounded bg-zinc-100 px-1.5 py-0.5 text-cyan-600 dark:bg-zinc-800 dark:text-cyan-400"
+              >https://your-domain.com</code
+            ></td
+          >
+        </tr>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3 font-medium">Callback URL</td>
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400"
+            ><code class="rounded bg-zinc-100 px-1.5 py-0.5 text-cyan-600 dark:bg-zinc-800 dark:text-cyan-400"
+              >https://your-domain.com/auth/github/callback</code
+            ></td
+          >
+        </tr>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3 font-medium">Webhook URL</td>
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400"
+            ><code class="rounded bg-zinc-100 px-1.5 py-0.5 text-cyan-600 dark:bg-zinc-800 dark:text-cyan-400"
+              >https://your-domain.com/webhooks/github</code
+            ></td
+          >
+        </tr>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3 font-medium">Webhook Secret</td>
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">Generate a secure random string</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 class="mt-6 mb-3 font-semibold text-zinc-900 dark:text-white">Required Permissions</h3>
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-zinc-200 dark:border-zinc-700">
+          <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Permission</th>
+          <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Access</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3">Contents</td>
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">Read</td>
+        </tr>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3">Metadata</td>
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">Read</td>
+        </tr>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3">Commit statuses</td>
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">Read and write</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 class="mt-6 mb-3 font-semibold text-zinc-900 dark:text-white">Subscribe to Events</h3>
+    <ul class="ml-4 list-disc text-sm text-zinc-500 dark:text-zinc-400">
+      <li>Push</li>
+      <li>Pull request</li>
+    </ul>
+  </section>
+
+  <section id="architecture" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Architecture</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">
+      The CI Server runs as a set of containers managed by rootless Docker:
+    </p>
+
+    <div
+      class="relative overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-900 p-4 font-mono text-sm leading-relaxed"
+    >
+      <pre
+        class="m-0 whitespace-pre"><code class="text-zinc-200">┌─────────────────────────────────────────────────────────┐
+│                    <span class="text-cyan-400">Ubuntu Server</span>                        │
+│                                                         │
+│  ┌──────────────┐                                       │
+│  │    <span class="text-amber-500">Caddy</span>     │ ◄─── HTTPS (port 443)                │
+│  │  (on host)   │                                       │
+│  └──────┬───────┘                                       │
+│         │                                               │
+│         ▼ localhost:8080                                │
+│  ┌─────────────────────────────────────────────────┐    │
+│  │           <span class="text-green-400">Rootless Docker</span> (ando user)           │    │
+│  │                                                 │    │
+│  │  ┌─────────────────┐    ┌─────────────────┐    │    │
+│  │  │  <span class="text-violet-400">ando-server</span>   │───▶│  <span class="text-sky-400">ando-sqlserver</span> │    │    │
+│  │  │  (CI Server)    │    │  (SQL Server)   │    │    │
+│  │  └────────┬────────┘    └─────────────────┘    │    │
+│  │           │                                    │    │
+│  │           ▼ Docker socket                      │    │
+│  │  ┌─────────────────┐                           │    │
+│  │  │  <span class="text-orange-400">Build Container</span> │ ◄─── Spawned per build    │    │
+│  │  │  (isolated)     │                           │    │
+│  │  └─────────────────┘                           │    │
+│  └─────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────┘</code></pre>
+    </div>
+  </section>
+
+  <section id="management" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Server Management</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">Common commands for managing your CI Server.</p>
+
+    <div
+      class="relative overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-900 p-4 font-mono text-sm leading-relaxed"
+    >
+      <span class="absolute top-3 right-4 text-xs tracking-wider text-zinc-400 uppercase">shell</span>
+      <pre
+        class="m-0 whitespace-pre"><code class="text-zinc-200"><span class="text-slate-400 italic"># SSH into the server</span>
+ssh user@your-server-ip
+
+<span class="text-slate-400 italic"># View container status</span>
+sudo -u ando DOCKER_HOST=unix:///run/user/1000/docker.sock \
+  docker compose -f /opt/ando/docker-compose.yml ps
+
+<span class="text-slate-400 italic"># View logs</span>
+sudo -u ando DOCKER_HOST=unix:///run/user/1000/docker.sock \
+  docker compose -f /opt/ando/docker-compose.yml logs -f
+
+<span class="text-slate-400 italic"># Restart services</span>
+sudo -u ando DOCKER_HOST=unix:///run/user/1000/docker.sock \
+  docker compose -f /opt/ando/docker-compose.yml restart
+
+<span class="text-slate-400 italic"># Check Caddy status</span>
+systemctl status caddy</code></pre>
+    </div>
+  </section>
+
+  <section id="paths" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">File Locations</h2>
+    <p class="mb-4 text-zinc-500 dark:text-zinc-400">Important files and directories on the server.</p>
+
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-zinc-200 dark:border-zinc-700">
+          <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Path</th>
+          <th class="px-3 py-3 text-left text-xs font-semibold tracking-wider text-zinc-400 uppercase">Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3"
+            ><code class="rounded bg-zinc-100 px-1.5 py-0.5 text-cyan-600 dark:bg-zinc-800 dark:text-cyan-400"
+              >/opt/ando/docker-compose.yml</code
+            ></td
+          >
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">Docker Compose configuration</td>
+        </tr>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3"
+            ><code class="rounded bg-zinc-100 px-1.5 py-0.5 text-cyan-600 dark:bg-zinc-800 dark:text-cyan-400"
+              >/opt/ando/config/.env</code
+            ></td
+          >
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">Environment configuration</td>
+        </tr>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3"
+            ><code class="rounded bg-zinc-100 px-1.5 py-0.5 text-cyan-600 dark:bg-zinc-800 dark:text-cyan-400"
+              >/opt/ando/config/github-app.pem</code
+            ></td
+          >
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">GitHub App private key</td>
+        </tr>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3"
+            ><code class="rounded bg-zinc-100 px-1.5 py-0.5 text-cyan-600 dark:bg-zinc-800 dark:text-cyan-400"
+              >/opt/ando/data/artifacts/</code
+            ></td
+          >
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">Build artifacts</td>
+        </tr>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3"
+            ><code class="rounded bg-zinc-100 px-1.5 py-0.5 text-cyan-600 dark:bg-zinc-800 dark:text-cyan-400"
+              >/opt/ando/data/repos/</code
+            ></td
+          >
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">Cloned repositories</td>
+        </tr>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3"
+            ><code class="rounded bg-zinc-100 px-1.5 py-0.5 text-cyan-600 dark:bg-zinc-800 dark:text-cyan-400"
+              >/opt/ando/data/sqldata/</code
+            ></td
+          >
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">SQL Server database files</td>
+        </tr>
+        <tr class="border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+          <td class="px-3 py-3"
+            ><code class="rounded bg-zinc-100 px-1.5 py-0.5 text-cyan-600 dark:bg-zinc-800 dark:text-cyan-400"
+              >/etc/caddy/Caddyfile</code
+            ></td
+          >
+          <td class="px-3 py-3 text-zinc-600 dark:text-zinc-400">Caddy reverse proxy config</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</ProviderLayout>

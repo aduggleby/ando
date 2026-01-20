@@ -26,10 +26,14 @@ public class ProjectServiceTests : IDisposable
     {
         _db = TestDbContextFactory.Create();
         _encryptionService = new MockEncryptionService();
+        var mockSecretsDetector = new Mock<IRequiredSecretsDetector>();
+        var mockProfileDetector = new Mock<IProfileDetector>();
 
         _service = new ProjectService(
             _db,
             _encryptionService,
+            mockSecretsDetector.Object,
+            mockProfileDetector.Object,
             NullLogger<ProjectService>.Instance);
     }
 
@@ -308,6 +312,7 @@ public class ProjectServiceTests : IDisposable
             enablePrBuilds: true,
             timeoutMinutes: 30,
             dockerImage: "node:18",
+            profile: "deploy",
             notifyOnFailure: true,
             notificationEmail: "dev@example.com");
 
@@ -318,6 +323,7 @@ public class ProjectServiceTests : IDisposable
         updated.EnablePrBuilds.ShouldBeTrue();
         updated.TimeoutMinutes.ShouldBe(30);
         updated.DockerImage.ShouldBe("node:18");
+        updated.Profile.ShouldBe("deploy");
         updated.NotifyOnFailure.ShouldBeTrue();
         updated.NotificationEmail.ShouldBe("dev@example.com");
     }
@@ -336,6 +342,7 @@ public class ProjectServiceTests : IDisposable
             enablePrBuilds: false,
             timeoutMinutes: 0, // Below minimum
             dockerImage: null,
+            profile: null,
             notifyOnFailure: false,
             notificationEmail: null);
 
@@ -358,6 +365,7 @@ public class ProjectServiceTests : IDisposable
             enablePrBuilds: false,
             timeoutMinutes: 100, // Above maximum
             dockerImage: null,
+            profile: null,
             notifyOnFailure: false,
             notificationEmail: null);
 
@@ -380,6 +388,7 @@ public class ProjectServiceTests : IDisposable
             enablePrBuilds: false,
             timeoutMinutes: 15,
             dockerImage: "  node:18  ",
+            profile: null,
             notifyOnFailure: true,
             notificationEmail: "  dev@example.com  ");
 
@@ -406,6 +415,7 @@ public class ProjectServiceTests : IDisposable
             enablePrBuilds: false,
             timeoutMinutes: 15,
             dockerImage: "   ", // Whitespace only
+            profile: null,
             notifyOnFailure: false,
             notificationEmail: "");
 
@@ -425,6 +435,7 @@ public class ProjectServiceTests : IDisposable
             enablePrBuilds: false,
             timeoutMinutes: 15,
             dockerImage: null,
+            profile: null,
             notifyOnFailure: false,
             notificationEmail: null);
 
@@ -714,9 +725,9 @@ public class ProjectServiceTests : IDisposable
     // Helpers
     // -------------------------------------------------------------------------
 
-    private async Task<User> CreateTestUserAsync(string login = "testuser")
+    private async Task<ApplicationUser> CreateTestUserAsync(string login = "testuser")
     {
-        var user = new User
+        var user = new ApplicationUser
         {
             GitHubId = Random.Shared.Next(1, 100000),
             GitHubLogin = login,
@@ -727,7 +738,7 @@ public class ProjectServiceTests : IDisposable
         return user;
     }
 
-    private async Task<Project> CreateTestProjectAsync(User owner, string repoName = "test-repo")
+    private async Task<Project> CreateTestProjectAsync(ApplicationUser owner, string repoName = "test-repo")
     {
         var project = new Project
         {

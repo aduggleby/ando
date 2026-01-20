@@ -23,6 +23,77 @@ let stepsFailed = 0;
 // Log filtering
 let searchFilter = "";
 
+// ANSI color code to CSS class mapping
+const ansiColors = {
+    30: "ansi-black", 31: "ansi-red", 32: "ansi-green", 33: "ansi-yellow",
+    34: "ansi-blue", 35: "ansi-magenta", 36: "ansi-cyan", 37: "ansi-white",
+    90: "ansi-bright-black", 91: "ansi-bright-red", 92: "ansi-bright-green", 93: "ansi-bright-yellow",
+    94: "ansi-bright-blue", 95: "ansi-bright-magenta", 96: "ansi-bright-cyan", 97: "ansi-bright-white"
+};
+
+// Parse ANSI escape codes and convert to HTML with CSS classes
+function parseAnsi(text) {
+    // Escape HTML first to prevent XSS
+    const escaped = text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    // Match ANSI escape sequences: ESC[...m (where ESC is \x1b or \u001b)
+    const ansiRegex = /\x1b\[([0-9;]*)m|\u001b\[([0-9;]*)m|\[([0-9;]*)m/g;
+
+    let result = "";
+    let lastIndex = 0;
+    let currentClasses = [];
+    let match;
+
+    while ((match = ansiRegex.exec(escaped)) !== null) {
+        // Add text before this escape sequence
+        if (match.index > lastIndex) {
+            const textBefore = escaped.slice(lastIndex, match.index);
+            if (currentClasses.length > 0) {
+                result += `<span class="${currentClasses.join(" ")}">${textBefore}</span>`;
+            } else {
+                result += textBefore;
+            }
+        }
+
+        // Parse the codes (could be multiple separated by ;)
+        const codes = (match[1] || match[2] || match[3] || "0").split(";").map(Number);
+
+        for (const code of codes) {
+            if (code === 0) {
+                // Reset
+                currentClasses = [];
+            } else if (code === 1) {
+                // Bold
+                if (!currentClasses.includes("ansi-bold")) currentClasses.push("ansi-bold");
+            } else if (code === 2) {
+                // Dim
+                if (!currentClasses.includes("ansi-dim")) currentClasses.push("ansi-dim");
+            } else if (ansiColors[code]) {
+                // Remove any existing color class and add new one
+                currentClasses = currentClasses.filter(c => !c.startsWith("ansi-") || c === "ansi-bold" || c === "ansi-dim");
+                currentClasses.push(ansiColors[code]);
+            }
+        }
+
+        lastIndex = match.index + match[0].length;
+    }
+
+    // Add remaining text
+    if (lastIndex < escaped.length) {
+        const remaining = escaped.slice(lastIndex);
+        if (currentClasses.length > 0) {
+            result += `<span class="${currentClasses.join(" ")}">${remaining}</span>`;
+        } else {
+            result += remaining;
+        }
+    }
+
+    return result || escaped;
+}
+
 // Initialize the SignalR connection for build logs
 function initializeBuildLogs(id, initialSequence, stepInfo = {}) {
     buildId = id;
@@ -45,7 +116,7 @@ function initializeBuildLogs(id, initialSequence, stepInfo = {}) {
         .build();
 
     // Handle incoming log entries
-    connection.on("LogReceived", (entry) => {
+    connection.on("LogEntry", (entry) => {
         if (entry.sequence > lastSequence) {
             appendLogEntry(entry);
             lastSequence = entry.sequence;
@@ -168,7 +239,7 @@ function appendLogEntry(entry) {
 
     const message = document.createElement("span");
     message.className = "log-message";
-    message.textContent = entry.message;
+    message.innerHTML = parseAnsi(entry.message);
     div.appendChild(message);
 
     container.appendChild(div);

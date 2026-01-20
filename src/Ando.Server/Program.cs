@@ -23,6 +23,7 @@ using Ando.Server.Jobs;
 using Ando.Server.Models;
 using Ando.Server.Services;
 using Hangfire;
+using Microsoft.AspNetCore.DataProtection;
 using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Razor;
@@ -58,6 +59,15 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 builder.Services.AddDbContext<AndoDbContext>(options =>
     options.UseSqlServer(connectionString));
+
+// =============================================================================
+// Data Protection (persist keys across container restarts)
+// =============================================================================
+
+var keysPath = builder.Configuration["DataProtection:KeysPath"] ?? "/data/keys";
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(keysPath))
+    .SetApplicationName("AndoServer");
 
 // =============================================================================
 // ASP.NET Core Identity
@@ -194,6 +204,10 @@ builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
 builder.Services.AddSingleton<GitHubAppAuthenticator>();
 builder.Services.AddScoped<IGitHubService, GitHubService>();
 
+// Script Detection (auto-detect required secrets and profiles from build scripts)
+builder.Services.AddScoped<IRequiredSecretsDetector, RequiredSecretsDetector>();
+builder.Services.AddScoped<IProfileDetector, ProfileDetector>();
+
 // Build Execution
 builder.Services.AddSingleton<CancellationTokenRegistry>();
 builder.Services.AddScoped<IBuildOrchestrator, BuildOrchestrator>();
@@ -286,6 +300,23 @@ if (app.Environment.IsDevelopment())
 }
 
 // =============================================================================
+// Database Migration and Seeding
+// MUST run before Hangfire job registration to ensure database exists
+// =============================================================================
+
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AndoDbContext>();
+
+    // Ensure database and tables exist
+    db.Database.EnsureCreated();
+
+    // Seed roles
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
+    await SeedRolesAsync(roleManager);
+}
+
+// =============================================================================
 // Recurring Jobs
 // =============================================================================
 
@@ -322,21 +353,6 @@ app.MapControllerRoute(
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
-
-// =============================================================================
-// Database Migration and Seeding
-// =============================================================================
-
-if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
-{
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<AndoDbContext>();
-    db.Database.EnsureCreated();
-
-    // Seed roles
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
-    await SeedRolesAsync(roleManager);
-}
 
 app.Run();
 

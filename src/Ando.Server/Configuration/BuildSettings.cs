@@ -47,8 +47,37 @@ public class BuildSettings
     public int WorkerCount { get; set; } = 2;
 
     /// <summary>
-    /// Path to repos directory inside the server container.
-    /// Repos are cloned here before being mounted into build containers.
+    /// Path to repos directory on the HOST filesystem.
+    /// This path is used for Docker volume mounts when creating build containers.
+    /// Example: /opt/ando/data/repos
     /// </summary>
     public string ReposPath { get; set; } = "/data/repos";
+
+    /// <summary>
+    /// Path to repos directory inside the SERVER container (optional).
+    /// When running the server in a container, this is where the ReposPath is mounted internally.
+    /// If not set, ReposPath is used for both purposes (assumes matching paths).
+    /// Example: /data/repos (when ReposPath=/opt/ando/data/repos is mounted at /data/repos)
+    /// </summary>
+    public string? ReposPathInContainer { get; set; }
+
+    /// <summary>
+    /// Gets the path to use for git operations (clone, checkout) inside the server.
+    /// Returns ReposPathInContainer if set, otherwise falls back to ReposPath.
+    /// </summary>
+    public string GetReposPathForServer() => ReposPathInContainer ?? ReposPath;
+
+    /// <summary>
+    /// Base URL of the server for generating absolute URLs (e.g., for GitHub commit statuses).
+    /// Example: https://demo.andobuild.com
+    /// </summary>
+    public string? BaseUrl { get; set; }
+
+    /// <summary>
+    /// Path to the Docker socket on the HOST filesystem.
+    /// This is used when creating build containers that need Docker-in-Docker support.
+    /// For standard Docker: /var/run/docker.sock
+    /// For rootless Docker: /var/run/user/{UID}/docker.sock
+    /// </summary>
+    public string DockerSocketPath { get; set; } = "/var/run/docker.sock";
 }

@@ -38,17 +38,20 @@ public class WebhooksController : ControllerBase
     private readonly AndoDbContext _db;
     private readonly GitHubSettings _gitHubSettings;
     private readonly IBuildService _buildService;
+    private readonly IProjectService _projectService;
     private readonly ILogger<WebhooksController> _logger;
 
     public WebhooksController(
         AndoDbContext db,
         IOptions<GitHubSettings> gitHubSettings,
         IBuildService buildService,
+        IProjectService projectService,
         ILogger<WebhooksController> logger)
     {
         _db = db;
         _gitHubSettings = gitHubSettings.Value;
         _buildService = buildService;
+        _projectService = projectService;
         _logger = logger;
     }
 
@@ -112,11 +115,12 @@ public class WebhooksController : ControllerBase
             return Ok(new { message = "Branch deletion ignored" });
         }
 
-        // Find matching project
-        var project = await _db.Projects
-            .FirstOrDefaultAsync(p => p.GitHubRepoId == payload.Repository.Id);
+        // Find ALL matching projects (multiple users can add the same repo)
+        var projects = await _db.Projects
+            .Where(p => p.GitHubRepoId == payload.Repository.Id)
+            .ToListAsync();
 
-        if (project == null)
+        if (projects.Count == 0)
         {
             _logger.LogInformation(
                 "No project configured for repository {Repo}",
@@ -124,36 +128,67 @@ public class WebhooksController : ControllerBase
             return Ok(new { message = "Repository not configured" });
         }
 
-        // Check branch filter
-        if (!project.MatchesBranchFilter(payload.Branch))
+        var buildIds = new List<int>();
+
+        foreach (var project in projects)
         {
+            // Check branch filter for this project
+            if (!project.MatchesBranchFilter(payload.Branch))
+            {
+                _logger.LogInformation(
+                    "Branch {Branch} does not match filter for project {ProjectId}",
+                    payload.Branch, project.Id);
+                continue;
+            }
+
+            // Re-detect required secrets from the build script (catches new env vars)
+            await _projectService.DetectAndUpdateRequiredSecretsAsync(project.Id);
+
+            // Reload project to get updated RequiredSecrets
+            await _db.Entry(project).ReloadAsync();
+
+            // Check if project is properly configured (all required secrets are set)
+            var secretNames = await _projectService.GetSecretNamesAsync(project.Id);
+            var missingSecrets = project.GetMissingSecretsFrom(secretNames);
+            if (missingSecrets.Count > 0)
+            {
+                _logger.LogWarning(
+                    "Project {ProjectId} is missing required secrets: {MissingSecrets}. Skipping build.",
+                    project.Id, string.Join(", ", missingSecrets));
+                continue;
+            }
+
+            // Update installation ID if changed
+            if (payload.Installation != null && project.InstallationId != payload.Installation.Id)
+            {
+                project.InstallationId = payload.Installation.Id;
+            }
+
+            // Queue build for this project
+            var buildId = await _buildService.QueueBuildAsync(
+                project.Id,
+                payload.CommitSha,
+                payload.Branch,
+                BuildTrigger.Push,
+                payload.HeadCommit?.Message,
+                payload.HeadCommit?.Author?.Name);
+
+            buildIds.Add(buildId);
+
             _logger.LogInformation(
-                "Branch {Branch} does not match filter for {Project}",
-                payload.Branch, project.RepoFullName);
-            return Ok(new { message = "Branch not in filter" });
+                "Queued build {BuildId} for {Repo} ({Branch}, {Sha})",
+                buildId, project.RepoFullName, payload.Branch, payload.CommitSha[..8]);
         }
 
-        // Update installation ID if changed
-        if (payload.Installation != null && project.InstallationId != payload.Installation.Id)
+        // Save any installation ID updates
+        await _db.SaveChangesAsync();
+
+        if (buildIds.Count == 0)
         {
-            project.InstallationId = payload.Installation.Id;
-            await _db.SaveChangesAsync();
+            return Ok(new { message = "No builds queued (branch filter)" });
         }
 
-        // Queue build
-        var buildId = await _buildService.QueueBuildAsync(
-            project.Id,
-            payload.CommitSha,
-            payload.Branch,
-            BuildTrigger.Push,
-            payload.HeadCommit?.Message,
-            payload.HeadCommit?.Author?.Name);
-
-        _logger.LogInformation(
-            "Queued build {BuildId} for {Repo} ({Branch}, {Sha})",
-            buildId, project.RepoFullName, payload.Branch, payload.CommitSha[..8]);
-
-        return Ok(new { message = "Build queued", buildId });
+        return Ok(new { message = $"{buildIds.Count} build(s) queued", buildIds });
     }
 
     /// <summary>
@@ -176,11 +211,12 @@ public class WebhooksController : ControllerBase
             return Ok(new { message = $"Action '{payload.Action}' ignored" });
         }
 
-        // Find matching project
-        var project = await _db.Projects
-            .FirstOrDefaultAsync(p => p.GitHubRepoId == payload.Repository.Id);
+        // Find ALL matching projects (multiple users can add the same repo)
+        var projects = await _db.Projects
+            .Where(p => p.GitHubRepoId == payload.Repository.Id)
+            .ToListAsync();
 
-        if (project == null)
+        if (projects.Count == 0)
         {
             _logger.LogInformation(
                 "No project configured for repository {Repo}",
@@ -188,36 +224,67 @@ public class WebhooksController : ControllerBase
             return Ok(new { message = "Repository not configured" });
         }
 
-        // Check if PR builds are enabled
-        if (!project.EnablePrBuilds)
+        var buildIds = new List<int>();
+
+        foreach (var project in projects)
         {
+            // Check if PR builds are enabled for this project
+            if (!project.EnablePrBuilds)
+            {
+                _logger.LogInformation(
+                    "PR builds not enabled for project {ProjectId}",
+                    project.Id);
+                continue;
+            }
+
+            // Re-detect required secrets from the build script (catches new env vars)
+            await _projectService.DetectAndUpdateRequiredSecretsAsync(project.Id);
+
+            // Reload project to get updated RequiredSecrets
+            await _db.Entry(project).ReloadAsync();
+
+            // Check if project is properly configured (all required secrets are set)
+            var secretNames = await _projectService.GetSecretNamesAsync(project.Id);
+            var missingSecrets = project.GetMissingSecretsFrom(secretNames);
+            if (missingSecrets.Count > 0)
+            {
+                _logger.LogWarning(
+                    "Project {ProjectId} is missing required secrets: {MissingSecrets}. Skipping build.",
+                    project.Id, string.Join(", ", missingSecrets));
+                continue;
+            }
+
+            // Update installation ID if changed
+            if (payload.Installation != null && project.InstallationId != payload.Installation.Id)
+            {
+                project.InstallationId = payload.Installation.Id;
+            }
+
+            // Queue build for this project
+            var buildId = await _buildService.QueueBuildAsync(
+                project.Id,
+                payload.PullRequest.Head.Sha,
+                payload.PullRequest.Head.Ref,
+                BuildTrigger.PullRequest,
+                $"PR #{payload.Number}: {payload.PullRequest.Title}",
+                payload.PullRequest.User?.Login,
+                payload.Number);
+
+            buildIds.Add(buildId);
+
             _logger.LogInformation(
-                "PR builds not enabled for {Project}",
-                project.RepoFullName);
-            return Ok(new { message = "PR builds disabled" });
+                "Queued PR build {BuildId} for {Repo} (PR #{Number}, {Sha})",
+                buildId, project.RepoFullName, payload.Number, payload.PullRequest.Head.Sha[..8]);
         }
 
-        // Update installation ID if changed
-        if (payload.Installation != null && project.InstallationId != payload.Installation.Id)
+        // Save any installation ID updates
+        await _db.SaveChangesAsync();
+
+        if (buildIds.Count == 0)
         {
-            project.InstallationId = payload.Installation.Id;
-            await _db.SaveChangesAsync();
+            return Ok(new { message = "No builds queued (PR builds disabled)" });
         }
 
-        // Queue build
-        var buildId = await _buildService.QueueBuildAsync(
-            project.Id,
-            payload.PullRequest.Head.Sha,
-            payload.PullRequest.Head.Ref,
-            BuildTrigger.PullRequest,
-            $"PR #{payload.Number}: {payload.PullRequest.Title}",
-            payload.PullRequest.User?.Login,
-            payload.Number);
-
-        _logger.LogInformation(
-            "Queued PR build {BuildId} for {Repo} (PR #{Number}, {Sha})",
-            buildId, project.RepoFullName, payload.Number, payload.PullRequest.Head.Sha[..8]);
-
-        return Ok(new { message = "Build queued", buildId });
+        return Ok(new { message = $"{buildIds.Count} build(s) queued", buildIds });
     }
 }
