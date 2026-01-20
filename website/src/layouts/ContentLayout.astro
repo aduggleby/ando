@@ -10,9 +10,13 @@ interface Props {
 
 const { frontmatter } = Astro.props;
 const { title, description } = frontmatter;
+
+// Generate alternate markdown URL from current path
+const currentPath = Astro.url.pathname.replace(/\/$/, "");
+const alternateMarkdownUrl = `${currentPath}.md`;
 ---
 
-<BaseLayout title={`${title} - ANDO`} description={description}>
+<BaseLayout title={`${title} - ANDO`} description={description} alternateMarkdownUrl={alternateMarkdownUrl}>
   <div class="max-w-3xl">
     <section id="top" class="mb-8 md:mb-12">
       <h1 class="mb-2 text-2xl font-bold text-zinc-900 sm:text-3xl dark:text-white">{title}</h1>

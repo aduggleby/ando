@@ -236,3 +236,31 @@ BicepDeployment objects provide typed access to deployment outputs:
 6. Options are configured via fluent lambdas: o => o.Output(...).WithRuntime(...)
 7. Always call EnsureAuthenticated() before cloud operations
 8. Use `ando verify` to check scripts without executing
+
+## Markdown Versions
+
+All pages are available in markdown format for LLM consumption:
+
+### Main Pages
+- https://andobuild.com/index.md - Homepage and overview
+- https://andobuild.com/about.md - About ANDO
+- https://andobuild.com/cli.md - CLI reference
+- https://andobuild.com/changelog.md - Release history
+- https://andobuild.com/license.md - License information
+
+### Provider Documentation
+- https://andobuild.com/providers/ando.md - Core operations (Log, Artifacts, Context)
+- https://andobuild.com/providers/appservice.md - Azure App Service deployments
+- https://andobuild.com/providers/azure.md - Azure CLI authentication
+- https://andobuild.com/providers/bicep.md - Azure Bicep deployments
+- https://andobuild.com/providers/cloudflare.md - Cloudflare Pages deployments
+- https://andobuild.com/providers/dotnet.md - .NET build, test, publish
+- https://andobuild.com/providers/ef.md - Entity Framework Core migrations
+- https://andobuild.com/providers/functions.md - Azure Functions deployments
+- https://andobuild.com/providers/node.md - Node.js installation
+- https://andobuild.com/providers/npm.md - npm operations
+- https://andobuild.com/providers/nuget.md - NuGet package operations
+
+### Examples
+- https://andobuild.com/examples/index.md - Examples overview
+- https://andobuild.com/examples/astro.md - Astro + Cloudflare Pages example

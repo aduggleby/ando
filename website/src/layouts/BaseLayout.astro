@@ -7,9 +7,10 @@ import SharedScripts from "../components/SharedScripts.astro";
 interface Props {
   title: string;
   description: string;
+  alternateMarkdownUrl?: string;
 }
 
-const { title, description } = Astro.props;
+const { title, description, alternateMarkdownUrl } = Astro.props;
 ---
 
 <html lang="en">
@@ -26,6 +27,11 @@ const { title, description } = Astro.props;
       rel="stylesheet"
     />
     <meta name="description" content={description} />
+    {
+      alternateMarkdownUrl && (
+        <link rel="alternate" type="text/markdown" href={alternateMarkdownUrl} title="Markdown version" />
+      )
+    }
   </head>
   <body
     class="flex min-h-screen flex-col bg-white font-sans text-zinc-800 antialiased dark:bg-zinc-900 dark:text-zinc-200"
