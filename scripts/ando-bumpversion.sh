@@ -246,9 +246,22 @@ CLAUDE_PROMPT="${CLAUDE_PROMPT//\$NEW_VERSION/$NEW_VERSION}"
 CLAUDE_PROMPT="${CLAUDE_PROMPT//\$BUMP_TYPE/$BUMP_TYPE}"
 CLAUDE_PROMPT="${CLAUDE_PROMPT//\$(date +%Y-%m-%d)/$(date +%Y-%m-%d)}"
 
-# Run Claude with the prompt
+# Save prompt to temp file for reference
+PROMPT_FILE=$(mktemp)
+echo "$CLAUDE_PROMPT" > "$PROMPT_FILE"
+
+echo "=========================================="
+echo "Claude will now verify documentation and update changelog."
+echo "Prompt saved to: $PROMPT_FILE"
+echo "=========================================="
+echo ""
+
+# Run Claude interactively (not with -p which buffers output)
 cd "$REPO_ROOT"
-claude -p "$CLAUDE_PROMPT"
+claude "$CLAUDE_PROMPT"
+
+# Clean up temp file
+rm -f "$PROMPT_FILE"
 
 # =============================================================================
 # Commit and push the version bump
