@@ -253,12 +253,15 @@ echo "$CLAUDE_PROMPT" > "$PROMPT_FILE"
 echo "=========================================="
 echo "Claude will now verify documentation and update changelog."
 echo "Prompt saved to: $PROMPT_FILE"
+echo ""
+echo "This runs with --dangerously-skip-permissions to avoid prompts."
+echo "Claude is working... (output will appear when complete)"
 echo "=========================================="
 echo ""
 
-# Run Claude interactively (not with -p which buffers output)
+# Run Claude with -p (non-interactive, auto-exits) and skip permission prompts
 cd "$REPO_ROOT"
-claude "$CLAUDE_PROMPT"
+claude -p "$CLAUDE_PROMPT" --dangerously-skip-permissions
 
 # Clean up temp file
 rm -f "$PROMPT_FILE"
