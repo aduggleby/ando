@@ -77,42 +77,7 @@ if [[ -n "$UNTRACKED" ]]; then
     exit 1
 fi
 
-# Check if current branch has an upstream and is up to date
-CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo "")
-
-if [[ -z "$UPSTREAM" ]]; then
-    echo "Error: Current branch '$CURRENT_BRANCH' has no upstream tracking branch."
-    echo "Please push your branch first: git push -u origin $CURRENT_BRANCH"
-    exit 1
-fi
-
-# Fetch latest from remote to compare
-git fetch --quiet
-
-# Check for unpushed commits
-UNPUSHED=$(git log @{u}..HEAD --oneline 2>/dev/null)
-if [[ -n "$UNPUSHED" ]]; then
-    echo "Error: You have unpushed commits."
-    echo "Please push your changes before bumping the version."
-    echo ""
-    echo "Unpushed commits:"
-    echo "$UNPUSHED"
-    exit 1
-fi
-
-# Check if we're behind the remote
-BEHIND=$(git log HEAD..@{u} --oneline 2>/dev/null)
-if [[ -n "$BEHIND" ]]; then
-    echo "Error: Your branch is behind the remote."
-    echo "Please pull the latest changes before bumping the version."
-    echo ""
-    echo "Commits behind:"
-    echo "$BEHIND"
-    exit 1
-fi
-
-echo "Git state: clean and up to date with remote"
+echo "Git state: clean (all changes committed)"
 echo ""
 
 # =============================================================================
