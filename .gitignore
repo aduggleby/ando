@@ -52,6 +52,7 @@ yarn-error.log
 .env
 .env.local
 .env.*.local
+.env.ando
 
 # Deployment scripts (contain local config)
 publish-to-nas.sh
