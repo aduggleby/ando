@@ -86,7 +86,10 @@
             </div>
 
             <div class="form-group">
-                <label for="profile">Build Profile</label>
+                <div class="flex items-center justify-between">
+                    <label for="profile">Build Profile</label>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="refreshBuildConfig()">Refresh from Repo</button>
+                </div>
                 @if (Model.AvailableProfiles.Count > 0)
                 {
                     <select id="profile" name="profile" class="@(!Model.IsProfileValid ? "input-error" : "")">
@@ -115,7 +118,6 @@
             <div class="form-group">
                 <div class="flex items-center justify-between">
                     <label>Detected Required Secrets</label>
-                    <button type="button" class="btn btn-secondary btn-sm" onclick="refreshSecrets()">Refresh</button>
                 </div>
                 @if (!string.IsNullOrEmpty(Model.RequiredSecrets))
                 {
@@ -166,21 +168,21 @@
 
         @if (Model.SecretNames.Count > 0)
         {
-            <div class="secrets-list">
+            <div class="mt-4 space-y-2">
                 @foreach (var name in Model.SecretNames)
                 {
-                    <div class="secret-row">
-                        <code class="secret-name">@name</code>
-                        <button type="button" class="btn-icon" onclick="copySecretName('@name')" title="Copy name">
+                    <div class="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                        <code class="font-mono text-sm font-medium text-slate-900">@name</code>
+                        <button type="button" class="inline-flex items-center justify-center p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition" onclick="copySecretName('@name')" title="Copy name">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                             </svg>
                         </button>
-                        <span class="secret-value-masked">••••••••••••</span>
-                        <form method="post" action="/projects/@Model.Id/secrets/@name/delete" class="inline-form"
+                        <span class="grow text-sm text-slate-400 tracking-wider">••••••••••••</span>
+                        <form method="post" action="/projects/@Model.Id/secrets/@name/delete" class="inline"
                               onsubmit="return confirm('Delete secret @name?');">
                             @Html.AntiForgeryToken()
-                            <button type="submit" class="btn-icon btn-icon-danger" title="Delete secret">
+                            <button type="submit" class="inline-flex items-center justify-center p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition" title="Delete secret">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                                 </svg>
@@ -192,26 +194,26 @@
         }
         else
         {
-            <p class="empty-message">No secrets configured.</p>
+            <p class="text-sm text-slate-500">No secrets configured.</p>
         }
 
         <h3>Add Secret</h3>
-        <form method="post" action="/projects/@Model.Id/secrets" class="add-secret-form">
+        <form method="post" action="/projects/@Model.Id/secrets">
             @Html.AntiForgeryToken()
 
-            <div class="form-row">
-                <div class="form-group">
+            <div class="mt-4 flex flex-col sm:flex-row sm:items-end gap-4">
+                <div class="sm:w-1/3">
                     <label for="secretName">Name</label>
                     <input type="text" id="secretName" name="name" placeholder="MY_SECRET"
                            pattern="^[A-Z_][A-Z0-9_]*$" required
                            oninput="formatSecretName(this)" />
-                    <span class="form-hint format-helper">Use UPPERCASE_WITH_UNDERSCORES</span>
+                    <span class="block mt-1 text-xs text-blue-600">Use UPPERCASE_WITH_UNDERSCORES</span>
                 </div>
-                <div class="form-group flex-grow">
+                <div class="grow">
                     <label for="secretValue">Value</label>
-                    <div class="password-input-wrapper">
-                        <input type="password" id="secretValue" name="value" placeholder="secret value" required />
-                        <button type="button" class="btn-icon password-toggle" onclick="toggleSecretVisibility()" title="Show/hide">
+                    <div class="relative">
+                        <input type="password" id="secretValue" name="value" placeholder="secret value" required class="pr-10" />
+                        <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition" onclick="toggleSecretVisibility()" title="Show/hide">
                             <svg id="eye-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
@@ -222,33 +224,25 @@
                         </button>
                     </div>
                 </div>
-                <div class="form-group form-button">
+                <div>
                     <button type="submit" class="btn btn-primary">Add</button>
                 </div>
             </div>
         </form>
 
         <h3 class="mt-8">Bulk Import</h3>
-        <p class="section-description">
-            Upload a .env file or paste content to import multiple secrets at once.
+        <p class="text-sm text-slate-500">
+            Paste or drag-and-drop a .env file to import multiple secrets at once.
             Existing secrets with matching names will be updated.
         </p>
 
-        <div class="form-group">
-            <label for="envFileUpload">Upload .env file</label>
-            <div class="file-upload-wrapper">
-                <input type="file" id="envFileUpload" accept=".env,.txt" onchange="loadEnvFile(this)" />
-                <span class="form-hint">Select a .env file to load its contents into the text area below.</span>
-            </div>
-        </div>
-
-        <form method="post" action="/projects/@Model.Id/secrets/bulk" class="bulk-import-form">
+        <form method="post" action="/projects/@Model.Id/secrets/bulk" class="mt-4">
             @Html.AntiForgeryToken()
-            <div class="form-group">
-                <label for="bulkContent">Or paste .env content</label>
-                <textarea id="bulkContent" name="content" rows="6"
-                          placeholder="# Paste .env content here&#10;NUGET_API_KEY=your-api-key&#10;DEPLOY_TOKEN=your-token&#10;DATABASE_URL=&quot;connection-string&quot;"></textarea>
-                <span class="form-hint">
+            <div class="mt-4">
+                <label for="bulkContent">Paste or drop .env content</label>
+                <textarea id="bulkContent" name="content" rows="6" class="font-mono text-xs transition-colors"
+                          placeholder="# Paste or drag .env file here&#10;NUGET_API_KEY=your-api-key&#10;DEPLOY_TOKEN=your-token&#10;DATABASE_URL=&quot;connection-string&quot;"></textarea>
+                <span class="mt-2 text-xs text-slate-500">
                     Format: KEY=value (one per line). Lines starting with # are ignored.
                     Values can be quoted with single or double quotes.
                 </span>
@@ -371,35 +365,59 @@ function formatSecretName(input) {
     }
 }
 
-// Refresh detected secrets
-function refreshSecrets() {
-    document.getElementById('refresh-secrets-form').submit();
+// Refresh profiles and secrets from repo
+function refreshBuildConfig() {
+    document.getElementById('refresh-build-config-form').submit();
 }
 
-// Load .env file contents into the bulk import textarea
-function loadEnvFile(input) {
-    const file = input.files[0];
-    if (!file) return;
+// Setup drag-and-drop for bulk import textarea
+document.addEventListener('DOMContentLoaded', () => {
+    const textarea = document.getElementById('bulkContent');
+    if (!textarea) return;
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const textarea = document.getElementById('bulkContent');
-        if (textarea) {
-            textarea.value = e.target.result;
-            // Highlight the textarea to show it was populated
-            textarea.focus();
-            textarea.classList.add('file-loaded');
-            setTimeout(() => textarea.classList.remove('file-loaded'), 2000);
+    const dragOverClasses = ['border-blue-500', 'bg-blue-50', 'ring-2', 'ring-blue-500/20'];
+
+    // Prevent default drag behaviors
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        textarea.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+    });
+
+    // Highlight on drag over
+    ['dragenter', 'dragover'].forEach(eventName => {
+        textarea.addEventListener(eventName, () => {
+            textarea.classList.add(...dragOverClasses);
+        });
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        textarea.addEventListener(eventName, () => {
+            textarea.classList.remove(...dragOverClasses);
+        });
+    });
+
+    // Handle dropped files
+    textarea.addEventListener('drop', (e) => {
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            const file = files[0];
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                textarea.value = event.target.result;
+                textarea.focus();
+            };
+            reader.onerror = function() {
+                alert('Failed to read file. Please try pasting the content manually.');
+            };
+            reader.readAsText(file);
         }
-    };
-    reader.onerror = function() {
-        alert('Failed to read file. Please try again or paste the content manually.');
-    };
-    reader.readAsText(file);
-}
+    });
+});
 </script>
 
-<!-- Hidden form for refresh secrets (outside the main settings form to avoid nesting) -->
-<form id="refresh-secrets-form" method="post" action="/projects/@Model.Id/refresh-secrets" style="display: none;">
+<!-- Hidden form for refresh build config (outside the main settings form to avoid nesting) -->
+<form id="refresh-build-config-form" method="post" action="/projects/@Model.Id/refresh-secrets" style="display: none;">
     @Html.AntiForgeryToken()
 </form>

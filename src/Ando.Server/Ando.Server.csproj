@@ -36,6 +36,10 @@
     <!-- Email Providers -->
     <PackageReference Include="Azure.Communication.Email" Version="1.0.1" />
     <PackageReference Include="MailKit" Version="4.9.0" />
+
+    <!-- FastEndpoints API Framework -->
+    <PackageReference Include="FastEndpoints" Version="5.33.0" />
+    <PackageReference Include="FastEndpoints.Swagger" Version="5.33.0" />
   </ItemGroup>
 
   <ItemGroup>

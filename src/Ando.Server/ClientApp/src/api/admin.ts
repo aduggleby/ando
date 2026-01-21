@@ -1,0 +1,74 @@
+// =============================================================================
+// api/admin.ts
+//
+// Admin API functions.
+// =============================================================================
+
+import api from './client';
+import type {
+  AdminDashboardDto,
+  UserListItemDto,
+  AdminProjectDto,
+} from '@/types';
+
+export async function getAdminDashboard(): Promise<{ dashboard: AdminDashboardDto }> {
+  const response = await api.get('/admin/dashboard');
+  return response.data;
+}
+
+export async function getUsers(): Promise<{ users: UserListItemDto[] }> {
+  const response = await api.get('/admin/users');
+  return response.data;
+}
+
+export async function getUserDetails(id: number): Promise<{ user: UserListItemDto }> {
+  const response = await api.get(`/admin/users/${id}`);
+  return response.data;
+}
+
+export async function changeUserRole(
+  userId: number,
+  isAdmin: boolean
+): Promise<{ success: boolean; error?: string }> {
+  const response = await api.post(`/admin/users/${userId}/role`, { isAdmin });
+  return response.data;
+}
+
+export async function lockUser(userId: number): Promise<{ success: boolean; error?: string }> {
+  const response = await api.post(`/admin/users/${userId}/lock`);
+  return response.data;
+}
+
+export async function unlockUser(userId: number): Promise<{ success: boolean; error?: string }> {
+  const response = await api.post(`/admin/users/${userId}/unlock`);
+  return response.data;
+}
+
+export async function deleteUser(userId: number): Promise<{ success: boolean; error?: string }> {
+  const response = await api.delete(`/admin/users/${userId}`);
+  return response.data;
+}
+
+export async function impersonateUser(userId: number): Promise<{ success: boolean; error?: string }> {
+  const response = await api.post(`/admin/users/${userId}/impersonate`);
+  return response.data;
+}
+
+export async function stopImpersonation(): Promise<{ success: boolean; error?: string }> {
+  const response = await api.post('/admin/stop-impersonation');
+  return response.data;
+}
+
+export async function getImpersonationStatus(): Promise<{
+  isImpersonating: boolean;
+  originalAdminId?: number;
+  impersonatedUserId?: number;
+}> {
+  const response = await api.get('/admin/impersonation-status');
+  return response.data;
+}
+
+export async function getAdminProjects(): Promise<{ projects: AdminProjectDto[] }> {
+  const response = await api.get('/admin/projects');
+  return response.data;
+}

@@ -2,6 +2,12 @@
 
 **Important:** Always address the user as "Mr. Ando".
 
+## GitHub Repository
+
+- **GitHub Username**: `aduggleby`
+- **Repository**: `aduggleby/ando`
+- **Container Registry**: `ghcr.io/aduggleby/ando-server`
+
 ## Git Rules
 
 - **Never automatically git push** - Only push when explicitly asked

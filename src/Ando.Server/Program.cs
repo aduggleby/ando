@@ -22,6 +22,8 @@ using Ando.Server.Hubs;
 using Ando.Server.Jobs;
 using Ando.Server.Models;
 using Ando.Server.Services;
+using FastEndpoints;
+using FastEndpoints.Swagger;
 using Hangfire;
 using Microsoft.AspNetCore.DataProtection;
 using Hangfire.SqlServer;
@@ -141,6 +143,28 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.AccessDeniedPath = "/auth/access-denied";
     options.ExpireTimeSpan = TimeSpan.FromDays(30);
     options.SlidingExpiration = true;
+
+    // Return 401 for API requests instead of redirecting to login
+    options.Events.OnRedirectToLogin = context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+        {
+            context.Response.StatusCode = 401;
+            return Task.CompletedTask;
+        }
+        context.Response.Redirect(context.RedirectUri);
+        return Task.CompletedTask;
+    };
+    options.Events.OnRedirectToAccessDenied = context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+        {
+            context.Response.StatusCode = 403;
+            return Task.CompletedTask;
+        }
+        context.Response.Redirect(context.RedirectUri);
+        return Task.CompletedTask;
+    };
 });
 
 builder.Services.AddAuthorization(options =>
@@ -163,7 +187,7 @@ builder.Services.AddSession(options =>
 });
 
 // =============================================================================
-// MVC & Razor
+// MVC & Razor (kept for parallel operation during migration)
 // =============================================================================
 
 builder.Services.AddControllersWithViews()
@@ -174,6 +198,21 @@ builder.Services.AddControllersWithViews()
             new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
 builder.Services.AddHttpContextAccessor();
+
+// =============================================================================
+// FastEndpoints (REST API layer)
+// =============================================================================
+
+builder.Services.AddFastEndpoints()
+    .SwaggerDocument(o =>
+    {
+        o.DocumentSettings = s =>
+        {
+            s.Title = "Ando CI Server API";
+            s.Version = "v1";
+            s.Description = "REST API for Ando CI Server - Build automation and project management";
+        };
+    });
 
 // =============================================================================
 // HTTP Client for external APIs
@@ -287,6 +326,23 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // =============================================================================
+// FastEndpoints (REST API)
+// =============================================================================
+
+app.UseFastEndpoints(c =>
+{
+    c.Endpoints.RoutePrefix = "api";
+    c.Serializer.Options.Converters.Add(
+        new System.Text.Json.Serialization.JsonStringEnumConverter());
+});
+
+// Swagger UI (development and testing only)
+if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
+{
+    app.UseSwaggerGen();
+}
+
+// =============================================================================
 // Endpoints
 // =============================================================================
 
@@ -339,7 +395,7 @@ if (!app.Environment.IsEnvironment("Testing"))
         "*/15 * * * *");
 }
 
-// MVC routes
+// MVC routes (kept for parallel operation during migration)
 app.MapControllerRoute(
     name: "projects",
     pattern: "projects/{action=Index}/{id?}",
@@ -353,6 +409,14 @@ app.MapControllerRoute(
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
+
+// =============================================================================
+// SPA Fallback (React App)
+// Serves the React SPA for client-side routing
+// =============================================================================
+
+// Fallback to SPA for routes that don't match API or MVC
+app.MapFallbackToFile("app/index.html");
 
 app.Run();
 

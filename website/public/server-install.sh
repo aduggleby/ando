@@ -8,8 +8,14 @@
 # - Ando.Server container with Docker-in-Docker capability
 # - Caddy reverse proxy for HTTPS (installed on host)
 #
-# Run from your local machine (where the Ando source code is):
-#   ./scripts/install-ando-server.sh user@server-ip
+# Usage:
+#   curl -fsSL https://andobuild.com/server-install.sh | bash -s user@server-ip
+#   curl -fsSL https://andobuild.com/server-install.sh | bash -s -- --build-local user@server-ip
+#   curl -fsSL https://andobuild.com/server-install.sh | bash -s -- --external-sql user@server-ip
+#
+# Options:
+#   --build-local    Build the Docker image locally instead of pulling from ghcr.io
+#   --external-sql   Use an existing SQL Server instead of deploying one in a container
 #
 # =============================================================================
 
@@ -22,8 +28,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DOCKER_IMAGE_NAME="ando-server"
 DOCKER_IMAGE_TAG="latest"
+GHCR_IMAGE="ghcr.io/aduggleby/ando-server"
 SQL_SERVER_IMAGE="mcr.microsoft.com/mssql/server:2022-latest"
 ANDO_USER="ando"
+BUILD_LOCAL="false"
+USE_EXTERNAL_SQL="false"
 
 # Colors
 RED='\033[0;31m'
@@ -102,12 +111,39 @@ generate_encryption_key() {
 # Validation
 # -----------------------------------------------------------------------------
 validate_args() {
+    # Parse options
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --build-local)
+                BUILD_LOCAL="true"
+                shift
+                ;;
+            --external-sql)
+                USE_EXTERNAL_SQL="true"
+                shift
+                ;;
+            -*)
+                echo "Unknown option: $1"
+                exit 1
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+
     if [[ $# -lt 1 ]]; then
-        echo "Usage: $0 <user@server-ip> [ssh-key-path]"
+        echo "Usage: $0 [OPTIONS] <user@server-ip> [ssh-key-path]"
+        echo ""
+        echo "Options:"
+        echo "  --build-local    Build image locally instead of pulling from ghcr.io"
+        echo "  --external-sql   Use an existing SQL Server instead of deploying a container"
         echo ""
         echo "Example:"
         echo "  $0 root@138.199.223.171"
         echo "  $0 root@138.199.223.171 ~/.ssh/id_claude"
+        echo "  $0 --build-local root@138.199.223.171"
+        echo "  $0 --external-sql root@138.199.223.171"
         exit 1
     fi
 
@@ -128,20 +164,34 @@ check_local_requirements() {
 
     local missing=()
 
-    for cmd in docker ssh scp openssl; do
+    # Always need ssh, scp, openssl
+    for cmd in ssh scp openssl; do
         if ! command -v "$cmd" &> /dev/null; then
             missing+=("$cmd")
         fi
     done
+
+    # Only need docker locally if building locally
+    if [[ "$BUILD_LOCAL" == "true" ]]; then
+        if ! command -v docker &> /dev/null; then
+            missing+=("docker")
+        fi
+    fi
 
     if [[ ${#missing[@]} -gt 0 ]]; then
         log_error "Missing required commands: ${missing[*]}"
         exit 1
     fi
 
-    if [[ ! -f "$PROJECT_ROOT/src/Ando.Server/Dockerfile" ]]; then
-        log_error "Cannot find Ando.Server Dockerfile. Run this script from the ando project root."
-        exit 1
+    # Only check for Dockerfile when building locally
+    if [[ "$BUILD_LOCAL" == "true" ]]; then
+        if [[ ! -f "$PROJECT_ROOT/src/Ando.Server/Dockerfile" ]]; then
+            log_error "Cannot find Ando.Server Dockerfile. Run this script from the ando project root."
+            exit 1
+        fi
+        log_info "Build mode: local (will build from source)"
+    else
+        log_info "Build mode: pull from $GHCR_IMAGE:$DOCKER_IMAGE_TAG"
     fi
 
     log_success "Local requirements satisfied"
@@ -192,9 +242,16 @@ gather_configuration() {
     # --- SQL Server Configuration ---
     echo ""
     echo -e "${CYAN}=== SQL Server Configuration ===${NC}"
-    local default_sa_password=$(generate_password)
-    prompt_with_default "SQL Server SA password" "$default_sa_password" SA_PASSWORD true
-    prompt_with_default "Database name" "AndoServer" DATABASE_NAME
+    if [[ "$USE_EXTERNAL_SQL" == "true" ]]; then
+        echo "Using external SQL Server (no container will be deployed)"
+        prompt_required "SQL Server connection string" CONNECTION_STRING
+        SA_PASSWORD=""
+        DATABASE_NAME=""
+    else
+        local default_sa_password=$(generate_password)
+        prompt_with_default "SQL Server SA password" "$default_sa_password" SA_PASSWORD true
+        prompt_with_default "Database name" "AndoServer" DATABASE_NAME
+    fi
 
     # --- GitHub Configuration ---
     echo ""
@@ -284,7 +341,7 @@ gather_configuration() {
 }
 
 # -----------------------------------------------------------------------------
-# Build Local Docker Image
+# Docker Image Management
 # -----------------------------------------------------------------------------
 build_local_image() {
     log_step "Building Ando.Server Docker image locally"
@@ -298,6 +355,28 @@ build_local_image() {
         .
 
     log_success "Docker image built: $DOCKER_IMAGE_NAME:$DOCKER_IMAGE_TAG"
+}
+
+pull_docker_image_remote() {
+    log_step "Pulling Docker image from GitHub Container Registry"
+
+    # Get ando user's UID
+    ANDO_UID=$(ssh $SSH_OPTS "$REMOTE_HOST" "id -u $ANDO_USER")
+
+    ssh $SSH_OPTS "$REMOTE_HOST" bash << EOF
+set -euo pipefail
+
+# Pull image as ando user with rootless Docker
+runuser -l $ANDO_USER -c "
+export DOCKER_HOST=unix:///run/user/$ANDO_UID/docker.sock
+echo 'Pulling $GHCR_IMAGE:$DOCKER_IMAGE_TAG...'
+docker pull $GHCR_IMAGE:$DOCKER_IMAGE_TAG
+docker tag $GHCR_IMAGE:$DOCKER_IMAGE_TAG $DOCKER_IMAGE_NAME:$DOCKER_IMAGE_TAG
+echo 'Image pulled and tagged as $DOCKER_IMAGE_NAME:$DOCKER_IMAGE_TAG'
+"
+EOF
+
+    log_success "Docker image pulled from ghcr.io"
 }
 
 # -----------------------------------------------------------------------------
@@ -534,11 +613,14 @@ transfer_config_files() {
 generate_env_file() {
     log_step "Generating .env file"
 
-    # Build connection string based on network mode
-    if [[ "$USE_ISOLATED_NETWORK" == "true" ]]; then
-        CONNECTION_STRING="Server=ando-sqlserver;Database=$DATABASE_NAME;User Id=sa;Password=$SA_PASSWORD;TrustServerCertificate=true"
-    else
-        CONNECTION_STRING="Server=localhost,1433;Database=$DATABASE_NAME;User Id=sa;Password=$SA_PASSWORD;TrustServerCertificate=true"
+    # Build connection string based on configuration
+    # If using external SQL, CONNECTION_STRING is already set from gather_configuration
+    if [[ "$USE_EXTERNAL_SQL" != "true" ]]; then
+        if [[ "$USE_ISOLATED_NETWORK" == "true" ]]; then
+            CONNECTION_STRING="Server=ando-sqlserver;Database=$DATABASE_NAME;User Id=sa;Password=$SA_PASSWORD;TrustServerCertificate=true"
+        else
+            CONNECTION_STRING="Server=localhost,1433;Database=$DATABASE_NAME;User Id=sa;Password=$SA_PASSWORD;TrustServerCertificate=true"
+        fi
     fi
 
     # Build email configuration
@@ -612,12 +694,17 @@ Build__WorkerCount=2
 # --- Email ---
 $email_env
 
-# --- SQL Server (for docker-compose) ---
-MSSQL_SA_PASSWORD=$SA_PASSWORD
-
 # --- Rootless Docker ---
 ANDO_UID=$ANDO_UID
 "
+
+    # Add SQL Server password only if using containerized SQL
+    if [[ "$USE_EXTERNAL_SQL" != "true" ]]; then
+        env_content+="
+# --- SQL Server (for docker-compose) ---
+MSSQL_SA_PASSWORD=$SA_PASSWORD
+"
+    fi
 
     # Write to remote server
     ssh $SSH_OPTS "$REMOTE_HOST" "cat > $INSTALL_DIR/config/.env << 'ENVEOF'
@@ -666,7 +753,7 @@ generate_compose_file() {
     local server_network=""
     local sql_ports=""
 
-    if [[ "$USE_ISOLATED_NETWORK" == "true" ]]; then
+    if [[ "$USE_ISOLATED_NETWORK" == "true" && "$USE_EXTERNAL_SQL" != "true" ]]; then
         network_config="
 networks:
   $NETWORK_NAME:
@@ -677,7 +764,7 @@ networks:
         server_network="
     networks:
       - $NETWORK_NAME"
-    else
+    elif [[ "$USE_EXTERNAL_SQL" != "true" ]]; then
         sql_ports="
     ports:
       - \"1433:1433\""
@@ -686,16 +773,11 @@ networks:
     # Docker socket path for rootless Docker
     DOCKER_SOCKET="/run/user/$ANDO_UID/docker.sock"
 
-    local compose_content="# =============================================================================
-# docker-compose.yml for Ando.Server Production (Rootless Docker)
-# Generated: $(date -Iseconds)
-#
-# This runs under rootless Docker for security.
-# Caddy runs on the host for proper TLS certificate acquisition.
-# =============================================================================
-
-services:
-  # ---------------------------------------------------------------------------
+    # SQL Server service (only if not using external SQL)
+    local sql_service=""
+    local depends_on=""
+    if [[ "$USE_EXTERNAL_SQL" != "true" ]]; then
+        sql_service="  # ---------------------------------------------------------------------------
   # SQL Server Database
   # ---------------------------------------------------------------------------
   ando-sqlserver:
@@ -715,7 +797,23 @@ services:
       start_period: 30s
     restart: unless-stopped$sql_network
 
-  # ---------------------------------------------------------------------------
+"
+        depends_on="
+    depends_on:
+      ando-sqlserver:
+        condition: service_healthy"
+    fi
+
+    local compose_content="# =============================================================================
+# docker-compose.yml for Ando.Server Production (Rootless Docker)
+# Generated: $(date -Iseconds)
+#
+# This runs under rootless Docker for security.
+# Caddy runs on the host for proper TLS certificate acquisition.
+# =============================================================================
+
+services:
+$sql_service  # ---------------------------------------------------------------------------
   # Ando CI Server
   # ---------------------------------------------------------------------------
   ando-server:
@@ -729,10 +827,8 @@ services:
       - $DOCKER_SOCKET:/var/run/docker.sock
       - $INSTALL_DIR/data/artifacts:/data/artifacts
       - $INSTALL_DIR/data/repos:/data/repos
-      - $INSTALL_DIR/config/github-app.pem:/app/config/github-app.pem:ro
-    depends_on:
-      ando-sqlserver:
-        condition: service_healthy
+      - $INSTALL_DIR/data/keys:/data/keys
+      - $INSTALL_DIR/config/github-app.pem:/app/config/github-app.pem:ro$depends_on
     healthcheck:
       test: curl -f http://localhost:8080/health || exit 1
       interval: 30s
@@ -760,7 +856,43 @@ start_services() {
     # Get ando user's UID
     ANDO_UID=$(ssh $SSH_OPTS "$REMOTE_HOST" "id -u $ANDO_USER")
 
-    ssh $SSH_OPTS "$REMOTE_HOST" bash << EOF
+    if [[ "$USE_EXTERNAL_SQL" == "true" ]]; then
+        # External SQL - just start Ando.Server
+        ssh $SSH_OPTS "$REMOTE_HOST" bash << EOF
+set -euo pipefail
+
+# Start container as ando user with rootless Docker
+runuser -l $ANDO_USER -c "
+export DOCKER_HOST=unix:///run/user/$ANDO_UID/docker.sock
+cd $INSTALL_DIR
+
+# Start Ando.Server
+echo 'Starting Ando.Server (using external SQL Server)...'
+docker compose up -d ando-server
+
+# Wait for Ando.Server to be healthy
+echo 'Waiting for Ando.Server to be healthy...'
+for i in {1..12}; do
+    if docker compose ps ando-server 2>/dev/null | grep -q 'healthy'; then
+        echo 'Ando.Server is healthy'
+        break
+    fi
+    echo \"  Waiting... (\\\$i/12)\"
+    sleep 5
+done
+
+# Check status
+docker compose ps
+"
+
+# Restart Caddy to pick up configuration
+echo "Starting Caddy..."
+systemctl restart caddy
+systemctl status caddy --no-pager || true
+EOF
+    else
+        # Containerized SQL Server
+        ssh $SSH_OPTS "$REMOTE_HOST" bash << EOF
 set -euo pipefail
 
 # Start containers as ando user with rootless Docker
@@ -811,8 +943,184 @@ echo "Starting Caddy..."
 systemctl restart caddy
 systemctl status caddy --no-pager || true
 EOF
+    fi
 
     log_success "Services started"
+}
+
+# -----------------------------------------------------------------------------
+# Setup Automated Backups
+# -----------------------------------------------------------------------------
+setup_automated_backups() {
+    # Skip if using external SQL
+    if [[ "$USE_EXTERNAL_SQL" == "true" ]]; then
+        log_step "Skipping automated backups (external SQL Server)"
+        return
+    fi
+
+    log_step "Setting up automated backups"
+
+    ANDO_UID=$(ssh $SSH_OPTS "$REMOTE_HOST" "id -u $ANDO_USER")
+
+    ssh $SSH_OPTS "$REMOTE_HOST" bash << BACKUP_EOF
+set -euo pipefail
+
+# Create directories
+mkdir -p "$INSTALL_DIR/scripts"
+mkdir -p "$INSTALL_DIR/backups"
+mkdir -p "$INSTALL_DIR/data/sqldata/backup"
+chown -R $ANDO_USER:$ANDO_USER "$INSTALL_DIR/scripts" "$INSTALL_DIR/backups" "$INSTALL_DIR/data/sqldata/backup"
+
+# Write backup script
+cat > "$INSTALL_DIR/scripts/backup.sh" << 'SCRIPT_EOF'
+#!/bin/bash
+# =============================================================================
+# Ando Server Automated Backup Script
+#
+# Runs daily at 2 AM via cron. Creates backups with retention:
+# - Daily backups: kept for 7 days
+# - Monthly backups (1st of month): kept for 12 months
+#
+# Backs up:
+# - SQL Server database
+# - Configuration files (config/, docker-compose.yml)
+# - Data protection keys (data/keys/)
+# - Caddy configuration
+# =============================================================================
+set -euo pipefail
+
+INSTALL_DIR="@@INSTALL_DIR@@"
+BACKUP_DIR="\$INSTALL_DIR/backups"
+DOCKER_HOST="unix:///run/user/@@ANDO_UID@@/docker.sock"
+DATE=\$(date +%Y%m%d)
+DAY_OF_MONTH=\$(date +%d)
+
+export DOCKER_HOST
+
+# Load SA password from env file
+source "\$INSTALL_DIR/config/.env"
+
+# Create backup directory if needed
+mkdir -p "\$BACKUP_DIR"
+
+# Determine if this is a monthly or daily backup
+if [[ "\$DAY_OF_MONTH" == "01" ]]; then
+    BACKUP_PREFIX="ando-monthly-\$(date +%Y%m)"
+else
+    BACKUP_PREFIX="ando-daily-\$DATE"
+fi
+
+echo "[\$(date '+%Y-%m-%d %H:%M:%S')] Starting backup: \$BACKUP_PREFIX"
+
+# 1. SQL Server database backup
+echo "  Backing up database..."
+docker exec ando-sqlserver /opt/mssql-tools18/bin/sqlcmd \\
+    -S localhost -U sa -P "\$MSSQL_SA_PASSWORD" -C \\
+    -Q "BACKUP DATABASE AndoServer TO DISK = '/var/opt/mssql/backup/\$BACKUP_PREFIX.bak' WITH FORMAT, INIT"
+cp "\$INSTALL_DIR/data/sqldata/backup/\$BACKUP_PREFIX.bak" "\$BACKUP_DIR/"
+
+# 2. Configuration files backup (config dir + docker-compose.yml + Caddyfile)
+echo "  Backing up configuration..."
+tar -czf "\$BACKUP_DIR/\$BACKUP_PREFIX-config.tar.gz" \\
+    -C / \\
+    "\${INSTALL_DIR#/}/config" \\
+    "\${INSTALL_DIR#/}/docker-compose.yml" \\
+    "etc/caddy/Caddyfile" \\
+    2>/dev/null || true
+
+# 3. Data protection keys backup
+echo "  Backing up data protection keys..."
+if [[ -d "\$INSTALL_DIR/data/keys" ]]; then
+    tar -czf "\$BACKUP_DIR/\$BACKUP_PREFIX-keys.tar.gz" \\
+        -C "\$INSTALL_DIR/data" keys 2>/dev/null || true
+fi
+
+# Clean up old daily backups (older than 7 days)
+find "\$BACKUP_DIR" -name "ando-daily-*" -mtime +7 -delete 2>/dev/null || true
+
+# Clean up old monthly backups (older than 12 months / 365 days)
+find "\$BACKUP_DIR" -name "ando-monthly-*" -mtime +365 -delete 2>/dev/null || true
+
+# Clean up backup files in SQL Server volume (keep only latest)
+find "\$INSTALL_DIR/data/sqldata/backup" -name "*.bak" -mtime +1 -delete 2>/dev/null || true
+
+echo "[\$(date '+%Y-%m-%d %H:%M:%S')] Backup completed: \$BACKUP_PREFIX"
+
+# List current backups
+echo "Current backups:"
+ls -lh "\$BACKUP_DIR"/ 2>/dev/null || echo "  (none)"
+SCRIPT_EOF
+
+# Replace placeholders in backup script
+sed -i "s|@@INSTALL_DIR@@|$INSTALL_DIR|g" "$INSTALL_DIR/scripts/backup.sh"
+sed -i "s|@@ANDO_UID@@|$ANDO_UID|g" "$INSTALL_DIR/scripts/backup.sh"
+
+chmod +x "$INSTALL_DIR/scripts/backup.sh"
+chown $ANDO_USER:$ANDO_USER "$INSTALL_DIR/scripts/backup.sh"
+
+# Setup cron job to run daily at 2 AM as ando user
+cat > /etc/cron.d/ando-backup << CRON_EOF
+# Ando Server automated database backup
+# Runs daily at 2 AM
+0 2 * * * $ANDO_USER $INSTALL_DIR/scripts/backup.sh >> /var/log/ando-backup.log 2>&1
+CRON_EOF
+
+chmod 644 /etc/cron.d/ando-backup
+
+# Create log file
+touch /var/log/ando-backup.log
+chown $ANDO_USER:$ANDO_USER /var/log/ando-backup.log
+
+echo "Backup script installed: $INSTALL_DIR/scripts/backup.sh"
+echo "Cron job installed: /etc/cron.d/ando-backup (daily at 2 AM)"
+echo "Backup directory: $INSTALL_DIR/backups"
+
+# Create management scripts
+for script in update status logs restart; do
+    cat > "$INSTALL_DIR/scripts/\$script.sh" << MGMT_EOF
+#!/bin/bash
+set -euo pipefail
+export DOCKER_HOST="unix:///run/user/$ANDO_UID/docker.sock"
+MGMT_EOF
+done
+
+# Update script
+cat >> "$INSTALL_DIR/scripts/update.sh" << 'EOF'
+echo "Pulling latest image..."
+docker compose -f "@@INSTALL_DIR@@/docker-compose.yml" pull
+echo "Restarting services..."
+docker compose -f "@@INSTALL_DIR@@/docker-compose.yml" up -d
+echo "Update complete."
+docker compose -f "@@INSTALL_DIR@@/docker-compose.yml" ps
+EOF
+
+# Status script
+cat >> "$INSTALL_DIR/scripts/status.sh" << 'EOF'
+docker compose -f "@@INSTALL_DIR@@/docker-compose.yml" ps
+EOF
+
+# Logs script
+cat >> "$INSTALL_DIR/scripts/logs.sh" << 'EOF'
+docker compose -f "@@INSTALL_DIR@@/docker-compose.yml" logs -f "\$@"
+EOF
+
+# Restart script
+cat >> "$INSTALL_DIR/scripts/restart.sh" << 'EOF'
+docker compose -f "@@INSTALL_DIR@@/docker-compose.yml" restart
+docker compose -f "@@INSTALL_DIR@@/docker-compose.yml" ps
+EOF
+
+# Replace placeholders and set permissions
+for script in update status logs restart; do
+    sed -i "s|@@INSTALL_DIR@@|$INSTALL_DIR|g" "$INSTALL_DIR/scripts/\$script.sh"
+    chmod +x "$INSTALL_DIR/scripts/\$script.sh"
+    chown $ANDO_USER:$ANDO_USER "$INSTALL_DIR/scripts/\$script.sh"
+done
+
+echo "Management scripts installed: update.sh, status.sh, logs.sh, restart.sh"
+BACKUP_EOF
+
+    log_success "Automated backups configured (daily at 2 AM)"
 }
 
 # -----------------------------------------------------------------------------
@@ -892,15 +1200,20 @@ print_summary() {
     echo "System Services:"
     echo "  - caddy           (Reverse proxy on host)"
     echo ""
-    echo "Management Commands (run on server):"
-    echo "  # View container status"
-    echo "  sudo -u $ANDO_USER DOCKER_HOST=unix:///run/user/\$(id -u $ANDO_USER)/docker.sock docker compose -f $INSTALL_DIR/docker-compose.yml ps"
-    echo ""
-    echo "  # View logs"
-    echo "  sudo -u $ANDO_USER DOCKER_HOST=unix:///run/user/\$(id -u $ANDO_USER)/docker.sock docker compose -f $INSTALL_DIR/docker-compose.yml logs -f"
-    echo ""
-    echo "  # Restart services"
-    echo "  sudo -u $ANDO_USER DOCKER_HOST=unix:///run/user/\$(id -u $ANDO_USER)/docker.sock docker compose -f $INSTALL_DIR/docker-compose.yml restart"
+    if [[ "$USE_EXTERNAL_SQL" != "true" ]]; then
+        echo "Automated Backups:"
+        echo "  Schedule:         Daily at 2 AM"
+        echo "  Location:         $INSTALL_DIR/backups/"
+        echo "  Retention:        7 daily + 12 monthly"
+        echo "  Log:              /var/log/ando-backup.log"
+        echo ""
+    fi
+    echo "Management Scripts (run on server):"
+    echo "  sudo -u $ANDO_USER $INSTALL_DIR/scripts/status.sh   # View container status"
+    echo "  sudo -u $ANDO_USER $INSTALL_DIR/scripts/logs.sh     # View logs (Ctrl+C to exit)"
+    echo "  sudo -u $ANDO_USER $INSTALL_DIR/scripts/restart.sh  # Restart services"
+    echo "  sudo -u $ANDO_USER $INSTALL_DIR/scripts/update.sh   # Pull latest and restart"
+    echo "  sudo -u $ANDO_USER $INSTALL_DIR/scripts/backup.sh   # Run backup now"
     echo ""
     echo "  # Caddy"
     echo "  systemctl status caddy"
@@ -935,18 +1248,30 @@ main() {
     check_remote_connection
     gather_configuration
 
-    build_local_image
+    # Build locally if requested
+    if [[ "$BUILD_LOCAL" == "true" ]]; then
+        build_local_image
+    fi
+
     install_docker_remote
     setup_rootless_docker
     install_caddy_host
     setup_directories_remote
     setup_docker_network_remote
-    transfer_docker_image
+
+    # Transfer local image or pull from ghcr.io
+    if [[ "$BUILD_LOCAL" == "true" ]]; then
+        transfer_docker_image
+    else
+        pull_docker_image_remote
+    fi
+
     transfer_config_files
     generate_env_file
     generate_caddyfile
     generate_compose_file
     start_services
+    setup_automated_backups
     verify_deployment
     print_summary
 }

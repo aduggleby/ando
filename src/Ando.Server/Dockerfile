@@ -9,7 +9,25 @@
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Stage 1: Build
+# Stage 1: Build React Frontend
+# -----------------------------------------------------------------------------
+FROM node:20-alpine AS frontend
+WORKDIR /app
+
+# Copy package files for better layer caching
+COPY src/Ando.Server/ClientApp/package*.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy source code
+COPY src/Ando.Server/ClientApp ./
+
+# Build the React application
+RUN npm run build
+
+# -----------------------------------------------------------------------------
+# Stage 2: Build .NET Backend
 # -----------------------------------------------------------------------------
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
@@ -21,15 +39,18 @@ COPY src/Ando.Server/Ando.Server.csproj src/Ando.Server/
 # Restore dependencies
 RUN dotnet restore src/Ando.Server/Ando.Server.csproj
 
-# Copy all source code
+# Copy all source code (excluding ClientApp node_modules via .dockerignore)
 COPY src/ src/
+
+# Copy built frontend from Stage 1 into wwwroot/app
+COPY --from=frontend /wwwroot/app src/Ando.Server/wwwroot/app
 
 # Build and publish
 WORKDIR /src/src/Ando.Server
 RUN dotnet publish -c Release -o /app
 
 # -----------------------------------------------------------------------------
-# Stage 2: Runtime
+# Stage 3: Runtime
 # -----------------------------------------------------------------------------
 FROM mcr.microsoft.com/dotnet/aspnet:9.0
 
