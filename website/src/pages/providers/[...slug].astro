@@ -1,0 +1,72 @@
+---
+// =============================================================================
+// [...slug].astro
+//
+// Summary: Dynamic route for provider pages using content collections.
+//
+// Handles both HTML routes (/providers/dotnet) and markdown routes
+// (/providers/dotnet.md). The markdown route returns raw markdown suitable
+// for LLM consumption.
+// =============================================================================
+
+import { getCollection } from "astro:content";
+import ProviderLayout from "../../layouts/ProviderLayout.astro";
+import OperationsTable from "../../components/OperationsTable.astro";
+import OperationDetails from "../../components/OperationDetails.astro";
+import { getOperationsForProvider } from "../../data/operations.js";
+import { markdownResponse, operationsToMarkdown } from "../../lib/markdown";
+
+export async function getStaticPaths() {
+  const providers = await getCollection("providers");
+  const paths = [];
+
+  for (const provider of providers) {
+    // HTML route: /providers/dotnet
+    paths.push({
+      params: { slug: provider.slug },
+      props: { provider, format: "html" },
+    });
+    // Markdown route: /providers/dotnet.md
+    paths.push({
+      params: { slug: `${provider.slug}.md` },
+      props: { provider, format: "md" },
+    });
+  }
+  return paths;
+}
+
+const { provider, format } = Astro.props;
+const operations = getOperationsForProvider(provider.data.provider);
+
+if (format === "md") {
+  const md = `# ${provider.data.title} Operations
+
+${provider.data.description}
+
+## Operations
+
+${operationsToMarkdown(operations)}
+
+${provider.body}
+`;
+  return markdownResponse(md);
+}
+
+const { Content } = await provider.render();
+---
+
+<ProviderLayout title={provider.data.title} provider={provider.data.provider} description={provider.data.description}>
+  <section id="operations" class="mb-8">
+    <h2 class="mb-3 text-xl font-bold text-zinc-900 dark:text-white">Operations</h2>
+    <OperationsTable operations={operations} />
+  </section>
+
+  <section id="details" class="mb-8">
+    <h2 class="mb-6 text-xl font-bold text-zinc-900 dark:text-white">Operation Details</h2>
+    <OperationDetails operations={operations} />
+  </section>
+
+  <div class="prose prose-zinc dark:prose-invert max-w-none">
+    <Content />
+  </div>
+</ProviderLayout>

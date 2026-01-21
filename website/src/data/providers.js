@@ -13,6 +13,7 @@ export const providers = [
   { id: "GitHub", href: "/providers/github", label: "GitHub" },
   { id: "Node", href: "/providers/node", label: "Node" },
   { id: "Npm", href: "/providers/npm", label: "Npm" },
+  { id: "Playwright", href: "/providers/playwright", label: "Playwright" },
   { id: "Nuget", href: "/providers/nuget", label: "NuGet" },
 ];
 

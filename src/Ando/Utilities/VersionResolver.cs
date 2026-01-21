@@ -39,7 +39,7 @@ public class VersionResolver
     private string? _npmVersion;
 
     // Fallback versions if API fails.
-    private const string FallbackDotnet = "10.0";
+    private const string FallbackDotnet = "9.0";
     private const string FallbackNode = "22";
     private const string FallbackNpm = "latest";
 

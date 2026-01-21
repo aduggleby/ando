@@ -1,11 +1,11 @@
 // =============================================================================
 // markdown.ts
 //
-// Summary: Utility functions for generating markdown versions of pages.
+// Summary: Utility functions for markdown processing.
 //
 // This module provides helpers for:
 // - Reading and stripping frontmatter from markdown files
-// - Converting page content to plain markdown for LLM consumption
+// - Converting between HTML and markdown formats
 // - Generating consistent markdown responses for static endpoints
 // =============================================================================
 
@@ -78,7 +78,32 @@ export function htmlToMarkdown(html: string): string {
 }
 
 /**
+ * Converts simple markdown to HTML.
+ * Handles inline markdown patterns used in operation descriptions.
+ */
+export function markdownToHtml(md: string): string {
+  return (
+    md
+      // Convert **bold** to <strong>
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      // Convert *italic* to <em> (but not inside code or links)
+      .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "<em>$1</em>")
+      // Convert `code` to <code>
+      .replace(
+        /`([^`]+)`/g,
+        '<code class="rounded border border-zinc-200 bg-zinc-100 px-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800">$1</code>'
+      )
+      // Convert [text](url) to <a>
+      .replace(
+        /\[([^\]]+)\]\(([^)]+)\)/g,
+        '<a href="$2" class="text-cyan-600 hover:underline dark:text-cyan-400">$1</a>'
+      )
+  );
+}
+
+/**
  * Formats operations data as markdown.
+ * Descriptions are already in markdown format.
  */
 export function operationsToMarkdown(
   operations: Array<{
@@ -89,7 +114,7 @@ export function operationsToMarkdown(
 ): string {
   return operations
     .map((op) => {
-      let md = `### ${op.name}\n\n${htmlToMarkdown(op.desc)}`;
+      let md = `### ${op.name}\n\n${op.desc}`;
       if (op.examples && op.examples.length > 0) {
         md += "\n\n```csharp\n" + op.examples.join("\n") + "\n```";
       }

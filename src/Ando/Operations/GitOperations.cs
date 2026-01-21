@@ -10,20 +10,18 @@
 // Example usage in build.csando:
 //   var release = DefineProfile("release");
 //   if (release) {
-//       Git.Tag(version);
+//       Git.Tag("v1.0.0");
 //       Git.Push();
 //       Git.PushTags();
 //   }
 //
 // Design Decisions:
 // - Operations are separate (Tag, Push, PushTags) for maximum flexibility
-// - VersionRef support allows using dynamically bumped versions
 // - Runs on host (not container) since git credentials are on host
 // =============================================================================
 
 using Ando.Execution;
 using Ando.Logging;
-using Ando.References;
 using Ando.Steps;
 
 namespace Ando.Operations;
@@ -41,7 +39,7 @@ public class GitOperations(
     /// <summary>
     /// Creates a git tag with the specified name.
     /// </summary>
-    /// <param name="tagName">The tag name (e.g., "v1.0.0" or a VersionRef).</param>
+    /// <param name="tagName">The tag name (e.g., "v1.0.0").</param>
     /// <param name="configure">Optional configuration for the tag.</param>
     public void Tag(string tagName, Action<GitTagOptions>? configure = null)
     {
@@ -55,42 +53,6 @@ public class GitOperations(
                 .Add(tagName)
                 .AddIf(options.Annotated, "-m", options.Message ?? tagName),
             tagName);
-    }
-
-    /// <summary>
-    /// Creates a git tag using a VersionRef (from BumpVersion).
-    /// The tag name will be prefixed with 'v' (e.g., "v1.0.0").
-    /// </summary>
-    /// <param name="version">The version reference from BumpVersion.</param>
-    /// <param name="configure">Optional configuration for the tag.</param>
-    public void Tag(VersionRef version, Action<GitTagOptions>? configure = null)
-    {
-        var options = new GitTagOptions();
-        configure?.Invoke(options);
-
-        // Register step that uses version.Value at execution time.
-        Registry.Register("Git.Tag", async () =>
-        {
-            var tagName = options.NoPrefix ? version.Value : $"v{version.Value}";
-
-            var args = new ArgumentBuilder()
-                .Add("tag")
-                .AddFlag(options.Annotated, "-a")
-                .Add(tagName)
-                .AddIf(options.Annotated, "-m", options.Message ?? tagName)
-                .Build();
-
-            var result = await ExecutorFactory().ExecuteAsync("git", args);
-
-            if (!result.Success)
-            {
-                Logger.Error($"git tag failed: {result.Error}");
-                return false;
-            }
-
-            Logger.Info($"Created tag: {tagName}");
-            return true;
-        }, $"v{version}");
     }
 
     /// <summary>
@@ -164,9 +126,6 @@ public class GitTagOptions
     /// <summary>Message for annotated tag. Defaults to tag name if not set.</summary>
     public string? Message { get; set; }
 
-    /// <summary>Don't prefix the version with 'v' (default: false, adds 'v' prefix).</summary>
-    public bool NoPrefix { get; set; }
-
     /// <summary>Sets the tag message.</summary>
     public GitTagOptions WithMessage(string message)
     {
@@ -178,13 +137,6 @@ public class GitTagOptions
     public GitTagOptions AsLightweight()
     {
         Annotated = false;
-        return this;
-    }
-
-    /// <summary>Don't add 'v' prefix to version numbers.</summary>
-    public GitTagOptions WithoutPrefix()
-    {
-        NoPrefix = true;
         return this;
     }
 }

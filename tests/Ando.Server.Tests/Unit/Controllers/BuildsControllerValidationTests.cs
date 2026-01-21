@@ -261,7 +261,7 @@ public class BuildsControllerValidationTests : IDisposable
         var result = await _controller.Details(99999);
 
         // Assert
-        result.ShouldBeOfType<NotFoundResult>();
+        AssertNotFoundView(result);
     }
 
     [Fact]
@@ -274,7 +274,7 @@ public class BuildsControllerValidationTests : IDisposable
         var result = await _controller.Details(otherBuild.Id);
 
         // Assert
-        result.ShouldBeOfType<NotFoundResult>();
+        AssertNotFoundView(result);
     }
 
     [Fact]
@@ -284,7 +284,7 @@ public class BuildsControllerValidationTests : IDisposable
         var result = await _controller.Cancel(99999);
 
         // Assert
-        result.ShouldBeOfType<NotFoundResult>();
+        AssertNotFoundView(result);
     }
 
     [Fact]
@@ -297,7 +297,7 @@ public class BuildsControllerValidationTests : IDisposable
         var result = await _controller.Cancel(otherBuild.Id);
 
         // Assert
-        result.ShouldBeOfType<NotFoundResult>();
+        AssertNotFoundView(result);
         _buildService.Verify(s => s.CancelBuildAsync(It.IsAny<int>()), Times.Never);
     }
 
@@ -308,7 +308,7 @@ public class BuildsControllerValidationTests : IDisposable
         var result = await _controller.Retry(99999);
 
         // Assert
-        result.ShouldBeOfType<NotFoundResult>();
+        AssertNotFoundView(result);
     }
 
     [Fact]
@@ -321,7 +321,7 @@ public class BuildsControllerValidationTests : IDisposable
         var result = await _controller.Retry(otherBuild.Id);
 
         // Assert
-        result.ShouldBeOfType<NotFoundResult>();
+        AssertNotFoundView(result);
         _buildService.Verify(s => s.QueueBuildAsync(
             It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(),
             It.IsAny<BuildTrigger>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int?>()),
@@ -335,7 +335,7 @@ public class BuildsControllerValidationTests : IDisposable
         var result = await _controller.GetLogs(99999);
 
         // Assert
-        result.ShouldBeOfType<NotFoundResult>();
+        AssertNotFoundView(result);
     }
 
     [Fact]
@@ -348,7 +348,7 @@ public class BuildsControllerValidationTests : IDisposable
         var result = await _controller.GetLogs(otherBuild.Id);
 
         // Assert
-        result.ShouldBeOfType<NotFoundResult>();
+        AssertNotFoundView(result);
     }
 
     // -------------------------------------------------------------------------
@@ -365,7 +365,7 @@ public class BuildsControllerValidationTests : IDisposable
         var result = await _controller.DownloadArtifact(build.Id, 99999);
 
         // Assert
-        result.ShouldBeOfType<NotFoundResult>();
+        AssertNotFoundView(result);
     }
 
     [Fact]
@@ -392,7 +392,7 @@ public class BuildsControllerValidationTests : IDisposable
         var result = await _controller.DownloadArtifact(build2.Id, artifact.Id);
 
         // Assert
-        result.ShouldBeOfType<NotFoundResult>();
+        AssertNotFoundView(result);
     }
 
     [Fact]
@@ -418,7 +418,7 @@ public class BuildsControllerValidationTests : IDisposable
         var result = await _controller.DownloadArtifact(otherBuild.Id, artifact.Id);
 
         // Assert
-        result.ShouldBeOfType<NotFoundResult>();
+        AssertNotFoundView(result);
     }
 
     // -------------------------------------------------------------------------
@@ -509,5 +509,11 @@ public class BuildsControllerValidationTests : IDisposable
     private string? GetTempData(string key)
     {
         return _controller.TempData[key]?.ToString();
+    }
+
+    private static void AssertNotFoundView(IActionResult result)
+    {
+        var viewResult = result.ShouldBeOfType<ViewResult>();
+        viewResult.ViewName.ShouldBe("NotFound");
     }
 }

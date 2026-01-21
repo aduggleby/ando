@@ -81,7 +81,7 @@
             <div class="form-group">
                 <label for="dockerImage">Docker Image (optional)</label>
                 <input type="text" id="dockerImage" name="dockerImage" value="@Model.DockerImage"
-                       placeholder="mcr.microsoft.com/dotnet/sdk:10.0-alpine" />
+                       placeholder="mcr.microsoft.com/dotnet/sdk:9.0-alpine" />
                 <span class="form-hint">Custom Docker image for builds. Leave empty to use the default.</span>
             </div>
 
@@ -168,7 +168,7 @@
 
         @if (Model.SecretNames.Count > 0)
         {
-            <div class="mt-4 space-y-2">
+            <div class="mt-4 space-y-2 secrets-list">
                 @foreach (var name in Model.SecretNames)
                 {
                     <div class="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
@@ -198,7 +198,7 @@
         }
 
         <h3>Add Secret</h3>
-        <form method="post" action="/projects/@Model.Id/secrets">
+        <form method="post" action="/projects/@Model.Id/secrets" class="add-secret-form">
             @Html.AntiForgeryToken()
 
             <div class="mt-4 flex flex-col sm:flex-row sm:items-end gap-4">

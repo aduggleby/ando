@@ -233,7 +233,7 @@ export class ProjectSettingsPage {
     this.saveSettingsButton = page.locator('button').filter({ hasText: /save settings/i });
 
     // Secrets
-    this.secretsTable = page.locator('.secrets-table');
+    this.secretsTable = page.locator('.secrets-list');
     this.secretNameInput = page.locator('#secretName');
     this.secretValueInput = page.locator('#secretValue');
     this.addSecretButton = page.locator('.add-secret-form button').filter({ hasText: /add/i });
@@ -296,18 +296,22 @@ export class ProjectSettingsPage {
   }
 
   async deleteSecret(name: string) {
-    const row = this.secretsTable.locator('tr').filter({ hasText: name });
+    // Find the div containing this secret (has a code element with the name)
+    const secretDiv = this.secretsTable.locator('> div').filter({ hasText: name });
     // Handle confirmation dialog
     this.page.once('dialog', dialog => dialog.accept());
-    await row.locator('button').filter({ hasText: /delete/i }).click();
+    // Click the delete button (form submit button with trash icon)
+    await secretDiv.locator('form button[type="submit"]').click();
   }
 
   async getSecretNames(): Promise<string[]> {
-    const rows = this.secretsTable.locator('tbody tr');
-    const count = await rows.count();
+    // Secrets are displayed in divs with code elements containing the name
+    const codes = this.secretsTable.locator('> div code').first();
+    const items = this.secretsTable.locator('> div');
+    const count = await items.count();
     const names: string[] = [];
     for (let i = 0; i < count; i++) {
-      const text = await rows.nth(i).locator('code').textContent();
+      const text = await items.nth(i).locator('code').first().textContent();
       if (text) names.push(text);
     }
     return names;

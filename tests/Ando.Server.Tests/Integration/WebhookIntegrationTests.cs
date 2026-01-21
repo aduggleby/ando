@@ -467,7 +467,7 @@ public class WebhookIntegrationTests : IAsyncLifetime, IDisposable
     // -------------------------------------------------------------------------
 
     [Fact]
-    public async Task PushWebhook_ReturnsJsonWithBuildId()
+    public async Task PushWebhook_ReturnsJsonWithBuildIds()
     {
         // Arrange
         var project = await CreateTestProjectAsync();
@@ -480,8 +480,9 @@ public class WebhookIntegrationTests : IAsyncLifetime, IDisposable
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var json = JsonDocument.Parse(content);
-        json.RootElement.TryGetProperty("buildId", out var buildIdElement).ShouldBeTrue();
-        buildIdElement.GetInt32().ShouldBeGreaterThan(0);
+        json.RootElement.TryGetProperty("buildIds", out var buildIdsElement).ShouldBeTrue();
+        buildIdsElement.GetArrayLength().ShouldBeGreaterThan(0);
+        buildIdsElement[0].GetInt32().ShouldBeGreaterThan(0);
     }
 
     [Fact]

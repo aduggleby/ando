@@ -16,104 +16,97 @@ export const operations = [
   {
     group: "Ando",
     name: "Root",
-    desc: "The root path of the project (where build.csando is located). Supports path combining with the <code>/</code> operator.",
+    desc: "The root path of the project (where build.csando is located). Supports path combining with the `/` operator.",
     examples: ['var output = Root / "dist";', "Dotnet.Publish(app, o => o.Output(output));"],
   },
   {
     group: "Ando",
     name: "Temp",
-    desc: "Temporary files directory (root/.ando/tmp). Supports path combining with the <code>/</code> operator. Use for caches, intermediate files, etc.",
+    desc: "Temporary files directory (root/.ando/tmp). Supports path combining with the `/` operator. Use for caches, intermediate files, etc.",
     examples: ['var cache = Temp / "cache";', 'var intermediate = Temp / "build-output";'],
   },
   {
     group: "Ando",
     name: "Env",
-    desc: "Gets an environment variable. By default throws if not set. Pass <code>required: false</code> to return null instead.",
+    desc: "Gets an environment variable. By default throws if not set. Pass `required: false` to return null instead.",
     examples: ['var apiKey = Env("API_KEY");', 'var optional = Env("OPTIONAL_VAR", required: false);'],
   },
   {
     group: "Ando",
     name: "Directory",
-    desc: "Creates a reference to a directory. Used with Npm and Cloudflare operations. Supports path combining with the <code>/</code> operator.",
+    desc: "Creates a reference to a directory. Used with Npm and Cloudflare operations. Supports path combining with the `/` operator.",
     examples: [
       'var frontend = Directory("./frontend");',
       "Npm.Ci(frontend);",
       'Cloudflare.PagesDeploy(frontend / "dist", "my-site");',
     ],
   },
-  // Ando.* operations
+  // DefineProfile (before Ando.* operations)
   {
     group: "Ando",
-    name: "Ando.UseImage",
+    name: "DefineProfile",
+    desc: "Defines a build profile that can be activated via CLI. Returns a `Profile` object that evaluates to `true` when active. Use `-p` or `--profile` CLI flag to activate.",
+    examples: [
+      'var release = DefineProfile("release");\nvar push = DefineProfile("push");\n\nDotnet.Build(app);\n\nif (release) {\n  Git.Tag("v1.0.0");\n  GitHub.CreateRelease(o => o.WithTag("v1.0.0"));\n}',
+      "// CLI usage:\n// ando -p release\n// ando -p push,release",
+    ],
+  },
+  // Build configuration operations (top-level)
+  {
+    group: "Ando",
+    name: "UseImage",
     desc: "Set the Docker image for the current build container. Must be called before build steps execute.",
-    examples: [
-      'Ando.UseImage("ubuntu:24.04");',
-      'Ando.UseImage("mcr.microsoft.com/dotnet/sdk:9.0");',
-      'Ando.UseImage("node:22");',
-    ],
+    examples: ['UseImage("ubuntu:24.04");', 'UseImage("mcr.microsoft.com/dotnet/sdk:9.0");', 'UseImage("node:22");'],
   },
   {
     group: "Ando",
-    name: "Ando.CopyArtifactsToHost",
+    name: "CopyArtifactsToHost",
     desc: "Register files to copy from the container to the host after the build completes. The first parameter is the path inside the container (relative to /workspace or absolute), and the second is the destination on the host (relative to project root or absolute).",
-    examples: ['Ando.CopyArtifactsToHost("dist", "./dist");', 'Ando.CopyArtifactsToHost("bin/Release", "./output");'],
+    examples: ['CopyArtifactsToHost("dist", "./dist");', 'CopyArtifactsToHost("bin/Release", "./output");'],
   },
   {
     group: "Ando",
-    name: "Ando.CopyZippedArtifactsToHost",
-    desc: "Register files to be archived and copied from the container to the host after the build completes. Creates a single archive file for faster transfer of many small files. Supports <code>.tar.gz</code> (default) and <code>.zip</code> formats. If the destination is a directory, creates <code>artifacts.tar.gz</code> in that directory.",
+    name: "CopyZippedArtifactsToHost",
+    desc: "Register files to be archived and copied from the container to the host after the build completes. Creates a single archive file for faster transfer of many small files. Supports `.tar.gz` (default) and `.zip` formats. If the destination is a directory, creates `artifacts.tar.gz` in that directory.",
     examples: [
-      'Ando.CopyZippedArtifactsToHost("dist", "./output");',
-      'Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.tar.gz");',
-      'Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");',
+      'CopyZippedArtifactsToHost("dist", "./output");',
+      'CopyZippedArtifactsToHost("dist", "./dist/binaries.tar.gz");',
+      'CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");',
     ],
   },
   {
     group: "Ando",
-    name: "Ando.Build",
-    desc: "Run a nested build script. Accepts a directory (runs build.csando in that directory) or a specific .csando file path. The child build runs in its own isolated container with its own <code>.env</code> file and context.",
+    name: "Build",
+    desc: "Run a nested build script. Accepts a directory (runs build.csando in that directory) or a specific .csando file path. The child build runs in its own isolated container with its own environment file (`.env.ando` or `.env`) and context.",
     examples: [
-      'Ando.Build(Directory("./website"));',
-      'Ando.Build(Directory("./website") / "deploy.csando");',
-      'Ando.Build(Directory("./api"), o => o.WithDind());',
+      'Build(Directory("./website"));',
+      'Build(Directory("./website") / "deploy.csando");',
+      'Build(Directory("./api"), o => o.WithDind());',
     ],
   },
-  // Log.* operations
+  // Log operation (top-level with methods)
   {
     group: "Ando",
-    name: "Log.Info",
-    desc: "Logs an informational message. Visible at Normal and Detailed verbosity levels.",
-    examples: ['Log.Info("Starting deployment...");', 'Log.Info("Build completed successfully");'],
-  },
-  {
-    group: "Ando",
-    name: "Log.Warning",
-    desc: "Logs a warning message. Visible at Minimal, Normal, and Detailed verbosity levels.",
-    examples: ['Log.Warning("Cache is stale, rebuilding");', 'Log.Warning("Deprecated API usage detected");'],
-  },
-  {
-    group: "Ando",
-    name: "Log.Error",
-    desc: "Logs an error message. Always visible regardless of verbosity level.",
-    examples: ['Log.Error("Failed to connect to server");', 'Log.Error("Missing required configuration");'],
-  },
-  {
-    group: "Ando",
-    name: "Log.Debug",
-    desc: "Logs a debug message. Only visible at Detailed verbosity level.",
-    examples: ['Log.Debug("Connection string: ...");', 'Log.Debug("Processing item 5 of 10");'],
+    name: "Log",
+    desc: "Logging operations for outputting messages during the build. Has four methods: `Log.Info()` (visible at Normal verbosity), `Log.Warning()` (visible at Minimal+), `Log.Error()` (always visible), and `Log.Debug()` (only at Detailed verbosity).",
+    examples: [
+      'Log.Info("Starting deployment...");',
+      'Log.Warning("Cache is stale, rebuilding");',
+      'Log.Error("Failed to connect to server");',
+      'Log.Debug("Processing item 5 of 10");',
+    ],
   },
   {
     group: "Node",
     name: "Node.Install",
-    desc: "Install Node.js globally in the container. Skips installation if already present (for warm containers). Calling this method disables automatic Node.js installation for subsequent npm operations. <em>Note: Npm operations (Ci, Install, Run, Test, Build) automatically install Node.js if not present.</em>",
+    desc: "Install Node.js globally in the container. Skips installation if already present (for warm containers). Calling this method disables automatic Node.js installation for subsequent npm operations. *Note: Npm operations (Ci, Install, Run, Test, Build) automatically install Node.js if not present.*",
     examples: ["Node.Install(); // Installs Node.js v22 (current LTS)", 'Node.Install("20"); // Installs Node.js v20'],
   },
   {
     group: "Dotnet",
     name: "Dotnet.SdkInstall",
-    desc: "Install .NET SDK globally in the container. Skips installation if already present (for warm containers). Calling this method disables automatic SDK installation for subsequent operations. <em>Note: Dotnet operations (Build, Test, Restore, Publish) automatically install the SDK if not present.</em>",
-    examples: ["Dotnet.SdkInstall(); // Installs .NET SDK 10.0", 'Dotnet.SdkInstall("9.0"); // Installs .NET SDK 9.0'],
+    desc: "Install .NET SDK globally in the container. Skips installation if already present (for warm containers). Calling this method disables automatic SDK installation for subsequent operations. *Note: Dotnet operations (Build, Test, Restore, Publish) automatically install the SDK if not present.*",
+    examples: ["Dotnet.SdkInstall(); // Installs .NET SDK 9.0", 'Dotnet.SdkInstall("8.0"); // Installs .NET SDK 8.0'],
   },
   {
     group: "Dotnet",
@@ -163,7 +156,7 @@ export const operations = [
   {
     group: "Ef",
     name: "Ef.DatabaseUpdate",
-    desc: "Apply pending EF Core migrations to the database. Can accept a connection string or an <code>OutputRef</code> from a Bicep deployment.",
+    desc: "Apply pending EF Core migrations to the database. Can accept a connection string or an `OutputRef` from a Bicep deployment.",
     examples: [
       "Ef.DatabaseUpdate(db);",
       'Ef.DatabaseUpdate(db, connectionString: "Server=...");',
@@ -220,6 +213,23 @@ export const operations = [
     name: "Npm.Build",
     desc: "Run 'npm run build'. Automatically installs Node.js if not present.",
     examples: ['var frontend = Directory("./frontend");', "Npm.Build(frontend);"],
+  },
+  {
+    group: "Playwright",
+    name: "Playwright.Test",
+    desc: "Run Playwright E2E tests. By default uses `npx playwright test`. Set `UseNpmScript` to use `npm run test` instead. Automatically installs Node.js if not present.",
+    examples: [
+      'var e2e = Directory("./tests/E2E");\nPlaywright.Test(e2e);',
+      'Playwright.Test(e2e, o => {\n  o.Project = "chromium";\n  o.Headed = true;\n});',
+      'Playwright.Test(e2e, o => {\n  o.Workers = 4;\n  o.Reporter = "html";\n});',
+      "// Use npm script instead of npx\nPlaywright.Test(e2e, o => o.UseNpmScript = true);",
+    ],
+  },
+  {
+    group: "Playwright",
+    name: "Playwright.Install",
+    desc: "Install Playwright browsers via `npx playwright install`. Call this after npm install and before running tests. Automatically installs Node.js if not present.",
+    examples: ['var e2e = Directory("./tests/E2E");\nNpm.Ci(e2e);\nPlaywright.Install(e2e);\nPlaywright.Test(e2e);'],
   },
   {
     group: "Azure",
@@ -285,7 +295,7 @@ export const operations = [
   {
     group: "Bicep",
     name: "Bicep.DeployToResourceGroup",
-    desc: 'Deploy a Bicep template to a resource group. Returns a <code>BicepDeployment</code> with typed access to outputs via <code>deployment.Output("name")</code>.',
+    desc: 'Deploy a Bicep template to a resource group. Returns a `BicepDeployment` with typed access to outputs via `deployment.Output("name")`.',
     examples: [
       'var deployment = Bicep.DeployToResourceGroup("my-rg", "./infra/main.bicep");',
       'var deployment = Bicep.DeployToResourceGroup("my-rg", "./main.bicep", o => o\n  .WithParameterFile("./params.json")\n  .WithDeploymentSlot("staging"));\nEf.DatabaseUpdate(db, deployment.Output("sqlConnectionString"));',
@@ -294,7 +304,7 @@ export const operations = [
   {
     group: "Bicep",
     name: "Bicep.DeployToSubscription",
-    desc: 'Deploy a Bicep template at subscription scope. Returns a <code>BicepDeployment</code> with typed access to outputs via <code>deployment.Output("name")</code>.',
+    desc: 'Deploy a Bicep template at subscription scope. Returns a `BicepDeployment` with typed access to outputs via `deployment.Output("name")`.',
     examples: [
       'var deployment = Bicep.DeployToSubscription("eastus", "./infra/sub.bicep");',
       'var deployment = Bicep.DeployToSubscription("eastus", "./sub.bicep", o => o\n  .WithParameter("environment", "prod"));\nvar resourceGroup = deployment.Output("resourceGroupName");',
@@ -318,7 +328,7 @@ export const operations = [
   {
     group: "Cloudflare",
     name: "Cloudflare.EnsureAuthenticated",
-    desc: 'Verify Cloudflare credentials. Prompts interactively if environment variables are not set. See <a href="/cloudflare#authentication">authentication</a> for setup.',
+    desc: "Verify Cloudflare credentials. Prompts interactively if environment variables are not set. See [authentication](/providers/cloudflare#authentication) for setup.",
     examples: ["Cloudflare.EnsureAuthenticated();"],
   },
   {
@@ -485,13 +495,13 @@ export const operations = [
   {
     group: "Nuget",
     name: "Nuget.EnsureAuthenticated",
-    desc: "Ensures NuGet API key is available for publishing. Prompts interactively if <code>NUGET_API_KEY</code> environment variable is not set. Call before Push.",
+    desc: "Ensures NuGet API key is available for publishing. Prompts interactively if `NUGET_API_KEY` environment variable is not set. Call before Push.",
     examples: ['var app = Dotnet.Project("./src/MyLib/MyLib.csproj");\nNuget.EnsureAuthenticated();\nNuget.Push(app);'],
   },
   {
     group: "Nuget",
     name: "Nuget.Pack",
-    desc: "Create a NuGet package from a project. <b>Defaults:</b> Release config, output to <code>bin/Release</code>.",
+    desc: "Create a NuGet package from a project. **Defaults:** Release config, output to `bin/Release`.",
     examples: [
       'var app = Dotnet.Project("./src/MyLib/MyLib.csproj");\nNuget.Pack(app);',
       'Nuget.Pack(app, o => o.WithVersion("1.0.0"));',
@@ -500,64 +510,21 @@ export const operations = [
   {
     group: "Nuget",
     name: "Nuget.Push",
-    desc: "Push packages to a feed. Pass a ProjectRef to push from <code>bin/Release/*.nupkg</code>, or a path/glob. <b>Defaults:</b> NuGet.org, skip duplicates (won't fail if version already exists).",
+    desc: "Push packages to a feed. Pass a ProjectRef to push from `bin/Release/*.nupkg`, or a path/glob. **Defaults:** NuGet.org, skip duplicates (won't fail if version already exists).",
     examples: [
       'var app = Dotnet.Project("./src/MyLib/MyLib.csproj");\nNuget.Pack(app);\nNuget.EnsureAuthenticated();\nNuget.Push(app);',
       'Nuget.Push("./packages/MyLib.1.0.0.nupkg");',
     ],
   },
-  // Profile operations
-  {
-    group: "Ando",
-    name: "DefineProfile",
-    desc: "Defines a build profile that can be activated via CLI. Returns a <code>Profile</code> object that evaluates to <code>true</code> when active. Use <code>-p</code> or <code>--profile</code> CLI flag to activate.",
-    examples: [
-      'var release = DefineProfile("release");\nvar push = DefineProfile("push");\n\nDotnet.Build(app);\n\nif (release) {\n  Git.Tag(version);\n  GitHub.CreateRelease(o => o.WithTag(version));\n}',
-      "// CLI usage:\n// ando -p release\n// ando -p push,release",
-    ],
-  },
-  // Version operations
-  {
-    group: "Dotnet",
-    name: "Dotnet.BumpVersion",
-    desc: "Bumps the version in a .csproj file. Returns a <code>VersionRef</code> that resolves to the new version at execution time. Default bump is patch (1.0.0 → 1.0.1).",
-    examples: [
-      "var version = Dotnet.BumpVersion(app); // patch bump",
-      "var version = Dotnet.BumpVersion(app, VersionBump.Minor); // 1.0.0 → 1.1.0",
-      "var version = Dotnet.BumpVersion(app, VersionBump.Major); // 1.0.0 → 2.0.0",
-    ],
-  },
-  {
-    group: "Dotnet",
-    name: "Dotnet.ReadVersion",
-    desc: "Reads the current version from a .csproj file. Returns a <code>VersionRef</code> that resolves at execution time.",
-    examples: ["var version = Dotnet.ReadVersion(app);"],
-  },
-  {
-    group: "Npm",
-    name: "Npm.BumpVersion",
-    desc: "Bumps the version in package.json using <code>npm version</code>. Returns a <code>VersionRef</code> that resolves to the new version at execution time.",
-    examples: [
-      'var frontend = Directory("./frontend");\nvar version = Npm.BumpVersion(frontend); // patch bump',
-      "var version = Npm.BumpVersion(frontend, VersionBump.Minor);",
-    ],
-  },
-  {
-    group: "Npm",
-    name: "Npm.ReadVersion",
-    desc: "Reads the current version from package.json. Returns a <code>VersionRef</code> that resolves at execution time.",
-    examples: ['var frontend = Directory("./frontend");\nvar version = Npm.ReadVersion(frontend);'],
-  },
   // Git operations
   {
     group: "Git",
     name: "Git.Tag",
-    desc: "Creates a git tag. Supports string tags or <code>VersionRef</code> (automatically prefixed with 'v'). By default creates annotated tags.",
+    desc: "Creates a git tag. By default creates annotated tags.",
     examples: [
       'Git.Tag("v1.0.0");',
-      "var version = Dotnet.BumpVersion(app);\nGit.Tag(version); // Creates tag like v1.0.0",
-      'Git.Tag(version, o => o.WithMessage("Release notes here"));',
-      "Git.Tag(version, o => o.AsLightweight()); // Lightweight tag",
+      'Git.Tag("v1.0.0", o => o.WithMessage("Release notes here"));',
+      'Git.Tag("v1.0.0", o => o.AsLightweight()); // Lightweight tag',
     ],
   },
   {
@@ -588,7 +555,7 @@ export const operations = [
   {
     group: "GitHub",
     name: "GitHub.CreatePr",
-    desc: "Creates a GitHub pull request using the gh CLI. Requires GitHub authentication via <code>GITHUB_TOKEN</code> env var or <code>gh auth login</code>.",
+    desc: "Creates a GitHub pull request using the gh CLI. Requires GitHub authentication via `GITHUB_TOKEN` env var or `gh auth login`.",
     examples: [
       'GitHub.CreatePr(o => o\n  .WithTitle("Add new feature")\n  .WithBody("Description here")\n  .WithBase("main"));',
       'GitHub.CreatePr(o => o.WithTitle("Fix bug").AsDraft());',
@@ -597,30 +564,29 @@ export const operations = [
   {
     group: "GitHub",
     name: "GitHub.CreateRelease",
-    desc: "Creates a GitHub release. Supports <code>VersionRef</code> for dynamic versioning. Automatically prefixes version with 'v'.",
+    desc: "Creates a GitHub release. Automatically prefixes version with 'v' if not present.",
     examples: [
       'GitHub.CreateRelease(o => o.WithTag("v1.0.0"));',
-      "var version = Dotnet.BumpVersion(app);\nGitHub.CreateRelease(o => o\n  .WithTag(version)\n  .WithGeneratedNotes());",
-      'GitHub.CreateRelease(o => o\n  .WithTag(version)\n  .WithNotes("## Changes\\n- Fixed bug")\n  .AsPrerelease());',
+      'GitHub.CreateRelease(o => o\n  .WithTag("1.0.0")\n  .WithGeneratedNotes());',
+      'GitHub.CreateRelease(o => o\n  .WithTag("v1.0.0")\n  .WithNotes("## Changes\\n- Fixed bug")\n  .AsPrerelease());',
     ],
   },
   {
     group: "GitHub",
     name: "GitHub.PushImage",
-    desc: "Pushes a Docker image to GitHub Container Registry (ghcr.io). The image must already be built locally. Automatically handles authentication using <code>GITHUB_TOKEN</code> or gh CLI config.",
+    desc: "Pushes a Docker image to GitHub Container Registry (ghcr.io). The image must already be built locally. Automatically handles authentication using `GITHUB_TOKEN` or gh CLI config.",
     examples: [
       'GitHub.PushImage("myapp", o => o.WithTag("latest"));',
-      'var version = Dotnet.BumpVersion(app);\nDocker.Build("Dockerfile", "myapp", version);\nGitHub.PushImage("myapp", o => o\n  .WithTag(version)\n  .WithOwner("my-org"));',
+      'GitHub.PushImage("myapp", o => o\n  .WithTag("v1.0.0")\n  .WithOwner("my-org"));',
     ],
   },
   // Docker operations
   {
     group: "Docker",
     name: "Docker.Build",
-    desc: "Builds a Docker image from a Dockerfile. Supports <code>VersionRef</code> for dynamic tagging.",
+    desc: "Builds a Docker image from a Dockerfile.",
     examples: [
       'Docker.Build("Dockerfile", o => o.WithTag("myapp:latest"));',
-      'var version = Dotnet.BumpVersion(app);\nDocker.Build("Dockerfile", "myapp", version);',
       'Docker.Build("./src/MyApp/Dockerfile", o => o\n  .WithTag("myapp:v1.0.0")\n  .WithBuildArg("VERSION", "1.0.0")\n  .WithPlatform("linux/amd64"));',
     ],
   },

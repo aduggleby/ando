@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-# Run the local development build of ando
-dotnet run --project "$(dirname "$0")/src/Ando/Ando.csproj" -- "$@"

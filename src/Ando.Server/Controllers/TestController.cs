@@ -65,11 +65,11 @@ public class TestController : ControllerBase
         _hubContext = hubContext;
         _testApiKey = testSettings.Value.ApiKey;
 
-        // Safety check - this controller should NEVER be available outside Testing
-        if (!_env.IsEnvironment("Testing"))
+        // Safety check - this controller should NEVER be available outside Testing/E2E
+        if (!_env.IsEnvironment("Testing") && !_env.IsEnvironment("E2E"))
         {
             throw new InvalidOperationException(
-                "TestController is only available in the Testing environment");
+                "TestController is only available in the Testing or E2E environment");
         }
 
         // Verify API key is configured

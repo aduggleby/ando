@@ -1,20 +1,16 @@
 ---
+import { getCollection } from "astro:content";
 import BaseLayout from "../../layouts/BaseLayout.astro";
 
-const examples = [
-  {
-    title: "Astro + Cloudflare Pages",
-    href: "/examples/astro",
-    description: "Build an Astro site and deploy to Cloudflare Pages with cache purging.",
-    tags: ["Node.js", "Cloudflare"],
-  },
-  {
-    title: ".NET CLI Tool + NuGet",
-    href: "/examples/dotnet-tool",
-    description: "Build a .NET CLI tool for multiple platforms, create a NuGet package, and publish with profiles.",
-    tags: [".NET", "NuGet", "Profiles"],
-  },
-];
+const examplesCollection = await getCollection("examples");
+
+// Map to the expected format
+const examples = examplesCollection.map((example) => ({
+  title: example.data.title,
+  href: `/examples/${example.slug}`,
+  description: example.data.description,
+  tags: example.data.tags || [],
+}));
 ---
 
 <BaseLayout

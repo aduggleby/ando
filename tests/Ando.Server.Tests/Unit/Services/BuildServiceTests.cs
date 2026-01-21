@@ -216,9 +216,9 @@ public class BuildServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task CancelBuildAsync_WithQueuedBuildNoJobId_ReturnsFalse()
+    public async Task CancelBuildAsync_WithQueuedBuildNoJobId_StillCancels()
     {
-        // Arrange - queued build without HangfireJobId (edge case)
+        // Arrange - queued build without HangfireJobId (orphaned state)
         var project = await CreateTestProjectAsync();
         var build = await CreateTestBuildAsync(project, BuildStatus.Queued);
         // HangfireJobId is null
@@ -226,16 +226,17 @@ public class BuildServiceTests : IDisposable
         // Act
         var result = await _service.CancelBuildAsync(build.Id);
 
-        // Assert - cannot cancel without job ID
-        result.ShouldBeFalse();
+        // Assert - still cancels orphaned builds for better UX
+        result.ShouldBeTrue();
         var updatedBuild = await _db.Builds.FindAsync(build.Id);
-        updatedBuild!.Status.ShouldBe(BuildStatus.Queued);
+        updatedBuild!.Status.ShouldBe(BuildStatus.Cancelled);
+        updatedBuild.FinishedAt.ShouldNotBeNull();
     }
 
     [Fact]
-    public async Task CancelBuildAsync_WithUnregisteredRunningBuild_ReturnsFalse()
+    public async Task CancelBuildAsync_WithUnregisteredRunningBuild_StillCancels()
     {
-        // Arrange - running build that isn't registered in cancellation registry
+        // Arrange - running build that isn't registered in cancellation registry (orphaned)
         var project = await CreateTestProjectAsync();
         var build = await CreateTestBuildAsync(project, BuildStatus.Running);
         // Intentionally not registering in _cancellationRegistry
@@ -243,8 +244,11 @@ public class BuildServiceTests : IDisposable
         // Act
         var result = await _service.CancelBuildAsync(build.Id);
 
-        // Assert - cannot cancel because not in registry
-        result.ShouldBeFalse();
+        // Assert - still cancels orphaned builds for better UX
+        result.ShouldBeTrue();
+        var updatedBuild = await _db.Builds.FindAsync(build.Id);
+        updatedBuild!.Status.ShouldBe(BuildStatus.Cancelled);
+        updatedBuild.FinishedAt.ShouldNotBeNull();
     }
 
     [Fact]

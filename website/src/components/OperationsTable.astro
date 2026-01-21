@@ -1,4 +1,6 @@
 ---
+import { markdownToHtml } from "../lib/markdown";
+
 interface Operation {
   group: string;
   name: string;
@@ -38,7 +40,7 @@ function getAnchorId(name: string): string {
             </a>
           </td>
           <td class="px-3 py-3">
-            <div class="text-zinc-600 dark:text-zinc-400" set:html={item.desc} />
+            <div class="text-zinc-600 dark:text-zinc-400" set:html={markdownToHtml(item.desc)} />
           </td>
         </tr>
       ))

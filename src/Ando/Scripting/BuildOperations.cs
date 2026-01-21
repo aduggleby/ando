@@ -86,6 +86,9 @@ public class BuildOperations
     /// <summary>Docker operations (build images).</summary>
     public DockerOperations Docker { get; }
 
+    /// <summary>Playwright E2E testing operations.</summary>
+    public PlaywrightOperations Playwright { get; }
+
     /// <summary>Legacy .NET SDK installation operations. Use Dotnet.SdkInstall() instead.</summary>
     [Obsolete("Use Dotnet.SdkInstall() instead.")]
     public DotnetSdkOperations DotnetSdk { get; }
@@ -131,11 +134,12 @@ public class BuildOperations
         Nuget = new NugetOperations(registry, logger, executorFactory);
         Ando = new AndoOperations(registry, logger, containerToHostPath, buildOptions, Artifacts, profileRegistry);
 
-        // Initialize Git, GitHub, and Docker operations.
+        // Initialize Git, GitHub, Docker, and Playwright operations.
         var gitHubAuthHelper = new GitHubAuthHelper(logger);
         Git = new GitOperations(registry, logger, executorFactory);
         GitHub = new GitHubOperations(registry, logger, executorFactory, gitHubAuthHelper);
         Docker = new DockerOperations(registry, logger, executorFactory);
+        Playwright = new PlaywrightOperations(registry, logger, executorFactory, nodeEnsurer);
 
         // Legacy backward compatibility wrapper.
 #pragma warning disable CS0618 // Suppress obsolete warning for internal initialization

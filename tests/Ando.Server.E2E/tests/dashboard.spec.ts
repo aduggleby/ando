@@ -137,14 +137,12 @@ test.describe('Dashboard', () => {
   });
 
   test.describe('Navigation', () => {
-    test('create project page redirects without GitHub', async ({ authedPage }) => {
-      // Navigate directly to create page - without GitHub connected, user should be redirected
-      const response = await authedPage.goto('/projects/create');
+    test('create project page shows connect repository form', async ({ authedPage }) => {
+      // Navigate directly to create page - user should see the connect repository form
+      await authedPage.goto('/projects/create');
 
-      // Without GitHub connected, authenticated user is redirected back to dashboard
-      // (The Create action redirects to Login, which redirects authenticated users to /)
-      // Check we landed on the homepage
-      await expect(authedPage.locator('h1')).toContainText('Dashboard');
+      // User should see the Connect Repository page
+      await expect(authedPage.locator('h2')).toContainText('Connect a GitHub Repository');
     });
 
     test('view all projects button navigates to projects list', async ({ authedPage, testProject }) => {

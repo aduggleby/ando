@@ -3,14 +3,15 @@
 //
 // Profiles:
 // - (default): Build, test, publish executables, create NuGet package
-// - push: Also pushes to NuGet.org and deploys the documentation website
+// - push: Also pushes to NuGet.org, container registry, and deploys docs
 //
 // Usage:
 //   ando              # Build and test only
-//   ando -p push      # Build, test, and push to NuGet.org + deploy docs
+//   ando -p push      # Build, test, and push to NuGet.org + container registry + deploy docs
 //
 // Prerequisites:
 // - NUGET_API_KEY env var set (or enter when prompted) for push profile
+// - Run ./ando-bumpversion.sh before push to set the desired version
 //
 // Output:
 // - dist/{runtime}/ando[.exe] - Platform-specific executables
@@ -24,15 +25,14 @@ var push = DefineProfile("push");
 var project = Dotnet.Project("./src/Ando/Ando.csproj");
 var testProject = Dotnet.Project("./tests/Ando.Tests/Ando.Tests.csproj");
 
+// Read version from csproj
+var csprojContent = File.ReadAllText(Root / "src/Ando/Ando.csproj");
+var versionMatch = System.Text.RegularExpressions.Regex.Match(csprojContent, @"<Version>(\d+\.\d+\.\d+)</Version>");
+var version = versionMatch.Success ? versionMatch.Groups[1].Value : "0.0.0";
+Log.Info($"Building version: {version}");
+
 // Base output directory
 var distPath = Root / "dist";
-
-// Bump version when pushing (before builds get the new version)
-VersionRef? version = null;
-if (push)
-{
-    version = Dotnet.BumpVersion(project);
-}
 
 // Install .NET SDK
 Dotnet.SdkInstall();
@@ -64,18 +64,21 @@ foreach (var runtime in runtimes)
 // Create NuGet package for the dotnet tool
 Nuget.Pack(project);
 
-// Push to NuGet.org and deploy website (only with -p push)
+// Push to NuGet.org, container registry, and deploy website (only with push profile)
 if (push)
 {
+    // Push to NuGet (skip if version already exists)
     Nuget.EnsureAuthenticated();
-    Nuget.Push(project);
+    Nuget.Push(project, o => o.SkipDuplicate());
 
     // Build server Docker image with version tag
-    Docker.Build("./src/Ando.Server/Dockerfile", "ando-server", version!, o => o
+    Docker.Build("./src/Ando.Server/Dockerfile", o => o
+        .WithTag($"ando-server:{version}")
         .WithContext("."));
 
-    // Tag the git repo with the version
-    Git.Tag(version!);
+    // Tag git repo with version
+    Git.Tag($"v{version}");
+    Git.Push();
     Git.PushTags();
 
     // Build and deploy the documentation website

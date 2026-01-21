@@ -79,7 +79,7 @@ public class VersionResolverTests
         var version = await resolver.GetLatestDotnetSdkVersionAsync();
 
         // Assert - should return fallback
-        version.ShouldBe("10.0");
+        version.ShouldBe("9.0");
         _logger.InfoMessages.ShouldContain(m => m.Contains("fallback"));
     }
 

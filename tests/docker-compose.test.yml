@@ -34,7 +34,7 @@ services:
       dockerfile: src/Ando.Server/Dockerfile
     container_name: ando-e2e-server
     environment:
-      - ASPNETCORE_ENVIRONMENT=Testing
+      - ASPNETCORE_ENVIRONMENT=E2E
       - ASPNETCORE_URLS=http://+:8080
       # Connection string uses container name (sqlserver) instead of localhost
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=AndoServer_E2E;User Id=sa;Password=Test@Password123!;TrustServerCertificate=True

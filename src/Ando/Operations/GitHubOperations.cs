@@ -9,8 +9,8 @@
 // Example usage in build.csando:
 //   var release = DefineProfile("release");
 //   if (release) {
-//       GitHub.CreateRelease(o => o.WithTag(version).WithNotes("Release notes"));
-//       GitHub.PushImage("myapp", o => o.WithTag(version));
+//       GitHub.CreateRelease(o => o.WithTag("v1.0.0").WithNotes("Release notes"));
+//       GitHub.PushImage("myapp", o => o.WithTag("v1.0.0"));
 //   }
 //
 // Authentication:
@@ -26,7 +26,6 @@
 
 using Ando.Execution;
 using Ando.Logging;
-using Ando.References;
 using Ando.Steps;
 using Ando.Utilities;
 
@@ -101,8 +100,7 @@ public class GitHubOperations(
 
         Registry.Register("GitHub.CreateRelease", async () =>
         {
-            // Get the tag name, supporting VersionRef.
-            var tag = options.TagRef?.Value ?? options.Tag;
+            var tag = options.Tag;
             if (string.IsNullOrEmpty(tag))
             {
                 Logger.Error("Release tag is required");
@@ -140,7 +138,7 @@ public class GitHubOperations(
 
             Logger.Info($"Created release: {tag}");
             return true;
-        }, options.Tag ?? options.TagRef?.ToString() ?? "release");
+        }, options.Tag ?? "release");
     }
 
     /// <summary>
@@ -156,8 +154,7 @@ public class GitHubOperations(
 
         Registry.Register("GitHub.PushImage", async () =>
         {
-            // Get the tag, supporting VersionRef.
-            var tag = options.TagRef?.Value ?? options.Tag ?? "latest";
+            var tag = options.Tag ?? "latest";
 
             // Determine the owner (required for ghcr.io).
             var owner = options.Owner;
@@ -218,7 +215,7 @@ public class GitHubOperations(
 
             Logger.Info($"Pushed: {remoteImage}");
             return true;
-        }, $"{imageName}:{options.Tag ?? options.TagRef?.ToString() ?? "latest"}");
+        }, $"{imageName}:{options.Tag ?? "latest"}");
     }
 
     // Attempts to get the GitHub owner from the git remote URL.
@@ -321,9 +318,6 @@ public class GitHubReleaseOptions
     /// <summary>Tag name for the release.</summary>
     public string? Tag { get; private set; }
 
-    /// <summary>Tag from a VersionRef (for dynamic versioning).</summary>
-    public VersionRef? TagRef { get; private set; }
-
     /// <summary>Release title.</summary>
     public string? Title { get; private set; }
 
@@ -346,13 +340,6 @@ public class GitHubReleaseOptions
     public GitHubReleaseOptions WithTag(string tag)
     {
         Tag = tag;
-        return this;
-    }
-
-    /// <summary>Sets the tag from a VersionRef.</summary>
-    public GitHubReleaseOptions WithTag(VersionRef version)
-    {
-        TagRef = version;
         return this;
     }
 
@@ -405,9 +392,6 @@ public class GitHubImageOptions
     /// <summary>Image tag.</summary>
     public string? Tag { get; private set; }
 
-    /// <summary>Tag from a VersionRef.</summary>
-    public VersionRef? TagRef { get; private set; }
-
     /// <summary>GitHub owner (user or organization).</summary>
     public string? Owner { get; private set; }
 
@@ -415,13 +399,6 @@ public class GitHubImageOptions
     public GitHubImageOptions WithTag(string tag)
     {
         Tag = tag;
-        return this;
-    }
-
-    /// <summary>Sets the image tag from a VersionRef.</summary>
-    public GitHubImageOptions WithTag(VersionRef version)
-    {
-        TagRef = version;
         return this;
     }
 

@@ -139,6 +139,12 @@ public class ScriptGlobals
     public DockerOperations Docker { get; }
 
     /// <summary>
+    /// Playwright E2E testing operations.
+    /// Usage: Playwright.Test(e2eDir), Playwright.Install(e2eDir)
+    /// </summary>
+    public PlaywrightOperations Playwright { get; }
+
+    /// <summary>
     /// Legacy .NET SDK installation operations.
     /// Use Dotnet.SdkInstall() instead for new scripts.
     /// Usage: DotnetSdk.Install() or DotnetSdk.Install("9.0")
@@ -206,6 +212,7 @@ public class ScriptGlobals
         Git = buildContext.Operations.Git;
         GitHub = buildContext.Operations.GitHub;
         Docker = buildContext.Operations.Docker;
+        Playwright = buildContext.Operations.Playwright;
         _profileRegistry = buildContext.ProfileRegistry;
 
         // Legacy backward compatibility.

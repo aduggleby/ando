@@ -30,9 +30,9 @@ public class DotnetSdkOperations
     /// <summary>
     /// Installs the .NET SDK. Delegates to Dotnet.SdkInstall().
     /// </summary>
-    /// <param name="version">The SDK version to install (default: 10.0).</param>
+    /// <param name="version">The SDK version to install (default: 9.0).</param>
     [Obsolete("Use Dotnet.SdkInstall() instead.")]
-    public void Install(string version = "10.0")
+    public void Install(string version = "9.0")
     {
         _dotnet.SdkInstall(version);
     }

@@ -25,6 +25,7 @@ using Ando.Server.Services;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using Hangfire;
+using Hangfire.States;
 using Microsoft.AspNetCore.DataProtection;
 using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Identity;
@@ -56,20 +57,37 @@ builder.Services.Configure<TestSettings>(
 // Database
 // =============================================================================
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+// In Testing environment, WebApplicationFactory configures the DbContext
+// Skip validation here to allow test-specific database configuration
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrEmpty(connectionString) && !builder.Environment.IsEnvironment("Testing"))
+{
+    throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+}
 
-builder.Services.AddDbContext<AndoDbContext>(options =>
-    options.UseSqlServer(connectionString));
+if (!string.IsNullOrEmpty(connectionString))
+{
+    builder.Services.AddDbContext<AndoDbContext>(options =>
+        options.UseSqlServer(connectionString));
+}
 
 // =============================================================================
 // Data Protection (persist keys across container restarts)
 // =============================================================================
 
-var keysPath = builder.Configuration["DataProtection:KeysPath"] ?? "/data/keys";
-builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo(keysPath))
-    .SetApplicationName("AndoServer");
+// In Testing/E2E environment, use ephemeral keys to avoid file system access issues
+if (builder.Environment.IsEnvironment("Testing") || builder.Environment.IsEnvironment("E2E"))
+{
+    builder.Services.AddDataProtection()
+        .SetApplicationName("AndoServer");
+}
+else
+{
+    var keysPath = builder.Configuration["DataProtection:KeysPath"] ?? "/data/keys";
+    builder.Services.AddDataProtection()
+        .PersistKeysToFileSystem(new DirectoryInfo(keysPath))
+        .SetApplicationName("AndoServer");
+}
 
 // =============================================================================
 // ASP.NET Core Identity
@@ -101,30 +119,40 @@ builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
 
 // =============================================================================
 // Hangfire (Background Jobs)
+// Skip in E2E environment - E2E tests don't need background job processing
 // =============================================================================
 
-builder.Services.AddHangfire(config => config
-    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
-    .UseSimpleAssemblyNameTypeSerializer()
-    .UseRecommendedSerializerSettings()
-    .UseSqlServerStorage(connectionString, new SqlServerStorageOptions
-    {
-        CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
-        SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
-        QueuePollInterval = TimeSpan.Zero,
-        UseRecommendedIsolationLevel = true,
-        DisableGlobalLocks = true
-    }));
-
-var buildSettings = builder.Configuration
-    .GetSection(BuildSettings.SectionName)
-    .Get<BuildSettings>() ?? new BuildSettings();
-
-builder.Services.AddHangfireServer(options =>
+if (!builder.Environment.IsEnvironment("E2E"))
 {
-    options.WorkerCount = buildSettings.WorkerCount;
-    options.Queues = ["builds", "default"];
-});
+    builder.Services.AddHangfire(config => config
+        .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+        .UseSimpleAssemblyNameTypeSerializer()
+        .UseRecommendedSerializerSettings()
+        .UseSqlServerStorage(connectionString, new SqlServerStorageOptions
+        {
+            CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+            SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+            QueuePollInterval = TimeSpan.Zero,
+            UseRecommendedIsolationLevel = true,
+            DisableGlobalLocks = true
+        }));
+
+    var buildSettings = builder.Configuration
+        .GetSection(BuildSettings.SectionName)
+        .Get<BuildSettings>() ?? new BuildSettings();
+
+    builder.Services.AddHangfireServer(options =>
+    {
+        options.WorkerCount = buildSettings.WorkerCount;
+        options.Queues = ["builds", "default"];
+    });
+}
+else
+{
+    // E2E environment: provide stub Hangfire services (BuildService depends on IBackgroundJobClient)
+    builder.Services.AddSingleton<IBackgroundJobClient, NoOpBackgroundJobClient>();
+    builder.Services.AddSingleton<IRecurringJobManager, NoOpRecurringJobManager>();
+}
 
 // =============================================================================
 // SignalR (Real-time)
@@ -305,7 +333,7 @@ var app = builder.Build();
 // Configuration validation - show error page if required config is missing
 app.UseConfigurationValidation();
 
-if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
+if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing") || app.Environment.IsEnvironment("E2E"))
 {
     // Show detailed errors for development and testing
     app.UseDeveloperExceptionPage();
@@ -336,8 +364,8 @@ app.UseFastEndpoints(c =>
         new System.Text.Json.Serialization.JsonStringEnumConverter());
 });
 
-// Swagger UI (development and testing only)
-if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
+// Swagger UI (development, testing, and E2E only)
+if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing") || app.Environment.IsEnvironment("E2E"))
 {
     app.UseSwaggerGen();
 }
@@ -360,6 +388,9 @@ if (app.Environment.IsDevelopment())
 // MUST run before Hangfire job registration to ensure database exists
 // =============================================================================
 
+// Skip in Testing environment - WebApplicationFactory handles database setup
+// E2E environment uses docker-compose and needs normal database initialization
+if (!app.Environment.IsEnvironment("Testing"))
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AndoDbContext>();
@@ -376,8 +407,8 @@ if (app.Environment.IsDevelopment())
 // Recurring Jobs
 // =============================================================================
 
-// Skip recurring job registration during testing (no JobStorage configured)
-if (!app.Environment.IsEnvironment("Testing"))
+// Skip recurring job registration during testing/E2E (no JobStorage configured)
+if (!app.Environment.IsEnvironment("Testing") && !app.Environment.IsEnvironment("E2E"))
 {
     // Use service-based API instead of static RecurringJob class
     var recurringJobManager = app.Services.GetRequiredService<IRecurringJobManager>();
@@ -453,3 +484,47 @@ static async Task SeedRolesAsync(RoleManager<ApplicationRole> roleManager)
 /// Partial class marker to make Program accessible for integration tests.
 /// </summary>
 public partial class Program { }
+
+// =============================================================================
+// Stub Hangfire Services (for E2E environment)
+// =============================================================================
+
+/// <summary>
+/// No-op implementation of IBackgroundJobClient for E2E testing.
+/// </summary>
+internal class NoOpBackgroundJobClient : IBackgroundJobClient
+{
+    private int _jobCounter;
+
+    public string Create(Hangfire.Common.Job job, IState state)
+    {
+        // Return a fake job ID
+        return $"e2e-job-{Interlocked.Increment(ref _jobCounter)}";
+    }
+
+    public bool ChangeState(string jobId, IState state, string expectedState)
+    {
+        return true;
+    }
+}
+
+/// <summary>
+/// No-op implementation of IRecurringJobManager for E2E testing.
+/// </summary>
+internal class NoOpRecurringJobManager : IRecurringJobManager
+{
+    public void AddOrUpdate(string recurringJobId, Hangfire.Common.Job job, string cronExpression, RecurringJobOptions options)
+    {
+        // No-op
+    }
+
+    public void Trigger(string recurringJobId)
+    {
+        // No-op
+    }
+
+    public void RemoveIfExists(string recurringJobId)
+    {
+        // No-op
+    }
+}

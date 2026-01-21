@@ -21,6 +21,7 @@ ando run
 
 - `-f, --file <file>` - Use a specific build file instead of build.csando
 - `-p, --profile <profiles>` - Activate build profiles (comma-separated, e.g., `-p push,release`)
+- `--read-env` - Load environment file without prompting (checks for `.env.ando` first, falls back to `.env`)
 - `--verbosity <level>` - Set output verbosity (quiet|minimal|normal|detailed)
 - `--no-color` - Disable colored output
 - `--cold` - Always create a fresh container (ignore warm cache)
@@ -124,7 +125,7 @@ Ando.UseImage("mcr.microsoft.com/dotnet/sdk:9.0");
 
 ### Nested Builds
 ```csharp
-// Run a child build in a subdirectory (own container, own .env)
+// Run a child build in a subdirectory (own container, own .env.ando or .env)
 Ando.Build(Directory("./website"));
 
 // Run a specific build file
@@ -289,11 +290,9 @@ BicepDeployment objects provide typed access to deployment outputs:
 
 ### Docker
 - Docker.Build(dockerfile, options?) - Build Docker image from Dockerfile
-- Docker.Build(dockerfile, imageName, version, options?) - Build with VersionRef tag (creates imageName:version)
 
 ### Git
 - Git.Tag(tagName, options?) - Create a git tag (annotated by default)
-- Git.Tag(versionRef, options?) - Create tag from VersionRef (auto-prefixes with 'v')
 - Git.Push(options?) - Push current branch to remote
 - Git.PushTags(remote?) - Push all tags to remote (default: origin)
 - Git.Add(paths...) - Stage files for commit
@@ -313,8 +312,8 @@ Dotnet.Build(app);
 Dotnet.Test(tests);
 
 if (release) {
-    Git.Tag(version);
-    GitHub.CreateRelease(o => o.WithTag(version));
+    Git.Tag("v1.0.0");
+    GitHub.CreateRelease(o => o.WithTag("v1.0.0"));
 }
 ```
 

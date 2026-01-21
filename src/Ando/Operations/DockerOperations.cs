@@ -10,17 +10,15 @@
 // Example usage in build.csando:
 //   Docker.Build("Dockerfile", o => o
 //       .WithTag("myapp:v1.0.0")
-//       .WithBuildArg("VERSION", version));
+//       .WithBuildArg("VERSION", "1.0.0"));
 //
 // Design Decisions:
 // - Minimal scope initially (just Build), expand as needed
-// - VersionRef support for dynamic tagging
 // - Registry push handled by specific providers (GitHub, Azure, etc.)
 // =============================================================================
 
 using Ando.Execution;
 using Ando.Logging;
-using Ando.References;
 using Ando.Steps;
 
 namespace Ando.Operations;
@@ -47,10 +45,7 @@ public class DockerOperations(
 
         Registry.Register("Docker.Build", async () =>
         {
-            // Resolve the tag, supporting VersionRef.
-            var tag = options.TagRef != null
-                ? (options.TagPrefix ?? "") + options.TagRef.Value
-                : options.Tag;
+            var tag = options.Tag;
 
             // Determine the context directory and dockerfile path.
             var dockerfilePath = dockerfile;
@@ -103,24 +98,7 @@ public class DockerOperations(
             }
 
             return true;
-        }, options.Tag ?? options.TagRef?.ToString() ?? dockerfile);
-    }
-
-    /// <summary>
-    /// Builds a Docker image with a VersionRef tag.
-    /// Convenience overload that automatically prefixes the version with the image name.
-    /// </summary>
-    /// <param name="dockerfile">Path to the Dockerfile.</param>
-    /// <param name="imageName">Name for the image (without tag).</param>
-    /// <param name="version">Version from BumpVersion or ReadVersion.</param>
-    /// <param name="configure">Additional configuration.</param>
-    public void Build(string dockerfile, string imageName, VersionRef version, Action<DockerBuildOptions>? configure = null)
-    {
-        Build(dockerfile, o =>
-        {
-            o.WithTag(version, $"{imageName}:");
-            configure?.Invoke(o);
-        });
+        }, options.Tag ?? dockerfile);
     }
 }
 
@@ -129,12 +107,6 @@ public class DockerBuildOptions
 {
     /// <summary>Image tag (e.g., "myapp:v1.0.0").</summary>
     public string? Tag { get; private set; }
-
-    /// <summary>Tag from a VersionRef.</summary>
-    public VersionRef? TagRef { get; private set; }
-
-    /// <summary>Prefix for VersionRef tag (e.g., "myapp:").</summary>
-    public string? TagPrefix { get; private set; }
 
     /// <summary>Build context directory (default: current directory).</summary>
     public string? Context { get; private set; }
@@ -155,14 +127,6 @@ public class DockerBuildOptions
         return this;
     }
 
-    /// <summary>Sets the tag from a VersionRef with optional prefix.</summary>
-    public DockerBuildOptions WithTag(VersionRef version, string? prefix = null)
-    {
-        TagRef = version;
-        TagPrefix = prefix;
-        return this;
-    }
-
     /// <summary>Sets the build context directory.</summary>
     public DockerBuildOptions WithContext(string context)
     {
@@ -174,16 +138,6 @@ public class DockerBuildOptions
     public DockerBuildOptions WithBuildArg(string key, string value)
     {
         BuildArgs[key] = value;
-        return this;
-    }
-
-    /// <summary>Adds a build argument with a VersionRef value.</summary>
-    public DockerBuildOptions WithBuildArg(string key, VersionRef version)
-    {
-        // Store a placeholder that will be resolved at execution time.
-        // This is a simplification - in practice, the ArgumentBuilder
-        // evaluates at execution time when VersionRef is resolved.
-        BuildArgs[key] = version.ToString();
         return this;
     }
 

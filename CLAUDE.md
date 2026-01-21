@@ -188,14 +188,6 @@ ssh -i ~/.ssh/id_claude root@138.199.223.171 "sudo -u ando XDG_RUNTIME_DIR=/run/
 
 Run `npm run build` in the website directory to verify documentation builds correctly.
 
-## Version Bumping
-
-When bumping the version in `src/Ando/Ando.csproj`:
-
-1. **Update the version** - Change the `<Version>` element in the csproj file
-2. **Add changelog entry** - Add an entry to `website/src/pages/changelog.astro` describing the changes
-3. **Update index.astro** - Update the version number shown on `website/src/pages/index.astro` if displayed
-
 ## Documentation Standards
 
 All C# files must include comprehensive documentation using C# comment syntax:

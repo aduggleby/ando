@@ -56,6 +56,41 @@ dotnet tool install --global --add-source ./nupkg Ando
 dotnet test tests/Ando.Tests
 ```
 
+#### Version Management
+
+Bump versions in both CLI and Server projects using the provided script:
+
+```bash
+# Bump patch version (1.0.0 → 1.0.1)
+./scripts/ando-bumpversion.sh
+
+# Bump minor version (1.0.5 → 1.1.0)
+./scripts/ando-bumpversion.sh minor
+
+# Bump major version (1.5.3 → 2.0.0)
+./scripts/ando-bumpversion.sh major
+```
+
+#### Development Scripts
+
+```bash
+# Run ando from source (passes all arguments)
+./scripts/ando-dev.sh run
+
+# Run ando with push profile from source
+./scripts/ando-push.sh
+```
+
+#### Release Workflow
+
+```bash
+# Build and test only
+ando
+
+# Push to NuGet.org, build Docker image, tag git, and deploy docs
+ando -p push
+```
+
 ### CI Server Development
 
 The CI Server requires SQL Server and a GitHub App for full functionality.
@@ -125,9 +160,10 @@ tests/
 ├── Ando.Tests/        # CLI unit/integration tests
 ├── Ando.Server.Tests/ # Server tests
 └── Ando.Server.E2E/   # Playwright E2E tests
+scripts/               # Development and release scripts
 website/               # Astro documentation site
 ```
 
 ## License
 
-[O'Sassy License](https://osaasy.dev/) - see [LICENSE](./LICENSE)
+[No'Saasy License](./LICENSE) (based on [O'Sassy](https://osaasy.dev/))

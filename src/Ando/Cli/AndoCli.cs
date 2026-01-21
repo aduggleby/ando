@@ -532,7 +532,7 @@ public class AndoCli : IDisposable
         Console.WriteLine("  -p, --profile <name>");
         Console.WriteLine("                    Activate build profiles (comma-separated for multiple)");
         Console.WriteLine("                    Example: -p release or -p push,release");
-        Console.WriteLine("  --read-env        Load .env file without prompting (also applies to sub-builds)");
+        Console.WriteLine("  --read-env        Load env file without prompting (also applies to sub-builds)");
         Console.WriteLine("  --verbosity <quiet|minimal|normal|detailed>");
         Console.WriteLine("  --no-color        Disable colored output");
         Console.WriteLine("  --cold            Always create fresh container");
@@ -628,16 +628,20 @@ public class AndoCli : IDisposable
     // Environment variable to auto-load .env files without prompting (for sub-builds).
     private const string AutoLoadEnvVar = "ANDO_AUTO_LOAD_ENV";
 
-    // Checks for a .env file in the project directory and prompts the user
+    // Checks for an environment file in the project directory and prompts the user
     // to load it if found. This provides a convenient way to set environment
     // variables for local development without exporting them in the shell.
+    // Checks for .env.ando first (project-specific), falls back to .env if not found.
     private async Task PromptToLoadEnvFileAsync(string rootPath)
     {
-        var envPath = Path.Combine(rootPath, ".env");
-        if (!File.Exists(envPath))
+        // Check for .env.ando first (takes priority), then fall back to .env.
+        var envPath = ResolveEnvFilePath(rootPath);
+        if (envPath == null)
             return;
 
-        // Parse the .env file to extract variable names and values.
+        var envFileName = Path.GetFileName(envPath);
+
+        // Parse the env file to extract variable names and values.
         var envVars = ParseEnvFile(envPath);
         if (envVars.Count == 0)
             return;
@@ -661,7 +665,7 @@ public class AndoCli : IDisposable
         if (!autoLoad)
         {
             // Show the user which variables would be loaded.
-            _logger.Info("Found .env file with the following variables:");
+            _logger.Info($"Found {envFileName} file with the following variables:");
             foreach (var (key, value) in unsetVars)
             {
                 // Mask sensitive values (tokens, secrets, passwords, keys).
@@ -682,7 +686,7 @@ public class AndoCli : IDisposable
 
             if (response == "n" || response == "no")
             {
-                _logger.Info("Skipped loading .env file");
+                _logger.Info($"Skipped loading {envFileName}");
                 Console.WriteLine();
                 return;
             }
@@ -700,10 +704,26 @@ public class AndoCli : IDisposable
         {
             Environment.SetEnvironmentVariable(key, value);
         }
-        _logger.Info($"Loaded {unsetVars.Count} environment variable(s) from .env");
+        _logger.Info($"Loaded {unsetVars.Count} environment variable(s) from {envFileName}");
 
         Console.WriteLine();
         await Task.CompletedTask;
+    }
+
+    // Resolves which environment file to use.
+    // Checks for .env.ando first (project-specific), falls back to .env.
+    // Returns null if neither file exists.
+    internal static string? ResolveEnvFilePath(string rootPath)
+    {
+        var andoEnvPath = Path.Combine(rootPath, ".env.ando");
+        if (File.Exists(andoEnvPath))
+            return andoEnvPath;
+
+        var defaultEnvPath = Path.Combine(rootPath, ".env");
+        if (File.Exists(defaultEnvPath))
+            return defaultEnvPath;
+
+        return null;
     }
 
     // Parses a .env file into key-value pairs.
@@ -712,7 +732,7 @@ public class AndoCli : IDisposable
     // - Comments starting with #
     // - Quoted values (single or double quotes)
     // - Empty lines are ignored
-    private static Dictionary<string, string> ParseEnvFile(string path)
+    internal static Dictionary<string, string> ParseEnvFile(string path)
     {
         var result = new Dictionary<string, string>();
 

@@ -233,7 +233,7 @@ public class ProjectsControllerValidationTests : IDisposable
         var result = await _controller.AddSecret(999, form);
 
         // Assert
-        result.ShouldBeOfType<NotFoundResult>();
+        AssertNotFoundView(result);
     }
 
     [Fact]
@@ -249,7 +249,7 @@ public class ProjectsControllerValidationTests : IDisposable
         var result = await _controller.AddSecret(1, form);
 
         // Assert
-        result.ShouldBeOfType<NotFoundResult>();
+        AssertNotFoundView(result);
     }
 
     [Fact]
@@ -263,7 +263,7 @@ public class ProjectsControllerValidationTests : IDisposable
         var result = await _controller.Details(999);
 
         // Assert
-        result.ShouldBeOfType<NotFoundResult>();
+        AssertNotFoundView(result);
     }
 
     [Fact]
@@ -277,7 +277,7 @@ public class ProjectsControllerValidationTests : IDisposable
         var result = await _controller.Settings(999);
 
         // Assert
-        result.ShouldBeOfType<NotFoundResult>();
+        AssertNotFoundView(result);
     }
 
     [Fact]
@@ -291,7 +291,7 @@ public class ProjectsControllerValidationTests : IDisposable
         var result = await _controller.Delete(999);
 
         // Assert
-        result.ShouldBeOfType<NotFoundResult>();
+        AssertNotFoundView(result);
     }
 
     [Fact]
@@ -305,7 +305,7 @@ public class ProjectsControllerValidationTests : IDisposable
         var result = await _controller.TriggerBuild(999);
 
         // Assert
-        result.ShouldBeOfType<NotFoundResult>();
+        AssertNotFoundView(result);
     }
 
     [Fact]
@@ -319,7 +319,7 @@ public class ProjectsControllerValidationTests : IDisposable
         var result = await _controller.DeleteSecret(999, "MY_SECRET");
 
         // Assert
-        result.ShouldBeOfType<NotFoundResult>();
+        AssertNotFoundView(result);
     }
 
     // -------------------------------------------------------------------------
@@ -377,7 +377,7 @@ public class ProjectsControllerValidationTests : IDisposable
         var result = await _controller.Settings(999, form);
 
         // Assert
-        result.ShouldBeOfType<NotFoundResult>();
+        AssertNotFoundView(result);
     }
 
     // -------------------------------------------------------------------------
@@ -428,5 +428,11 @@ public class ProjectsControllerValidationTests : IDisposable
     private string? GetTempData(string key)
     {
         return _controller.TempData[key]?.ToString();
+    }
+
+    private static void AssertNotFoundView(IActionResult result)
+    {
+        var viewResult = result.ShouldBeOfType<ViewResult>();
+        viewResult.ViewName.ShouldBe("NotFound");
     }
 }

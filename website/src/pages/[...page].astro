@@ -1,0 +1,82 @@
+---
+// =============================================================================
+// [...page].astro
+//
+// Summary: Dynamic route for standalone pages using content collections.
+//
+// Handles both HTML routes (/cli, /about) and markdown routes (/cli.md, /about.md).
+// The markdown route returns raw markdown suitable for LLM consumption.
+// Pages with toc: true in frontmatter get a table of contents sidebar.
+// =============================================================================
+
+import { getCollection } from "astro:content";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { markdownResponse } from "../lib/markdown";
+
+export async function getStaticPaths() {
+  const pages = await getCollection("pages");
+  const paths = [];
+
+  for (const page of pages) {
+    // HTML route: /cli, /about
+    paths.push({
+      params: { page: page.slug },
+      props: { page, format: "html" },
+    });
+    // Markdown route: /cli.md, /about.md
+    paths.push({
+      params: { page: `${page.slug}.md` },
+      props: { page, format: "md" },
+    });
+  }
+  return paths;
+}
+
+const { page, format } = Astro.props;
+
+if (format === "md") {
+  const md = `# ${page.data.title}
+
+${page.body}
+`;
+  return markdownResponse(md);
+}
+
+const { Content } = await page.render();
+const alternateMarkdownUrl = `/${page.slug}.md`;
+const showToc = page.data.toc === true;
+---
+
+<BaseLayout
+  title={`${page.data.title} - ANDO`}
+  description={page.data.description}
+  alternateMarkdownUrl={alternateMarkdownUrl}
+>
+  <div class={showToc ? "flex gap-12" : ""}>
+    <div class={showToc ? "max-w-4xl flex-1" : "max-w-3xl"}>
+      <section id="top" class="mb-8 md:mb-12">
+        <h1 class="mb-2 text-2xl font-bold text-zinc-900 sm:text-3xl dark:text-white">{page.data.title}</h1>
+      </section>
+
+      <div
+        id="content"
+        class="prose prose-zinc dark:prose-invert prose-headings:font-semibold prose-a:text-cyan-600 dark:prose-a:text-cyan-400 prose-code:rounded prose-code:bg-zinc-100 prose-code:px-1 prose-code:before:content-none prose-code:after:content-none dark:prose-code:bg-zinc-800 prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-800 max-w-none"
+      >
+        <Content />
+      </div>
+    </div>
+
+    {
+      showToc && (
+        <aside class="hidden w-48 shrink-0 lg:block">
+          <nav id="toc" class="sticky top-8">
+            <h4 class="mb-3 text-xs font-semibold tracking-wider text-zinc-400 uppercase">On this page</h4>
+            <ul id="toc-list" class="space-y-2 text-sm" />
+          </nav>
+        </aside>
+      )
+    }
+  </div>
+
+  {showToc && <script is:inline src="/scripts/toc.js" />}
+</BaseLayout>

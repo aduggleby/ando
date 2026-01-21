@@ -57,13 +57,13 @@ public class ConfigurationValidator
         EncryptionSettings encryptionSettings,
         TestSettings testSettings)
     {
-        // Skip validation in Testing environment (uses test doubles)
-        if (_environment.IsEnvironment("Testing"))
+        // Skip validation in Testing/E2E environment (uses test doubles)
+        if (_environment.IsEnvironment("Testing") || _environment.IsEnvironment("E2E"))
         {
-            // Only validate Test API key in testing environment
+            // Only validate Test API key in testing/E2E environment
             if (string.IsNullOrEmpty(testSettings.ApiKey))
             {
-                _errors.Add("Test:ApiKey is required in Testing environment. Set via environment variable: Test__ApiKey");
+                _errors.Add("Test:ApiKey is required in Testing/E2E environment. Set via environment variable: Test__ApiKey");
             }
             return;
         }
