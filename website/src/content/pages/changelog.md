@@ -18,6 +18,17 @@ dotnet tool update -g ando
 ando --version
 ```
 
+## 0.9.12
+
+**2026-01-21**
+
+**Maintenance:**
+
+- Removed `.env.ando` files from git tracking to prevent accidental commits of local environment configuration
+- Added `.env.ando` pattern to `.gitignore`
+
+---
+
 ## 0.9.11
 
 **2026-01-21**
