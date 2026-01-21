@@ -356,6 +356,7 @@ All pages are available in markdown format for LLM consumption:
 - https://andobuild.com/providers/node.md - Node.js installation
 - https://andobuild.com/providers/npm.md - npm operations
 - https://andobuild.com/providers/nuget.md - NuGet package operations
+- https://andobuild.com/providers/playwright.md - Playwright E2E testing
 
 ### Examples
 - https://andobuild.com/examples/index.md - Examples overview

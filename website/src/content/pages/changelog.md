@@ -18,6 +18,16 @@ dotnet tool update -g ando
 ando --version
 ```
 
+## 0.9.11
+
+**2026-01-21**
+
+**Maintenance:**
+
+- Fixed file permissions on multiple source and documentation files
+
+---
+
 ## 0.9.5
 
 **2026-01-17**
