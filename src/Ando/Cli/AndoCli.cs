@@ -138,6 +138,12 @@ public class AndoCli : IDisposable
             return await CleanCommandAsync();
         }
 
+        if (_args[0] == "--version" || _args[0] == "-v")
+        {
+            Console.WriteLine($"ando {Version}");
+            return 0;
+        }
+
         _logger.Error($"Unknown command: {_args[0]}");
         return 1;
     }
@@ -521,6 +527,7 @@ public class AndoCli : IDisposable
         Console.WriteLine("  verify            Check build script for errors without executing");
         Console.WriteLine("  clean             Remove artifacts, temp files, and containers");
         Console.WriteLine("  help              Show this help");
+        Console.WriteLine("  --version, -v     Show version number");
         Console.WriteLine();
         Console.WriteLine("Examples:");
         Console.WriteLine("  ando                          Run build.csando in current directory");

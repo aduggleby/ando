@@ -7,6 +7,26 @@
 
 import { test as base, expect, Page, BrowserContext } from '@playwright/test';
 import { TestApi, CreateUserResponse, CreateProjectResponse, CreateBuildResponse } from '../utils/test-api';
+import * as fs from 'fs';
+
+/**
+ * Detect if we're running inside a Docker container.
+ * The /.dockerenv file exists in Docker containers.
+ */
+function isInsideContainer(): boolean {
+  return fs.existsSync('/.dockerenv');
+}
+
+/**
+ * Get the appropriate base URL based on the environment.
+ * - Inside container: use host.docker.internal to reach host's Docker
+ * - Outside container: use localhost
+ */
+function getBaseUrl(): string {
+  const port = 17100;
+  const host = isInsideContainer() ? 'host.docker.internal' : 'localhost';
+  return `http://${host}:${port}`;
+}
 
 // Test API key header name
 const TEST_API_KEY = 'test-api-key-for-e2e-tests';
@@ -70,8 +90,9 @@ export interface WorkerFixtures {
  */
 export const test = base.extend<TestFixtures, WorkerFixtures>({
   // Worker-scoped base URL
+  // Uses host.docker.internal when running inside a container (ANDO build with --dind)
   baseUrl: [async ({}, use) => {
-    await use(process.env.BASE_URL || 'http://localhost:17100');
+    await use(process.env.BASE_URL || getBaseUrl());
   }, { scope: 'worker' }],
 
   // Test API client

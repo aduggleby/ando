@@ -270,6 +270,9 @@ public class DockerManager
         if (config.MountDockerSocket)
         {
             args.AddRange(["-v", "/var/run/docker.sock:/var/run/docker.sock"]);
+            // Enable host.docker.internal on Linux (works by default on Docker Desktop)
+            // This allows containers to reach services on the host (e.g., E2E test servers)
+            args.AddRange(["--add-host", "host.docker.internal:host-gateway"]);
             _logger.Info($"  Docker socket mounted for Docker-in-Docker");
         }
 
