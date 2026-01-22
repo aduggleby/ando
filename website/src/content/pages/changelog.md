@@ -18,6 +18,18 @@ dotnet tool update -g ando
 ando --version
 ```
 
+## 0.9.22
+
+**2026-01-22**
+
+**Maintenance:**
+
+- Reverted SDK version and target framework to .NET 9 (9.0.200 SDK, net9.0 target framework)
+  - An attempted upgrade to .NET 10 was reverted to maintain compatibility and stability
+  - The project continues to use .NET 9 exclusively as per the documented requirements
+
+---
+
 ## 0.9.21
 
 **2026-01-22**
