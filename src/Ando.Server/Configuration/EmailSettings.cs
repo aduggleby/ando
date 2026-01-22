@@ -78,13 +78,20 @@ public class EmailSettings
 
 /// <summary>
 /// Resend-specific settings.
+/// Also supports Resend-compatible API providers by setting a custom BaseUrl.
 /// </summary>
 public class ResendProviderSettings
 {
     /// <summary>
-    /// Resend API key (starts with "re_").
+    /// Resend API key (starts with "re_" for official Resend).
     /// </summary>
     public string ApiKey { get; set; } = "";
+
+    /// <summary>
+    /// Base URL for the Resend API. Defaults to official Resend API.
+    /// Set to a custom URL for Resend-compatible providers (e.g., "https://resendalternative.com/api").
+    /// </summary>
+    public string BaseUrl { get; set; } = "https://api.resend.com/";
 }
 
 /// <summary>

@@ -29,8 +29,9 @@ services:
       - GitHub__ClientId=${GITHUB_CLIENT_ID:-}
       - GitHub__ClientSecret=${GITHUB_CLIENT_SECRET:-}
       - GitHub__WebhookSecret=${GITHUB_WEBHOOK_SECRET:-}
-      # Override with your Resend API key
-      - Resend__ApiKey=${RESEND_API_KEY:-}
+      # Override with your Resend API key and optional base URL for Resend-compatible providers
+      - Email__Resend__ApiKey=${RESEND_API_KEY:-}
+      - Email__Resend__BaseUrl=${RESEND_BASE_URL:-}
       # Encryption key (generate with: openssl rand -base64 32)
       - Encryption__Key=${ENCRYPTION_KEY:-dGhpc2lzYWRldmVsb3BtZW50a2V5b25seTMyYnl0ZXM=}
     volumes:

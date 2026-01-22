@@ -230,27 +230,38 @@ gather_configuration() {
     echo -e "${CYAN}=== Email Configuration ===${NC}"
     echo "Email providers:"
     echo "  1) Resend (recommended)"
-    echo "  2) Azure Communication Services"
-    echo "  3) SMTP"
-    echo "  4) Skip (no email notifications)"
+    echo "  2) Resend Compatible (custom base URL)"
+    echo "  3) Azure Communication Services"
+    echo "  4) SMTP"
+    echo "  5) Skip (no email notifications)"
     echo ""
-    read -r -p "Select email provider [1-4]: " EMAIL_CHOICE
+    read -r -p "Select email provider [1-5]: " EMAIL_CHOICE
 
     case "$EMAIL_CHOICE" in
         1)
             EMAIL_PROVIDER="Resend"
+            RESEND_BASE_URL=""
             prompt_required "Resend API Key" RESEND_API_KEY true
             prompt_required "From email address" EMAIL_FROM_ADDRESS
             prompt_with_default "From name" "Ando CI" EMAIL_FROM_NAME
             ;;
         2)
-            EMAIL_PROVIDER="Azure"
-            prompt_required "Azure Communication Services connection string" AZURE_EMAIL_CONNECTION_STRING true
+            EMAIL_PROVIDER="Resend"
+            prompt_required "Resend-compatible API Base URL (e.g., https://resendalternative.com/api)" RESEND_BASE_URL
+            prompt_required "API Key" RESEND_API_KEY true
             prompt_required "From email address" EMAIL_FROM_ADDRESS
             prompt_with_default "From name" "Ando CI" EMAIL_FROM_NAME
             ;;
         3)
+            EMAIL_PROVIDER="Azure"
+            RESEND_BASE_URL=""
+            prompt_required "Azure Communication Services connection string" AZURE_EMAIL_CONNECTION_STRING true
+            prompt_required "From email address" EMAIL_FROM_ADDRESS
+            prompt_with_default "From name" "Ando CI" EMAIL_FROM_NAME
+            ;;
+        4)
             EMAIL_PROVIDER="Smtp"
+            RESEND_BASE_URL=""
             prompt_required "SMTP Host" SMTP_HOST
             prompt_with_default "SMTP Port" "587" SMTP_PORT
             prompt_required "SMTP Username" SMTP_USERNAME
@@ -259,8 +270,9 @@ gather_configuration() {
             prompt_required "From email address" EMAIL_FROM_ADDRESS
             prompt_with_default "From name" "Ando CI" EMAIL_FROM_NAME
             ;;
-        4|*)
+        5|*)
             EMAIL_PROVIDER="None"
+            RESEND_BASE_URL=""
             log_info "Email notifications disabled"
             ;;
     esac
@@ -549,6 +561,11 @@ generate_env_file() {
 Email__FromAddress=$EMAIL_FROM_ADDRESS
 Email__FromName=$EMAIL_FROM_NAME
 Email__Resend__ApiKey=$RESEND_API_KEY"
+            # Add base URL if using Resend-compatible provider
+            if [[ -n "$RESEND_BASE_URL" ]]; then
+                email_env="$email_env
+Email__Resend__BaseUrl=$RESEND_BASE_URL"
+            fi
             ;;
         Azure)
             email_env="Email__Provider=Azure

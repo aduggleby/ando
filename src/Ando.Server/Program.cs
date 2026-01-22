@@ -254,9 +254,11 @@ builder.Services.AddHttpClient("GitHub", client =>
     client.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
 });
 
+// Resend base URL is configurable to support Resend-compatible providers
+var resendBaseUrl = builder.Configuration["Email:Resend:BaseUrl"] ?? "https://api.resend.com/";
 builder.Services.AddHttpClient("Resend", client =>
 {
-    client.BaseAddress = new Uri("https://api.resend.com/");
+    client.BaseAddress = new Uri(resendBaseUrl);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
