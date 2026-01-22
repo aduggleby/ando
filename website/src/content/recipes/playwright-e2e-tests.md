@@ -226,9 +226,50 @@ ANDO correctly propagates exit codes from Playwright.Test() - if tests fail, the
 
 1. **`--dind` flag** mounts the host's Docker socket into the build container
 2. **`Docker.Install()`** installs the Docker CLI inside the container
-3. **docker-compose** starts sibling containers on the host's Docker daemon
-4. **Container detection** switches URLs from `localhost` to `host.docker.internal`
-5. **Playwright tests** connect to the server container via the host network
+3. **`Playwright.Install()`** downloads browsers AND installs system dependencies (via `--with-deps`)
+4. **docker-compose** starts sibling containers on the host's Docker daemon
+5. **Container detection** switches URLs from `localhost` to `host.docker.internal`
+6. **Playwright tests** connect to the server container via the host network
+
+## Important: Container Recreation
+
+When running inside an ANDO container with `--dind`, the Docker daemon is shared with the host. This means `docker compose ps` might see containers from previous host runs that appear "healthy" but aren't accessible from inside the build container.
+
+**Solution**: Your `global-setup.ts` should always recreate containers when running inside a container:
+
+```typescript
+// global-setup.ts
+async function globalSetup(): Promise<void> {
+  const inContainer = isInsideContainer();
+
+  // When inside a container, always recreate to ensure fresh state
+  if (inContainer) {
+    stopContainers();  // docker compose down --volumes
+    startContainers(); // docker compose up -d --build --wait
+  } else if (areContainersHealthy()) {
+    console.log('Containers already running');
+  } else {
+    startContainers();
+  }
+
+  await waitForServer();
+}
+```
+
+This ensures tests always have a fresh, properly-networked set of containers.
+
+## System Dependencies
+
+`Playwright.Install()` runs `npx playwright install --with-deps` which installs both:
+- **Browser binaries**: Chromium, Firefox, WebKit
+- **System packages**: libgtk, libasound, libxrandr, libxcomposite, etc.
+
+This is essential for Docker/CI environments where these packages aren't pre-installed. Without `--with-deps`, you'll see errors like:
+
+```
+Host system is missing dependencies to run browsers.
+Please install them with: npx playwright install-deps
+```
 
 ## See Also
 

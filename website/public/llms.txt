@@ -291,7 +291,23 @@ BicepDeployment objects provide typed access to deployment outputs:
 
 ### Docker
 - Docker.Install() - Install Docker CLI in container (required for Docker.Build with --dind)
+- Docker.IsAvailable() - Check if Docker CLI and daemon are accessible (returns bool immediately, not a step)
 - Docker.Build(dockerfile, options?) - Build Docker image from Dockerfile
+
+### Playwright
+- Playwright.Install(directory) - Install browsers AND system dependencies (runs `npx playwright install --with-deps`)
+- Playwright.Test(directory, options?) - Run Playwright tests (default: `npx playwright test`)
+
+PlaywrightTestOptions:
+- Project - Run specific project (e.g., "chromium")
+- Headed - Run with visible browser
+- UI - Run in interactive UI mode
+- Workers - Number of parallel workers
+- Reporter - Reporter to use (e.g., "html", "list")
+- Grep - Filter tests by pattern
+- UpdateSnapshots - Update visual snapshots
+- UseNpmScript - Use `npm run` instead of `npx playwright test`
+- NpmScriptName - Custom script name when UseNpmScript is true
 
 ### Git
 - Git.Tag(tagName, options?) - Create a git tag (annotated by default)
@@ -367,4 +383,4 @@ All pages are available in markdown format for LLM consumption:
 
 ### Recipes
 - https://andobuild.com/recipes/index.md - Recipes overview
-- https://andobuild.com/recipes/playwright-e2e-tests.md - Running Playwright E2E tests with automatic local/server detection
+- https://andobuild.com/recipes/playwright-e2e-tests.md - Running Playwright E2E tests with Docker-in-Docker (--dind), container detection, and automatic system dependency installation

@@ -88,14 +88,15 @@ public class PlaywrightOperations(
     }
 
     /// <summary>
-    /// Installs Playwright browsers via 'npx playwright install'.
+    /// Installs Playwright browsers and system dependencies via 'npx playwright install --with-deps'.
     /// Call this after npm install and before running tests.
+    /// The --with-deps flag installs required system packages (libgtk, libasound, etc.).
     /// </summary>
     /// <param name="directory">Directory containing playwright.config.ts.</param>
     public void Install(DirectoryRef directory)
     {
         RegisterCommandWithEnsurer("Playwright.Install", "npx",
-            ["playwright", "install"],
+            ["playwright", "install", "--with-deps"],
             GetEnsurer(), directory.Name, directory.Path);
     }
 }

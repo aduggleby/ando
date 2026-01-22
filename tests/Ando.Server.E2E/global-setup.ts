@@ -11,6 +11,10 @@
  * When running inside an ANDO container (Docker-in-Docker mode), we use
  * host.docker.internal to reach containers running on the host's Docker.
  * This enables E2E tests to run as part of the ANDO build process.
+ *
+ * Important: When inside a container, we always recreate the test containers
+ * to ensure a fresh state. This is because --dind mode shares the Docker
+ * daemon, so we might see stale containers from previous host runs.
  */
 
 import { execSync, spawnSync } from 'child_process';
@@ -18,7 +22,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 const COMPOSE_FILE = path.resolve(__dirname, '../docker-compose.test.yml');
-const MAX_WAIT_SECONDS = 120;
+const MAX_WAIT_SECONDS = 60;
 
 /**
  * Detect if we're running inside a Docker container.
@@ -69,6 +73,21 @@ function areContainersHealthy(): boolean {
 }
 
 /**
+ * Stop and remove existing containers.
+ */
+function stopContainers(): void {
+  console.log('Stopping existing E2E containers...');
+  try {
+    execSync(`docker compose -f ${COMPOSE_FILE} down --volumes --remove-orphans`, {
+      stdio: 'inherit',
+      cwd: path.dirname(COMPOSE_FILE),
+    });
+  } catch {
+    // Ignore errors if containers don't exist
+  }
+}
+
+/**
  * Start the docker-compose services.
  */
 function startContainers(): void {
@@ -103,7 +122,10 @@ async function waitForServer(): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
 
-  throw new Error(`Server did not become ready within ${MAX_WAIT_SECONDS} seconds`);
+  const hint = isInsideContainer()
+    ? 'Check that host.docker.internal resolves correctly and containers are accessible.'
+    : 'Check docker compose logs for errors: docker compose -f tests/docker-compose.test.yml logs';
+  throw new Error(`Server did not become ready within ${MAX_WAIT_SECONDS} seconds at ${serverUrl}. ${hint}`);
 }
 
 /**
@@ -112,7 +134,18 @@ async function waitForServer(): Promise<void> {
 async function globalSetup(): Promise<void> {
   console.log('\n=== E2E Test Setup ===\n');
 
-  if (areContainersHealthy()) {
+  const inContainer = isInsideContainer();
+  if (inContainer) {
+    console.log('Running inside container (ANDO build with --dind)');
+    console.log('Will recreate containers to ensure fresh state...');
+  }
+
+  // When inside a container, always recreate to ensure fresh state.
+  // The Docker daemon is shared, so we might see stale containers from host runs.
+  if (inContainer) {
+    stopContainers();
+    startContainers();
+  } else if (areContainersHealthy()) {
     console.log('E2E containers are already running and healthy.');
   } else {
     startContainers();

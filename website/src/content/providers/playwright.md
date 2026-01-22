@@ -20,6 +20,20 @@ Configure Playwright test runs with `PlaywrightTestOptions`.
 | `UseNpmScript` | Use `npm run` instead of `npx playwright test` |
 | `NpmScriptName` | Custom npm script name when UseNpmScript is true (defaults to "test") |
 
+## Operations
+
+### Playwright.Install
+
+Installs Playwright browsers and system dependencies. Runs `npx playwright install --with-deps` which:
+- Downloads browser binaries (Chromium, Firefox, WebKit)
+- Installs required system packages (libgtk, libasound, libxrandr, etc.)
+
+This is required before running tests, especially in CI/Docker environments where system dependencies may be missing.
+
+### Playwright.Test
+
+Runs Playwright tests. By default uses `npx playwright test`. Set `UseNpmScript = true` to use `npm run test` instead.
+
 ## Example
 
 Run E2E tests with Playwright.
@@ -31,7 +45,7 @@ var e2e = Directory("./tests/E2E");
 // Install dependencies (prefer ci for reproducible builds)
 Npm.Ci(e2e);
 
-// Install Playwright browsers
+// Install Playwright browsers AND system dependencies
 Playwright.Install(e2e);
 
 // Run all E2E tests
@@ -44,3 +58,11 @@ Playwright.Test(e2e, o => {
     o.Workers = 4;
 });
 ```
+
+## Docker/CI Considerations
+
+When running in Docker or CI environments:
+
+1. **System dependencies**: `Playwright.Install()` automatically installs required system packages via `--with-deps`
+2. **Headless mode**: Tests run headless by default (no display required)
+3. **Docker-in-Docker**: For tests that need docker-compose, see the [Playwright E2E Tests recipe](/recipes/playwright-e2e-tests)
