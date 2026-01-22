@@ -18,6 +18,30 @@ dotnet tool update -g ando
 ando --version
 ```
 
+## 0.9.20
+
+**2026-01-22**
+
+**New Features:**
+
+- Added `Docker.IsAvailable()` method to check if Docker CLI and daemon are accessible
+  - Returns `true` if Docker is available, `false` otherwise
+  - Executes immediately (not registered as a step) for conditional logic in build scripts
+
+**Improvements:**
+
+- Enhanced E2E testing support with Docker-in-Docker mode
+  - Build scripts can now detect Docker availability and conditionally run E2E tests
+  - Updated main build script to use `Docker.IsAvailable()` for cleaner E2E test gating
+  - Improved documentation for running E2E tests with `ando --dind` flag
+
+**Documentation:**
+
+- Updated Playwright E2E testing recipe with Docker-in-Docker best practices
+- Clarified E2E test requirements in build script comments
+
+---
+
 ## 0.9.19
 
 **2026-01-22**
