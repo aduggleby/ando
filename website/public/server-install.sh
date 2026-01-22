@@ -341,6 +341,8 @@ TestKeyForTestingPurposesOnlyDoNotUseInProduction1234567890abcdef
         2)
             # Local file path
             prompt_required "Path to local github-app.pem file" GITHUB_PEM_PATH
+            # Expand tilde to home directory
+            GITHUB_PEM_PATH="${GITHUB_PEM_PATH/#\~/$HOME}"
             if [[ ! -f "$GITHUB_PEM_PATH" ]]; then
                 log_error "File not found: $GITHUB_PEM_PATH"
                 exit 1
