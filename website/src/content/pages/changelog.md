@@ -18,6 +18,31 @@ dotnet tool update -g ando
 ando --version
 ```
 
+## 0.9.23
+
+**2026-01-22**
+
+**New Features:**
+
+- Enhanced `GitHub.CreateRelease()` with optional file uploads
+  - Use `WithFiles()` to attach release assets (e.g., binaries, archives)
+  - Supports `path#name` syntax to rename files (e.g., `"dist/app#app-linux-x64"`)
+  - Files are uploaded as release assets alongside the release creation
+
+**Example:**
+
+```csharp
+GitHub.CreateRelease(o => o
+    .WithTag("v1.0.0")
+    .WithGeneratedNotes()
+    .WithFiles(
+        "dist/linux-x64/app#app-linux-x64",
+        "dist/win-x64/app.exe#app-win-x64.exe"
+    ));
+```
+
+---
+
 ## 0.9.22
 
 **2026-01-22**
