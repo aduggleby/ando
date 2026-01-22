@@ -26,7 +26,7 @@ VERSION=$(grep -oP '(?<=<Version>)[^<]+' "$PROJECT_DIR/Ando.csproj")
 echo "Building and pushing version: $VERSION"
 
 # Run the build with push profile
-dotnet run --project "$PROJECT_DIR/Ando.csproj" -- run -p push --dind "$@"
+dotnet run --project "$PROJECT_DIR/Ando.csproj" -- run -p push --dind --read-env "$@"
 
 # Wait for NuGet to index the new version
 echo ""

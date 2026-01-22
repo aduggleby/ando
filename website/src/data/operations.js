@@ -568,11 +568,12 @@ export const operations = [
   {
     group: "GitHub",
     name: "GitHub.CreateRelease",
-    desc: "Creates a GitHub release. Automatically prefixes version with 'v' if not present.",
+    desc: "Creates a GitHub release with optional file uploads. Automatically prefixes version with 'v' if not present. Use <code>WithFiles()</code> to upload release assets. Supports <code>path#name</code> syntax to rename files.",
     examples: [
       'GitHub.CreateRelease(o => o.WithTag("v1.0.0"));',
       'GitHub.CreateRelease(o => o\n  .WithTag("1.0.0")\n  .WithGeneratedNotes());',
       'GitHub.CreateRelease(o => o\n  .WithTag("v1.0.0")\n  .WithNotes("## Changes\\n- Fixed bug")\n  .AsPrerelease());',
+      'GitHub.CreateRelease(o => o\n  .WithTag("v1.0.0")\n  .WithGeneratedNotes()\n  .WithFiles(\n    "dist/linux-x64/app#app-linux-x64",\n    "dist/win-x64/app.exe#app-win-x64.exe"\n  ));',
     ],
   },
   {

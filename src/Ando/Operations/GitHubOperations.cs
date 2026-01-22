@@ -90,7 +90,7 @@ public class GitHubOperations(
     }
 
     /// <summary>
-    /// Creates a GitHub release.
+    /// Creates a GitHub release with optional file uploads.
     /// </summary>
     /// <param name="configure">Configuration for the release.</param>
     public void CreateRelease(Action<GitHubReleaseOptions> configure)
@@ -113,8 +113,18 @@ public class GitHubOperations(
                 tag = $"v{tag}";
             }
 
-            var args = new ArgumentBuilder()
-                .Add("release", "create", tag)
+            // Build the argument list - files come after the tag.
+            var argsBuilder = new ArgumentBuilder()
+                .Add("release", "create", tag);
+
+            // Add files as positional arguments after the tag.
+            foreach (var file in options.Files)
+            {
+                argsBuilder.Add(file);
+            }
+
+            // Add flags after files.
+            var args = argsBuilder
                 .AddIfNotNull("--title", options.Title ?? tag)
                 .AddIfNotNull("--notes", options.Notes)
                 .AddFlag(options.Draft, "--draft")
@@ -136,7 +146,14 @@ public class GitHubOperations(
                 return false;
             }
 
-            Logger.Info($"Created release: {tag}");
+            if (options.Files.Count > 0)
+            {
+                Logger.Info($"Created release: {tag} with {options.Files.Count} asset(s)");
+            }
+            else
+            {
+                Logger.Info($"Created release: {tag}");
+            }
             return true;
         }, options.Tag ?? "release");
     }
@@ -336,6 +353,9 @@ public class GitHubReleaseOptions
     /// <summary>Don't add 'v' prefix to tag.</summary>
     public bool NoPrefix { get; private set; }
 
+    /// <summary>Files to upload as release assets.</summary>
+    public List<string> Files { get; private set; } = [];
+
     /// <summary>Sets the tag name.</summary>
     public GitHubReleaseOptions WithTag(string tag)
     {
@@ -382,6 +402,13 @@ public class GitHubReleaseOptions
     public GitHubReleaseOptions WithoutPrefix()
     {
         NoPrefix = true;
+        return this;
+    }
+
+    /// <summary>Adds files to upload as release assets.</summary>
+    public GitHubReleaseOptions WithFiles(params string[] files)
+    {
+        Files.AddRange(files);
         return this;
     }
 }

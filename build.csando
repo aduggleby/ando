@@ -3,7 +3,7 @@
 //
 // Profiles:
 // - (default): Build, test, publish executables, create NuGet package
-// - push: Also pushes to NuGet.org, container registry, and deploys docs
+// - push: Also pushes to NuGet.org, container registry, creates GitHub release with binaries, and deploys docs
 // - e2e: Force E2E tests to run (even on Ando.Server)
 //
 // Usage:
@@ -148,6 +148,20 @@ if (push)
     Git.Tag($"v{version}", o => o.WithSkipIfExists());
     Git.Push();
     Git.PushTags();
+
+    // Create GitHub release with binaries
+    // Use path#name syntax to give uploaded files clear names
+    GitHub.CreateRelease(o => o
+        .WithTag(version)
+        .WithGeneratedNotes()
+        .WithFiles(
+            $"{distPath}/win-x64/ando.exe#ando-win-x64.exe",
+            $"{distPath}/win-arm64/ando.exe#ando-win-arm64.exe",
+            $"{distPath}/linux-x64/ando#ando-linux-x64",
+            $"{distPath}/linux-arm64/ando#ando-linux-arm64",
+            $"{distPath}/osx-x64/ando#ando-osx-x64",
+            $"{distPath}/osx-arm64/ando#ando-osx-arm64"
+        ));
 
     // Build and deploy the documentation website
     Ando.Build(Directory("./website"));

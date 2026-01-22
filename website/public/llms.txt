@@ -319,7 +319,7 @@ PlaywrightTestOptions:
 
 ### GitHub
 - GitHub.CreatePr(options) - Create a pull request (requires gh CLI)
-- GitHub.CreateRelease(options) - Create a GitHub release
+- GitHub.CreateRelease(options) - Create a GitHub release with optional file uploads (use WithFiles() to attach assets, supports path#name syntax)
 - GitHub.PushImage(imageName, options?) - Push Docker image to ghcr.io
 
 ### Profiles
@@ -332,7 +332,10 @@ Dotnet.Test(tests);
 
 if (release) {
     Git.Tag("v1.0.0");
-    GitHub.CreateRelease(o => o.WithTag("v1.0.0"));
+    GitHub.CreateRelease(o => o
+        .WithTag("v1.0.0")
+        .WithGeneratedNotes()
+        .WithFiles("dist/app#app-linux", "dist/app.exe#app-windows.exe"));
 }
 ```
 
