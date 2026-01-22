@@ -18,6 +18,20 @@ dotnet tool update -g ando
 ando --version
 ```
 
+## 0.9.17
+
+**2026-01-22**
+
+**Improvements:**
+
+- Enhanced `ProjectRef` to read version directly from `.csproj` files
+  - Access project version via `project.Version` property in build scripts
+  - Example: `Log.Info($"Building {project.Name} version {project.Version}");`
+  - Version is lazily loaded and cached for performance
+  - Returns "0.0.0" if no Version element is found
+
+---
+
 ## 0.9.16
 
 **2026-01-22**
