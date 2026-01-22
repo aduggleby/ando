@@ -18,6 +18,26 @@ dotnet tool update -g ando
 ando --version
 ```
 
+## 0.9.19
+
+**2026-01-22**
+
+**New Features:**
+
+- Added Playwright E2E testing to the main build script with automatic local/server detection
+  - Tests run automatically on local builds where Docker is available
+  - Tests are skipped on Ando.Server (nested Docker) by default
+  - Use `-p e2e` profile to force E2E tests in any environment
+
+**Documentation:**
+
+- Added new Recipes section to the documentation website
+  - New recipe: "Running Playwright E2E Tests" with automatic local/server detection
+- Updated `llms.txt` with links to new recipe documentation
+- Added `.NET Version` section to CLAUDE.md documenting the .NET 9 requirement
+
+---
+
 ## 0.9.18
 
 **2026-01-22**
