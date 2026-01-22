@@ -60,7 +60,7 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 log_step() { echo -e "\n${CYAN}==>${NC} ${CYAN}$1${NC}"; }
 
 confirm() {
-    read -r -p "$1 [y/N] " response
+    read -r -p "$1 [y/N] " response < /dev/tty
     case "$response" in
         [yY][eE][sS]|[yY]) return 0 ;;
         *) return 1 ;;
@@ -74,10 +74,10 @@ prompt_with_default() {
     local is_secret="${4:-false}"
 
     if [[ "$is_secret" == "true" ]]; then
-        read -r -s -p "$prompt [$default]: " value
+        read -r -s -p "$prompt [$default]: " value < /dev/tty
         echo ""
     else
-        read -r -p "$prompt [$default]: " value
+        read -r -p "$prompt [$default]: " value < /dev/tty
     fi
 
     value="${value:-$default}"
@@ -92,10 +92,10 @@ prompt_required() {
 
     while [[ -z "$value" ]]; do
         if [[ "$is_secret" == "true" ]]; then
-            read -r -s -p "$prompt: " value
+            read -r -s -p "$prompt: " value < /dev/tty
             echo ""
         else
-            read -r -p "$prompt: " value
+            read -r -p "$prompt: " value < /dev/tty
         fi
 
         if [[ -z "$value" ]]; then
@@ -337,7 +337,7 @@ PEMEOF
     echo "  3) SMTP"
     echo "  4) Skip (no email notifications)"
     echo ""
-    read -r -p "Select email provider [1-4]: " EMAIL_CHOICE
+    read -r -p "Select email provider [1-4]: " EMAIL_CHOICE < /dev/tty
 
     case "$EMAIL_CHOICE" in
         1)
