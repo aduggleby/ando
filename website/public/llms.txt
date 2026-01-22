@@ -289,6 +289,7 @@ BicepDeployment objects provide typed access to deployment outputs:
 - Nuget.Push(path, options?) - Push package from path/glob (default: nuget.org, skips duplicates)
 
 ### Docker
+- Docker.Install() - Install Docker CLI in container (required for Docker.Build with --dind)
 - Docker.Build(dockerfile, options?) - Build Docker image from Dockerfile
 
 ### Git

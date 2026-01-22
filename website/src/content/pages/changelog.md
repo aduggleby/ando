@@ -18,6 +18,23 @@ dotnet tool update -g ando
 ando --version
 ```
 
+## 0.9.13
+
+**2026-01-22**
+
+**New Features:**
+
+- Added `Docker.Install()` to install Docker CLI in the container for Docker-in-Docker builds
+
+**Improvements:**
+
+- Git commands now always run on the host (not in the container), fixing issues with git operations in containerized builds
+- Added `WithSkipIfExists()` option to `Git.Tag()` to gracefully handle existing tags instead of failing
+- Improved `Nuget.Push()` duplicate handling - now properly detects and reports when a package version already exists
+- Updated GitHub CLI token extraction to support newer `gh` CLI versions
+
+---
+
 ## 0.9.12
 
 **2026-01-21**
