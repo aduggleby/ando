@@ -2,12 +2,15 @@
 // build.csando - ANDO CLI Build and Release Script
 //
 // Profiles:
-// - (default): Build, test, publish executables, create NuGet package
+// - (default): Build, test (including Playwright E2E locally), publish executables, create NuGet package
 // - push: Also pushes to NuGet.org, container registry, and deploys docs
+// - e2e: Force E2E tests even when running on Ando.Server
 //
 // Usage:
-//   ando              # Build and test only
+//   ando              # Build and test only (runs E2E tests locally)
 //   ando -p push      # Build, test, and push to NuGet.org + container registry + deploy docs
+//   ando -p e2e       # Force E2E tests even on Ando.Server
+//   ando -p push,e2e  # Push with forced E2E tests
 //
 // Prerequisites:
 // - NUGET_API_KEY env var set (or enter when prompted) for push profile
@@ -21,6 +24,7 @@
 
 // Define profiles
 var push = DefineProfile("push");
+var e2e = DefineProfile("e2e");  // Force E2E tests even when running on Ando.Server
 
 var project = Dotnet.Project("./src/Ando/Ando.csproj");
 var testProject = Dotnet.Project("./tests/Ando.Tests/Ando.Tests.csproj");
@@ -41,8 +45,30 @@ Dotnet.Restore(project);
 // Build the project
 Dotnet.Build(project);
 
-// Run tests (exclude E2E tests - they need nested Docker which isn't available in build container)
+// Run .NET tests (exclude E2E - they have a separate step below)
 Dotnet.Test(testProject, o => o.Filter = "Category!=E2E");
+
+// Detect if running on Ando.Server (ANDO_HOST_ROOT is set when running in the CI server)
+var isOnServer = Env("ANDO_HOST_ROOT", required: false) != null;
+
+// Run Playwright E2E tests (locally or with -p e2e override)
+// E2E tests require docker-compose for SQL Server and the server container.
+// This works locally but not in nested Docker (Ando.Server) without special setup.
+// Note: Playwright.Test() uses `npx playwright test` directly, which properly propagates
+// exit codes - the build WILL fail if any tests fail. Avoid Npm.Run() with custom scripts
+// that might swallow errors (e.g., "playwright test || true").
+var e2eTests = Directory("./tests/Ando.Server.E2E");
+if (!isOnServer || e2e)
+{
+    Log.Info("Running Playwright E2E tests...");
+    Npm.Ci(e2eTests);
+    Playwright.Install(e2eTests);
+    Playwright.Test(e2eTests);  // Will fail the build if tests fail
+}
+else
+{
+    Log.Info("Skipping E2E tests (running on Ando.Server - use -p e2e to override)");
+}
 
 // Publish for multiple platforms
 var runtimes = new[] { "win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64" };

@@ -77,8 +77,6 @@ public class DockerOperations(
 
         Registry.Register("Docker.Build", async () =>
         {
-            var tag = options.Tag;
-
             // Determine the context directory and dockerfile path.
             var dockerfilePath = dockerfile;
             var contextPath = options.Context ?? ".";
@@ -92,8 +90,13 @@ public class DockerOperations(
 
             var argsBuilder = new ArgumentBuilder()
                 .Add("build")
-                .Add("-f", dockerfilePath)
-                .AddIfNotNull("-t", tag);
+                .Add("-f", dockerfilePath);
+
+            // Add all tags.
+            foreach (var tag in options.Tags)
+            {
+                argsBuilder.Add("-t", tag);
+            }
 
             // Add build arguments.
             foreach (var (key, value) in options.BuildArgs)
@@ -124,21 +127,21 @@ public class DockerOperations(
                 return false;
             }
 
-            if (!string.IsNullOrEmpty(tag))
+            if (options.Tags.Count > 0)
             {
-                Logger.Info($"Built image: {tag}");
+                Logger.Info($"Built image: {string.Join(", ", options.Tags)}");
             }
 
             return true;
-        }, options.Tag ?? dockerfile);
+        }, options.Tags.FirstOrDefault() ?? dockerfile);
     }
 }
 
 /// <summary>Options for 'docker build' command.</summary>
 public class DockerBuildOptions
 {
-    /// <summary>Image tag (e.g., "myapp:v1.0.0").</summary>
-    public string? Tag { get; private set; }
+    /// <summary>Image tags (e.g., "myapp:v1.0.0", "myapp:latest").</summary>
+    public List<string> Tags { get; } = new();
 
     /// <summary>Build context directory (default: current directory).</summary>
     public string? Context { get; private set; }
@@ -152,10 +155,10 @@ public class DockerBuildOptions
     /// <summary>Do not use cache when building.</summary>
     public bool NoCache { get; private set; }
 
-    /// <summary>Sets the image tag.</summary>
+    /// <summary>Adds an image tag. Can be called multiple times for multiple tags.</summary>
     public DockerBuildOptions WithTag(string tag)
     {
-        Tag = tag;
+        Tags.Add(tag);
         return this;
     }
 

@@ -172,6 +172,14 @@ ssh -i ~/.ssh/id_claude root@138.199.223.171 "sudo -u ando XDG_RUNTIME_DIR=/run/
 - Operations register steps; they don't execute immediately
 - Use fluent builders for options (e.g., `WithConfiguration()`, `WithRuntime()`)
 
+## .NET Version
+
+**IMPORTANT: This project uses .NET 9 exclusively. Do NOT upgrade to .NET 10 or any future version.**
+
+- All projects target `net9.0`
+- `global.json` pins the SDK to 9.x versions
+- If prompted to upgrade, decline and keep .NET 9
+
 ## Keeping Documentation in Sync
 
 **IMPORTANT**: When making changes to the codebase:

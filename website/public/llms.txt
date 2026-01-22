@@ -364,3 +364,7 @@ All pages are available in markdown format for LLM consumption:
 - https://andobuild.com/examples/index.md - Examples overview
 - https://andobuild.com/examples/astro.md - Astro + Cloudflare Pages example
 - https://andobuild.com/examples/dotnet-tool.md - .NET CLI tool with NuGet publishing and profiles
+
+### Recipes
+- https://andobuild.com/recipes/index.md - Recipes overview
+- https://andobuild.com/recipes/playwright-e2e-tests.md - Running Playwright E2E tests with automatic local/server detection
