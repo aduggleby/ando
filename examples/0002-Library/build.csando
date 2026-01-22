@@ -19,3 +19,6 @@ Dotnet.Build(Console, o => o.Configuration = Configuration.Release);
 Dotnet.Publish(Console, o => o
     .Output(output)
     .WithConfiguration(Configuration.Release));
+
+// Copy the published files from container to host
+Ando.CopyArtifactsToHost("dist", "./dist");
