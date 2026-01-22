@@ -18,6 +18,18 @@ dotnet tool update -g ando
 ando --version
 ```
 
+## 0.9.18
+
+**2026-01-22**
+
+**Improvements:**
+
+- Added support for Resend-compatible email providers with configurable base URL in Ando.Server
+  - Configure `Email__BaseUrl` to use alternative email providers like Loops or self-hosted Resend instances
+  - Default base URL remains `https://api.resend.com` for standard Resend usage
+
+---
+
 ## 0.9.17
 
 **2026-01-22**
