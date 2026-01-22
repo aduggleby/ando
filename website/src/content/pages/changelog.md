@@ -18,6 +18,16 @@ dotnet tool update -g ando
 ando --version
 ```
 
+## 0.9.14
+
+**2026-01-22**
+
+**Bug Fixes:**
+
+- Fixed input handling in `server-install.sh` to read from `/dev/tty` for better compatibility with piped installations
+
+---
+
 ## 0.9.13
 
 **2026-01-22**
