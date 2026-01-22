@@ -246,14 +246,12 @@ gather_configuration() {
         GITHUB_CLIENT_ID="Iv1.test123"
         GITHUB_CLIENT_SECRET="test-client-secret"
         GITHUB_WEBHOOK_SECRET="test-webhook-secret"
-        # Create test PEM file
-        GITHUB_PEM_PATH="/tmp/test-github-app.pem"
-        cat > "$GITHUB_PEM_PATH" << 'PEMEOF'
------BEGIN RSA PRIVATE KEY-----
+        # Create test PEM content
+        GITHUB_PEM_MODE="content"
+        GITHUB_PEM_CONTENT="-----BEGIN RSA PRIVATE KEY-----
 MIIEowIBAAKCAQEA0Z3VS5JJcds3xfn/ygWyF8PbnGy0AHB7MmE1gFsVwMHOtest
 TestKeyForTestingPurposesOnlyDoNotUseInProduction1234567890abcdef
------END RSA PRIVATE KEY-----
-PEMEOF
+-----END RSA PRIVATE KEY-----"
         ENCRYPTION_KEY=$(generate_encryption_key)
         EMAIL_PROVIDER="None"
         return
@@ -315,12 +313,50 @@ PEMEOF
     echo ""
     echo "GitHub App Private Key:"
     echo "  Download the .pem file from your GitHub App settings"
-    prompt_required "Path to local github-app.pem file" GITHUB_PEM_PATH
+    echo ""
+    echo "  How do you want to provide the private key?"
+    echo "    1) Paste the PEM content (recommended for curl | bash)"
+    echo "    2) Local file path"
+    echo "    3) Already uploaded to server"
+    echo ""
+    read -r -p "Select option [1-3]: " PEM_OPTION < /dev/tty
 
-    if [[ ! -f "$GITHUB_PEM_PATH" ]]; then
-        log_error "File not found: $GITHUB_PEM_PATH"
-        exit 1
-    fi
+    case "$PEM_OPTION" in
+        1)
+            # Paste PEM content
+            echo ""
+            echo "Paste your PEM file content below, then press Enter twice:"
+            GITHUB_PEM_CONTENT=""
+            while IFS= read -r line < /dev/tty; do
+                [[ -z "$line" ]] && break
+                GITHUB_PEM_CONTENT+="$line"$'\n'
+            done
+            if [[ -z "$GITHUB_PEM_CONTENT" ]]; then
+                log_error "No PEM content provided"
+                exit 1
+            fi
+            GITHUB_PEM_PATH=""
+            GITHUB_PEM_MODE="content"
+            ;;
+        2)
+            # Local file path
+            prompt_required "Path to local github-app.pem file" GITHUB_PEM_PATH
+            if [[ ! -f "$GITHUB_PEM_PATH" ]]; then
+                log_error "File not found: $GITHUB_PEM_PATH"
+                exit 1
+            fi
+            GITHUB_PEM_MODE="local"
+            ;;
+        3)
+            # Already on server
+            prompt_with_default "Path on server" "$INSTALL_DIR/config/github-app.pem" GITHUB_PEM_SERVER_PATH
+            GITHUB_PEM_MODE="server"
+            ;;
+        *)
+            log_error "Invalid option"
+            exit 1
+            ;;
+    esac
 
     # --- Encryption Key ---
     echo ""
@@ -653,9 +689,27 @@ transfer_docker_image() {
 transfer_config_files() {
     log_step "Transferring configuration files"
 
-    # Transfer GitHub PEM file
-    scp $SCP_OPTS "$GITHUB_PEM_PATH" "$REMOTE_HOST:$INSTALL_DIR/config/github-app.pem"
-    ssh $SSH_OPTS "$REMOTE_HOST" "chown $ANDO_USER:$ANDO_USER $INSTALL_DIR/config/github-app.pem && chmod 600 $INSTALL_DIR/config/github-app.pem"
+    # Transfer GitHub PEM file based on mode
+    case "$GITHUB_PEM_MODE" in
+        content)
+            # Write pasted content to server
+            ssh $SSH_OPTS "$REMOTE_HOST" "cat > $INSTALL_DIR/config/github-app.pem << 'PEMEOF'
+$GITHUB_PEM_CONTENT
+PEMEOF"
+            ssh $SSH_OPTS "$REMOTE_HOST" "chown $ANDO_USER:$ANDO_USER $INSTALL_DIR/config/github-app.pem && chmod 600 $INSTALL_DIR/config/github-app.pem"
+            ;;
+        local)
+            # SCP local file to server
+            scp $SCP_OPTS "$GITHUB_PEM_PATH" "$REMOTE_HOST:$INSTALL_DIR/config/github-app.pem"
+            ssh $SSH_OPTS "$REMOTE_HOST" "chown $ANDO_USER:$ANDO_USER $INSTALL_DIR/config/github-app.pem && chmod 600 $INSTALL_DIR/config/github-app.pem"
+            ;;
+        server)
+            # File already on server - just copy/link to expected location if different
+            if [[ "$GITHUB_PEM_SERVER_PATH" != "$INSTALL_DIR/config/github-app.pem" ]]; then
+                ssh $SSH_OPTS "$REMOTE_HOST" "cp '$GITHUB_PEM_SERVER_PATH' '$INSTALL_DIR/config/github-app.pem' && chown $ANDO_USER:$ANDO_USER $INSTALL_DIR/config/github-app.pem && chmod 600 $INSTALL_DIR/config/github-app.pem"
+            fi
+            ;;
+    esac
 
     log_success "Configuration files transferred"
 }
