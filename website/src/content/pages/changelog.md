@@ -18,6 +18,19 @@ dotnet tool update -g ando
 ando --version
 ```
 
+## 0.9.15
+
+**2026-01-22**
+
+**Improvements:**
+
+- Refactored GitHub PEM handling in `server-install.sh` for improved flexibility
+  - Added option to paste PEM content directly (recommended for `curl | bash` installations)
+  - Added option to use a file already uploaded to the server
+  - Retained local file path option for compatibility
+
+---
+
 ## 0.9.14
 
 **2026-01-22**
