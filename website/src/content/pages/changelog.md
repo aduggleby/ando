@@ -18,6 +18,16 @@ dotnet tool update -g ando
 ando --version
 ```
 
+## 0.9.16
+
+**2026-01-22**
+
+**Improvements:**
+
+- Expanded tilde (`~`) to home directory for `GITHUB_PEM_PATH` in `server-install.sh`
+
+---
+
 ## 0.9.15
 
 **2026-01-22**
