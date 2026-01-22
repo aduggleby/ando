@@ -76,6 +76,7 @@ var distDir = Directory("./frontend") / "dist";
 ### .NET Build + Test + Publish
 ```csharp
 var project = Dotnet.Project("./src/MyApp/MyApp.csproj");
+Log.Info($"Building {project.Name} version {project.Version}");
 
 Dotnet.Restore(project);
 Dotnet.Build(project);
@@ -212,7 +213,7 @@ Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");
 
 ### Dotnet
 - Dotnet.SdkInstall(version?) - Install .NET SDK globally (default: 9.0). Use for base images without .NET.
-- Dotnet.Project(path) - Create a .NET project reference from a .csproj path
+- Dotnet.Project(path) - Create a .NET project reference from a .csproj path. Returns ProjectRef with Path, Name, Directory, and Version properties.
 - Dotnet.Restore(project) - Restore NuGet packages
 - Dotnet.Build(project) - Compile a project
 - Dotnet.Test(project) - Run unit tests

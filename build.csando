@@ -25,12 +25,8 @@ var push = DefineProfile("push");
 var project = Dotnet.Project("./src/Ando/Ando.csproj");
 var testProject = Dotnet.Project("./tests/Ando.Tests/Ando.Tests.csproj");
 
-// Read version from csproj during script loading (runs on host).
-// We use Environment.CurrentDirectory since Root points to /workspace (container path).
-var csprojPath = Path.Combine(Environment.CurrentDirectory, "src/Ando/Ando.csproj");
-var csprojContent = File.ReadAllText(csprojPath);
-var versionMatch = System.Text.RegularExpressions.Regex.Match(csprojContent, @"<Version>(\d+\.\d+\.\d+)</Version>");
-var version = versionMatch.Success ? versionMatch.Groups[1].Value : "0.0.0";
+// Get version from the project file.
+var version = project.Version;
 Log.Info($"Building version: {version}");
 
 // Base output directory

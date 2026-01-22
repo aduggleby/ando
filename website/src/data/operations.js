@@ -111,8 +111,12 @@ export const operations = [
   {
     group: "Dotnet",
     name: "Dotnet.Project",
-    desc: "Creates a reference to a .NET project file (.csproj). Used with Dotnet and Ef operations.",
-    examples: ['var app = Dotnet.Project("./src/MyApp/MyApp.csproj");', "Dotnet.Build(app);"],
+    desc: "Creates a reference to a .NET project file (.csproj). Used with Dotnet and Ef operations. The returned <code>ProjectRef</code> has properties: <code>Path</code>, <code>Name</code>, <code>Directory</code>, and <code>Version</code> (reads from csproj).",
+    examples: [
+      'var app = Dotnet.Project("./src/MyApp/MyApp.csproj");',
+      "Dotnet.Build(app);",
+      'Log.Info($"Building {app.Name} version {app.Version}");',
+    ],
   },
   {
     group: "Dotnet",
