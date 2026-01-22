@@ -16,6 +16,7 @@ ando run
 - `ando verify` - Check build script for errors without executing
 - `ando clean` - Remove artifacts, temp files, and containers
 - `ando help` - Show available commands
+- `ando --version` or `ando -v` - Show version number
 
 ### Run Options
 

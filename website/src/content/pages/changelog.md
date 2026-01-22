@@ -18,6 +18,29 @@ dotnet tool update -g ando
 ando --version
 ```
 
+## 0.9.21
+
+**2026-01-22**
+
+**New Features:**
+
+- Added `--version` / `-v` CLI command to display the installed ANDO version
+  - Usage: `ando --version` or `ando -v`
+
+**Improvements:**
+
+- Enhanced `Playwright.Install()` to automatically install system dependencies
+  - Now runs `npx playwright install --with-deps` instead of just `npx playwright install`
+  - Automatically installs required system packages (libgtk, libasound, etc.) on Linux
+  - Improves reliability when running E2E tests in Docker containers
+- Improved Docker-in-Docker (`--dind`) support on Linux
+  - Added `host.docker.internal` hostname mapping for containers
+  - Containers can now reach services on the host via `host.docker.internal`
+  - Useful for E2E tests that need to connect to locally running servers
+- Updated all examples to include `Ando.CopyArtifactsToHost()` for copying build outputs to host
+
+---
+
 ## 0.9.20
 
 **2026-01-22**
