@@ -54,6 +54,11 @@ RUN dotnet publish -c Release -o /app
 # -----------------------------------------------------------------------------
 FROM mcr.microsoft.com/dotnet/aspnet:9.0
 
+# OCI labels to link container to GitHub repository
+LABEL org.opencontainers.image.source="https://github.com/aduggleby/ando"
+LABEL org.opencontainers.image.description="ANDO CI Server - A typed C# build system"
+LABEL org.opencontainers.image.licenses="MIT"
+
 # Install Docker CLI for Docker-in-Docker capability.
 # The server needs to spawn Docker containers for builds.
 RUN apt-get update && \

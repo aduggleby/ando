@@ -24,8 +24,15 @@ set -euo pipefail
 # -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Handle both direct execution and piped execution (curl | bash)
+if [[ -n "${BASH_SOURCE[0]:-}" && "${BASH_SOURCE[0]}" != "bash" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+else
+    # Piped execution - these are only needed for --build-local
+    SCRIPT_DIR=""
+    PROJECT_ROOT=""
+fi
 DOCKER_IMAGE_NAME="ando-server"
 DOCKER_IMAGE_TAG="latest"
 GHCR_IMAGE="ghcr.io/aduggleby/ando-server"
@@ -33,6 +40,7 @@ SQL_SERVER_IMAGE="mcr.microsoft.com/mssql/server:2022-latest"
 ANDO_USER="ando"
 BUILD_LOCAL="false"
 USE_EXTERNAL_SQL="false"
+TEST_MODE="false"
 
 # Colors
 RED='\033[0;31m'
@@ -122,6 +130,10 @@ validate_args() {
                 USE_EXTERNAL_SQL="true"
                 shift
                 ;;
+            --test)
+                TEST_MODE="true"
+                shift
+                ;;
             -*)
                 echo "Unknown option: $1"
                 exit 1
@@ -185,6 +197,11 @@ check_local_requirements() {
 
     # Only check for Dockerfile when building locally
     if [[ "$BUILD_LOCAL" == "true" ]]; then
+        if [[ -z "$PROJECT_ROOT" ]]; then
+            log_error "--build-local requires running the script directly, not via curl pipe."
+            log_error "Download the script first: curl -fsSL https://andobuild.com/server-install.sh -o server-install.sh"
+            exit 1
+        fi
         if [[ ! -f "$PROJECT_ROOT/src/Ando.Server/Dockerfile" ]]; then
             log_error "Cannot find Ando.Server Dockerfile. Run this script from the ando project root."
             exit 1
@@ -213,6 +230,35 @@ check_remote_connection() {
 # -----------------------------------------------------------------------------
 gather_configuration() {
     log_step "Gathering configuration"
+
+    # Test mode uses predefined values
+    if [[ "$TEST_MODE" == "true" ]]; then
+        log_info "Using test mode configuration"
+        INSTALL_DIR="/opt/ando"
+        USE_ISOLATED_NETWORK="true"
+        NETWORK_NAME="ando-network"
+        DOMAIN_NAME="test.andobuild.com"
+        ADMIN_EMAIL="admin@test.andobuild.com"
+        SA_PASSWORD="TestPassword123!Aa"
+        DATABASE_NAME="AndoServer"
+        GITHUB_APP_ID="12345"
+        GITHUB_APP_NAME="test-app"
+        GITHUB_CLIENT_ID="Iv1.test123"
+        GITHUB_CLIENT_SECRET="test-client-secret"
+        GITHUB_WEBHOOK_SECRET="test-webhook-secret"
+        # Create test PEM file
+        GITHUB_PEM_PATH="/tmp/test-github-app.pem"
+        cat > "$GITHUB_PEM_PATH" << 'PEMEOF'
+-----BEGIN RSA PRIVATE KEY-----
+MIIEowIBAAKCAQEA0Z3VS5JJcds3xfn/ygWyF8PbnGy0AHB7MmE1gFsVwMHOtest
+TestKeyForTestingPurposesOnlyDoNotUseInProduction1234567890abcdef
+-----END RSA PRIVATE KEY-----
+PEMEOF
+        ENCRYPTION_KEY=$(generate_encryption_key)
+        EMAIL_PROVIDER="None"
+        return
+    fi
+
     echo ""
     echo "Please provide the following configuration values."
     echo "Press Enter to accept defaults shown in brackets."
@@ -363,18 +409,25 @@ pull_docker_image_remote() {
     # Get ando user's UID
     ANDO_UID=$(ssh $SSH_OPTS "$REMOTE_HOST" "id -u $ANDO_USER")
 
-    ssh $SSH_OPTS "$REMOTE_HOST" bash << EOF
+    # Pull and tag the image, capturing the exit code
+    if ! ssh $SSH_OPTS "$REMOTE_HOST" bash << EOF
 set -euo pipefail
 
 # Pull image as ando user with rootless Docker
-runuser -l $ANDO_USER -c "
+runuser -l $ANDO_USER -c '
+set -euo pipefail
 export DOCKER_HOST=unix:///run/user/$ANDO_UID/docker.sock
-echo 'Pulling $GHCR_IMAGE:$DOCKER_IMAGE_TAG...'
-docker pull $GHCR_IMAGE:$DOCKER_IMAGE_TAG
-docker tag $GHCR_IMAGE:$DOCKER_IMAGE_TAG $DOCKER_IMAGE_NAME:$DOCKER_IMAGE_TAG
-echo 'Image pulled and tagged as $DOCKER_IMAGE_NAME:$DOCKER_IMAGE_TAG'
-"
+echo "Pulling $GHCR_IMAGE:$DOCKER_IMAGE_TAG..."
+docker pull $GHCR_IMAGE:$DOCKER_IMAGE_TAG || exit 1
+docker tag $GHCR_IMAGE:$DOCKER_IMAGE_TAG $DOCKER_IMAGE_NAME:$DOCKER_IMAGE_TAG || exit 1
+echo "Image pulled and tagged as $DOCKER_IMAGE_NAME:$DOCKER_IMAGE_TAG"
+'
 EOF
+    then
+        log_error "Failed to pull Docker image from ghcr.io"
+        log_error "Make sure the image exists: $GHCR_IMAGE:$DOCKER_IMAGE_TAG"
+        exit 1
+    fi
 
     log_success "Docker image pulled from ghcr.io"
 }

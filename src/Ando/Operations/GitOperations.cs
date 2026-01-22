@@ -29,13 +29,34 @@ namespace Ando.Operations;
 /// <summary>
 /// Git CLI operations for version control.
 /// Methods register steps in the workflow rather than executing immediately.
+/// Git commands always run on the HOST (not in containers) since .git lives on host.
 /// </summary>
-public class GitOperations(
-    StepRegistry registry,
-    IBuildLogger logger,
-    Func<ICommandExecutor> executorFactory)
-    : OperationsBase(registry, logger, executorFactory)
+public class GitOperations : OperationsBase
 {
+    // Host executor for git commands - git must run on host where .git directory exists.
+    private readonly ICommandExecutor _hostExecutor;
+
+    public GitOperations(
+        StepRegistry registry,
+        IBuildLogger logger,
+        Func<ICommandExecutor> executorFactory)
+        : base(registry, logger, executorFactory)
+    {
+        // Always use ProcessRunner for git - it runs on host, not in container.
+        _hostExecutor = new Execution.ProcessRunner(logger);
+    }
+
+    // Registers a git command that runs on the host (not in container).
+    private void RegisterHostCommand(string stepName, Func<ArgumentBuilder> buildArgs, string? context = null)
+    {
+        Registry.Register(stepName, async () =>
+        {
+            var args = buildArgs().Build();
+            var result = await _hostExecutor.ExecuteAsync("git", args);
+            return result.Success;
+        }, context);
+    }
+
     /// <summary>
     /// Creates a git tag with the specified name.
     /// </summary>
@@ -46,13 +67,29 @@ public class GitOperations(
         var options = new GitTagOptions();
         configure?.Invoke(options);
 
-        RegisterCommand("Git.Tag", "git",
-            () => new ArgumentBuilder()
+        Registry.Register("Git.Tag", async () =>
+        {
+            // Check if tag already exists when SkipIfExists is enabled
+            if (options.SkipIfExists)
+            {
+                var checkResult = await _hostExecutor.ExecuteAsync("git", ["tag", "-l", tagName]);
+                if (checkResult.Success && !string.IsNullOrWhiteSpace(checkResult.Output))
+                {
+                    Logger.Warning($"Tag '{tagName}' already exists - skipped");
+                    return true;
+                }
+            }
+
+            var args = new ArgumentBuilder()
                 .Add("tag")
                 .AddFlag(options.Annotated, "-a")
                 .Add(tagName)
-                .AddIf(options.Annotated, "-m", options.Message ?? tagName),
-            tagName);
+                .AddIf(options.Annotated, "-m", options.Message ?? tagName)
+                .Build();
+
+            var result = await _hostExecutor.ExecuteAsync("git", args);
+            return result.Success;
+        }, tagName);
     }
 
     /// <summary>
@@ -64,7 +101,7 @@ public class GitOperations(
         var options = new GitPushOptions();
         configure?.Invoke(options);
 
-        RegisterCommand("Git.Push", "git",
+        RegisterHostCommand("Git.Push",
             () => new ArgumentBuilder()
                 .Add("push")
                 .AddIfNotNull(options.Remote)
@@ -79,7 +116,7 @@ public class GitOperations(
     /// <param name="remote">The remote to push to (default: origin).</param>
     public void PushTags(string remote = "origin")
     {
-        RegisterCommand("Git.PushTags", "git",
+        RegisterHostCommand("Git.PushTags",
             () => new ArgumentBuilder()
                 .Add("push", remote, "--tags"),
             remote);
@@ -93,7 +130,7 @@ public class GitOperations(
     {
         var pathsToAdd = paths.Length > 0 ? paths : ["."];
 
-        RegisterCommand("Git.Add", "git",
+        RegisterHostCommand("Git.Add",
             () => new ArgumentBuilder()
                 .Add("add")
                 .Add(pathsToAdd),
@@ -110,7 +147,7 @@ public class GitOperations(
         var options = new GitCommitOptions();
         configure?.Invoke(options);
 
-        RegisterCommand("Git.Commit", "git",
+        RegisterHostCommand("Git.Commit",
             () => new ArgumentBuilder()
                 .Add("commit", "-m", message)
                 .AddFlag(options.AllowEmpty, "--allow-empty"));
@@ -126,6 +163,9 @@ public class GitTagOptions
     /// <summary>Message for annotated tag. Defaults to tag name if not set.</summary>
     public string? Message { get; set; }
 
+    /// <summary>Skip creating the tag if it already exists (instead of failing).</summary>
+    public bool SkipIfExists { get; set; }
+
     /// <summary>Sets the tag message.</summary>
     public GitTagOptions WithMessage(string message)
     {
@@ -137,6 +177,13 @@ public class GitTagOptions
     public GitTagOptions AsLightweight()
     {
         Annotated = false;
+        return this;
+    }
+
+    /// <summary>Skip creating the tag if it already exists (shows warning instead of failing).</summary>
+    public GitTagOptions WithSkipIfExists()
+    {
+        SkipIfExists = true;
         return this;
     }
 }

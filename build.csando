@@ -25,8 +25,10 @@ var push = DefineProfile("push");
 var project = Dotnet.Project("./src/Ando/Ando.csproj");
 var testProject = Dotnet.Project("./tests/Ando.Tests/Ando.Tests.csproj");
 
-// Read version from csproj
-var csprojContent = File.ReadAllText(Root / "src/Ando/Ando.csproj");
+// Read version from csproj during script loading (runs on host).
+// We use Environment.CurrentDirectory since Root points to /workspace (container path).
+var csprojPath = Path.Combine(Environment.CurrentDirectory, "src/Ando/Ando.csproj");
+var csprojContent = File.ReadAllText(csprojPath);
 var versionMatch = System.Text.RegularExpressions.Regex.Match(csprojContent, @"<Version>(\d+\.\d+\.\d+)</Version>");
 var version = versionMatch.Success ? versionMatch.Groups[1].Value : "0.0.0";
 Log.Info($"Building version: {version}");
@@ -43,8 +45,8 @@ Dotnet.Restore(project);
 // Build the project
 Dotnet.Build(project);
 
-// Run tests
-Dotnet.Test(testProject);
+// Run tests (exclude E2E tests - they need nested Docker which isn't available in build container)
+Dotnet.Test(testProject, o => o.Filter = "Category!=E2E");
 
 // Publish for multiple platforms
 var runtimes = new[] { "win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64" };
@@ -69,15 +71,23 @@ if (push)
 {
     // Push to NuGet (skip if version already exists)
     Nuget.EnsureAuthenticated();
-    Nuget.Push(project, o => o.SkipDuplicate());
+    Nuget.Push(project, o => o.SkipDuplicates());
+
+    // Install Docker CLI (needed for --dind mode)
+    Docker.Install();
 
     // Build server Docker image with version tag
     Docker.Build("./src/Ando.Server/Dockerfile", o => o
         .WithTag($"ando-server:{version}")
         .WithContext("."));
 
-    // Tag git repo with version
-    Git.Tag($"v{version}");
+    // Push container image to GitHub Container Registry (ghcr.io)
+    GitHub.PushImage("ando-server", o => o
+        .WithTag(version)
+        .WithOwner("aduggleby"));
+
+    // Tag git repo with version (skip if already exists)
+    Git.Tag($"v{version}", o => o.WithSkipIfExists());
     Git.Push();
     Git.PushTags();
 

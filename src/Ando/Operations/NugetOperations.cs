@@ -113,14 +113,7 @@ public class NugetOperations : OperationsBase
         var projectDir = Path.GetDirectoryName(project.Path) ?? ".";
         var packagePattern = Path.Combine(projectDir, "bin", "Release", "*.nupkg");
 
-        RegisterCommand("Nuget.Push", "dotnet",
-            () => new ArgumentBuilder()
-                .Add("nuget", "push", packagePattern)
-                .AddIfNotNull("--source", options.Source ?? NugetPushOptions.NuGetOrgSource)
-                .AddIfNotNull("--api-key", GetEffectiveApiKey(options))
-                .AddFlag(options.SkipDuplicate, "--skip-duplicate")
-                .AddFlag(options.NoSymbols, "--no-symbols"),
-            project.Name);
+        RegisterNugetPush(packagePattern, options, project.Name);
     }
 
     /// <summary>
@@ -136,14 +129,34 @@ public class NugetOperations : OperationsBase
 
         EnsureApiKeyCaptured();
 
-        RegisterCommand("Nuget.Push", "dotnet",
-            () => new ArgumentBuilder()
+        RegisterNugetPush(packagePath, options, Path.GetFileName(packagePath));
+    }
+
+    // Registers the NuGet push step with duplicate detection.
+    private void RegisterNugetPush(string packagePath, NugetPushOptions options, string context)
+    {
+        Registry.Register("Nuget.Push", async () =>
+        {
+            var args = new ArgumentBuilder()
                 .Add("nuget", "push", packagePath)
                 .AddIfNotNull("--source", options.Source ?? NugetPushOptions.NuGetOrgSource)
                 .AddIfNotNull("--api-key", GetEffectiveApiKey(options))
                 .AddFlag(options.SkipDuplicate, "--skip-duplicate")
-                .AddFlag(options.NoSymbols, "--no-symbols"),
-            Path.GetFileName(packagePath));
+                .AddFlag(options.NoSymbols, "--no-symbols")
+                .Build();
+
+            var result = await ExecutorFactory().ExecuteAsync("dotnet", args);
+
+            // Check for duplicate/conflict in output (NuGet returns 409 Conflict).
+            var output = result.Output + result.Error;
+            if (options.SkipDuplicate && (output.Contains("409") || output.Contains("already exists")))
+            {
+                Logger.Warning("Package version already exists on NuGet - skipped");
+                return true; // Still success since SkipDuplicates was requested
+            }
+
+            return result.Success;
+        }, context);
     }
 
     /// <summary>

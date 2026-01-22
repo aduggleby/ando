@@ -510,17 +510,17 @@ export const operations = [
   {
     group: "Nuget",
     name: "Nuget.Push",
-    desc: "Push packages to a feed. Pass a ProjectRef to push from `bin/Release/*.nupkg`, or a path/glob. **Defaults:** NuGet.org, skip duplicates (won't fail if version already exists).",
+    desc: "Push packages to a feed. Pass a ProjectRef to push from `bin/Release/*.nupkg`, or a path/glob. **Defaults:** NuGet.org. Use <code>SkipDuplicates()</code> to avoid failure if version already exists (shows warning instead).",
     examples: [
-      'var app = Dotnet.Project("./src/MyLib/MyLib.csproj");\nNuget.Pack(app);\nNuget.EnsureAuthenticated();\nNuget.Push(app);',
+      'var app = Dotnet.Project("./src/MyLib/MyLib.csproj");\nNuget.Pack(app);\nNuget.EnsureAuthenticated();\nNuget.Push(app, o => o.SkipDuplicates());',
       'Nuget.Push("./packages/MyLib.1.0.0.nupkg");',
     ],
   },
-  // Git operations
+  // Git operations - ALL run on HOST (not in container)
   {
     group: "Git",
     name: "Git.Tag",
-    desc: "Creates a git tag. By default creates annotated tags.",
+    desc: "Creates a git tag. By default creates annotated tags. <strong>Runs on host</strong> (not in container).",
     examples: [
       'Git.Tag("v1.0.0");',
       'Git.Tag("v1.0.0", o => o.WithMessage("Release notes here"));',
@@ -530,25 +530,25 @@ export const operations = [
   {
     group: "Git",
     name: "Git.Push",
-    desc: "Pushes the current branch to the remote repository.",
+    desc: "Pushes the current branch to the remote repository. <strong>Runs on host</strong> (not in container).",
     examples: ["Git.Push();", 'Git.Push(o => o.ToRemote("upstream"));', "Git.Push(o => o.WithUpstream()); // -u flag"],
   },
   {
     group: "Git",
     name: "Git.PushTags",
-    desc: "Pushes all tags to the remote repository.",
+    desc: "Pushes all tags to the remote repository. <strong>Runs on host</strong> (not in container).",
     examples: ["Git.PushTags();", 'Git.PushTags("upstream");'],
   },
   {
     group: "Git",
     name: "Git.Add",
-    desc: "Adds files to the git staging area.",
+    desc: "Adds files to the git staging area. <strong>Runs on host</strong> (not in container).",
     examples: ['Git.Add("."); // Add all', 'Git.Add("src/", "tests/");'],
   },
   {
     group: "Git",
     name: "Git.Commit",
-    desc: "Commits staged changes with a message.",
+    desc: "Commits staged changes with a message. <strong>Runs on host</strong> (not in container).",
     examples: ['Git.Commit("Release v1.0.0");', 'Git.Commit("Empty commit", o => o.WithAllowEmpty());'],
   },
   // GitHub operations
@@ -583,10 +583,16 @@ export const operations = [
   // Docker operations
   {
     group: "Docker",
+    name: "Docker.Install",
+    desc: "Installs the Docker CLI in the container. Required before using <code>Docker.Build</code> when running with <code>--dind</code>. Skips if already installed.",
+    examples: ['Docker.Install();\nDocker.Build("Dockerfile", o => o.WithTag("myapp:latest"));'],
+  },
+  {
+    group: "Docker",
     name: "Docker.Build",
-    desc: "Builds a Docker image from a Dockerfile.",
+    desc: "Builds a Docker image from a Dockerfile. <strong>Requires <code>--dind</code> CLI flag</strong> to mount the Docker socket. Call <code>Docker.Install()</code> first to install the Docker CLI in the container.",
     examples: [
-      'Docker.Build("Dockerfile", o => o.WithTag("myapp:latest"));',
+      '// Run with: ando --dind\nDocker.Install();\nDocker.Build("Dockerfile", o => o.WithTag("myapp:latest"));',
       'Docker.Build("./src/MyApp/Dockerfile", o => o\n  .WithTag("myapp:v1.0.0")\n  .WithBuildArg("VERSION", "1.0.0")\n  .WithPlatform("linux/amd64"));',
     ],
   },

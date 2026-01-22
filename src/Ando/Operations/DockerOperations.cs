@@ -34,6 +34,38 @@ public class DockerOperations(
     : OperationsBase(registry, logger, executorFactory)
 {
     /// <summary>
+    /// Installs the Docker CLI in the container.
+    /// Required before using Docker.Build when running with --dind.
+    /// </summary>
+    public void Install()
+    {
+        Registry.Register("Docker.Install", async () =>
+        {
+            // Check if docker is already installed.
+            var checkResult = await ExecutorFactory().ExecuteAsync("which", ["docker"]);
+            if (checkResult.Success)
+            {
+                Logger.Info("Docker CLI already installed");
+                return true;
+            }
+
+            // Install Docker CLI using the official convenience script.
+            // This works on most Linux distributions.
+            var installResult = await ExecutorFactory().ExecuteAsync("bash", ["-c",
+                "curl -fsSL https://get.docker.com | sh"]);
+
+            if (!installResult.Success)
+            {
+                Logger.Error($"Failed to install Docker CLI: {installResult.Error}");
+                return false;
+            }
+
+            Logger.Info("Docker CLI installed");
+            return true;
+        });
+    }
+
+    /// <summary>
     /// Builds a Docker image from a Dockerfile.
     /// </summary>
     /// <param name="dockerfile">Path to the Dockerfile or directory containing it.</param>

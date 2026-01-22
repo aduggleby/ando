@@ -32,8 +32,9 @@ Npm.Install(website);
 // Build the Astro site (outputs to ./dist).
 Npm.Build(website);
 
-// Run E2E tests (only with -p test or -p push)
-if (test || push)
+// Run E2E tests (only with -p test)
+// Note: Push profile skips tests since they're not required for deployment
+if (test)
 {
     Playwright.Install(website);
     Playwright.Test(website);

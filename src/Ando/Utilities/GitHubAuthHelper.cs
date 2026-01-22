@@ -104,7 +104,7 @@ public class GitHubAuthHelper
             return token;
         }
 
-        // Priority 3: Extract from gh CLI config file.
+        // Priority 3: Extract from gh CLI config file (legacy - older gh versions).
         token = ExtractFromGhConfig();
         if (!string.IsNullOrEmpty(token))
         {
@@ -112,8 +112,52 @@ public class GitHubAuthHelper
             return token;
         }
 
+        // Priority 4: Use `gh auth token` command (newer gh versions use keyring).
+        token = ExtractFromGhAuthToken();
+        if (!string.IsNullOrEmpty(token))
+        {
+            _logger.Debug("Using token from gh auth token command");
+            return token;
+        }
+
         _logger.Debug("No GitHub token found");
         return null;
+    }
+
+    // Gets token using `gh auth token` command.
+    // This works when gh CLI stores tokens in the system keyring (newer versions).
+    private string? ExtractFromGhAuthToken()
+    {
+        try
+        {
+            var startInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "gh",
+                Arguments = "auth token",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = System.Diagnostics.Process.Start(startInfo);
+            if (process == null) return null;
+
+            var output = process.StandardOutput.ReadToEnd().Trim();
+            process.WaitForExit(5000);
+
+            if (process.ExitCode == 0 && !string.IsNullOrEmpty(output))
+            {
+                return output;
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug($"Failed to run gh auth token: {ex.Message}");
+            return null;
+        }
     }
 
     // Extracts the oauth_token from gh CLI config file.
