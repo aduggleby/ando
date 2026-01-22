@@ -1,11 +1,37 @@
 import { defineConfig, devices } from '@playwright/test';
+import * as fs from 'fs';
 
 /**
  * Playwright configuration for Ando.Server E2E tests.
  *
  * Uses a test-specific base URL and ensures proper isolation between tests.
  * Requires a SQL Server container (ando-e2e-sqlserver) to be running.
+ *
+ * Container Detection:
+ * When running inside an ANDO container (Docker-in-Docker mode), tests
+ * connect via host.docker.internal instead of localhost. This allows
+ * the tests to reach containers started on the host's Docker daemon.
  */
+
+/**
+ * Detect if we're running inside a Docker container.
+ * The /.dockerenv file exists in Docker containers.
+ */
+function isInsideContainer(): boolean {
+  return fs.existsSync('/.dockerenv');
+}
+
+/**
+ * Get the appropriate base URL based on the environment.
+ * - Inside container: use host.docker.internal to reach host's Docker
+ * - Outside container: use localhost
+ */
+function getBaseUrl(): string {
+  const port = 17100;
+  const host = isInsideContainer() ? 'host.docker.internal' : 'localhost';
+  return `http://${host}:${port}`;
+}
+
 export default defineConfig({
   testDir: './tests',
 
@@ -36,7 +62,8 @@ export default defineConfig({
   // Shared settings for all projects
   use: {
     // Base URL for the test server (project port range: 17100-17199)
-    baseURL: process.env.BASE_URL || 'http://localhost:17100',
+    // Uses host.docker.internal when running inside a container (ANDO build)
+    baseURL: process.env.BASE_URL || getBaseUrl(),
 
     // Collect trace on first retry
     trace: 'on-first-retry',

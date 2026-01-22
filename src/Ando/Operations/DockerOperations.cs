@@ -17,6 +17,7 @@
 // - Registry push handled by specific providers (GitHub, Azure, etc.)
 // =============================================================================
 
+using System.Diagnostics;
 using Ando.Execution;
 using Ando.Logging;
 using Ando.Steps;
@@ -33,6 +34,38 @@ public class DockerOperations(
     Func<ICommandExecutor> executorFactory)
     : OperationsBase(registry, logger, executorFactory)
 {
+    /// <summary>
+    /// Checks if Docker CLI is available and the Docker daemon is accessible.
+    /// Use this to conditionally skip operations that require Docker.
+    /// This executes immediately (not registered as a step).
+    /// </summary>
+    /// <returns>True if Docker is available and working, false otherwise.</returns>
+    public bool IsAvailable()
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "docker",
+                Arguments = "info",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+
+            using var process = Process.Start(startInfo);
+            if (process == null) return false;
+
+            process.WaitForExit(5000);
+            return process.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     /// <summary>
     /// Installs the Docker CLI in the container.
     /// Required before using Docker.Build when running with --dind.

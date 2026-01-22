@@ -1,6 +1,6 @@
 ---
-title: Running Playwright E2E Tests
-description: Add browser-based end-to-end tests to your ANDO build with automatic local/server detection.
+title: Playwright E2E Tests in ANDO Builds
+description: Run browser-based end-to-end tests inside ANDO builds using Docker-in-Docker mode.
 difficulty: intermediate
 tags:
   - testing
@@ -11,170 +11,227 @@ tags:
 
 ## Overview
 
-Playwright E2E tests provide powerful browser-based testing for your web applications. However, running them in a CI environment like ANDO requires special consideration because E2E tests often need additional infrastructure (databases, application servers) running in Docker containers.
+Playwright E2E tests provide powerful browser-based testing for web applications. This recipe shows how to run them inside ANDO builds using Docker-in-Docker (sibling containers) mode.
 
-This recipe shows how to conditionally run Playwright E2E tests based on the build environment, with an override mechanism when you need to force execution.
+## The Challenge
 
-## The Problem
-
-When ANDO builds run on the CI server, they execute inside Docker containers. If your E2E tests use `docker-compose` to spin up infrastructure (databases, the application under test), you end up with **triple-nested Docker**:
+E2E tests typically use `docker-compose` to spin up test infrastructure (databases, application servers). Running this inside an ANDO build container creates nested Docker execution:
 
 ```
 Host Machine
-└── ANDO Server (Docker container)
-    └── Build Container (nested Docker)
-        └── E2E Infrastructure (docker-compose) ← This fails!
+└── ANDO Build Container
+    └── docker-compose (E2E Infrastructure) ← Doesn't work by default!
 ```
 
-Running Docker-in-Docker-in-Docker is complex and often doesn't work without special configuration. The simplest solution is to skip E2E tests when running on the ANDO server and run them locally where Docker is directly available.
+## The Solution: Docker-in-Docker Mode
 
-## The Solution
+ANDO's `--dind` flag enables Docker-in-Docker mode, giving the build container access to the host's Docker daemon. Containers started by `docker-compose` become **siblings** to the build container rather than nested inside it:
 
-ANDO sets the `ANDO_HOST_ROOT` environment variable when builds run on the CI server. We can use this to detect the environment and conditionally run E2E tests:
+```
+Host Machine (Docker Daemon)
+├── ANDO Build Container (runs tests)
+├── SQL Server Container (sibling)
+└── Web Server Container (sibling)
+```
 
-- **`ANDO_HOST_ROOT` not set**: Running locally - run E2E tests
-- **`ANDO_HOST_ROOT` set**: Running on ANDO server - skip E2E tests by default
-- **`-p e2e` profile**: Force E2E tests regardless of environment
+## Implementation
 
-## Complete Example
+### 1. Container Detection in Tests
+
+Your Playwright configuration needs to detect when running inside a container and connect via `host.docker.internal` instead of `localhost`:
+
+```typescript
+// playwright.config.ts
+import * as fs from 'fs';
+
+function isInsideContainer(): boolean {
+  return fs.existsSync('/.dockerenv');
+}
+
+function getBaseUrl(): string {
+  const port = 17100;
+  const host = isInsideContainer() ? 'host.docker.internal' : 'localhost';
+  return `http://${host}:${port}`;
+}
+
+export default defineConfig({
+  use: {
+    baseURL: process.env.BASE_URL || getBaseUrl(),
+  },
+  // ... rest of config
+});
+```
+
+Apply the same pattern in your `global-setup.ts` for health checks:
+
+```typescript
+// global-setup.ts
+function getServerUrl(): string {
+  const port = 17100;
+  const host = isInsideContainer() ? 'host.docker.internal' : 'localhost';
+  return `http://${host}:${port}/health`;
+}
+```
+
+### 2. Build Script Integration
+
+Add E2E tests to your `build.csando` with environment and Docker detection:
 
 ```csharp
-// build.csando - Build script with conditional E2E tests
-//
-// Profiles:
-// - (default): Build, test, run E2E locally
-// - e2e: Force E2E tests even on ANDO server
-//
-// Usage:
-//   ando              # Runs E2E tests locally, skips on server
-//   ando -p e2e       # Forces E2E tests everywhere
+// Define e2e profile to force tests on server
+var e2e = DefineProfile("e2e");
 
-// Define profiles
-var e2e = DefineProfile("e2e");  // Force E2E tests
-
-// Project references
-var project = Dotnet.Project("./src/MyApp/MyApp.csproj");
-var testProject = Dotnet.Project("./tests/MyApp.Tests/MyApp.Tests.csproj");
-
-// Install SDK and build
-Dotnet.SdkInstall();
-Dotnet.Restore(project);
-Dotnet.Build(project);
-
-// Run .NET unit/integration tests
-Dotnet.Test(testProject);
-
-// Detect if running on ANDO server
+// Detect if running on Ando.Server
 var isOnServer = Env("ANDO_HOST_ROOT", required: false) != null;
 
-// Run Playwright E2E tests conditionally
+// Run E2E tests (locally or with -p e2e override)
 var e2eTests = Directory("./tests/MyApp.E2E");
-if (!isOnServer || e2e)
+var shouldRunE2E = !isOnServer || e2e;
+
+if (shouldRunE2E)
 {
-    // E2E tests require docker-compose for infrastructure
-    // This works locally but not in nested Docker without special setup
-    Log.Info("Running Playwright E2E tests...");
-    Npm.Ci(e2eTests);
-    Playwright.Install(e2eTests);
-    Playwright.Test(e2eTests);
+    // Check if Docker is available (requires --dind flag)
+    if (!Docker.IsAvailable())
+    {
+        Log.Warning("Skipping E2E tests (Docker not available - run with 'ando --dind')");
+    }
+    else
+    {
+        Log.Info("Running Playwright E2E tests...");
+
+        // Install Docker CLI (needed for docker-compose)
+        Docker.Install();
+
+        // Install npm dependencies
+        Npm.Ci(e2eTests);
+
+        // Install Playwright browsers
+        Playwright.Install(e2eTests);
+
+        // Run E2E tests
+        Playwright.Test(e2eTests);
+    }
 }
 else
 {
-    Log.Info("Skipping E2E tests (running on ANDO server - use -p e2e to override)");
+    Log.Info("Skipping E2E tests (use -p e2e to override)");
 }
 ```
 
-## How It Works
+The `Docker.IsAvailable()` check runs immediately (not as a registered step) and returns `true` if Docker CLI and daemon are accessible. This allows the build to gracefully skip E2E tests with a warning when Docker isn't available, rather than failing with a cryptic error.
 
-### Environment Detection
-
-The `Env()` function retrieves environment variables. With `required: false`, it returns `null` instead of throwing when the variable isn't set:
-
-```csharp
-var isOnServer = Env("ANDO_HOST_ROOT", required: false) != null;
-```
-
-### Profile Override
-
-The `DefineProfile()` function creates a boolean that becomes `true` when you activate it with `-p`:
-
-```csharp
-var e2e = DefineProfile("e2e");
-
-// e2e is false by default
-// e2e is true when you run: ando -p e2e
-```
-
-### Conditional Logic
-
-The condition `!isOnServer || e2e` means:
-- Run E2E tests if NOT on server (local development)
-- OR run E2E tests if the `e2e` profile is active (explicit override)
-
-## Running the Build
+### 3. Running the Build
 
 ```bash
-# Local development - E2E tests run automatically
+# Run locally with E2E tests (requires --dind for Docker access)
+ando --dind
+
+# Skip E2E tests (runs faster)
 ando
 
-# On ANDO server - E2E tests are skipped
-# (automatically detected via ANDO_HOST_ROOT)
-
-# Force E2E tests on ANDO server
-ando -p e2e
-
-# Combine with other profiles
-ando -p push,e2e
+# Force E2E tests on server
+ando -p e2e --dind
 ```
 
-## Important: Exit Code Handling
+## Running Tests Locally (Outside ANDO)
 
-**The build will fail if tests fail** - but only if exit codes are properly propagated.
+You can still run tests directly on your machine for debugging with the Playwright UI:
 
-`Playwright.Test()` uses `npx playwright test` directly, which correctly returns a non-zero exit code when tests fail. ANDO checks the exit code and stops the build on failure.
+```bash
+# Install dependencies
+cd tests/MyApp.E2E && npm install
 
-**Avoid npm scripts that swallow errors:**
+# Run tests with UI (great for debugging)
+npm run test:ui
 
-```json
-// BAD - This will NOT fail the build when tests fail!
-"scripts": {
-  "test": "playwright test || true"
-}
+# Run tests headed (visible browser)
+npm run test:headed
+
+# Run tests in CI mode
+npm test
 ```
 
-If you must use an npm script, ensure it propagates the exit code:
+When running outside an ANDO container, `isInsideContainer()` returns false and tests connect to `localhost` as usual.
+
+## CI Integration
+
+For CI pipelines, you have two options:
+
+### Option 1: E2E Tests Inside ANDO Build
+
+```yaml
+# GitHub Actions
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ANDO build with E2E tests
+        run: ando --dind
+```
+
+### Option 2: E2E Tests as Separate Job
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ANDO build (no E2E)
+        run: ando
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run E2E tests
+        run: |
+          cd tests/MyApp.E2E
+          npm ci
+          npx playwright install --with-deps
+          npm test
+```
+
+## Exit Code Handling
+
+Ensure your npm scripts properly propagate exit codes:
 
 ```json
 // GOOD - Exit code is preserved
 "scripts": {
   "test": "playwright test"
 }
+
+// BAD - This will NOT fail CI when tests fail!
+"scripts": {
+  "test": "playwright test || true"
+}
 ```
 
-To use a custom npm script instead of `npx playwright test`:
+ANDO correctly propagates exit codes from Playwright.Test() - if tests fail, the build fails.
 
-```csharp
-// Use Npm.Run() only if your script properly propagates exit codes
-Npm.Run(e2eTests, "test");
+## Key Takeaways
 
-// Or use Playwright.Test() with UseNpmScript option
-Playwright.Test(e2eTests, o => o.UseNpmScript = true);
-```
+| Scenario | Command | E2E Tests |
+|----------|---------|-----------|
+| Local development | `ando --dind` | Run |
+| Local (fast build) | `ando` | Skip |
+| Server (default) | CI pipeline | Skip |
+| Server (forced) | `ando -p e2e --dind` | Run |
+| Debug with UI | `npm run test:ui` | Run locally |
 
-## Key Operations Used
+## How It Works
 
-| Operation | Description |
-|-----------|-------------|
-| `Env(name, required?)` | Get environment variable. Use `required: false` to return null if not set. |
-| `DefineProfile(name)` | Define a build profile for conditional execution. |
-| `Directory(path)` | Create a directory reference for npm/Playwright operations. |
-| `Npm.Ci(directory)` | Install npm dependencies using clean install. |
-| `Playwright.Install(directory)` | Install Playwright browsers. |
-| `Playwright.Test(directory)` | Run Playwright tests (fails build on test failures). |
-| `Log.Info(message)` | Log an informational message. |
+1. **`--dind` flag** mounts the host's Docker socket into the build container
+2. **`Docker.Install()`** installs the Docker CLI inside the container
+3. **docker-compose** starts sibling containers on the host's Docker daemon
+4. **Container detection** switches URLs from `localhost` to `host.docker.internal`
+5. **Playwright tests** connect to the server container via the host network
 
 ## See Also
 
-- [Npm Provider](/providers/npm) - npm operations reference
 - [Playwright Provider](/providers/playwright) - Playwright operations reference
-- [Profiles](/cli#profiles) - CLI profile documentation
+- [Npm Provider](/providers/npm) - npm operations reference
+- [Docker Provider](/providers/docker) - Docker operations and `--dind` mode

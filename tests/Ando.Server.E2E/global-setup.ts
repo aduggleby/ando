@@ -3,17 +3,40 @@
  *
  * Uses docker-compose to start an isolated test environment with:
  * - SQL Server container (private network, no exposed ports)
- * - Ando.Server container (exposes port 5000 only)
+ * - Ando.Server container (exposes port 17100 only)
  *
  * The containers communicate over a private Docker network.
+ *
+ * Container Detection:
+ * When running inside an ANDO container (Docker-in-Docker mode), we use
+ * host.docker.internal to reach containers running on the host's Docker.
+ * This enables E2E tests to run as part of the ANDO build process.
  */
 
 import { execSync, spawnSync } from 'child_process';
 import * as path from 'path';
+import * as fs from 'fs';
 
 const COMPOSE_FILE = path.resolve(__dirname, '../docker-compose.test.yml');
-const SERVER_URL = 'http://localhost:17100/health';
 const MAX_WAIT_SECONDS = 120;
+
+/**
+ * Detect if we're running inside a Docker container.
+ * The /.dockerenv file exists in Docker containers.
+ */
+function isInsideContainer(): boolean {
+  return fs.existsSync('/.dockerenv');
+}
+
+/**
+ * Get the server URL for health checks.
+ * Uses host.docker.internal when inside a container (ANDO build).
+ */
+function getServerUrl(): string {
+  const port = 17100;
+  const host = isInsideContainer() ? 'host.docker.internal' : 'localhost';
+  return `http://${host}:${port}/health`;
+}
 
 /**
  * Check if the E2E containers are already running and healthy.
@@ -60,11 +83,12 @@ function startContainers(): void {
  * Wait for the server to be ready.
  */
 async function waitForServer(): Promise<void> {
-  console.log('Waiting for server to be ready...');
+  const serverUrl = getServerUrl();
+  console.log(`Waiting for server to be ready at ${serverUrl}...`);
 
   for (let i = 0; i < MAX_WAIT_SECONDS; i++) {
     try {
-      const response = await fetch(SERVER_URL);
+      const response = await fetch(serverUrl);
       if (response.ok) {
         console.log('Server is ready!');
         return;
