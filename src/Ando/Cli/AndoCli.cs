@@ -18,6 +18,15 @@
 // - Uses warm containers by default for faster subsequent builds
 // - Docker is mandatory - no local execution mode for consistency
 // - Exit codes follow Unix conventions (0=success, non-zero=specific errors)
+//
+// Exit Codes:
+// - 0: Success
+// - 1: Build workflow failed
+// - 2: Script not found or invalid file
+// - 3: Docker not available
+// - 4: Profile validation failed
+// - 5: Generic error (Roslyn errors, exceptions, etc.)
+// - 6: .env.ando not gitignored (user declined to continue)
 // =============================================================================
 
 using System.Reflection;
@@ -194,6 +203,13 @@ public class AndoCli : IDisposable
             var hostRootPath = HasFlag("--dind")
                 ? Environment.GetEnvironmentVariable("ANDO_HOST_ROOT") ?? defaultHostRoot
                 : defaultHostRoot;
+
+            // Check that .env.ando is gitignored if it exists.
+            // This prevents accidental commits of sensitive environment files.
+            if (!CheckEnvAndoGitIgnoreStatus(hostRootPath))
+            {
+                return 6; // Exit code for gitignore check failure
+            }
 
             // Check for .env file and offer to load it.
             await PromptToLoadEnvFileAsync(hostRootPath);
@@ -634,6 +650,80 @@ public class AndoCli : IDisposable
 
     // Environment variable to auto-load .env files without prompting (for sub-builds).
     private const string AutoLoadEnvVar = "ANDO_AUTO_LOAD_ENV";
+
+    // Checks if .env.ando file exists and is properly gitignored.
+    // If the file exists but is not gitignored, warns the user and prompts
+    // for confirmation to continue. This prevents accidental commits of
+    // sensitive environment files.
+    // Returns true if safe to continue, false if user wants to abort.
+    private bool CheckEnvAndoGitIgnoreStatus(string rootPath)
+    {
+        var envAndoPath = Path.Combine(rootPath, ".env.ando");
+
+        // If .env.ando doesn't exist, nothing to check.
+        if (!File.Exists(envAndoPath))
+            return true;
+
+        // Check if we're in a git repository.
+        var gitDir = Path.Combine(rootPath, ".git");
+        if (!Directory.Exists(gitDir))
+            return true; // Not a git repo, skip check.
+
+        // Use git check-ignore to verify .env.ando is gitignored.
+        // Exit code 0 = file is ignored, non-zero = file is not ignored.
+        try
+        {
+            var processInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "git",
+                Arguments = "check-ignore -q .env.ando",
+                WorkingDirectory = rootPath,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = System.Diagnostics.Process.Start(processInfo);
+            if (process == null)
+                return true; // Can't run git, skip check.
+
+            process.WaitForExit(5000); // 5 second timeout
+
+            if (process.ExitCode == 0)
+                return true; // File is gitignored, safe to continue.
+        }
+        catch
+        {
+            // Git not available or other error, skip check.
+            return true;
+        }
+
+        // File exists but is NOT gitignored - warn the user.
+        _logger.Warning("WARNING: .env.ando file is not gitignored!");
+        _logger.Warning("");
+        _logger.Warning("The .env.ando file typically contains sensitive information such as");
+        _logger.Warning("API keys, tokens, and passwords. It should be added to .gitignore");
+        _logger.Warning("to prevent accidental commits.");
+        _logger.Warning("");
+        _logger.Warning("Add this line to your .gitignore file:");
+        _logger.Warning("  .env.ando");
+        _logger.Warning("");
+
+        // Prompt user with y/N (N is default).
+        Console.Write("Continue anyway? [y/N] ");
+        var response = Console.ReadLine()?.Trim().ToLowerInvariant();
+
+        // Only continue if user explicitly types 'y' or 'yes'.
+        if (response == "y" || response == "yes")
+        {
+            Console.WriteLine();
+            return true;
+        }
+
+        _logger.Info("Build aborted. Please add .env.ando to your .gitignore file.");
+        return false;
+    }
 
     // Checks for an environment file in the project directory and prompts the user
     // to load it if found. This provides a convenient way to set environment
