@@ -18,6 +18,17 @@ dotnet tool update -g ando
 ando --version
 ```
 
+## 0.9.24
+
+**2026-01-23**
+
+**Maintenance:**
+
+- Version bump for release infrastructure improvements
+- No user-facing changes in this release
+
+---
+
 ## 0.9.23
 
 **2026-01-22**
