@@ -341,6 +341,119 @@ if (release) {
 
 Activate with CLI: `ando -p release` or `ando -p push,release`
 
+## Options Reference
+
+### Dotnet.Restore Options
+- WithRuntime(string) - Target runtime identifier (e.g., "linux-x64", "win-x64")
+- NoCache - Bypass NuGet cache, force fresh downloads
+
+### Dotnet.Build Options
+- Configuration - Debug or Release
+- NoRestore - Skip implicit restore
+
+### Dotnet.Test Options
+- Configuration - Build configuration
+- NoRestore - Skip restore
+- NoBuild - Skip build (implies NoRestore)
+- Filter - Test filter expression (e.g., "Category=Unit", "Name=MyTest")
+
+### Dotnet.Publish Options
+- Output(path) - Output directory for artifacts
+- WithConfiguration(Configuration) - Debug or Release
+- WithRuntime(string) - Target runtime (e.g., "linux-x64", "linux-arm64", "win-x64", "osx-arm64")
+- AsSelfContained(bool) - Include .NET runtime (default: true when called)
+- AsSingleFile(bool) - Bundle into single executable
+- SkipRestore() - Skip restore before publishing
+- SkipBuild() - Skip build before publishing
+
+### Nuget.Pack Options
+- Output(path) - Output directory for .nupkg
+- WithConfiguration(Configuration) - Build configuration
+- WithVersion(string) - Explicit package version
+- WithVersionSuffix(string) - Pre-release suffix (e.g., "beta", "rc1")
+- WithSymbols(bool) - Generate .snupkg for debugging
+- WithSource(bool) - Include source files in symbols
+- SkipRestore() - Skip restore
+- SkipBuild() - Skip build
+
+### Nuget.Push Options
+- ToSource(string) - NuGet feed URL
+- ToNuGetOrg() - Push to nuget.org (default)
+- WithApiKey(string) - API key (or use NUGET_API_KEY env var)
+- SkipDuplicates(bool) - Skip if version exists (default: true)
+- WithoutSymbols(bool) - Don't push .snupkg
+
+### Docker.Build Options
+- WithTag(string) - Add image tag (can call multiple times)
+- WithContext(string) - Build context directory
+- WithBuildArg(key, value) - Pass build argument to Dockerfile
+- WithPlatform(string) - Target platform (e.g., "linux/amd64", "linux/arm64")
+- WithNoCache() - Disable build cache
+
+### Git.Tag Options
+- WithMessage(string) - Tag message for annotated tags
+- AsLightweight() - Create lightweight tag instead of annotated
+- WithSkipIfExists() - Skip if tag exists (warn instead of fail)
+
+### Git.Push Options
+- ToRemote(string) - Remote name (default: origin)
+- ToBranch(string) - Branch to push
+- WithUpstream() - Set upstream tracking (-u flag)
+
+### Git.Commit Options
+- WithAllowEmpty() - Allow empty commit
+
+### GitHub.CreateRelease Options
+- WithTag(string) - Tag name (e.g., "v1.0.0")
+- WithTitle(string) - Release title
+- WithNotes(string) - Markdown release notes
+- WithGeneratedNotes() - Auto-generate notes from commits since last release
+- AsDraft() - Create as draft (not visible until published)
+- AsPrerelease() - Mark as pre-release
+- WithoutPrefix() - Don't add 'v' prefix to tag
+- WithFiles(params string[]) - Files to upload as release assets
+
+### GitHub.CreatePr Options
+- WithTitle(string) - PR title
+- WithBody(string) - PR description (markdown)
+- WithBase(string) - Target branch (e.g., "main")
+- WithHead(string) - Source branch
+- AsDraft() - Create as draft PR
+
+### GitHub.PushImage Options
+- WithTag(string) - Image tag
+- WithOwner(string) - GitHub user/org (auto-detected if not set)
+
+### Bicep.Deploy Options
+- WithName(string) - Custom deployment name
+- WithParameterFile(string) - Path to .json or .bicepparam file
+- WithParameter(name, value) - Inline parameter
+- WithMode(DeploymentMode) - Incremental (default) or Complete
+- WithDeploymentSlot(string) - App Service slot
+
+### Cloudflare.PagesDeploy Options
+- WithProjectName(string) - Pages project name
+- WithBranch(string) - Git branch for deployment
+- WithCommitHash(string) - Commit hash for tracking
+- WithCommitMessage(string) - Commit message for tracking
+
+### AppService.DeployZip Options
+- WithDeploymentSlot(string) - Deploy to specific slot
+- WithNoWait() - Don't wait for completion
+- WithRestart() - Restart after deployment
+
+### Functions.DeployZip / Publish Options
+- WithDeploymentSlot(string) - Deploy to specific slot
+- WithConfiguration(string) - Build configuration
+- WithForceRestart() - Force restart after deployment
+- WithNoWait() - Don't wait for completion
+
+### Ando.Build Options
+- WithVerbosity(string) - Output verbosity (Quiet, Minimal, Normal, Detailed)
+- ColdStart(bool) - Force fresh container
+- WithDind(bool) - Enable Docker-in-Docker
+- WithImage(string) - Override Docker image
+
 ## Tips for Writing Build Scripts
 
 1. Build scripts are C# - use C# syntax including var, lambdas, string interpolation
@@ -388,3 +501,6 @@ All pages are available in markdown format for LLM consumption:
 ### Recipes
 - https://andobuild.com/recipes/index.md - Recipes overview
 - https://andobuild.com/recipes/playwright-e2e-tests.md - Running Playwright E2E tests with Docker-in-Docker (--dind), container detection, and automatic system dependency installation
+- https://andobuild.com/recipes/github-releases.md - GitHub Release Management with auto-generated notes, version tags, and binary uploads
+- https://andobuild.com/recipes/container-github-registry.md - Building Docker images and pushing to GitHub Container Registry (ghcr.io)
+- https://andobuild.com/recipes/nuget-github-packages.md - Publishing NuGet packages to GitHub Packages registry

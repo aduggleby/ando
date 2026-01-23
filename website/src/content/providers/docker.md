@@ -67,6 +67,18 @@ Git.PushTags();
 GitHub.CreateRelease(o => o.WithTag("v1.0.0").WithGeneratedNotes());
 ```
 
+## Options Reference
+
+### Docker.Build Options
+
+| Option | Description |
+|--------|-------------|
+| `WithTag(string)` | Add an image tag. Can be called multiple times to add multiple tags. Format: `name:tag` (e.g., "myapp:v1.0.0", "myapp:latest"). |
+| `WithContext(string)` | Build context directory. This is the root directory for COPY instructions in the Dockerfile. Defaults to the Dockerfile's parent directory. |
+| `WithBuildArg(key, value)` | Pass a build-time variable to the Dockerfile. Access in Dockerfile with `ARG key` and `${key}`. Common uses: version numbers, build timestamps, feature flags. |
+| `WithPlatform(string)` | Target platform for cross-compilation. Format: `os/arch` (e.g., "linux/amd64", "linux/arm64"). Required when building for a different architecture than your host. |
+| `WithNoCache()` | Disable build cache entirely. Forces all layers to rebuild. Use when debugging caching issues or ensuring a clean build. |
+
 ## Notes
 
 - Docker operations require Docker to be installed on the host machine.

@@ -4,21 +4,21 @@ description: Run Playwright E2E tests for browser-based testing.
 provider: Playwright
 ---
 
-## Test Options
+## Options Reference
 
-Configure Playwright test runs with `PlaywrightTestOptions`.
+### Playwright.Test Options
 
 | Option | Description |
 |--------|-------------|
-| `Project` | Run tests for a specific project (e.g., "chromium", "firefox", "webkit") |
-| `Headed` | Run tests in headed mode (visible browser windows) |
-| `UI` | Run tests in UI mode for interactive debugging |
-| `Workers` | Number of parallel workers (defaults to half of CPU cores) |
-| `Reporter` | Reporter to use (e.g., "html", "list", "dot", "json") |
-| `Grep` | Filter tests by title pattern |
-| `UpdateSnapshots` | Update visual snapshots |
-| `UseNpmScript` | Use `npm run` instead of `npx playwright test` |
-| `NpmScriptName` | Custom npm script name when UseNpmScript is true (defaults to "test") |
+| `Project` | Run tests for a specific browser project defined in playwright.config. Values: `"chromium"`, `"firefox"`, `"webkit"`, or custom project names. Runs all projects if not specified. |
+| `Headed` | Run tests with visible browser windows instead of headless mode. Useful for debugging test failures locally. Not recommended for CI. |
+| `UI` | Launch Playwright's interactive UI mode for debugging. Shows test execution in real-time with time-travel debugging. Only works locally, not in CI. |
+| `Workers` | Number of parallel test workers. Defaults to half of CPU cores. Set to `1` for sequential execution when debugging flaky tests. |
+| `Reporter` | Output format for test results. Options: `"html"` (interactive report), `"list"` (detailed console output), `"dot"` (minimal dots), `"json"` (machine-readable), `"junit"` (CI integration). |
+| `Grep` | Filter tests by title pattern using regex. Only tests matching the pattern will run. Example: `"login"` runs all tests with "login" in the title. |
+| `UpdateSnapshots` | Update visual comparison snapshots instead of comparing them. Use when intentionally changing UI and need to update baseline images. |
+| `UseNpmScript` | Use `npm run {script}` instead of `npx playwright test`. Enable when your package.json has custom Playwright configuration in the test script. |
+| `NpmScriptName` | Custom npm script name to run when `UseNpmScript` is true. Defaults to `"test"`. Use for projects with multiple test scripts (e.g., "test:e2e", "test:visual"). |
 
 ## Operations
 

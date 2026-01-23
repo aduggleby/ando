@@ -66,3 +66,14 @@ Cloudflare.PagesDeploy(website / "dist", "my-website");
 // Purge the cache (accepts domain name or Zone ID)
 Cloudflare.PurgeCache("my-website.com");
 ```
+
+## Options Reference
+
+### Cloudflare.PagesDeploy Options
+
+| Option | Description |
+|--------|-------------|
+| `WithProjectName(string)` | Cloudflare Pages project name. Must match an existing project in your Cloudflare account. Can also be set via `CLOUDFLARE_PROJECT_NAME` environment variable. |
+| `WithBranch(string)` | Git branch name for the deployment. Used by Cloudflare to determine if this is a production or preview deployment. Production branch deploys to the main URL. |
+| `WithCommitHash(string)` | Git commit hash to associate with the deployment. Displayed in Cloudflare dashboard for tracking which code version is deployed. |
+| `WithCommitMessage(string)` | Git commit message for the deployment. Displayed in Cloudflare dashboard alongside the commit hash. |

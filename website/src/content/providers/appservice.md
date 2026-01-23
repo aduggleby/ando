@@ -25,3 +25,13 @@ AppService.DeployWithSwap("my-web-app", Root / "app.zip");
 AppService.DeployZip("my-web-app", Root / "app.zip", "my-rg", o => o
   .WithDeploymentSlot("staging"));
 ```
+
+## Options Reference
+
+### AppService.DeployZip Options
+
+| Option | Description |
+|--------|-------------|
+| `WithDeploymentSlot(string)` | Deploy to a specific slot instead of production. Common slots: "staging", "dev", "canary". Slots have their own URLs and can be swapped with production. |
+| `WithNoWait()` | Don't wait for deployment to complete. Returns immediately after starting the deployment. Use when you don't need to verify deployment success in the build. |
+| `WithRestart()` | Restart the app after deployment. Forces the app to pick up new code immediately instead of waiting for the next scheduled restart. |

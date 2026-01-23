@@ -103,3 +103,14 @@ Build(Directory("./website") / "deploy.csando");
 // Child build with Docker-in-Docker enabled
 Build(Directory("./integration-tests"), o => o.WithDind());
 ```
+
+## Options Reference
+
+### Build Options
+
+| Option | Description |
+|--------|-------------|
+| `WithVerbosity(string)` | Set output verbosity level. Values: "Quiet" (errors only), "Minimal" (warnings and errors), "Normal" (default), "Detailed" (debug output). |
+| `ColdStart(bool)` | Force a fresh container for this build, ignoring any warm container cache. Use when you need a clean environment or are debugging container state issues. |
+| `WithDind(bool)` | Enable Docker-in-Docker mode. Required when the child build needs to run Docker commands (e.g., building images, running docker-compose). Mounts the Docker socket into the container. |
+| `WithImage(string)` | Override the Docker image for this child build. Use when the child build requires different tools than the parent (e.g., Node.js build in a .NET project). |
