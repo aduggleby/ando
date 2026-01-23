@@ -283,7 +283,12 @@ public class BumpCommand
                 var messages = await _git.GetCommitMessagesSinceTagAsync(tag);
                 if (messages.Count > 0)
                 {
-                    _logger.Info($"Found {messages.Count} commit(s) since tag {tag}");
+                    _logger.Info($"Found {messages.Count} commit(s) since tag {tag}:");
+                    foreach (var msg in messages)
+                    {
+                        Console.WriteLine($"  • {msg}");
+                    }
+                    Console.WriteLine();
                     return messages;
                 }
             }

@@ -85,8 +85,15 @@ ando bump [patch|minor|major]
 4. Validates all versions match (prompts to select base if mismatched)
 5. Calculates the new version based on bump type
 6. Updates all project files (.csproj, package.json)
-7. Updates documentation (changelog, version badges)
-8. Commits the changes automatically
+7. Generates changelog from git commits since last version tag
+8. Updates documentation (changelog, version badges)
+9. Commits the changes automatically
+
+**Changelog generation:**
+- Looks for git tags matching the current version (`vX.Y.Z` or `X.Y.Z` format)
+- If a tag is found, extracts commit messages since that tag
+- Filters out "Bump version" commits automatically
+- If no tag is found, prompts for a manual changelog entry
 
 **Supported projects:**
 - `.csproj` files referenced via `Dotnet.Project("path")`
@@ -106,6 +113,8 @@ Bumping minor: 1.2.3 → 1.3.0
 Updating project versions:
   ✓ ./src/App/App.csproj
   ✓ ./website/package.json
+
+Found 3 commit(s) since tag v1.2.3
 
 Updating documentation:
   ✓ CHANGELOG.md
