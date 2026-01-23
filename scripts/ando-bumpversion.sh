@@ -56,6 +56,23 @@ if [[ "$BUMP_TYPE" != "patch" && "$BUMP_TYPE" != "minor" && "$BUMP_TYPE" != "maj
 fi
 
 # =============================================================================
+# Check GitHub authentication before proceeding
+# =============================================================================
+
+# Verify gh CLI is authenticated (required for HTTPS push)
+if ! gh auth status &>/dev/null; then
+    echo "Error: GitHub CLI is not authenticated."
+    echo ""
+    echo "This script uses 'git push' which requires authentication for HTTPS remotes."
+    echo "Please run 'gh auth login' and ensure git is configured to use gh as credential helper."
+    echo ""
+    echo "To set up gh as git credential helper:"
+    echo "  gh auth login"
+    echo "  gh auth setup-git"
+    exit 1
+fi
+
+# =============================================================================
 # Check for clean git state before proceeding
 # =============================================================================
 
