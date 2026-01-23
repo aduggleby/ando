@@ -27,6 +27,7 @@
 // - 4: Profile validation failed
 // - 5: Generic error (Roslyn errors, exceptions, etc.)
 // - 6: .env.ando not gitignored (user declined to continue)
+// - 7: GitHub OAuth scope check failed (user declined to re-authenticate)
 // =============================================================================
 
 using System.Reflection;
@@ -35,6 +36,7 @@ using Ando.Execution;
 using Ando.Logging;
 using Ando.Profiles;
 using Ando.Scripting;
+using Ando.Utilities;
 using Ando.Workflow;
 
 namespace Ando.Cli;
@@ -244,6 +246,15 @@ public class AndoCli : IDisposable
             if (profiles.Count > 0)
             {
                 _logger.Info($"Profiles: {string.Join(", ", profiles)}");
+            }
+
+            // Step 2b: Pre-flight check for GitHub OAuth scopes.
+            // This runs on the host before container creation to verify
+            // the token has required scopes for operations like PushImage.
+            var scopeChecker = new GitHubScopeChecker(_logger);
+            if (!await scopeChecker.EnsureRequiredScopesAsync(context.StepRegistry))
+            {
+                return 7; // Exit code for GitHub scope check failure
             }
 
             // Step 3: Set up Docker container for isolated execution.
