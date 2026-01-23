@@ -35,6 +35,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="5.0.0" />
+    <PackageReference Include="Spectre.Console" Version="0.50.0" />
   </ItemGroup>
 
 </Project>

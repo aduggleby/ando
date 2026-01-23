@@ -15,6 +15,9 @@ ando run
 - `ando` or `ando run` - Run the build script in a Docker container
 - `ando commit` - Commit all changes with AI-generated message using Claude
 - `ando bump [patch|minor|major]` - Bump version across all projects in build.csando (default: patch)
+- `ando release` - Interactive release workflow (commit, docs, bump, push, publish)
+- `ando release --all` - Run all applicable release steps non-interactively
+- `ando release --dry-run` - Preview what release would do
 - `ando verify` - Check build script for errors without executing
 - `ando clean` - Remove artifacts, temp files, and containers
 - `ando help` - Show available commands

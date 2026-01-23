@@ -14,6 +14,7 @@ The CLI provides a small, focused surface area.
 | `ando run` | Run the build script in a Docker container. |
 | `ando commit` | Commit all changes with AI-generated message using Claude. |
 | `ando bump` | Bump version across all projects in build.csando. |
+| `ando release` | Interactive release workflow (commit, docs, bump, push, publish). |
 | `ando verify` | Check build script for errors without executing. |
 | `ando clean` | Remove artifacts, temp files, and containers. |
 | `ando help` | Show available commands and options. |
@@ -111,6 +112,67 @@ Updating documentation:
   ✓ README.md
 
 Committed: Bump version to 1.3.0
+```
+
+## Release Command
+
+The `ando release` command provides an interactive release workflow that orchestrates multiple steps: commit, documentation update, version bump, push, and publish.
+
+**Usage:**
+```bash
+ando release           # Interactive checklist (all steps selected by default)
+ando release --all     # Skip checklist, run all applicable steps
+ando release --dry-run # Show what would happen without executing
+```
+
+**Steps:**
+1. **Commit** - Commit uncommitted changes (uses `ando commit`)
+2. **Update Documentation** - Uses Claude to review and update docs based on changes
+3. **Bump Version** - Bump version across all projects (uses `ando bump`)
+4. **Push** - Push to remote repository
+5. **Publish** - Run the publish build (`ando run -p push --dind`)
+
+**Smart Defaults:**
+- Steps are contextually enabled/disabled based on repository state
+- Commit is disabled when there are no uncommitted changes
+- Push is disabled when there's no remote tracking branch
+- Publish is disabled when build.csando has no `push` profile
+
+**Example output:**
+```
+$ ando release
+
+ANDO Release Workflow
+─────────────────────
+
+Current state:
+  Branch: main
+  Version: 0.9.23
+  Uncommitted changes: 3 files
+  Website folder: yes
+
+Select steps to run:
+  [x] Commit uncommitted changes
+  [x] Update documentation (Claude)
+  [x] Bump version (0.9.23)
+  [x] Push to remote (origin/main)
+  [x] Run publish build (ando run -p push --dind)
+
+Bump type (current: 0.9.23):
+> patch
+  minor
+  major
+
+Starting release...
+
+Step 1/5: Commit uncommitted changes
+────────────────────────────────────────
+...
+
+Release complete!
+  Version: 0.9.24
+  Commit: abc1234
+  Branch: main
 ```
 
 ## Hooks
@@ -233,6 +295,15 @@ ando bump
 
 # Bump minor version
 ando bump minor
+
+# Interactive release workflow
+ando release
+
+# Release without interactive prompts
+ando release --all
+
+# Preview what release would do
+ando release --dry-run
 
 # Verify build script without executing
 ando verify
