@@ -41,7 +41,7 @@ public class CliProcessRunner
     /// <param name="timeoutMs">Timeout in milliseconds (default: 60 seconds).</param>
     /// <param name="workingDirectory">Working directory (default: current directory).</param>
     /// <returns>ProcessResult with exit code and captured output.</returns>
-    public async Task<ProcessResult> RunAsync(
+    public virtual async Task<ProcessResult> RunAsync(
         string fileName,
         string arguments,
         string? stdin = null,
@@ -102,7 +102,7 @@ public class CliProcessRunner
     /// <param name="timeoutMs">Timeout in milliseconds (default: 2 minutes).</param>
     /// <returns>Claude's response text.</returns>
     /// <exception cref="Exception">Thrown if Claude CLI fails.</exception>
-    public async Task<string> RunClaudeAsync(string prompt, int timeoutMs = 120000)
+    public virtual async Task<string> RunClaudeAsync(string prompt, int timeoutMs = 120000)
     {
         var result = await RunAsync(
             "claude",

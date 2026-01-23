@@ -193,8 +193,24 @@ ssh -i ~/.ssh/id_claude root@138.199.223.171 "sudo -u ando XDG_RUNTIME_DIR=/run/
 4. **Main build.csando** (`build.csando`) - Update if affected
 5. **Test files** - Update test assertions and embedded scripts
 6. **CLAUDE.md files** - Update if instructions change
+7. **CLI help** - Update the `HelpCommand()` method in `AndoCli.cs` when adding or changing CLI commands/options
 
 Run `npm run build` in the website directory to verify documentation builds correctly.
+
+## CLI Development Rules
+
+**IMPORTANT**: When modifying the ANDO CLI:
+
+1. **Update `ando help`** - The `HelpCommand()` method in `src/Ando/Cli/AndoCli.cs` must always be updated when:
+   - Adding new CLI commands
+   - Adding new CLI options
+   - Changing existing command behavior
+   - Adding new operations that affect CLI usage
+
+2. **DIND Mode Detection** - Operations that require Docker-in-Docker (--dind flag) must be detected at startup:
+   - Check if the build script contains operations requiring DIND before execution begins
+   - Warn the user early if DIND is required but --dind flag is not provided
+   - Operations requiring DIND include: Docker.Build, Docker.Push, GitHub.PushImage
 
 ## Documentation Standards
 
