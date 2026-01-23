@@ -32,6 +32,7 @@
 
 using System.Reflection;
 using System.Security.Cryptography;
+using Ando.Cli.Commands;
 using Ando.Execution;
 using Ando.Logging;
 using Ando.Profiles;
@@ -125,8 +126,9 @@ public class AndoCli : IDisposable
         // - No args or "run" or any non-flag argument -> run the build
         // - "help", "--help", "-h" -> show help
         // - "clean" -> cleanup command
+        // - "commit" -> AI-generated commit
         // This allows "ando" and "ando run" to behave identically.
-        if (_args.Length == 0 || _args[0] == "run" || !_args[0].StartsWith("-") && _args[0] != "clean" && _args[0] != "help" && _args[0] != "verify")
+        if (_args.Length == 0 || _args[0] == "run" || !_args[0].StartsWith("-") && _args[0] != "clean" && _args[0] != "help" && _args[0] != "verify" && _args[0] != "commit")
         {
             PrintHeader();
             return await RunCommandAsync();
@@ -142,6 +144,11 @@ public class AndoCli : IDisposable
         {
             PrintHeader();
             return await VerifyCommandAsync();
+        }
+
+        if (_args[0] == "commit")
+        {
+            return await CommitCommandAsync();
         }
 
         if (_args[0] == "clean")
@@ -403,6 +410,15 @@ public class AndoCli : IDisposable
         return 1;
     }
 
+    // Handles the 'commit' command which commits all changes with an AI-generated message.
+    // Uses Claude CLI to analyze the diff and generate a conventional commit message.
+    private async Task<int> CommitCommandAsync()
+    {
+        var runner = new CliProcessRunner();
+        var command = new CommitCommand(runner, _logger);
+        return await command.ExecuteAsync();
+    }
+
     // Handles the 'clean' command which removes build artifacts and caches.
     // Supports selective cleanup via flags, or cleans artifacts+temp by default.
     private async Task<int> CleanCommandAsync()
@@ -551,6 +567,7 @@ public class AndoCli : IDisposable
         Console.WriteLine();
         Console.WriteLine("Commands:");
         Console.WriteLine("  run               Run the build script (default)");
+        Console.WriteLine("  commit            Commit all changes with AI-generated message");
         Console.WriteLine("  verify            Check build script for errors without executing");
         Console.WriteLine("  clean             Remove artifacts, temp files, and containers");
         Console.WriteLine("  help              Show this help");
@@ -558,6 +575,7 @@ public class AndoCli : IDisposable
         Console.WriteLine();
         Console.WriteLine("Examples:");
         Console.WriteLine("  ando                          Run build.csando in current directory");
+        Console.WriteLine("  ando commit                   Commit with AI-generated message");
         Console.WriteLine("  ando -f deploy.csando         Run a specific build file");
         Console.WriteLine("  ando verify -f deploy.csando  Verify a specific build file");
         Console.WriteLine();

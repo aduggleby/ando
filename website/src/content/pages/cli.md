@@ -12,6 +12,7 @@ The CLI provides a small, focused surface area.
 |---------|-------------|
 | `ando` | Run the build script (same as 'ando run'). |
 | `ando run` | Run the build script in a Docker container. |
+| `ando commit` | Commit all changes with AI-generated message using Claude. |
 | `ando verify` | Check build script for errors without executing. |
 | `ando clean` | Remove artifacts, temp files, and containers. |
 | `ando help` | Show available commands and options. |
@@ -30,6 +31,39 @@ Options for the `ando run` command.
 | `--cold` | Always create a fresh container (ignore warm cache). |
 | `--image <image>` | Use a custom Docker image. |
 | `--dind` | Mount Docker socket for Docker-in-Docker builds. |
+
+## Commit Command
+
+The `ando commit` command commits all staged and unstaged changes with an AI-generated commit message using Claude.
+
+**Requirements:**
+- Claude CLI must be installed (`npm install -g @anthropic-ai/claude-code`)
+- Must be in a git repository
+
+**How it works:**
+1. Checks for uncommitted changes
+2. Shows the list of changed files
+3. Sends the git diff to Claude to generate a conventional commit message
+4. Displays the generated message and asks for confirmation
+5. Stages all changes and commits with the approved message
+
+**Example output:**
+```
+$ ando commit
+Analyzing changes...
+
+  src/Ando/Operations/GitHubOperations.cs
+  website/src/content/providers/github.md
+
+Generated commit message:
+────────────────────────────────────────
+docs: add options reference to GitHub provider
+────────────────────────────────────────
+
+Commit with this message? [Y/n] y
+
+Committed: docs: add options reference to GitHub provider
+```
 
 ## Clean Options
 
@@ -50,6 +84,9 @@ Common usage patterns.
 ```bash
 # Run the build with default settings
 ando
+
+# Commit all changes with AI-generated message
+ando commit
 
 # Verify build script without executing
 ando verify
