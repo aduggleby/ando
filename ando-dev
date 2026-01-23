@@ -2,4 +2,9 @@
 # Helper script to run ando from source during development
 # Usage: ./ando-dev [args...]
 
-exec dotnet run --project "$(dirname "$0")/src/Ando/Ando.csproj" -- "$@"
+# Clean up Syncthing conflict files before building.
+# These cause compilation errors due to duplicate class definitions.
+SCRIPT_DIR="$(dirname "$0")"
+find "$SCRIPT_DIR" -name "*.sync-conflict-*" -type f -delete 2>/dev/null
+
+exec dotnet run --project "$SCRIPT_DIR/src/Ando/Ando.csproj" -- "$@"

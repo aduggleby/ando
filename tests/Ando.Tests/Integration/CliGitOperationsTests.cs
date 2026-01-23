@@ -2,36 +2,64 @@
 // CliGitOperationsTests.cs
 //
 // Integration tests for CliGitOperations using actual git repositories.
+// These tests require git to be installed and will be skipped if git is not
+// available (e.g., when running inside a Docker container without git).
 // =============================================================================
 
 using Ando.Utilities;
 using Shouldly;
+using Xunit.Sdk;
 
 namespace Ando.Tests.Integration;
 
+[Collection("DirectoryChangingTests")]
 [Trait("Category", "Integration")]
 public class CliGitOperationsTests : IDisposable
 {
-    private readonly string _testDir;
+    private readonly string? _testDir;
     private readonly CliProcessRunner _runner;
     private readonly CliGitOperations _git;
+    private readonly bool _gitAvailable;
+
+    private static bool IsGitAvailable()
+    {
+        try
+        {
+            var runner = new CliProcessRunner();
+            var result = runner.RunAsync("git", "--version").GetAwaiter().GetResult();
+            return result.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     public CliGitOperationsTests()
     {
-        _testDir = Path.Combine(Path.GetTempPath(), $"ando-git-test-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(_testDir);
-
         _runner = new CliProcessRunner();
         _git = new CliGitOperations(_runner);
+        _gitAvailable = IsGitAvailable();
+
+        if (!_gitAvailable)
+            return;
+
+        _testDir = Path.Combine(Path.GetTempPath(), $"ando-git-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(_testDir);
 
         // Initialize git repo in test directory.
         InitGitRepo();
     }
 
+    private void SkipIfGitNotAvailable()
+    {
+        Skip.If(!_gitAvailable, "Git is not available in this environment");
+    }
+
     public void Dispose()
     {
         // Clean up test directory.
-        if (Directory.Exists(_testDir))
+        if (_testDir != null && Directory.Exists(_testDir))
         {
             // Git creates read-only files, need to make them writable first.
             foreach (var file in Directory.GetFiles(_testDir, "*", SearchOption.AllDirectories))
@@ -61,13 +89,14 @@ public class CliGitOperationsTests : IDisposable
         File.WriteAllText(Path.Combine(_testDir, name), content);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task IsGitRepositoryAsync_InGitRepo_ReturnsTrue()
     {
+        SkipIfGitNotAvailable();
         var originalDir = Directory.GetCurrentDirectory();
         try
         {
-            Directory.SetCurrentDirectory(_testDir);
+            Directory.SetCurrentDirectory(_testDir!);
             var result = await _git.IsGitRepositoryAsync();
             result.ShouldBeTrue();
         }
@@ -77,9 +106,10 @@ public class CliGitOperationsTests : IDisposable
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task IsGitRepositoryAsync_NotInGitRepo_ReturnsFalse()
     {
+        SkipIfGitNotAvailable();
         var nonGitDir = Path.Combine(Path.GetTempPath(), $"non-git-{Guid.NewGuid():N}");
         Directory.CreateDirectory(nonGitDir);
         try
@@ -102,13 +132,14 @@ public class CliGitOperationsTests : IDisposable
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task HasUncommittedChangesAsync_CleanRepo_ReturnsFalse()
     {
+        SkipIfGitNotAvailable();
         var originalDir = Directory.GetCurrentDirectory();
         try
         {
-            Directory.SetCurrentDirectory(_testDir);
+            Directory.SetCurrentDirectory(_testDir!);
 
             // Create initial commit so repo is not empty.
             CreateFile("initial.txt");
@@ -124,13 +155,14 @@ public class CliGitOperationsTests : IDisposable
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task HasUncommittedChangesAsync_WithChanges_ReturnsTrue()
     {
+        SkipIfGitNotAvailable();
         var originalDir = Directory.GetCurrentDirectory();
         try
         {
-            Directory.SetCurrentDirectory(_testDir);
+            Directory.SetCurrentDirectory(_testDir!);
 
             CreateFile("test.txt");
 
@@ -143,13 +175,14 @@ public class CliGitOperationsTests : IDisposable
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task GetChangedFilesAsync_ReturnsChangedFiles()
     {
+        SkipIfGitNotAvailable();
         var originalDir = Directory.GetCurrentDirectory();
         try
         {
-            Directory.SetCurrentDirectory(_testDir);
+            Directory.SetCurrentDirectory(_testDir!);
 
             CreateFile("file1.txt");
             CreateFile("file2.txt");
@@ -165,13 +198,14 @@ public class CliGitOperationsTests : IDisposable
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task StageAllAsync_StagesAllFiles()
     {
+        SkipIfGitNotAvailable();
         var originalDir = Directory.GetCurrentDirectory();
         try
         {
-            Directory.SetCurrentDirectory(_testDir);
+            Directory.SetCurrentDirectory(_testDir!);
 
             CreateFile("staged.txt");
             await _git.StageAllAsync();
@@ -185,13 +219,14 @@ public class CliGitOperationsTests : IDisposable
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task CommitAsync_CreatesCommit()
     {
+        SkipIfGitNotAvailable();
         var originalDir = Directory.GetCurrentDirectory();
         try
         {
-            Directory.SetCurrentDirectory(_testDir);
+            Directory.SetCurrentDirectory(_testDir!);
 
             CreateFile("commit-test.txt");
             await _git.StageAllAsync();
@@ -211,13 +246,14 @@ public class CliGitOperationsTests : IDisposable
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task GetCurrentBranchAsync_ReturnsCurrentBranch()
     {
+        SkipIfGitNotAvailable();
         var originalDir = Directory.GetCurrentDirectory();
         try
         {
-            Directory.SetCurrentDirectory(_testDir);
+            Directory.SetCurrentDirectory(_testDir!);
 
             // Create initial commit (required for branch to exist).
             CreateFile("initial.txt");
@@ -235,13 +271,14 @@ public class CliGitOperationsTests : IDisposable
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task GetDiffAsync_ReturnsChanges()
     {
+        SkipIfGitNotAvailable();
         var originalDir = Directory.GetCurrentDirectory();
         try
         {
-            Directory.SetCurrentDirectory(_testDir);
+            Directory.SetCurrentDirectory(_testDir!);
 
             // Create initial commit.
             CreateFile("initial.txt", "original content");
@@ -262,13 +299,14 @@ public class CliGitOperationsTests : IDisposable
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task GetLastTagAsync_NoTags_ReturnsNull()
     {
+        SkipIfGitNotAvailable();
         var originalDir = Directory.GetCurrentDirectory();
         try
         {
-            Directory.SetCurrentDirectory(_testDir);
+            Directory.SetCurrentDirectory(_testDir!);
 
             // Create initial commit.
             CreateFile("initial.txt");
@@ -284,13 +322,14 @@ public class CliGitOperationsTests : IDisposable
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task GetLastTagAsync_WithTag_ReturnsTag()
     {
+        SkipIfGitNotAvailable();
         var originalDir = Directory.GetCurrentDirectory();
         try
         {
-            Directory.SetCurrentDirectory(_testDir);
+            Directory.SetCurrentDirectory(_testDir!);
 
             // Create initial commit and tag.
             CreateFile("initial.txt");
@@ -307,13 +346,14 @@ public class CliGitOperationsTests : IDisposable
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task HasRemoteTrackingAsync_NoRemote_ReturnsFalse()
     {
+        SkipIfGitNotAvailable();
         var originalDir = Directory.GetCurrentDirectory();
         try
         {
-            Directory.SetCurrentDirectory(_testDir);
+            Directory.SetCurrentDirectory(_testDir!);
 
             // Create initial commit.
             CreateFile("initial.txt");

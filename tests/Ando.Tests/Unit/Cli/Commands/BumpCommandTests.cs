@@ -12,6 +12,7 @@ using Shouldly;
 
 namespace Ando.Tests.Unit.Cli.Commands;
 
+[Collection("DirectoryChangingTests")]
 [Trait("Category", "Unit")]
 public class BumpCommandTests : IDisposable
 {
@@ -103,7 +104,7 @@ public class BumpCommandTests : IDisposable
         var command = new BumpCommand(_runner, _logger);
         await command.ExecuteAsync(BumpType.Patch);
 
-        _logger.InfoMessages.ShouldContain(m => m.Contains("Detecting projects"));
+        _logger.InfoMessages.ShouldContain(m => m.Contains("Detecting projects..."));
     }
 
     #endregion

@@ -656,6 +656,8 @@ public class AndoCli : IDisposable
         Console.WriteLine("  --all               Run all applicable release steps non-interactively");
         Console.WriteLine("  --dry-run           Preview release steps without making changes");
         Console.WriteLine();
+        Console.WriteLine("  Release runs a mandatory build verification (ando run) before any steps.");
+        Console.WriteLine();
         Console.WriteLine("  Release workflow steps (selectable via interactive checklist):");
         Console.WriteLine("    1. commit   - Commit uncommitted changes (AI-generated message)");
         Console.WriteLine("    2. bump     - Bump version (uses type from command line)");

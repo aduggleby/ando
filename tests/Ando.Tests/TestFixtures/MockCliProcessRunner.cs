@@ -83,7 +83,8 @@ public class MockCliProcessRunner : CliProcessRunner
         string arguments,
         string? stdin = null,
         int timeoutMs = 60000,
-        string? workingDirectory = null)
+        string? workingDirectory = null,
+        bool streamOutput = false)
     {
         var executed = new ExecutedProcess(fileName, arguments, stdin, workingDirectory);
         ExecutedProcesses.Add(executed);
@@ -117,9 +118,9 @@ public class MockCliProcessRunner : CliProcessRunner
         return new ProcessResult(0, DefaultOutput, "");
     }
 
-    public override async Task<string> RunClaudeAsync(string prompt, int timeoutMs = 120000)
+    public override async Task<string> RunClaudeAsync(string prompt, int timeoutMs = 120000, bool streamOutput = false)
     {
-        var result = await RunAsync("claude", "-p --dangerously-skip-permissions", stdin: prompt, timeoutMs: timeoutMs);
+        var result = await RunAsync("claude", "-p --dangerously-skip-permissions", stdin: prompt, timeoutMs: timeoutMs, streamOutput: streamOutput);
 
         if (result.ExitCode != 0)
         {

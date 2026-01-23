@@ -11,6 +11,7 @@ using Shouldly;
 
 namespace Ando.Tests.Unit.Cli.Commands;
 
+[Collection("DirectoryChangingTests")]
 [Trait("Category", "Unit")]
 public class CommitCommandTests : IDisposable
 {

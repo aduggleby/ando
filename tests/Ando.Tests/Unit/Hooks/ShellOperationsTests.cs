@@ -9,6 +9,7 @@ using Shouldly;
 
 namespace Ando.Tests.Unit.Hooks;
 
+[Collection("DirectoryChangingTests")]
 [Trait("Category", "Unit")]
 public class ShellOperationsTests
 {

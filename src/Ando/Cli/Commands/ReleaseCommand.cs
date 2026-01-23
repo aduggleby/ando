@@ -127,6 +127,14 @@ public class ReleaseCommand
                 return 0;
             }
 
+            // 7. Run mandatory build verification before release steps.
+            var buildResult = await ExecuteBuildVerificationAsync();
+            if (buildResult != 0)
+            {
+                AnsiConsole.MarkupLine("[red]Build verification failed. Release aborted.[/]");
+                return buildResult;
+            }
+
             var exitCode = await ExecuteStepsAsync(selectedSteps, bumpType, repoRoot);
 
             // Run post-hooks.
@@ -388,6 +396,25 @@ public class ReleaseCommand
         AnsiConsole.WriteLine();
 
         var result = await _runner.RunAsync("ando", "run -p push --dind --read-env", timeoutMs: 600000, streamOutput: true);
+        return result.ExitCode;
+    }
+
+    private async Task<int> ExecuteBuildVerificationAsync()
+    {
+        AnsiConsole.MarkupLine("[bold]Build Verification[/]");
+        AnsiConsole.MarkupLine("──────────────────");
+        AnsiConsole.MarkupLine("Running: ando run --read-env");
+        AnsiConsole.WriteLine();
+
+        var result = await _runner.RunAsync("ando", "run --read-env", timeoutMs: 600000, streamOutput: true);
+
+        if (result.ExitCode == 0)
+        {
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine("[green]Build verification passed.[/]");
+            AnsiConsole.WriteLine();
+        }
+
         return result.ExitCode;
     }
 
