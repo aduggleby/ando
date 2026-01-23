@@ -58,26 +58,107 @@ fi
 
 cd "$REPO_ROOT"
 
-# Check for uncommitted changes (staged or unstaged)
+# Check for uncommitted changes (staged or unstaged) or untracked files
+HAS_UNCOMMITTED=false
+HAS_UNTRACKED=false
+
 if ! git diff --quiet || ! git diff --cached --quiet; then
-    echo "Error: You have uncommitted changes."
-    echo "Please commit or stash your changes before bumping the version."
-    echo ""
-    git status --short
-    exit 1
+    HAS_UNCOMMITTED=true
 fi
 
-# Check for untracked files (excluding common ignored patterns)
 UNTRACKED=$(git ls-files --others --exclude-standard)
 if [[ -n "$UNTRACKED" ]]; then
-    echo "Error: You have untracked files."
-    echo "Please commit, stash, or add to .gitignore before bumping the version."
-    echo ""
-    echo "$UNTRACKED"
-    exit 1
+    HAS_UNTRACKED=true
 fi
 
-echo "Git state: clean (all changes committed)"
+if [[ "$HAS_UNCOMMITTED" == true || "$HAS_UNTRACKED" == true ]]; then
+    echo "Warning: You have uncommitted changes or untracked files."
+    echo ""
+    git status --short
+    echo ""
+    read -p "Auto-commit with Claude-generated message? (y/N): " AUTO_COMMIT
+
+    case "$AUTO_COMMIT" in
+        [yY]|[yY][eE][sS])
+            echo ""
+            echo "Generating commit message with Claude..."
+            echo ""
+
+            # Create temp file for prompt (handles special characters better)
+            PROMPT_FILE=$(mktemp)
+            trap "rm -f '$PROMPT_FILE'" EXIT
+
+            # Write prompt to temp file
+            cat > "$PROMPT_FILE" << 'PROMPT_HEADER'
+Generate a concise git commit message for the following changes. Follow conventional commit format.
+
+Rules:
+- First line: type(scope): brief description (max 72 chars)
+- Types: feat, fix, docs, style, refactor, test, chore, build
+- Optional body: blank line then detailed explanation if needed
+- Focus on WHAT changed and WHY, not HOW
+- Be specific but concise
+
+Git status:
+PROMPT_HEADER
+
+            git status --short >> "$PROMPT_FILE"
+
+            echo "" >> "$PROMPT_FILE"
+            echo "Staged changes diff:" >> "$PROMPT_FILE"
+            git diff --cached >> "$PROMPT_FILE" 2>/dev/null || true
+
+            echo "" >> "$PROMPT_FILE"
+            echo "Unstaged changes diff:" >> "$PROMPT_FILE"
+            git diff >> "$PROMPT_FILE" 2>/dev/null || true
+
+            echo "" >> "$PROMPT_FILE"
+            echo "Output ONLY the commit message, nothing else. No markdown formatting, no explanations." >> "$PROMPT_FILE"
+
+            # Generate commit message using Claude (read prompt from file)
+            GENERATED_MESSAGE=$(cat "$PROMPT_FILE" | claude -p - --allowedTools '' 2>&1)
+            CLAUDE_EXIT_CODE=$?
+
+            rm -f "$PROMPT_FILE"
+
+            if [[ $CLAUDE_EXIT_CODE -ne 0 ]] || [[ -z "$GENERATED_MESSAGE" ]]; then
+                echo "Error: Failed to generate commit message with Claude."
+                echo "Claude output: $GENERATED_MESSAGE"
+                exit 1
+            fi
+
+            echo "Generated commit message:"
+            echo "----------------------------------------"
+            echo "$GENERATED_MESSAGE"
+            echo "----------------------------------------"
+            echo ""
+            read -p "Use this commit message? (Y/n): " USE_MESSAGE
+
+            case "$USE_MESSAGE" in
+                [nN]|[nN][oO])
+                    echo "Aborted. Please commit manually."
+                    exit 1
+                    ;;
+                *)
+                    # Stage all changes and commit
+                    git add -A
+                    git commit -m "$GENERATED_MESSAGE"
+                    echo ""
+                    echo "Changes committed successfully."
+                    echo ""
+                    ;;
+            esac
+            ;;
+        *)
+            echo ""
+            echo "Aborted. Please commit or stash your changes before bumping the version."
+            exit 1
+            ;;
+    esac
+else
+    echo "Git state: clean (all changes committed)"
+fi
+
 echo ""
 
 # =============================================================================

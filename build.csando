@@ -150,17 +150,18 @@ if (push)
     Git.PushTags();
 
     // Create GitHub release with binaries
-    // Use path#name syntax to give uploaded files clear names
+    // Files are renamed during upload using path#newname syntax for display labels
+    // The actual filename comes from the path - unique directory names ensure unique uploads
     GitHub.CreateRelease(o => o
         .WithTag(version)
         .WithGeneratedNotes()
         .WithFiles(
-            $"{distPath}/win-x64/ando.exe#ando-win-x64.exe",
-            $"{distPath}/win-arm64/ando.exe#ando-win-arm64.exe",
-            $"{distPath}/linux-x64/ando#ando-linux-x64",
-            $"{distPath}/linux-arm64/ando#ando-linux-arm64",
-            $"{distPath}/osx-x64/ando#ando-osx-x64",
-            $"{distPath}/osx-arm64/ando#ando-osx-arm64"
+            "./dist/win-x64/ando.exe",
+            "./dist/win-arm64/ando.exe",
+            "./dist/linux-x64/ando",
+            "./dist/linux-arm64/ando",
+            "./dist/osx-x64/ando",
+            "./dist/osx-arm64/ando"
         ));
 
     // Build and deploy the documentation website
