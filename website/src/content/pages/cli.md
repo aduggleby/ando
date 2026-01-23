@@ -85,15 +85,19 @@ ando bump [patch|minor|major]
 4. Validates all versions match (prompts to select base if mismatched)
 5. Calculates the new version based on bump type
 6. Updates all project files (.csproj, package.json)
-7. Generates changelog from git commits since last version tag
+7. Generates changelog using Claude from commits and changed files
 8. Updates documentation (changelog, version badges)
 9. Commits the changes automatically
 
 **Changelog generation:**
 - Looks for git tags matching the current version (`vX.Y.Z` or `X.Y.Z` format)
-- If a tag is found, extracts commit messages since that tag
-- Filters out "Bump version" commits automatically
+- If a tag is found, gathers commit messages and changed files since that tag
+- Sends context to Claude to generate user-friendly changelog entries
+- Claude produces concise, non-technical descriptions focused on user impact
 - If no tag is found, prompts for a manual changelog entry
+
+**Requirements:**
+- Claude CLI must be installed (`npm install -g @anthropic-ai/claude-code`)
 
 **Supported projects:**
 - `.csproj` files referenced via `Dotnet.Project("path")`
@@ -114,7 +118,15 @@ Updating project versions:
   ✓ ./src/App/App.csproj
   ✓ ./website/package.json
 
-Found 3 commit(s) since tag v1.2.3
+Changes since tag v1.2.3:
+  Commits: 3
+  Files changed: 8
+
+Generating changelog with Claude...
+
+Generated changelog entry:
+  • Add support for custom build profiles
+  • Improve error messages for missing dependencies
 
 Updating documentation:
   ✓ CHANGELOG.md
