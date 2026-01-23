@@ -15,6 +15,7 @@
 // - Integrates with ando commit if there are uncommitted changes
 // =============================================================================
 
+using Ando.Hooks;
 using Ando.Logging;
 using Ando.Utilities;
 using Ando.Versioning;
@@ -62,6 +63,21 @@ public class BumpCommand
             }
 
             var repoRoot = Path.GetDirectoryName(buildScript) ?? ".";
+
+            // Initialize hook runner.
+            var hookRunner = new HookRunner(repoRoot, _logger);
+            var hookContext = new HookContext
+            {
+                Command = "bump",
+                BumpType = type.ToString().ToLower()
+            };
+
+            // Run pre-hooks.
+            if (!await hookRunner.RunHooksAsync(HookRunner.HookType.Pre, "bump", hookContext))
+            {
+                _logger.Error("Bump aborted by pre-hook.");
+                return 1;
+            }
 
             // Step 2: Check for uncommitted changes.
             if (await _git.HasUncommittedChangesAsync())
@@ -220,6 +236,14 @@ public class BumpCommand
             await _git.CommitAsync($"Bump version to {newVersion}");
 
             _logger.Info($"Committed: Bump version to {newVersion}");
+
+            // Run post-hooks with updated context.
+            hookContext = hookContext with
+            {
+                OldVersion = baseVersion,
+                NewVersion = newVersion
+            };
+            await hookRunner.RunHooksAsync(HookRunner.HookType.Post, "bump", hookContext);
 
             return 0;
         }

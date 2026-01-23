@@ -113,6 +113,98 @@ Updating documentation:
 Committed: Bump version to 1.3.0
 ```
 
+## Hooks
+
+ANDO hooks are `.csando` scripts that run automatically before and after CLI commands. They use the same Roslyn scripting as `build.csando`.
+
+### Hook Types
+
+| Hook | When it runs |
+|------|--------------|
+| `ando-pre.csando` | Before ANY command |
+| `ando-pre-{cmd}.csando` | Before specific command |
+| `ando-post-{cmd}.csando` | After specific command |
+| `ando-post.csando` | After ANY command |
+
+Commands with hooks: `bump`, `commit`
+
+### Search Locations
+
+Hooks are searched in this order (first found wins):
+
+1. `./scripts/ando-{hook}.csando`
+2. `./ando-{hook}.csando`
+
+### Execution Order
+
+For `ando bump`:
+
+```
+1. scripts/ando-pre.csando        (general pre-hook)
+2. scripts/ando-pre-bump.csando   (command-specific pre-hook)
+3. [ando bump executes]
+4. scripts/ando-post-bump.csando  (command-specific post-hook)
+5. scripts/ando-post.csando       (general post-hook)
+```
+
+### Available APIs
+
+Hooks have access to these globals:
+
+| Global | Description |
+|--------|-------------|
+| `Log.Info()`, `Log.Warning()`, `Log.Error()` | Logging |
+| `Env(name)` | Environment variables |
+| `Root` | Project root path |
+| `Directory(path)` | Directory reference |
+| `Shell.RunAsync(cmd, args)` | Run shell commands |
+
+### Environment Variables
+
+Hooks receive context via environment variables:
+
+| Variable | Description | Available in |
+|----------|-------------|--------------|
+| `ANDO_COMMAND` | Current command | All hooks |
+| `ANDO_OLD_VERSION` | Version before bump | bump hooks |
+| `ANDO_NEW_VERSION` | Version after bump | post-bump |
+| `ANDO_BUMP_TYPE` | patch, minor, or major | bump hooks |
+
+### Hook Behavior
+
+- **Pre-hooks:** Non-zero exit or exception aborts the command
+- **Post-hooks:** Failures only warn (command already completed)
+- **Missing hooks:** Silently skipped (no error or warning)
+- **Execution:** Hooks run on the host machine (not in Docker)
+
+### Example: Run Tests Before Bump
+
+```csharp
+// scripts/ando-pre-bump.csando
+Log.Info("Running tests before bump...");
+
+var result = await Shell.RunAsync("dotnet", "test", "--no-build");
+
+if (result.ExitCode != 0)
+{
+    Log.Error("Tests failed. Aborting bump.");
+    throw new Exception("Tests failed");
+}
+```
+
+### Example: Clean Syncthing Conflicts
+
+```csharp
+// scripts/ando-pre.csando
+var conflicts = Directory.GetFiles(".", "*.sync-conflict-*", SearchOption.AllDirectories);
+
+foreach (var file in conflicts)
+{
+    Log.Info($"Removing: {file}");
+    File.Delete(file);
+}
+```
+
 ## Clean Options
 
 Options for the `ando clean` command.

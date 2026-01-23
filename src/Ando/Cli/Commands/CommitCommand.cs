@@ -16,6 +16,7 @@
 // =============================================================================
 
 using Ando.AI;
+using Ando.Hooks;
 using Ando.Logging;
 using Ando.Utilities;
 
@@ -58,6 +59,18 @@ public class CommitCommand
             {
                 _logger.Info("Nothing to commit. Working tree is clean.");
                 return 0;
+            }
+
+            // Initialize hook runner.
+            var projectRoot = Directory.GetCurrentDirectory();
+            var hookRunner = new HookRunner(projectRoot, _logger);
+            var hookContext = new HookContext { Command = "commit" };
+
+            // Run pre-hooks.
+            if (!await hookRunner.RunHooksAsync(HookRunner.HookType.Pre, "commit", hookContext))
+            {
+                _logger.Error("Commit aborted by pre-hook.");
+                return 1;
             }
 
             // Display analyzing message.
@@ -114,6 +127,9 @@ public class CommitCommand
 
             Console.WriteLine();
             _logger.Info($"Committed: {message.Split('\n')[0]}");
+
+            // Run post-hooks.
+            await hookRunner.RunHooksAsync(HookRunner.HookType.Post, "commit", hookContext);
 
             return 0;
         }
