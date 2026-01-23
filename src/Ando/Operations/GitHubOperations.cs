@@ -285,13 +285,8 @@ public class GitHubOperations(
             var localImage = $"{imageName}:{tag}";
             var remoteImage = $"ghcr.io/{owner.ToLowerInvariant()}/{imageName}:{tag}";
 
-            // Check for required scope before attempting push.
-            if (!_authHelper.HasScope("write:packages"))
-            {
-                Logger.Error("GitHub authentication missing 'write:packages' scope required for pushing to ghcr.io.");
-                Logger.Error("Re-authenticate with: gh auth login --scopes write:packages");
-                return false;
-            }
+            // Note: Scope check is done on the host by GitHubScopeChecker before build starts.
+            // The check here is skipped since gh CLI is not available in the container.
 
             // Get authentication token.
             var token = _authHelper.GetToken();

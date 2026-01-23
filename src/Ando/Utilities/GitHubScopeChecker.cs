@@ -142,11 +142,11 @@ public class GitHubScopeChecker
 
         try
         {
-            // Use bash to unset env vars - more reliable than ProcessStartInfo.Environment
+            // Use bash to unset GITHUB_TOKEN so we check the keyring token's scopes.
             var startInfo = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "bash",
-                Arguments = "-c \"unset GITHUB_TOKEN GH_TOKEN; gh auth status 2>&1\"",
+                Arguments = "-c \"unset GITHUB_TOKEN; gh auth status 2>&1\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -198,13 +198,11 @@ public class GitHubScopeChecker
             // Save and temporarily unset GITHUB_TOKEN, as gh auth refresh won't work
             // when the token is set via environment variable.
             var savedToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
-            var savedGhToken = Environment.GetEnvironmentVariable("GH_TOKEN");
 
-            if (!string.IsNullOrEmpty(savedToken) || !string.IsNullOrEmpty(savedGhToken))
+            if (!string.IsNullOrEmpty(savedToken))
             {
-                _logger.Debug("Temporarily unsetting GITHUB_TOKEN/GH_TOKEN for auth refresh");
+                _logger.Debug("Temporarily unsetting GITHUB_TOKEN for auth refresh");
                 Environment.SetEnvironmentVariable("GITHUB_TOKEN", null);
-                Environment.SetEnvironmentVariable("GH_TOKEN", null);
             }
 
             var scopesArg = string.Join(",", scopes);
@@ -220,7 +218,7 @@ public class GitHubScopeChecker
             using var process = System.Diagnostics.Process.Start(startInfo);
             if (process == null)
             {
-                RestoreTokens(savedToken, savedGhToken);
+                RestoreToken(savedToken);
                 return false;
             }
 
@@ -239,8 +237,8 @@ public class GitHubScopeChecker
             }
             else
             {
-                // Restore original tokens if refresh failed.
-                RestoreTokens(savedToken, savedGhToken);
+                // Restore original token if refresh failed.
+                RestoreToken(savedToken);
             }
 
             return success;
@@ -253,17 +251,13 @@ public class GitHubScopeChecker
     }
 
     /// <summary>
-    /// Restores saved token environment variables.
+    /// Restores saved GITHUB_TOKEN environment variable.
     /// </summary>
-    private static void RestoreTokens(string? savedToken, string? savedGhToken)
+    private static void RestoreToken(string? savedToken)
     {
         if (!string.IsNullOrEmpty(savedToken))
         {
             Environment.SetEnvironmentVariable("GITHUB_TOKEN", savedToken);
-        }
-        if (!string.IsNullOrEmpty(savedGhToken))
-        {
-            Environment.SetEnvironmentVariable("GH_TOKEN", savedGhToken);
         }
     }
 
@@ -274,11 +268,11 @@ public class GitHubScopeChecker
     {
         try
         {
-            // Use bash to unset env vars so we get the keyring token
+            // Use bash to unset GITHUB_TOKEN so we get the keyring token
             var startInfo = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "bash",
-                Arguments = "-c \"unset GITHUB_TOKEN GH_TOKEN; gh auth token\"",
+                Arguments = "-c \"unset GITHUB_TOKEN; gh auth token\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,

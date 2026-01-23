@@ -1,21 +1,16 @@
 // =============================================================================
 // GitHubAuthHelper.cs
 //
-// Summary: Helper for GitHub authentication across local and CI environments.
+// Summary: Helper for GitHub authentication.
 //
-// GitHubAuthHelper provides a unified way to get GitHub tokens that works both
-// locally (extracting from gh CLI config) and in CI (using environment variables).
-//
-// Authentication flow:
-// 1. Check GITHUB_TOKEN environment variable (CI-standard)
-// 2. Check GH_TOKEN environment variable (gh CLI alternative)
-// 3. Try to extract token from ~/.config/gh/hosts.yml (local development)
+// Authentication sources (in order):
+// 1. GITHUB_TOKEN environment variable (for CI or explicit configuration)
+// 2. `gh auth token` command (for local development with gh CLI)
 //
 // Design Decisions:
-// - Environment variables take precedence (explicit > implicit)
-// - Falls back to gh CLI config for seamless local development
+// - Keep it simple: only two sources, no legacy config file parsing
+// - Environment variable takes precedence (explicit > implicit)
 // - Token is passed to containers via GITHUB_TOKEN env var
-// - Simple YAML parsing avoids dependency on YAML library
 // =============================================================================
 
 using Ando.Logging;
@@ -24,15 +19,12 @@ namespace Ando.Utilities;
 
 /// <summary>
 /// Helper for obtaining GitHub authentication tokens.
-/// Supports both environment variables (CI) and gh CLI config (local development).
 /// </summary>
 public class GitHubAuthHelper
 {
     private readonly IBuildLogger _logger;
     private string? _cachedToken;
     private bool _tokenResolved;
-    private HashSet<string> _cachedScopes = [];
-    private bool _scopesResolved;
 
     public GitHubAuthHelper(IBuildLogger logger)
     {
@@ -40,7 +32,7 @@ public class GitHubAuthHelper
     }
 
     /// <summary>
-    /// Gets the GitHub token from environment or gh CLI config.
+    /// Gets the GitHub token from GITHUB_TOKEN env var or gh CLI.
     /// Returns null if no token is available.
     /// </summary>
     public string? GetToken()
@@ -58,7 +50,6 @@ public class GitHubAuthHelper
     /// <summary>
     /// Gets the GitHub token, throwing if not available.
     /// </summary>
-    /// <exception cref="InvalidOperationException">Thrown if no token is found.</exception>
     public string GetRequiredToken()
     {
         var token = GetToken();
@@ -73,8 +64,7 @@ public class GitHubAuthHelper
     }
 
     /// <summary>
-    /// Returns the environment dictionary with GITHUB_TOKEN set.
-    /// Use this when running commands that need GitHub authentication.
+    /// Returns environment dictionary with GITHUB_TOKEN set.
     /// </summary>
     public Dictionary<string, string> GetEnvironment()
     {
@@ -88,52 +78,11 @@ public class GitHubAuthHelper
     }
 
     /// <summary>
-    /// Checks if the current GitHub authentication has the required scope.
-    /// Uses `gh auth status` to check available scopes.
+    /// Resolves the token: GITHUB_TOKEN env var first, then gh auth token.
     /// </summary>
-    /// <param name="requiredScope">The scope to check for (e.g., "write:packages").</param>
-    /// <returns>True if the scope is available, false otherwise.</returns>
-    public bool HasScope(string requiredScope)
-    {
-        var scopes = GetScopes();
-        return scopes.Contains(requiredScope);
-    }
-
-    /// <summary>
-    /// Gets the list of OAuth scopes for the current GitHub authentication.
-    /// </summary>
-    public HashSet<string> GetScopes()
-    {
-        if (_scopesResolved)
-        {
-            return _cachedScopes;
-        }
-
-        _cachedScopes = ResolveScopes();
-        _scopesResolved = true;
-        return _cachedScopes;
-    }
-
-    /// <summary>
-    /// Validates that the required scope is available, throwing with a helpful message if not.
-    /// </summary>
-    /// <param name="requiredScope">The scope to check for.</param>
-    /// <param name="operation">Description of the operation needing this scope.</param>
-    /// <exception cref="InvalidOperationException">Thrown if the scope is not available.</exception>
-    public void RequireScope(string requiredScope, string operation)
-    {
-        if (!HasScope(requiredScope))
-        {
-            throw new InvalidOperationException(
-                $"GitHub authentication missing required scope '{requiredScope}' for {operation}.\n" +
-                $"Re-authenticate with: gh auth login --scopes {requiredScope}");
-        }
-    }
-
-    // Resolves the token from various sources.
     private string? ResolveToken()
     {
-        // Priority 1: GITHUB_TOKEN environment variable (CI-standard).
+        // Priority 1: GITHUB_TOKEN environment variable.
         var token = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
         if (!string.IsNullOrEmpty(token))
         {
@@ -141,27 +90,11 @@ public class GitHubAuthHelper
             return token;
         }
 
-        // Priority 2: GH_TOKEN environment variable (gh CLI alternative).
-        token = Environment.GetEnvironmentVariable("GH_TOKEN");
+        // Priority 2: gh auth token command.
+        token = RunGhAuthToken();
         if (!string.IsNullOrEmpty(token))
         {
-            _logger.Debug("Using GH_TOKEN from environment");
-            return token;
-        }
-
-        // Priority 3: Extract from gh CLI config file (legacy - older gh versions).
-        token = ExtractFromGhConfig();
-        if (!string.IsNullOrEmpty(token))
-        {
-            _logger.Debug("Using token from gh CLI config");
-            return token;
-        }
-
-        // Priority 4: Use `gh auth token` command (newer gh versions use keyring).
-        token = ExtractFromGhAuthToken();
-        if (!string.IsNullOrEmpty(token))
-        {
-            _logger.Debug("Using token from gh auth token command");
+            _logger.Debug("Using token from gh auth token");
             return token;
         }
 
@@ -169,9 +102,10 @@ public class GitHubAuthHelper
         return null;
     }
 
-    // Gets token using `gh auth token` command.
-    // This works when gh CLI stores tokens in the system keyring (newer versions).
-    private string? ExtractFromGhAuthToken()
+    /// <summary>
+    /// Gets token using `gh auth token` command.
+    /// </summary>
+    private string? RunGhAuthToken()
     {
         try
         {
@@ -191,144 +125,11 @@ public class GitHubAuthHelper
             var output = process.StandardOutput.ReadToEnd().Trim();
             process.WaitForExit(5000);
 
-            if (process.ExitCode == 0 && !string.IsNullOrEmpty(output))
-            {
-                return output;
-            }
-
-            return null;
+            return process.ExitCode == 0 && !string.IsNullOrEmpty(output) ? output : null;
         }
         catch (Exception ex)
         {
             _logger.Debug($"Failed to run gh auth token: {ex.Message}");
-            return null;
-        }
-    }
-
-    // Resolves OAuth scopes from `gh auth status`.
-    // Output contains lines like: "Token scopes: 'delete_repo', 'gist', 'read:org', 'repo', 'workflow', 'write:packages'"
-    private HashSet<string> ResolveScopes()
-    {
-        var scopes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        try
-        {
-            var startInfo = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "gh",
-                Arguments = "auth status",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using var process = System.Diagnostics.Process.Start(startInfo);
-            if (process == null) return scopes;
-
-            // gh auth status outputs to stderr
-            var output = process.StandardError.ReadToEnd();
-            process.WaitForExit(5000);
-
-            // Parse "Token scopes: 'scope1', 'scope2', ..." line
-            foreach (var line in output.Split('\n'))
-            {
-                if (line.Contains("Token scopes:"))
-                {
-                    var scopesPart = line[(line.IndexOf("Token scopes:") + "Token scopes:".Length)..];
-                    // Parse comma-separated scopes, removing quotes and whitespace
-                    foreach (var scope in scopesPart.Split(','))
-                    {
-                        var cleaned = scope.Trim().Trim('\'', '"', ' ');
-                        if (!string.IsNullOrEmpty(cleaned))
-                        {
-                            scopes.Add(cleaned);
-                        }
-                    }
-                    break;
-                }
-            }
-
-            _logger.Debug($"GitHub token scopes: {string.Join(", ", scopes)}");
-        }
-        catch (Exception ex)
-        {
-            _logger.Debug($"Failed to get GitHub scopes: {ex.Message}");
-        }
-
-        return scopes;
-    }
-
-    // Extracts the oauth_token from gh CLI config file.
-    // Config is at ~/.config/gh/hosts.yml with format:
-    // github.com:
-    //     oauth_token: gho_xxxxx
-    //     user: username
-    //     git_protocol: https
-    private string? ExtractFromGhConfig()
-    {
-        try
-        {
-            var configDir = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME")
-                ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config");
-
-            var hostsPath = Path.Combine(configDir, "gh", "hosts.yml");
-
-            if (!File.Exists(hostsPath))
-            {
-                return null;
-            }
-
-            var content = File.ReadAllText(hostsPath);
-
-            // Simple YAML parsing for oauth_token under github.com.
-            // Look for "github.com:" section and then "oauth_token:" line.
-            var lines = content.Split('\n');
-            var inGitHubSection = false;
-
-            foreach (var line in lines)
-            {
-                var trimmed = line.TrimEnd();
-
-                // Check for github.com section start.
-                if (trimmed.StartsWith("github.com:") || trimmed == "github.com:")
-                {
-                    inGitHubSection = true;
-                    continue;
-                }
-
-                // Check for another top-level section (not indented).
-                if (inGitHubSection && !string.IsNullOrWhiteSpace(trimmed) && !char.IsWhiteSpace(trimmed[0]))
-                {
-                    // We've left the github.com section.
-                    break;
-                }
-
-                // Look for oauth_token in github.com section.
-                if (inGitHubSection && trimmed.Contains("oauth_token:"))
-                {
-                    var tokenStart = trimmed.IndexOf("oauth_token:") + "oauth_token:".Length;
-                    var token = trimmed[tokenStart..].Trim();
-
-                    // Remove quotes if present.
-                    if ((token.StartsWith('"') && token.EndsWith('"')) ||
-                        (token.StartsWith('\'') && token.EndsWith('\'')))
-                    {
-                        token = token[1..^1];
-                    }
-
-                    if (!string.IsNullOrEmpty(token))
-                    {
-                        return token;
-                    }
-                }
-            }
-
-            return null;
-        }
-        catch (Exception ex)
-        {
-            _logger.Debug($"Failed to read gh config: {ex.Message}");
             return null;
         }
     }
