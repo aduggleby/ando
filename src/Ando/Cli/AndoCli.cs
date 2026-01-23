@@ -658,8 +658,8 @@ public class AndoCli : IDisposable
         Console.WriteLine();
         Console.WriteLine("  Release workflow steps (selectable via interactive checklist):");
         Console.WriteLine("    1. commit   - Commit uncommitted changes (AI-generated message)");
-        Console.WriteLine("    2. docs     - Update documentation using Claude");
-        Console.WriteLine("    3. bump     - Bump version (uses type from command line)");
+        Console.WriteLine("    2. bump     - Bump version (uses type from command line)");
+        Console.WriteLine("    3. docs     - Update documentation using Claude (auto-commits)");
         Console.WriteLine("    4. push     - Push commits to remote");
         Console.WriteLine("    5. publish  - Run build with push profile (ando run -p push --dind --read-env)");
         Console.WriteLine();

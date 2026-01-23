@@ -153,13 +153,13 @@ public class ReleaseCommand
         return
         [
             new("commit", "Commit uncommitted changes", hasChanges, hasChanges ? null : "no changes"),
+            new("bump", $"Bump version ({version})", true, null),
             new("docs", hasWebsite
                 ? "Update documentation (Claude)"
                 : "Update documentation (Claude - markdown only)",
                 hasDocsToUpdate, hasDocsToUpdate ? null : "no documentation files"),
-            new("bump", $"Bump version ({version})", true, null),
             new("push", $"Push to remote ({remoteBranch ?? "no remote"})", hasRemote, hasRemote ? null : "no remote tracking"),
-            new("publish", "Run publish build (ando run -p push --dind)", hasPushProfile, hasPushProfile ? null : "no push profile")
+            new("publish", "Run publish build (ando run -p push --dind --read-env)", hasPushProfile, hasPushProfile ? null : "no push profile")
         ];
     }
 
@@ -230,8 +230,8 @@ public class ReleaseCommand
             var result = step.Id switch
             {
                 "commit" => await ExecuteCommitAsync(repoRoot),
-                "docs" => await ExecuteDocsUpdateAsync(repoRoot),
                 "bump" => await ExecuteBumpAsync(bumpType, repoRoot),
+                "docs" => await ExecuteDocsUpdateAsync(repoRoot),
                 "push" => await ExecutePushAsync(),
                 "publish" => await ExecutePublishAsync(),
                 _ => throw new InvalidOperationException($"Unknown step: {step.Id}")
@@ -321,7 +321,6 @@ public class ReleaseCommand
         try
         {
             await _runner.RunClaudeAsync(prompt, timeoutMs: 300000, streamOutput: true);
-            return 0;
         }
         catch (Exception ex)
         {
@@ -329,6 +328,34 @@ public class ReleaseCommand
             // Non-fatal - continue with release.
             return 0;
         }
+
+        // Check if Claude made any changes and commit them.
+        // Version was already bumped in the previous step.
+        if (await _git.HasUncommittedChangesAsync())
+        {
+            var version = GetCurrentVersion(repoRoot);
+
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine("[dim]Committing documentation changes...[/]");
+
+            try
+            {
+                await _git.StageAllAsync();
+                await _git.CommitAsync($"docs: update documentation for v{version}");
+                AnsiConsole.MarkupLine("[green]Documentation changes committed.[/]");
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.MarkupLine($"[yellow]Failed to commit documentation changes: {ex.Message}[/]");
+                // Non-fatal - continue with release.
+            }
+        }
+        else
+        {
+            AnsiConsole.MarkupLine("[dim]No documentation changes needed.[/]");
+        }
+
+        return 0;
     }
 
     private async Task<int> ExecuteBumpAsync(BumpType bumpType, string repoRoot)

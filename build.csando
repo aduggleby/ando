@@ -20,7 +20,7 @@
 //
 // Prerequisites:
 // - NUGET_API_KEY env var set (or enter when prompted) for push profile
-// - Run ./ando-bumpversion.sh before push to set the desired version
+// - Run `ando bump` before push to set the desired version
 // - For E2E tests: Run with `ando --dind` to enable Docker-in-Docker
 //
 // Output:
