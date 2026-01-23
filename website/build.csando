@@ -26,8 +26,8 @@ var website = Directory(".");
 // Install Node.js (includes npm) in the Ubuntu container.
 Node.Install();
 
-// Install dependencies.
-Npm.Install(website);
+// Install dependencies (using Npm.Ci for faster, reproducible CI builds).
+Npm.Ci(website);
 
 // Build the Astro site (outputs to ./dist).
 Npm.Build(website);

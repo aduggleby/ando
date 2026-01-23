@@ -359,7 +359,7 @@ test.describe('Project Deletion', () => {
 test.describe('User Isolation', () => {
   test('user cannot see other users projects', async ({ authedPage, testApi }) => {
     // Create another user with a project (use unique name to avoid conflicts)
-    const uniqueId = Date.now().toString(36);
+    const uniqueId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     const otherUser = await testApi.createUser({ login: `other-user-${uniqueId}` });
     const otherProject = await testApi.createProject({
       userId: otherUser.userId,
@@ -379,7 +379,7 @@ test.describe('User Isolation', () => {
 
   test('user cannot access other users project details', async ({ authedPage, testApi }) => {
     // Create another user with a project (use unique name to avoid conflicts)
-    const uniqueId = Date.now().toString(36);
+    const uniqueId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     const otherUser = await testApi.createUser({ login: `other-user-${uniqueId}` });
     const otherProject = await testApi.createProject({
       userId: otherUser.userId,
