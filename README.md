@@ -28,7 +28,7 @@ Full documentation is available at **[andobuild.com](https://andobuild.com)**.
 
 ### Prerequisites
 
-- **.NET 10 SDK** - https://dotnet.microsoft.com/download
+- **.NET 9 SDK** - https://dotnet.microsoft.com/download
 - **Node.js 20+** - For the website and CI Server frontend
 - **Docker** - For running SQL Server and building containers
 

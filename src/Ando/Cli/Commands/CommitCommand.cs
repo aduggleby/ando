@@ -42,8 +42,9 @@ public class CommitCommand
     /// <summary>
     /// Executes the commit command.
     /// </summary>
+    /// <param name="autoConfirm">Skip confirmation prompt and commit automatically.</param>
     /// <returns>Exit code: 0 for success or cancellation, 1 for errors.</returns>
-    public async Task<int> ExecuteAsync()
+    public async Task<int> ExecuteAsync(bool autoConfirm = false)
     {
         try
         {
@@ -111,14 +112,17 @@ public class CommitCommand
             Console.WriteLine("────────────────────────────────────────");
             Console.WriteLine();
 
-            // Confirm with user.
-            Console.Write("Commit with this message? [Y/n] ");
-            var response = Console.ReadLine()?.Trim().ToLowerInvariant();
-
-            if (response == "n" || response == "no")
+            // Confirm with user (unless auto-confirm is enabled).
+            if (!autoConfirm)
             {
-                _logger.Info("Commit cancelled.");
-                return 0;
+                Console.Write("Commit with this message? [Y/n] ");
+                var response = Console.ReadLine()?.Trim().ToLowerInvariant();
+
+                if (response == "n" || response == "no")
+                {
+                    _logger.Info("Commit cancelled.");
+                    return 0;
+                }
             }
 
             // Stage all changes and commit.
