@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.32
+
+**2026-01-23**
+
+- feat(bump): auto-generate changelog from git commits since last tag
+
 ## 0.9.31
 
 **2026-01-23**
