@@ -31,6 +31,8 @@ public class GitHubAuthHelper
     private readonly IBuildLogger _logger;
     private string? _cachedToken;
     private bool _tokenResolved;
+    private HashSet<string> _cachedScopes = [];
+    private bool _scopesResolved;
 
     public GitHubAuthHelper(IBuildLogger logger)
     {
@@ -83,6 +85,49 @@ public class GitHubAuthHelper
             env["GITHUB_TOKEN"] = token;
         }
         return env;
+    }
+
+    /// <summary>
+    /// Checks if the current GitHub authentication has the required scope.
+    /// Uses `gh auth status` to check available scopes.
+    /// </summary>
+    /// <param name="requiredScope">The scope to check for (e.g., "write:packages").</param>
+    /// <returns>True if the scope is available, false otherwise.</returns>
+    public bool HasScope(string requiredScope)
+    {
+        var scopes = GetScopes();
+        return scopes.Contains(requiredScope);
+    }
+
+    /// <summary>
+    /// Gets the list of OAuth scopes for the current GitHub authentication.
+    /// </summary>
+    public HashSet<string> GetScopes()
+    {
+        if (_scopesResolved)
+        {
+            return _cachedScopes;
+        }
+
+        _cachedScopes = ResolveScopes();
+        _scopesResolved = true;
+        return _cachedScopes;
+    }
+
+    /// <summary>
+    /// Validates that the required scope is available, throwing with a helpful message if not.
+    /// </summary>
+    /// <param name="requiredScope">The scope to check for.</param>
+    /// <param name="operation">Description of the operation needing this scope.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the scope is not available.</exception>
+    public void RequireScope(string requiredScope, string operation)
+    {
+        if (!HasScope(requiredScope))
+        {
+            throw new InvalidOperationException(
+                $"GitHub authentication missing required scope '{requiredScope}' for {operation}.\n" +
+                $"Re-authenticate with: gh auth login --scopes {requiredScope}");
+        }
     }
 
     // Resolves the token from various sources.
@@ -158,6 +203,60 @@ public class GitHubAuthHelper
             _logger.Debug($"Failed to run gh auth token: {ex.Message}");
             return null;
         }
+    }
+
+    // Resolves OAuth scopes from `gh auth status`.
+    // Output contains lines like: "Token scopes: 'delete_repo', 'gist', 'read:org', 'repo', 'workflow', 'write:packages'"
+    private HashSet<string> ResolveScopes()
+    {
+        var scopes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var startInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "gh",
+                Arguments = "auth status",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = System.Diagnostics.Process.Start(startInfo);
+            if (process == null) return scopes;
+
+            // gh auth status outputs to stderr
+            var output = process.StandardError.ReadToEnd();
+            process.WaitForExit(5000);
+
+            // Parse "Token scopes: 'scope1', 'scope2', ..." line
+            foreach (var line in output.Split('\n'))
+            {
+                if (line.Contains("Token scopes:"))
+                {
+                    var scopesPart = line[(line.IndexOf("Token scopes:") + "Token scopes:".Length)..];
+                    // Parse comma-separated scopes, removing quotes and whitespace
+                    foreach (var scope in scopesPart.Split(','))
+                    {
+                        var cleaned = scope.Trim().Trim('\'', '"', ' ');
+                        if (!string.IsNullOrEmpty(cleaned))
+                        {
+                            scopes.Add(cleaned);
+                        }
+                    }
+                    break;
+                }
+            }
+
+            _logger.Debug($"GitHub token scopes: {string.Join(", ", scopes)}");
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug($"Failed to get GitHub scopes: {ex.Message}");
+        }
+
+        return scopes;
     }
 
     // Extracts the oauth_token from gh CLI config file.

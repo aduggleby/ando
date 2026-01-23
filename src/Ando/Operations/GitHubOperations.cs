@@ -285,6 +285,14 @@ public class GitHubOperations(
             var localImage = $"{imageName}:{tag}";
             var remoteImage = $"ghcr.io/{owner.ToLowerInvariant()}/{imageName}:{tag}";
 
+            // Check for required scope before attempting push.
+            if (!_authHelper.HasScope("write:packages"))
+            {
+                Logger.Error("GitHub authentication missing 'write:packages' scope required for pushing to ghcr.io.");
+                Logger.Error("Re-authenticate with: gh auth login --scopes write:packages");
+                return false;
+            }
+
             // Get authentication token.
             var token = _authHelper.GetToken();
             if (string.IsNullOrEmpty(token))
