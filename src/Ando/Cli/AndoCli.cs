@@ -127,8 +127,9 @@ public class AndoCli : IDisposable
         // - "help", "--help", "-h" -> show help
         // - "clean" -> cleanup command
         // - "commit" -> AI-generated commit
+        // - "bump" -> Version bumping
         // This allows "ando" and "ando run" to behave identically.
-        if (_args.Length == 0 || _args[0] == "run" || !_args[0].StartsWith("-") && _args[0] != "clean" && _args[0] != "help" && _args[0] != "verify" && _args[0] != "commit")
+        if (_args.Length == 0 || _args[0] == "run" || !_args[0].StartsWith("-") && _args[0] != "clean" && _args[0] != "help" && _args[0] != "verify" && _args[0] != "commit" && _args[0] != "bump")
         {
             PrintHeader();
             return await RunCommandAsync();
@@ -149,6 +150,11 @@ public class AndoCli : IDisposable
         if (_args[0] == "commit")
         {
             return await CommitCommandAsync();
+        }
+
+        if (_args[0] == "bump")
+        {
+            return await BumpCommandAsync();
         }
 
         if (_args[0] == "clean")
@@ -419,6 +425,28 @@ public class AndoCli : IDisposable
         return await command.ExecuteAsync();
     }
 
+    // Handles the 'bump' command which bumps version in all detected projects.
+    // Parses build.csando to find projects and updates their versions.
+    private async Task<int> BumpCommandAsync()
+    {
+        // Parse bump type argument.
+        var bumpType = Versioning.BumpType.Patch;
+        if (_args.Length > 1)
+        {
+            bumpType = _args[1].ToLower() switch
+            {
+                "minor" => Versioning.BumpType.Minor,
+                "major" => Versioning.BumpType.Major,
+                "patch" => Versioning.BumpType.Patch,
+                _ => throw new ArgumentException($"Invalid bump type: {_args[1]}. Use 'patch', 'minor', or 'major'.")
+            };
+        }
+
+        var runner = new CliProcessRunner();
+        var command = new BumpCommand(runner, _logger);
+        return await command.ExecuteAsync(bumpType);
+    }
+
     // Handles the 'clean' command which removes build artifacts and caches.
     // Supports selective cleanup via flags, or cleans artifacts+temp by default.
     private async Task<int> CleanCommandAsync()
@@ -568,6 +596,7 @@ public class AndoCli : IDisposable
         Console.WriteLine("Commands:");
         Console.WriteLine("  run               Run the build script (default)");
         Console.WriteLine("  commit            Commit all changes with AI-generated message");
+        Console.WriteLine("  bump [type]       Bump version in all projects (patch|minor|major)");
         Console.WriteLine("  verify            Check build script for errors without executing");
         Console.WriteLine("  clean             Remove artifacts, temp files, and containers");
         Console.WriteLine("  help              Show this help");
@@ -576,6 +605,8 @@ public class AndoCli : IDisposable
         Console.WriteLine("Examples:");
         Console.WriteLine("  ando                          Run build.csando in current directory");
         Console.WriteLine("  ando commit                   Commit with AI-generated message");
+        Console.WriteLine("  ando bump                     Bump patch version (1.0.0 -> 1.0.1)");
+        Console.WriteLine("  ando bump minor               Bump minor version (1.0.0 -> 1.1.0)");
         Console.WriteLine("  ando -f deploy.csando         Run a specific build file");
         Console.WriteLine("  ando verify -f deploy.csando  Verify a specific build file");
         Console.WriteLine();

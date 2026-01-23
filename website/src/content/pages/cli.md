@@ -13,6 +13,7 @@ The CLI provides a small, focused surface area.
 | `ando` | Run the build script (same as 'ando run'). |
 | `ando run` | Run the build script in a Docker container. |
 | `ando commit` | Commit all changes with AI-generated message using Claude. |
+| `ando bump` | Bump version across all projects in build.csando. |
 | `ando verify` | Check build script for errors without executing. |
 | `ando clean` | Remove artifacts, temp files, and containers. |
 | `ando help` | Show available commands and options. |
@@ -65,6 +66,53 @@ Commit with this message? [Y/n] y
 Committed: docs: add options reference to GitHub provider
 ```
 
+## Bump Command
+
+The `ando bump` command bumps the version of all projects detected in your `build.csando` file.
+
+**Usage:**
+```bash
+ando bump [patch|minor|major]
+```
+
+**Default:** `patch` - bumps the patch version (1.0.0 → 1.0.1)
+
+**How it works:**
+1. Detects projects from `build.csando` (Dotnet.Project and Npm directories)
+2. Checks for uncommitted changes (offers to run `ando commit` first)
+3. Reads current versions from all detected projects
+4. Validates all versions match (prompts to select base if mismatched)
+5. Calculates the new version based on bump type
+6. Updates all project files (.csproj, package.json)
+7. Updates documentation (changelog, version badges)
+8. Commits the changes automatically
+
+**Supported projects:**
+- `.csproj` files referenced via `Dotnet.Project("path")`
+- `package.json` files in directories used with `Npm.*` operations
+
+**Example output:**
+```
+$ ando bump minor
+Detecting projects...
+
+Detected projects:
+  ./src/App/App.csproj                     1.2.3
+  ./website/package.json                   1.2.3
+
+Bumping minor: 1.2.3 → 1.3.0
+
+Updating project versions:
+  ✓ ./src/App/App.csproj
+  ✓ ./website/package.json
+
+Updating documentation:
+  ✓ CHANGELOG.md
+  ✓ README.md
+
+Committed: Bump version to 1.3.0
+```
+
 ## Clean Options
 
 Options for the `ando clean` command.
@@ -87,6 +135,12 @@ ando
 
 # Commit all changes with AI-generated message
 ando commit
+
+# Bump version (patch by default)
+ando bump
+
+# Bump minor version
+ando bump minor
 
 # Verify build script without executing
 ando verify
