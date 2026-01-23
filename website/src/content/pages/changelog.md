@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.34
+
+**2026-01-23**
+
+- Add GitHub link badge to the documentation website landing page
+
 ## 0.9.33
 
 **2026-01-23**
