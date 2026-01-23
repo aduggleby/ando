@@ -14,6 +14,9 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Clean up Syncthing conflict files first
+"$SCRIPT_DIR/clean.sh"
 REPO_ROOT="$SCRIPT_DIR/.."
 CLI_CSPROJ="$REPO_ROOT/src/Ando/Ando.csproj"
 SERVER_CSPROJ="$REPO_ROOT/src/Ando.Server/Ando.Server.csproj"

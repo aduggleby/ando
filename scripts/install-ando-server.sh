@@ -19,6 +19,9 @@ set -euo pipefail
 # Configuration
 # -----------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Clean up Syncthing conflict files first
+"$SCRIPT_DIR/clean.sh"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DOCKER_IMAGE_NAME="ando-server"
 DOCKER_IMAGE_TAG="latest"
