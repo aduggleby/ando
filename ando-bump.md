@@ -307,20 +307,6 @@ The command looks for documentation files in these locations:
 
 If files are not found, the documentation update step is skipped with a warning.
 
-### Configuration
-
-Projects can customize documentation paths in `.ando/config.json`:
-
-```json
-{
-  "bump": {
-    "changelog": "docs/CHANGELOG.md",
-    "versionBadge": "src/pages/index.astro",
-    "versionBadgePattern": "v[0-9]+\\.[0-9]+\\.[0-9]+"
-  }
-}
-```
-
 ## File Structure
 
 ```
@@ -338,11 +324,228 @@ src/Ando/
 │   ├── VersionReader.cs           # Read versions from .csproj/package.json
 │   ├── VersionWriter.cs           # Write versions to .csproj/package.json
 │   ├── SemVer.cs                  # Semver parsing and bumping
-│   ├── DocumentationUpdater.cs    # Update changelog and version badge
-│   └── BumpOrchestrator.cs        # Coordinates the bump workflow
+│   └── DocumentationUpdater.cs    # Update changelog and version badge
 │
-└── Git/                           # NEW or extend existing
-    └── GitOperations.cs           # Check status, add, commit (host-side)
+└── Utilities/                     # Shared utilities
+    ├── ProcessRunner.cs           # Process execution with timeout
+    └── GitOperations.cs           # Git operations (status, add, commit)
+```
+
+## Shared Utilities
+
+These utilities are shared across `ando bump`, `ando commit`, `ando release`, and hooks.
+
+### ProcessRunner.cs
+
+```csharp
+// =============================================================================
+// ProcessRunner.cs
+//
+// Executes external processes with timeout support and proper error handling.
+// =============================================================================
+
+public class ProcessRunner
+{
+    public record ProcessResult(int ExitCode, string Output, string Error);
+
+    public async Task<ProcessResult> RunAsync(
+        string fileName,
+        string arguments,
+        string? stdin = null,
+        int timeoutMs = 60000,
+        string? workingDirectory = null)
+    {
+        using var cts = new CancellationTokenSource(timeoutMs);
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = fileName,
+            Arguments = arguments,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            RedirectStandardInput = stdin != null,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = workingDirectory ?? Directory.GetCurrentDirectory()
+        };
+
+        using var process = new Process { StartInfo = startInfo };
+        process.Start();
+
+        if (stdin != null)
+        {
+            await process.StandardInput.WriteAsync(stdin);
+            process.StandardInput.Close();
+        }
+
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+
+        try
+        {
+            await process.WaitForExitAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            process.Kill(entireProcessTree: true);
+            throw new TimeoutException($"Process '{fileName}' timed out after {timeoutMs}ms");
+        }
+
+        return new ProcessResult(
+            process.ExitCode,
+            await outputTask,
+            await errorTask
+        );
+    }
+
+    public async Task<string> RunClaudeAsync(string prompt, int timeoutMs = 120000)
+    {
+        var result = await RunAsync(
+            "claude",
+            "-p --dangerously-skip-permissions",
+            stdin: prompt,
+            timeoutMs: timeoutMs
+        );
+
+        if (result.ExitCode != 0)
+            throw new Exception($"Claude failed: {result.Error}");
+
+        return result.Output.Trim();
+    }
+}
+```
+
+### GitOperations.cs
+
+```csharp
+// =============================================================================
+// GitOperations.cs
+//
+// Git operations for checking status, staging files, and committing.
+// Shared across bump, commit, release commands.
+// =============================================================================
+
+public class GitOperations
+{
+    private readonly ProcessRunner _runner;
+
+    public GitOperations(ProcessRunner runner)
+    {
+        _runner = runner;
+    }
+
+    public async Task<bool> HasUncommittedChangesAsync()
+    {
+        var result = await _runner.RunAsync("git", "status --porcelain");
+        return !string.IsNullOrWhiteSpace(result.Output);
+    }
+
+    public async Task<string> GetStatusAsync()
+    {
+        var result = await _runner.RunAsync("git", "status --porcelain");
+        return result.Output;
+    }
+
+    public async Task<List<string>> GetChangedFilesAsync()
+    {
+        var status = await GetStatusAsync();
+        return status
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line =>
+            {
+                // Handle renames: "R  old -> new"
+                if (line.Contains(" -> "))
+                    return line.Split(" -> ").Last().Trim();
+                // Standard format: "XY filename"
+                return line.Length > 3 ? line[3..].Trim() : line.Trim();
+            })
+            .Where(f => !string.IsNullOrEmpty(f))
+            .ToList();
+    }
+
+    public async Task<string> GetDiffAsync(bool includeUntracked = false)
+    {
+        // Use git pathspec to exclude noisy files
+        var excludes = string.Join(" ",
+            ":(exclude)package-lock.json",
+            ":(exclude)yarn.lock",
+            ":(exclude)pnpm-lock.yaml",
+            ":(exclude)*.min.js",
+            ":(exclude)*.min.css");
+
+        var staged = await _runner.RunAsync("git", $"diff --cached -- . {excludes}");
+        var unstaged = await _runner.RunAsync("git", $"diff -- . {excludes}");
+
+        var result = new StringBuilder();
+        if (!string.IsNullOrWhiteSpace(staged.Output))
+            result.AppendLine(staged.Output);
+        if (!string.IsNullOrWhiteSpace(unstaged.Output))
+            result.AppendLine(unstaged.Output);
+
+        return result.ToString();
+    }
+
+    public async Task<string?> GetLastTagAsync()
+    {
+        var result = await _runner.RunAsync("git", "describe --tags --abbrev=0");
+        return result.ExitCode == 0 ? result.Output.Trim() : null;
+    }
+
+    public async Task<string> GetDiffSinceTagAsync(string tag)
+    {
+        var result = await _runner.RunAsync("git", $"diff {tag}..HEAD");
+        return result.Output;
+    }
+
+    public async Task StageAllAsync()
+    {
+        await _runner.RunAsync("git", "add -A");
+    }
+
+    public async Task StageFilesAsync(IEnumerable<string> files)
+    {
+        var fileList = string.Join(" ", files.Select(f => $"\"{f}\""));
+        await _runner.RunAsync("git", $"add {fileList}");
+    }
+
+    public async Task CommitAsync(string message)
+    {
+        var result = await _runner.RunAsync("git", "commit -F -", stdin: message);
+        if (result.ExitCode != 0)
+            throw new Exception($"Git commit failed: {result.Error}");
+    }
+
+    public async Task<string> GetCurrentBranchAsync()
+    {
+        var result = await _runner.RunAsync("git", "branch --show-current");
+        return result.Output.Trim();
+    }
+
+    public async Task<bool> HasRemoteTrackingAsync()
+    {
+        var result = await _runner.RunAsync("git", "rev-parse --abbrev-ref @{upstream}");
+        return result.ExitCode == 0;
+    }
+
+    public async Task<string?> GetRemoteTrackingBranchAsync()
+    {
+        var result = await _runner.RunAsync("git", "rev-parse --abbrev-ref @{upstream}");
+        return result.ExitCode == 0 ? result.Output.Trim() : null;
+    }
+
+    public async Task<string> GetCurrentCommitShortAsync()
+    {
+        var result = await _runner.RunAsync("git", "rev-parse --short HEAD");
+        return result.Output.Trim();
+    }
+
+    public async Task PushAsync()
+    {
+        var result = await _runner.RunAsync("git", "push");
+        if (result.ExitCode != 0)
+            throw new Exception($"Git push failed: {result.Error}");
+    }
+}
 ```
 
 ## Implementation Details
@@ -438,9 +641,31 @@ public class ProjectDetector
 
 public record SemVer(int Major, int Minor, int Patch, string? Prerelease = null)
 {
+    private static readonly Regex VersionRegex = new(
+        @"^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$",
+        RegexOptions.Compiled);
+
     public static SemVer Parse(string version)
     {
-        // Parse "1.2.3" or "1.2.3-beta.1"
+        if (!TryParse(version, out var result))
+            throw new ArgumentException($"Invalid version format: {version}");
+        return result;
+    }
+
+    public static bool TryParse(string version, out SemVer result)
+    {
+        result = default!;
+        var match = VersionRegex.Match(version.Trim());
+        if (!match.Success)
+            return false;
+
+        result = new SemVer(
+            int.Parse(match.Groups[1].Value),
+            int.Parse(match.Groups[2].Value),
+            int.Parse(match.Groups[3].Value),
+            match.Groups[4].Success ? match.Groups[4].Value : null
+        );
+        return true;
     }
 
     public SemVer Bump(BumpType type)
@@ -450,6 +675,7 @@ public record SemVer(int Major, int Minor, int Patch, string? Prerelease = null)
             BumpType.Patch => this with { Patch = Patch + 1, Prerelease = null },
             BumpType.Minor => this with { Minor = Minor + 1, Patch = 0, Prerelease = null },
             BumpType.Major => this with { Major = Major + 1, Minor = 0, Patch = 0, Prerelease = null },
+            _ => throw new ArgumentOutOfRangeException(nameof(type))
         };
     }
 
@@ -471,25 +697,35 @@ public class VersionReader
 {
     public string? ReadVersion(string projectPath, ProjectType type)
     {
-        return type switch
+        var version = type switch
         {
             ProjectType.Dotnet => ReadCsprojVersion(projectPath),
             ProjectType.Npm => ReadPackageJsonVersion(projectPath),
+            _ => null
         };
+
+        // Validate the version string
+        if (version != null && !SemVer.TryParse(version, out _))
+        {
+            throw new InvalidOperationException(
+                $"Invalid version format '{version}' in {projectPath}");
+        }
+
+        return version;
     }
 
     private string? ReadCsprojVersion(string path)
     {
-        // Parse XML, find <Version> element
         var doc = XDocument.Load(path);
         return doc.Descendants("Version").FirstOrDefault()?.Value;
     }
 
     private string? ReadPackageJsonVersion(string path)
     {
-        // Parse JSON, find "version" field
         var json = JsonDocument.Parse(File.ReadAllText(path));
-        return json.RootElement.GetProperty("version").GetString();
+        return json.RootElement.TryGetProperty("version", out var prop)
+            ? prop.GetString()
+            : null;
     }
 }
 ```
@@ -505,6 +741,12 @@ public class VersionWriter
 {
     public void WriteVersion(string projectPath, ProjectType type, string newVersion)
     {
+        // Validate version before writing
+        if (!SemVer.TryParse(newVersion, out _))
+        {
+            throw new ArgumentException($"Invalid version format: {newVersion}");
+        }
+
         switch (type)
         {
             case ProjectType.Dotnet:
@@ -518,8 +760,6 @@ public class VersionWriter
 
     private void WriteCsprojVersion(string path, string version)
     {
-        // Use regex replacement to preserve formatting
-        // Pattern: <Version>...</Version>
         var content = File.ReadAllText(path);
         var updated = Regex.Replace(
             content,
@@ -530,7 +770,6 @@ public class VersionWriter
 
     private void WritePackageJsonVersion(string path, string version)
     {
-        // Use regex to preserve formatting (indentation, etc.)
         var content = File.ReadAllText(path);
         var updated = Regex.Replace(
             content,
@@ -617,16 +856,8 @@ public class DocumentationUpdater
             var content = File.ReadAllText(path);
             var date = DateTime.Now.ToString("yyyy-MM-dd");
 
-            // Find insertion point (after frontmatter if present)
-            var insertIndex = 0;
-            if (content.StartsWith("---"))
-            {
-                var endFrontmatter = content.IndexOf("---", 3);
-                if (endFrontmatter > 0)
-                {
-                    insertIndex = content.IndexOf('\n', endFrontmatter) + 1;
-                }
-            }
+            // Find insertion point (after YAML frontmatter if present)
+            var insertIndex = FindFrontmatterEnd(content);
 
             var entry = $"\n## {newVersion}\n\n**{date}**\n\n- Version bump\n";
             var updated = content.Insert(insertIndex, entry);
@@ -640,16 +871,47 @@ public class DocumentationUpdater
         }
     }
 
+    private int FindFrontmatterEnd(string content)
+    {
+        if (!content.StartsWith("---"))
+            return 0;
+
+        // Find closing --- on its own line (YAML frontmatter delimiter)
+        var lines = content.Split('\n');
+        var charCount = lines[0].Length + 1; // First "---" line plus newline
+
+        for (int i = 1; i < lines.Length; i++)
+        {
+            if (lines[i].TrimEnd() == "---")
+                return charCount + lines[i].Length + 1;
+
+            charCount += lines[i].Length + 1;
+        }
+
+        return 0; // No closing frontmatter found, insert at start
+    }
+
     private UpdateResult UpdateVersionBadge(string path, string oldVersion, string newVersion)
     {
         try
         {
             var content = File.ReadAllText(path);
+            var escapedOld = Regex.Escape(oldVersion);
 
-            // Replace version patterns like "v0.9.23" or "0.9.23"
-            var updated = content
-                .Replace($"v{oldVersion}", $"v{newVersion}")
-                .Replace($"\"{oldVersion}\"", $"\"{newVersion}\"");
+            // Only replace version in specific contexts to avoid changing changelogs/history
+            var patterns = new[]
+            {
+                // Version in quotes: "0.9.23" or '0.9.23'
+                ($@"([""'])v?{escapedOld}\1", $"$1v{newVersion}$1"),
+                // Version badge: v0.9.23 at word boundary (not in URL path)
+                ($@"\bv{escapedOld}\b(?!/)", $"v{newVersion}"),
+            };
+
+            var updated = content;
+            foreach (var (pattern, replacement) in patterns)
+            {
+                updated = Regex.Replace(updated, pattern, replacement);
+            }
 
             if (updated == content)
             {
@@ -669,35 +931,13 @@ public class DocumentationUpdater
 
 ### Git Integration
 
-```csharp
-// =============================================================================
-// GitStatusChecker.cs
-//
-// Checks git repository status for uncommitted changes.
-// Runs on host (not in container).
-// =============================================================================
+Uses the shared `GitOperations` class from `Utilities/`. See the [Shared Utilities](#gitoperationscs) section above for the full implementation.
 
-public class GitStatusChecker
-{
-    public bool HasUncommittedChanges()
-    {
-        // Run: git status --porcelain
-        // Return true if output is not empty
-    }
-
-    public List<string> GetChangedFiles()
-    {
-        // Run: git status --porcelain
-        // Parse output into list of changed files
-    }
-
-    public void CommitFiles(IEnumerable<string> files, string message)
-    {
-        // Run: git add <files>
-        // Run: git commit -m "<message>"
-    }
-}
-```
+Key methods used by BumpCommand:
+- `HasUncommittedChangesAsync()` - Check if there are uncommitted changes
+- `GetChangedFilesAsync()` - List changed files for display
+- `StageFilesAsync(files)` - Stage specific files
+- `CommitAsync(message)` - Create commit with message
 
 ## CLI Registration
 

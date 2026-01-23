@@ -171,10 +171,14 @@ src/Ando/
 ├── Hooks/                         # NEW directory
 │   ├── HookRunner.cs              # Discovers and executes hooks
 │   ├── HookContext.cs             # Environment variables for hooks
-│   └── HookScriptHost.cs          # Roslyn host for hook scripts
+│   ├── HookScriptHost.cs          # Roslyn host for hook scripts
+│   └── HookAbortException.cs      # Exception for hook abort
 │
-└── Scripting/
-    └── ScriptHost.cs              # Existing - may need refactoring
+├── Scripting/
+│   └── ScriptHost.cs              # Existing - may need refactoring
+│
+└── Utilities/                     # Shared (see ando-bump.md)
+    └── ProcessRunner.cs           # Process execution with timeout
 ```
 
 ## Implementation Details
@@ -194,24 +198,34 @@ public class HookRunner
     private readonly string _projectRoot;
     private readonly HookScriptHost _scriptHost;
     private readonly IConsole _console;
+    private const int HookTimeoutMs = 300000; // 5 minutes
 
     public enum HookType { Pre, Post }
 
+    public HookRunner(string projectRoot, ScriptHost scriptHost, IConsole console)
+    {
+        _projectRoot = projectRoot;
+        _scriptHost = new HookScriptHost(scriptHost);
+        _console = console;
+    }
+
     public async Task<bool> RunHooksAsync(HookType type, string command, HookContext context)
     {
+        var typeName = type.ToString().ToLower();
+
         // Run general hook first (ando-pre or ando-post)
-        var generalHook = FindHook($"ando-{type.ToString().ToLower()}");
+        var generalHook = FindHook($"ando-{typeName}");
         if (generalHook != null)
         {
-            if (!await ExecuteHookAsync(generalHook, context))
+            if (!await ExecuteHookAsync(generalHook, context, isPreHook: type == HookType.Pre))
                 return false;
         }
 
         // Run command-specific hook (ando-pre-bump, ando-post-commit, etc.)
-        var specificHook = FindHook($"ando-{type.ToString().ToLower()}-{command}");
+        var specificHook = FindHook($"ando-{typeName}-{command}");
         if (specificHook != null)
         {
-            if (!await ExecuteHookAsync(specificHook, context))
+            if (!await ExecuteHookAsync(specificHook, context, isPreHook: type == HookType.Pre))
                 return false;
         }
 
@@ -229,25 +243,38 @@ public class HookRunner
         return searchPaths.FirstOrDefault(File.Exists);
     }
 
-    private async Task<bool> ExecuteHookAsync(string hookPath, HookContext context)
+    private async Task<bool> ExecuteHookAsync(string hookPath, HookContext context, bool isPreHook)
     {
+        var hookName = Path.GetFileName(hookPath);
+
         try
         {
-            _console.WriteLine($"Running hook: {Path.GetFileName(hookPath)}");
+            _console.WriteLine($"Running hook: {hookName}");
 
-            await _scriptHost.ExecuteAsync(hookPath, context.ToEnvironment());
+            await _scriptHost.ExecuteAsync(hookPath, context.ToEnvironment(), HookTimeoutMs);
 
             return true;
         }
         catch (HookAbortException ex)
         {
             _console.WriteLine($"Hook aborted: {ex.Message}");
-            return false;
+            return false; // Pre-hooks abort, post-hooks just warn
+        }
+        catch (TimeoutException ex)
+        {
+            _console.WriteLine($"Hook timed out: {ex.Message}");
+            return !isPreHook; // Pre-hooks abort on timeout, post-hooks continue
         }
         catch (Exception ex)
         {
             _console.WriteLine($"Hook failed: {ex.Message}");
-            return false;
+            if (isPreHook)
+            {
+                return false; // Pre-hooks abort on failure
+            }
+            // Post-hooks just warn and continue
+            _console.WriteLine("Continuing despite post-hook failure.");
+            return true;
         }
     }
 }
@@ -286,6 +313,93 @@ public class HookContext
             env["ANDO_BUMP_TYPE"] = BumpType;
 
         return env;
+    }
+}
+```
+
+### HookScriptHost.cs
+
+```csharp
+// =============================================================================
+// HookScriptHost.cs
+//
+// Executes hook scripts using Roslyn scripting infrastructure.
+// Wraps the existing ScriptHost with hook-specific behavior.
+// =============================================================================
+
+public class HookScriptHost
+{
+    private readonly ScriptHost _scriptHost;
+    private const int DefaultTimeoutMs = 300000; // 5 minutes
+
+    public HookScriptHost(ScriptHost scriptHost)
+    {
+        _scriptHost = scriptHost;
+    }
+
+    public async Task ExecuteAsync(
+        string hookPath,
+        Dictionary<string, string> environment,
+        int timeoutMs = DefaultTimeoutMs)
+    {
+        // Set environment variables for the hook
+        var originalValues = new Dictionary<string, string?>();
+        foreach (var (key, value) in environment)
+        {
+            originalValues[key] = Environment.GetEnvironmentVariable(key);
+            Environment.SetEnvironmentVariable(key, value);
+        }
+
+        try
+        {
+            using var cts = new CancellationTokenSource(timeoutMs);
+
+            var task = _scriptHost.ExecuteAsync(hookPath);
+
+            if (await Task.WhenAny(task, Task.Delay(timeoutMs, cts.Token)) != task)
+            {
+                throw new TimeoutException(
+                    $"Hook '{Path.GetFileName(hookPath)}' timed out after {timeoutMs / 1000} seconds");
+            }
+
+            await task; // Propagate any exception
+        }
+        finally
+        {
+            // Restore original environment variables
+            foreach (var (key, originalValue) in originalValues)
+            {
+                Environment.SetEnvironmentVariable(key, originalValue);
+            }
+        }
+    }
+}
+```
+
+### HookAbortException.cs
+
+```csharp
+// =============================================================================
+// HookAbortException.cs
+//
+// Exception thrown when a hook requests to abort the current command.
+// =============================================================================
+
+public class HookAbortException : Exception
+{
+    public string HookName { get; }
+    public int ExitCode { get; }
+
+    public HookAbortException(string hookName, int exitCode, string message)
+        : base(message)
+    {
+        HookName = hookName;
+        ExitCode = exitCode;
+    }
+
+    public HookAbortException(string hookName, string message)
+        : this(hookName, 1, message)
+    {
     }
 }
 ```

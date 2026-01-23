@@ -183,11 +183,12 @@ src/Ando/
 │   │   └── CommitCommand.cs       # NEW
 │   └── Program.cs                 # Add commit command registration
 │
-├── Git/                           # Shared with BumpCommand
-│   └── GitOperations.cs           # Status, diff, add, commit
+├── AI/                            # NEW directory
+│   └── CommitMessageGenerator.cs  # Claude integration for commit messages
 │
-└── AI/                            # NEW directory
-    └── CommitMessageGenerator.cs  # Claude integration for commit messages
+└── Utilities/                     # Shared (see ando-bump.md for full implementation)
+    ├── ProcessRunner.cs           # Process execution with timeout
+    └── GitOperations.cs           # Git operations (status, add, commit)
 ```
 
 ## Implementation Details
@@ -208,10 +209,17 @@ public class CommitCommand
     private readonly CommitMessageGenerator _messageGenerator;
     private readonly IConsole _console;
 
+    public CommitCommand(ProcessRunner runner, IConsole console)
+    {
+        _git = new GitOperations(runner);
+        _messageGenerator = new CommitMessageGenerator(runner);
+        _console = console;
+    }
+
     public async Task<int> ExecuteAsync()
     {
         // 1. Check for changes
-        if (!_git.HasUncommittedChanges())
+        if (!await _git.HasUncommittedChangesAsync())
         {
             _console.WriteLine("Nothing to commit. Working tree is clean.");
             return 0;
@@ -222,17 +230,16 @@ public class CommitCommand
         _console.WriteLine();
 
         // Show changed files
-        foreach (var file in _git.GetChangedFiles())
+        foreach (var file in await _git.GetChangedFilesAsync())
         {
             _console.WriteLine($"  {file}");
         }
         _console.WriteLine();
 
         // 3. Generate commit message with Claude
-        var message = await _messageGenerator.GenerateAsync(
-            _git.GetStatus(),
-            _git.GetDiff()
-        );
+        var status = await _git.GetStatusAsync();
+        var diff = await _git.GetDiffAsync();
+        var message = await _messageGenerator.GenerateAsync(status, diff);
 
         // 4. Show and confirm
         _console.WriteLine("Generated commit message:");
@@ -248,8 +255,8 @@ public class CommitCommand
         }
 
         // 5. Commit
-        _git.StageAll();
-        _git.Commit(message);
+        await _git.StageAllAsync();
+        await _git.CommitAsync(message);
 
         _console.WriteLine();
         _console.WriteLine($"Committed: {message.Split('\n')[0]}");
@@ -272,20 +279,17 @@ public class CommitCommand
 public class CommitMessageGenerator
 {
     private const int MaxDiffLength = 8000;
+    private readonly ProcessRunner _runner;
 
-    private static readonly string[] ExcludedPatterns = new[]
+    public CommitMessageGenerator(ProcessRunner runner)
     {
-        "package-lock.json",
-        "yarn.lock",
-        "pnpm-lock.yaml",
-        "*.min.js",
-        "*.min.css"
-    };
+        _runner = runner;
+    }
 
     public async Task<string> GenerateAsync(string gitStatus, string gitDiff)
     {
         var prompt = BuildPrompt(gitStatus, gitDiff);
-        var response = await CallClaudeAsync(prompt);
+        var response = await _runner.RunClaudeAsync(prompt);
         return CleanResponse(response);
     }
 
@@ -314,79 +318,17 @@ public class CommitMessageGenerator
             """;
     }
 
-    private async Task<string> CallClaudeAsync(string prompt)
-    {
-        // Option 1: Use Claude CLI
-        // Run: echo "{prompt}" | claude -p --allowedTools ''
-
-        // Option 2: Use Anthropic API directly
-        // POST to https://api.anthropic.com/v1/messages
-
-        // For simplicity, use Claude CLI which handles auth
-        var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "claude",
-                Arguments = "-p --allowedTools ''",
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                UseShellExecute = false
-            }
-        };
-
-        process.Start();
-        await process.StandardInput.WriteAsync(prompt);
-        process.StandardInput.Close();
-
-        var output = await process.StandardOutput.ReadToEndAsync();
-        await process.WaitForExitAsync();
-
-        return output;
-    }
-
     private string TruncateDiff(string diff, int maxLength)
     {
-        // Filter out excluded files
-        var filteredDiff = FilterExcludedFiles(diff);
+        // Note: Diff is already filtered by GitOperations.GetDiffAsync using git pathspec
+        if (diff.Length <= maxLength)
+            return diff;
 
-        if (filteredDiff.Length <= maxLength)
-            return filteredDiff;
-
-        return filteredDiff.Substring(0, maxLength) +
-               "\n\n[Diff truncated - showing first 8000 characters]";
-    }
-
-    private string FilterExcludedFiles(string diff)
-    {
-        // Remove diff sections for excluded files
-        // Split by "diff --git" and filter
-        var sections = Regex.Split(diff, @"(?=diff --git)");
-        var filtered = sections.Where(s => !IsExcludedFile(s));
-        return string.Join("", filtered);
-    }
-
-    private bool IsExcludedFile(string diffSection)
-    {
-        foreach (var pattern in ExcludedPatterns)
-        {
-            if (pattern.Contains('*'))
-            {
-                var regex = "^" + Regex.Escape(pattern).Replace("\\*", ".*") + "$";
-                if (Regex.IsMatch(diffSection, regex))
-                    return true;
-            }
-            else if (diffSection.Contains(pattern))
-            {
-                return true;
-            }
-        }
-        return false;
+        return diff[..maxLength] + "\n\n[Diff truncated - showing first 8000 characters]";
     }
 
     private string CleanResponse(string response)
     {
-        // Remove any markdown formatting Claude might add
         var clean = response.Trim();
 
         // Remove quotes if wrapped
@@ -405,110 +347,16 @@ public class CommitMessageGenerator
 }
 ```
 
-### GitOperations.cs (Extended)
+### GitOperations.cs
 
-```csharp
-// =============================================================================
-// GitOperations.cs
-//
-// Git operations for checking status, staging files, and committing.
-// Runs on host machine (not in container).
-// =============================================================================
+Uses the shared `GitOperations` class from `Utilities/`. See [ando-bump.md](ando-bump.md#gitoperationscs) for the full implementation.
 
-public class GitOperations
-{
-    public bool HasUncommittedChanges()
-    {
-        var result = RunGit("status", "--porcelain");
-        return !string.IsNullOrWhiteSpace(result);
-    }
-
-    public string GetStatus()
-    {
-        return RunGit("status", "--porcelain");
-    }
-
-    public List<string> GetChangedFiles()
-    {
-        var status = GetStatus();
-        return status
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .Select(line => line.Substring(3)) // Remove status prefix "M  " etc
-            .ToList();
-    }
-
-    public string GetDiff()
-    {
-        // Get both staged and unstaged changes
-        var staged = RunGit("diff", "--cached");
-        var unstaged = RunGit("diff");
-
-        var result = new StringBuilder();
-
-        if (!string.IsNullOrWhiteSpace(staged))
-        {
-            result.AppendLine("=== Staged changes ===");
-            result.AppendLine(staged);
-        }
-
-        if (!string.IsNullOrWhiteSpace(unstaged))
-        {
-            result.AppendLine("=== Unstaged changes ===");
-            result.AppendLine(unstaged);
-        }
-
-        return result.ToString();
-    }
-
-    public void StageAll()
-    {
-        RunGit("add", "-A");
-    }
-
-    public void Commit(string message)
-    {
-        // Use stdin for message to handle special characters
-        RunGitWithInput("commit", "-F", "-", input: message);
-    }
-
-    private string RunGit(params string[] args)
-    {
-        var process = Process.Start(new ProcessStartInfo
-        {
-            FileName = "git",
-            Arguments = string.Join(" ", args),
-            RedirectStandardOutput = true,
-            UseShellExecute = false
-        });
-
-        var output = process!.StandardOutput.ReadToEnd();
-        process.WaitForExit();
-        return output;
-    }
-
-    private void RunGitWithInput(string command, params string[] args, string input)
-    {
-        var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "git",
-                Arguments = $"{command} {string.Join(" ", args)}",
-                RedirectStandardInput = true,
-                UseShellExecute = false
-            }
-        };
-
-        process.Start();
-        process.StandardInput.Write(input);
-        process.StandardInput.Close();
-        process.WaitForExit();
-
-        if (process.ExitCode != 0)
-            throw new Exception($"Git {command} failed with exit code {process.ExitCode}");
-    }
-}
-```
+Key methods used by CommitCommand:
+- `HasUncommittedChangesAsync()` - Check if there are changes to commit
+- `GetChangedFilesAsync()` - List changed files for display
+- `GetDiffAsync()` - Get diff with noisy files excluded via git pathspec
+- `StageAllAsync()` - Stage all changes
+- `CommitAsync(message)` - Create commit with message
 
 ## CLI Registration
 
