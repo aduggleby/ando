@@ -18,6 +18,18 @@ dotnet tool update -g ando
 ando --version
 ```
 
+## 0.9.27
+
+**2026-01-23**
+
+**Improvements:**
+
+- Improved reliability of GitHub OAuth scope checking
+  - Fixed environment variable handling when checking keyring token scopes
+  - Uses bash subprocess for more reliable token isolation during scope verification
+
+---
+
 ## 0.9.26
 
 **2026-01-23**

@@ -134,7 +134,7 @@ public class GitHubScopeChecker
 
     /// <summary>
     /// Gets the current OAuth scopes from gh CLI.
-    /// Temporarily unsets GITHUB_TOKEN to check the keyring token's scopes.
+    /// Runs with GITHUB_TOKEN unset to check the keyring token's scopes.
     /// </summary>
     private HashSet<string> GetCurrentScopes()
     {
@@ -142,27 +142,22 @@ public class GitHubScopeChecker
 
         try
         {
+            // Use bash to unset env vars - more reliable than ProcessStartInfo.Environment
             var startInfo = new System.Diagnostics.ProcessStartInfo
             {
-                FileName = "gh",
-                Arguments = "auth status",
+                FileName = "bash",
+                Arguments = "-c \"unset GITHUB_TOKEN GH_TOKEN; gh auth status 2>&1\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
 
-            // Temporarily unset token env vars so gh checks the keyring token.
-            // The env var token might be stale (missing new scopes).
-            // Must use Remove() - setting to empty string doesn't work.
-            startInfo.Environment.Remove("GITHUB_TOKEN");
-            startInfo.Environment.Remove("GH_TOKEN");
-
             using var process = System.Diagnostics.Process.Start(startInfo);
             if (process == null) return scopes;
 
-            // gh auth status outputs to stderr
-            var output = process.StandardError.ReadToEnd();
+            // Output goes to stdout due to 2>&1 redirect
+            var output = process.StandardOutput.ReadToEnd();
             process.WaitForExit(5000);
 
             // Parse "Token scopes: 'scope1', 'scope2', ..." line
@@ -273,16 +268,17 @@ public class GitHubScopeChecker
     }
 
     /// <summary>
-    /// Gets a fresh token from gh auth token after refresh.
+    /// Gets a fresh token from gh auth token (from keyring, not env var).
     /// </summary>
     private string? GetNewToken()
     {
         try
         {
+            // Use bash to unset env vars so we get the keyring token
             var startInfo = new System.Diagnostics.ProcessStartInfo
             {
-                FileName = "gh",
-                Arguments = "auth token",
+                FileName = "bash",
+                Arguments = "-c \"unset GITHUB_TOKEN GH_TOKEN; gh auth token\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
