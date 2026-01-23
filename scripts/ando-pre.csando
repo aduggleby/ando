@@ -7,7 +7,7 @@
 
 // Remove Syncthing conflict files that can cause build errors.
 var conflictFiles = System.IO.Directory
-    .EnumerateFiles(Directory, "*.sync-conflict-*", System.IO.SearchOption.AllDirectories)
+    .EnumerateFiles(Root, "*.sync-conflict-*", System.IO.SearchOption.AllDirectories)
     .ToList();
 
 if (conflictFiles.Count > 0)
