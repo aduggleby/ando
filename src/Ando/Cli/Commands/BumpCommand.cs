@@ -210,15 +210,15 @@ public class BumpCommand
                 updatedFiles.Add(project.Path);
             }
 
-            // Step 8: Get commit messages for changelog.
-            var commitMessages = await GetCommitMessagesSinceVersionAsync(baseVersion);
+            // Step 8: Generate changelog entry using Claude.
+            var changelogEntry = await GenerateChangelogEntryAsync(baseVersion, newVersion);
 
             // Step 9: Update documentation (changelog, version badges).
             Console.WriteLine();
             _logger.Info("Updating documentation:");
 
             var docUpdater = new DocumentationUpdater(repoRoot);
-            var docResults = docUpdater.UpdateDocumentation(baseVersion, newVersion, commitMessages);
+            var docResults = docUpdater.UpdateDocumentation(baseVersion, newVersion, changelogEntry);
 
             foreach (var result in docResults)
             {
@@ -267,36 +267,37 @@ public class BumpCommand
     }
 
     /// <summary>
-    /// Gets commit messages since the specified version.
+    /// Generates a changelog entry using Claude based on commit messages and changed files.
     /// Tries to find a git tag matching the version (vX.Y.Z or X.Y.Z format).
     /// If no tag is found, prompts the user for a changelog entry.
     /// </summary>
-    private async Task<IReadOnlyList<string>?> GetCommitMessagesSinceVersionAsync(string version)
+    private async Task<IReadOnlyList<string>?> GenerateChangelogEntryAsync(string currentVersion, string newVersion)
     {
         // Try both "vX.Y.Z" and "X.Y.Z" tag formats.
-        var tagFormats = new[] { $"v{version}", version };
+        var tagFormats = new[] { $"v{currentVersion}", currentVersion };
 
         foreach (var tag in tagFormats)
         {
             if (await _git.TagExistsAsync(tag))
             {
                 var messages = await _git.GetCommitMessagesSinceTagAsync(tag);
-                if (messages.Count > 0)
+                var changedFiles = await _git.GetChangedFilesSinceTagAsync(tag);
+
+                if (messages.Count > 0 || changedFiles.Count > 0)
                 {
-                    _logger.Info($"Found {messages.Count} commit(s) since tag {tag}:");
-                    foreach (var msg in messages)
-                    {
-                        Console.WriteLine($"  • {msg}");
-                    }
+                    _logger.Info($"Changes since tag {tag}:");
+                    Console.WriteLine($"  Commits: {messages.Count}");
+                    Console.WriteLine($"  Files changed: {changedFiles.Count}");
                     Console.WriteLine();
-                    return messages;
+
+                    return await GenerateChangelogWithClaudeAsync(messages, changedFiles, newVersion);
                 }
             }
         }
 
         // No tag found or no commits since tag - ask user for changelog entry.
         Console.WriteLine();
-        _logger.Warning($"No git tag found for version {version}.");
+        _logger.Warning($"No git tag found for version {currentVersion}.");
         Console.Write("Enter changelog entry (or press Enter for 'Version bump'): ");
         var userEntry = Console.ReadLine()?.Trim();
 
@@ -304,5 +305,85 @@ public class BumpCommand
             return null;
 
         return [userEntry];
+    }
+
+    /// <summary>
+    /// Calls Claude to generate a concise, non-technical changelog entry.
+    /// </summary>
+    private async Task<IReadOnlyList<string>?> GenerateChangelogWithClaudeAsync(
+        List<string> commitMessages,
+        List<string> changedFiles,
+        string newVersion)
+    {
+        var commitList = string.Join("\n", commitMessages.Select(m => $"- {m}"));
+        var fileList = string.Join("\n", changedFiles.Select(f => $"- {f}"));
+
+        var prompt = $"""
+            Generate a concise changelog entry for version {newVersion}.
+
+            ## Commit Messages
+            {commitList}
+
+            ## Changed Files
+            {fileList}
+
+            ## Instructions
+            - Write 1-3 bullet points describing the changes
+            - Use simple, non-technical language that end users can understand
+            - Focus on what changed from a user's perspective, not implementation details
+            - Start each bullet with a verb (Add, Fix, Improve, Update, etc.)
+            - Do NOT include version numbers in the bullet points
+            - Do NOT include file names or technical jargon
+            - If there are only internal/maintenance changes, summarize as "Internal improvements"
+
+            ## Output Format
+            Return ONLY the bullet points, one per line, starting with "- ".
+            Example:
+            - Add support for custom build profiles
+            - Fix issue with version detection on Windows
+            - Improve error messages for missing dependencies
+            """;
+
+        _logger.Info("Generating changelog with Claude...");
+
+        try
+        {
+            var result = await _runner.RunClaudeAsync(prompt, timeoutMs: 60000, streamOutput: false);
+
+            if (string.IsNullOrWhiteSpace(result))
+            {
+                _logger.Warning("Claude returned empty response, using default.");
+                return null;
+            }
+
+            // Parse the response - extract lines starting with "-".
+            var entries = result
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Where(line => line.TrimStart().StartsWith("-"))
+                .Select(line => line.TrimStart().TrimStart('-').Trim())
+                .Where(line => !string.IsNullOrWhiteSpace(line))
+                .ToList();
+
+            if (entries.Count == 0)
+            {
+                _logger.Warning("Could not parse Claude response, using default.");
+                return null;
+            }
+
+            Console.WriteLine();
+            _logger.Info("Generated changelog entry:");
+            foreach (var entry in entries)
+            {
+                Console.WriteLine($"  • {entry}");
+            }
+            Console.WriteLine();
+
+            return entries;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning($"Failed to generate changelog with Claude: {ex.Message}");
+            return null;
+        }
     }
 }

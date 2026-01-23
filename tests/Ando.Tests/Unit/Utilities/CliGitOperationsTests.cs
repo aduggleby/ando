@@ -383,4 +383,44 @@ public class CliGitOperationsTests
     }
 
     #endregion
+
+    #region GetChangedFilesSinceTagAsync Tests
+
+    [Fact]
+    public async Task GetChangedFilesSinceTagAsync_ReturnsChangedFiles()
+    {
+        _runner.SetResult("git", "diff --name-only v1.0.0..HEAD",
+            new CliProcessRunner.ProcessResult(0, "src/File1.cs\nsrc/File2.cs\nREADME.md\n", ""));
+
+        var files = await _git.GetChangedFilesSinceTagAsync("v1.0.0");
+
+        files.Count.ShouldBe(3);
+        files.ShouldContain("src/File1.cs");
+        files.ShouldContain("src/File2.cs");
+        files.ShouldContain("README.md");
+    }
+
+    [Fact]
+    public async Task GetChangedFilesSinceTagAsync_NoChanges_ReturnsEmptyList()
+    {
+        _runner.SetResult("git", "diff --name-only v1.0.0..HEAD",
+            new CliProcessRunner.ProcessResult(0, "", ""));
+
+        var files = await _git.GetChangedFilesSinceTagAsync("v1.0.0");
+
+        files.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task GetChangedFilesSinceTagAsync_TagNotFound_ReturnsEmptyList()
+    {
+        _runner.SetResult("git", "diff --name-only v1.0.0..HEAD",
+            new CliProcessRunner.ProcessResult(128, "", "fatal: bad revision 'v1.0.0..HEAD'"));
+
+        var files = await _git.GetChangedFilesSinceTagAsync("v1.0.0");
+
+        files.ShouldBeEmpty();
+    }
+
+    #endregion
 }

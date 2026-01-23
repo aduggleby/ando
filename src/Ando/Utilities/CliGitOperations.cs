@@ -235,4 +235,20 @@ public class CliGitOperations
         var result = await _runner.RunAsync("git", $"rev-parse {tag}");
         return result.ExitCode == 0;
     }
+
+    /// <summary>
+    /// Gets the list of files changed since a specific tag.
+    /// </summary>
+    /// <param name="tag">The tag to compare against.</param>
+    /// <returns>List of changed file paths.</returns>
+    public async Task<List<string>> GetChangedFilesSinceTagAsync(string tag)
+    {
+        var result = await _runner.RunAsync("git", $"diff --name-only {tag}..HEAD");
+        if (result.ExitCode != 0)
+            return [];
+
+        return result.Output
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .ToList();
+    }
 }
