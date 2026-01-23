@@ -18,6 +18,19 @@ dotnet tool update -g ando
 ando --version
 ```
 
+## 0.9.26
+
+**2026-01-23**
+
+**Improvements:**
+
+- Added OAuth scope validation for `GitHub.PushImage()` operations
+  - Now checks for `write:packages` scope before attempting to push to ghcr.io
+  - Provides clear error message with re-authentication instructions if scope is missing
+  - Run `gh auth login --scopes write:packages` to fix scope issues
+
+---
+
 ## 0.9.25
 
 **2026-01-23**
