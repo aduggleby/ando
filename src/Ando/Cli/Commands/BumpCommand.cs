@@ -210,12 +210,15 @@ public class BumpCommand
                 updatedFiles.Add(project.Path);
             }
 
-            // Step 8: Update documentation.
+            // Step 8: Get commit messages for changelog.
+            var commitMessages = await GetCommitMessagesSinceVersionAsync(baseVersion);
+
+            // Step 9: Update documentation (changelog, version badges).
             Console.WriteLine();
             _logger.Info("Updating documentation:");
 
             var docUpdater = new DocumentationUpdater(repoRoot);
-            var docResults = docUpdater.UpdateDocumentation(baseVersion, newVersion);
+            var docResults = docUpdater.UpdateDocumentation(baseVersion, newVersion, commitMessages);
 
             foreach (var result in docResults)
             {
@@ -230,7 +233,7 @@ public class BumpCommand
                 }
             }
 
-            // Step 9: Commit changes.
+            // Step 10: Commit changes.
             Console.WriteLine();
             await _git.StageFilesAsync(updatedFiles.Select(f => Path.Combine(repoRoot, f)));
             await _git.CommitAsync($"Bump version to {newVersion}");
@@ -261,5 +264,40 @@ public class BumpCommand
     {
         var path = Path.Combine(Directory.GetCurrentDirectory(), "build.csando");
         return File.Exists(path) ? path : null;
+    }
+
+    /// <summary>
+    /// Gets commit messages since the specified version.
+    /// Tries to find a git tag matching the version (vX.Y.Z or X.Y.Z format).
+    /// If no tag is found, prompts the user for a changelog entry.
+    /// </summary>
+    private async Task<IReadOnlyList<string>?> GetCommitMessagesSinceVersionAsync(string version)
+    {
+        // Try both "vX.Y.Z" and "X.Y.Z" tag formats.
+        var tagFormats = new[] { $"v{version}", version };
+
+        foreach (var tag in tagFormats)
+        {
+            if (await _git.TagExistsAsync(tag))
+            {
+                var messages = await _git.GetCommitMessagesSinceTagAsync(tag);
+                if (messages.Count > 0)
+                {
+                    _logger.Info($"Found {messages.Count} commit(s) since tag {tag}");
+                    return messages;
+                }
+            }
+        }
+
+        // No tag found or no commits since tag - ask user for changelog entry.
+        Console.WriteLine();
+        _logger.Warning($"No git tag found for version {version}.");
+        Console.Write("Enter changelog entry (or press Enter for 'Version bump'): ");
+        var userEntry = Console.ReadLine()?.Trim();
+
+        if (string.IsNullOrEmpty(userEntry))
+            return null;
+
+        return [userEntry];
     }
 }

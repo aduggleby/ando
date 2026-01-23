@@ -90,6 +90,81 @@ title: Changelog
         results.ShouldBeEmpty();
     }
 
+    [Fact]
+    public void UpdateDocumentation_Changelog_WithCommitMessages()
+    {
+        var changelogPath = Path.Combine(_testDir, "CHANGELOG.md");
+        File.WriteAllText(changelogPath, "# Changelog\n\n## 1.0.0\n\n- Initial release\n");
+
+        var commitMessages = new List<string>
+        {
+            "feat: add new feature",
+            "fix: bug fix",
+            "chore: update dependencies"
+        };
+
+        var results = _updater.UpdateDocumentation("1.0.0", "1.0.1", commitMessages);
+
+        var content = File.ReadAllText(changelogPath);
+        content.ShouldContain("## 1.0.1");
+        content.ShouldContain("- feat: add new feature");
+        content.ShouldContain("- fix: bug fix");
+        content.ShouldContain("- chore: update dependencies");
+        content.ShouldNotContain("- Version bump");
+    }
+
+    [Fact]
+    public void UpdateDocumentation_Changelog_FiltersVersionBumpCommits()
+    {
+        var changelogPath = Path.Combine(_testDir, "CHANGELOG.md");
+        File.WriteAllText(changelogPath, "# Changelog\n");
+
+        var commitMessages = new List<string>
+        {
+            "feat: actual change",
+            "Bump version to 1.0.0",
+            "1.0.0"
+        };
+
+        var results = _updater.UpdateDocumentation("1.0.0", "1.0.1", commitMessages);
+
+        var content = File.ReadAllText(changelogPath);
+        content.ShouldContain("- feat: actual change");
+        content.ShouldNotContain("Bump version");
+    }
+
+    [Fact]
+    public void UpdateDocumentation_Changelog_EmptyCommitMessages_UsesVersionBump()
+    {
+        var changelogPath = Path.Combine(_testDir, "CHANGELOG.md");
+        File.WriteAllText(changelogPath, "# Changelog\n");
+
+        var commitMessages = new List<string>();
+
+        var results = _updater.UpdateDocumentation("1.0.0", "1.0.1", commitMessages);
+
+        var content = File.ReadAllText(changelogPath);
+        content.ShouldContain("- Version bump");
+    }
+
+    [Fact]
+    public void UpdateDocumentation_Changelog_OnlyVersionBumpCommits_UsesVersionBump()
+    {
+        var changelogPath = Path.Combine(_testDir, "CHANGELOG.md");
+        File.WriteAllText(changelogPath, "# Changelog\n");
+
+        var commitMessages = new List<string>
+        {
+            "Bump version to 1.0.0",
+            "v1.0.0"
+        };
+
+        var results = _updater.UpdateDocumentation("1.0.0", "1.0.1", commitMessages);
+
+        var content = File.ReadAllText(changelogPath);
+        content.ShouldContain("- Version bump");
+    }
+
     #endregion
 
     #region Version Badge Tests

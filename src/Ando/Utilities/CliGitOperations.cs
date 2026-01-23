@@ -208,4 +208,31 @@ public class CliGitOperations
         var result = await _runner.RunAsync("git", "rev-parse --git-dir");
         return result.ExitCode == 0;
     }
+
+    /// <summary>
+    /// Gets commit messages since a specific tag.
+    /// Returns empty list if the tag doesn't exist.
+    /// </summary>
+    /// <param name="tag">The tag to get commits since (e.g., "v1.0.0").</param>
+    /// <returns>List of commit messages (subject lines only).</returns>
+    public async Task<List<string>> GetCommitMessagesSinceTagAsync(string tag)
+    {
+        var result = await _runner.RunAsync("git", $"log {tag}..HEAD --pretty=format:%s");
+        if (result.ExitCode != 0)
+            return [];
+
+        return result.Output
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Checks if a tag exists.
+    /// </summary>
+    /// <param name="tag">The tag name to check.</param>
+    public async Task<bool> TagExistsAsync(string tag)
+    {
+        var result = await _runner.RunAsync("git", $"rev-parse {tag}");
+        return result.ExitCode == 0;
+    }
 }

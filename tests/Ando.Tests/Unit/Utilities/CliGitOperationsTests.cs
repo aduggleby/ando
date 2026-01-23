@@ -317,4 +317,70 @@ public class CliGitOperationsTests
     }
 
     #endregion
+
+    #region GetCommitMessagesSinceTagAsync Tests
+
+    [Fact]
+    public async Task GetCommitMessagesSinceTagAsync_ReturnsCommitMessages()
+    {
+        _runner.SetResult("git", "log v1.0.0..HEAD --pretty=format:%s",
+            new CliProcessRunner.ProcessResult(0, "feat: add new feature\nfix: bug fix\nchore: update deps\n", ""));
+
+        var messages = await _git.GetCommitMessagesSinceTagAsync("v1.0.0");
+
+        messages.Count.ShouldBe(3);
+        messages.ShouldContain("feat: add new feature");
+        messages.ShouldContain("fix: bug fix");
+        messages.ShouldContain("chore: update deps");
+    }
+
+    [Fact]
+    public async Task GetCommitMessagesSinceTagAsync_NoCommits_ReturnsEmptyList()
+    {
+        _runner.SetResult("git", "log v1.0.0..HEAD --pretty=format:%s",
+            new CliProcessRunner.ProcessResult(0, "", ""));
+
+        var messages = await _git.GetCommitMessagesSinceTagAsync("v1.0.0");
+
+        messages.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task GetCommitMessagesSinceTagAsync_TagNotFound_ReturnsEmptyList()
+    {
+        _runner.SetResult("git", "log v1.0.0..HEAD --pretty=format:%s",
+            new CliProcessRunner.ProcessResult(128, "", "fatal: bad revision 'v1.0.0..HEAD'"));
+
+        var messages = await _git.GetCommitMessagesSinceTagAsync("v1.0.0");
+
+        messages.ShouldBeEmpty();
+    }
+
+    #endregion
+
+    #region TagExistsAsync Tests
+
+    [Fact]
+    public async Task TagExistsAsync_TagExists_ReturnsTrue()
+    {
+        _runner.SetResult("git", "rev-parse v1.0.0",
+            new CliProcessRunner.ProcessResult(0, "abc123def456\n", ""));
+
+        var exists = await _git.TagExistsAsync("v1.0.0");
+
+        exists.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task TagExistsAsync_TagNotFound_ReturnsFalse()
+    {
+        _runner.SetResult("git", "rev-parse v1.0.0",
+            new CliProcessRunner.ProcessResult(128, "", "fatal: bad revision 'v1.0.0'"));
+
+        var exists = await _git.TagExistsAsync("v1.0.0");
+
+        exists.ShouldBeFalse();
+    }
+
+    #endregion
 }

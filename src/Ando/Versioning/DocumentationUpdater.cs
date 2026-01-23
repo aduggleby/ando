@@ -43,8 +43,9 @@ public partial class DocumentationUpdater
     /// </summary>
     /// <param name="oldVersion">Previous version string.</param>
     /// <param name="newVersion">New version string.</param>
+    /// <param name="commitMessages">Optional list of commit messages to include in changelog.</param>
     /// <returns>List of update results.</returns>
-    public List<UpdateResult> UpdateDocumentation(string oldVersion, string newVersion)
+    public List<UpdateResult> UpdateDocumentation(string oldVersion, string newVersion, IReadOnlyList<string>? commitMessages = null)
     {
         var results = new List<UpdateResult>();
 
@@ -52,7 +53,7 @@ public partial class DocumentationUpdater
         var changelogPath = FindChangelog();
         if (changelogPath != null)
         {
-            results.Add(UpdateChangelog(changelogPath, newVersion));
+            results.Add(UpdateChangelog(changelogPath, newVersion, commitMessages));
         }
 
         // Update version badge.
@@ -101,7 +102,10 @@ public partial class DocumentationUpdater
     /// <summary>
     /// Updates the changelog with a new version entry.
     /// </summary>
-    private UpdateResult UpdateChangelog(string path, string newVersion)
+    /// <param name="path">Path to the changelog file.</param>
+    /// <param name="newVersion">New version string.</param>
+    /// <param name="commitMessages">Optional list of commit messages to include.</param>
+    private UpdateResult UpdateChangelog(string path, string newVersion, IReadOnlyList<string>? commitMessages)
     {
         try
         {
@@ -111,7 +115,10 @@ public partial class DocumentationUpdater
             // Find insertion point (after YAML frontmatter if present).
             var insertIndex = FindFrontmatterEnd(content);
 
-            var entry = $"\n## {newVersion}\n\n**{date}**\n\n- Version bump\n";
+            // Build changelog entries from commit messages or use default.
+            var entriesText = BuildChangelogEntries(commitMessages);
+
+            var entry = $"\n## {newVersion}\n\n**{date}**\n\n{entriesText}\n";
             var updated = content.Insert(insertIndex, entry);
 
             File.WriteAllText(path, updated);
@@ -124,6 +131,36 @@ public partial class DocumentationUpdater
             var relativePath = Path.GetRelativePath(_repoRoot, path);
             return new UpdateResult(relativePath, false, ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Builds changelog entry text from commit messages.
+    /// Filters out version bump commits and formats the rest as bullet points.
+    /// </summary>
+    private static string BuildChangelogEntries(IReadOnlyList<string>? commitMessages)
+    {
+        if (commitMessages == null || commitMessages.Count == 0)
+        {
+            return "- Version bump";
+        }
+
+        // Filter out version bump commits and empty messages.
+        var relevantCommits = commitMessages
+            .Where(m => !string.IsNullOrWhiteSpace(m))
+            .Where(m => !m.StartsWith("Bump version", StringComparison.OrdinalIgnoreCase))
+            .Where(m => !Regex.IsMatch(m, @"^v?\d+\.\d+\.\d+$")) // Skip pure version number commits
+            .ToList();
+
+        if (relevantCommits.Count == 0)
+        {
+            return "- Version bump";
+        }
+
+        // Format each commit as a bullet point.
+        // If commit follows conventional commit format (type: message), keep it.
+        // Otherwise, just use the message as-is.
+        var entries = relevantCommits.Select(m => $"- {m.Trim()}");
+        return string.Join("\n", entries);
     }
 
     /// <summary>
