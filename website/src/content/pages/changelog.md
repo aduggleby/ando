@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.33
+
+**2026-01-23**
+
+- Add AI-powered changelog generation that creates user-friendly release notes from commit messages
+
 ## 0.9.32
 
 **2026-01-23**
