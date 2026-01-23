@@ -455,14 +455,30 @@ public class AndoCli : IDisposable
 
     // Handles the 'release' command which orchestrates the full release workflow.
     // Presents an interactive checklist for step selection.
+    // Supports: ando release [patch|minor|major] [--all] [--dry-run]
     private async Task<int> ReleaseCommandAsync()
     {
         var all = HasFlag("--all");
         var dryRun = HasFlag("--dry-run");
 
+        // Parse bump type from positional argument (e.g., "ando release minor").
+        var bumpType = Versioning.BumpType.Patch;
+        foreach (var arg in _args.Skip(1)) // Skip "release"
+        {
+            if (arg.StartsWith("-")) continue; // Skip flags
+            bumpType = arg.ToLower() switch
+            {
+                "minor" => Versioning.BumpType.Minor,
+                "major" => Versioning.BumpType.Major,
+                "patch" => Versioning.BumpType.Patch,
+                _ => bumpType // Ignore unknown positional args
+            };
+            break; // Only check first positional arg
+        }
+
         var runner = new CliProcessRunner();
         var command = new ReleaseCommand(runner, _logger);
-        return await command.ExecuteAsync(all, dryRun);
+        return await command.ExecuteAsync(all, dryRun, bumpType);
     }
 
     // Handles the 'clean' command which removes build artifacts and caches.
@@ -616,7 +632,7 @@ public class AndoCli : IDisposable
         Console.WriteLine("  verify            Check build script for errors without executing");
         Console.WriteLine("  commit            Commit all changes with AI-generated message");
         Console.WriteLine("  bump [type]       Bump version in all projects (patch|minor|major)");
-        Console.WriteLine("  release           Interactive release workflow");
+        Console.WriteLine("  release [type]    Interactive release workflow (patch|minor|major)");
         Console.WriteLine("  clean             Remove artifacts, temp files, and containers");
         Console.WriteLine("  help, -h, --help  Show this help");
         Console.WriteLine("  -v, --version     Show version number");
@@ -634,15 +650,18 @@ public class AndoCli : IDisposable
         Console.WriteLine("  --dind              Mount Docker socket for Docker-in-Docker operations");
         Console.WriteLine();
         Console.WriteLine("Release Options:");
+        Console.WriteLine("  patch               Bump patch version (default): 1.0.0 -> 1.0.1");
+        Console.WriteLine("  minor               Bump minor version: 1.0.0 -> 1.1.0");
+        Console.WriteLine("  major               Bump major version: 1.0.0 -> 2.0.0");
         Console.WriteLine("  --all               Run all applicable release steps non-interactively");
         Console.WriteLine("  --dry-run           Preview release steps without making changes");
         Console.WriteLine();
         Console.WriteLine("  Release workflow steps (selectable via interactive checklist):");
         Console.WriteLine("    1. commit   - Commit uncommitted changes (AI-generated message)");
         Console.WriteLine("    2. docs     - Update documentation using Claude");
-        Console.WriteLine("    3. bump     - Bump version (prompts for patch/minor/major)");
+        Console.WriteLine("    3. bump     - Bump version (uses type from command line)");
         Console.WriteLine("    4. push     - Push commits to remote");
-        Console.WriteLine("    5. publish  - Run build with push profile (ando run -p push --dind)");
+        Console.WriteLine("    5. publish  - Run build with push profile (ando run -p push --dind --read-env)");
         Console.WriteLine();
         Console.WriteLine("Bump Options:");
         Console.WriteLine("  patch               Increment patch version: 1.0.0 -> 1.0.1 (default)");
@@ -665,8 +684,9 @@ public class AndoCli : IDisposable
         Console.WriteLine("  ando commit                   Commit with AI-generated message");
         Console.WriteLine("  ando bump                     Bump patch version");
         Console.WriteLine("  ando bump minor               Bump minor version");
-        Console.WriteLine("  ando release                  Interactive release workflow");
-        Console.WriteLine("  ando release --all            Run all release steps automatically");
+        Console.WriteLine("  ando release                  Interactive release workflow (patch bump)");
+        Console.WriteLine("  ando release minor            Release with minor version bump");
+        Console.WriteLine("  ando release major --all      Release major version, skip checklist");
         Console.WriteLine("  ando release --dry-run        Preview release without changes");
         Console.WriteLine("  ando clean                    Remove artifacts and temp files");
         Console.WriteLine("  ando clean --all              Remove everything including container");

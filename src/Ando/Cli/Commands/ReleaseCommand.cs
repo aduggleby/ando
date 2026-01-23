@@ -46,8 +46,9 @@ public class ReleaseCommand
     /// </summary>
     /// <param name="all">Skip checklist and run all applicable steps.</param>
     /// <param name="dryRun">Show what would happen without executing.</param>
+    /// <param name="bumpType">Version bump type (patch, minor, major). Defaults to patch.</param>
     /// <returns>Exit code: 0 for success, 1 for errors.</returns>
-    public async Task<int> ExecuteAsync(bool all = false, bool dryRun = false)
+    public async Task<int> ExecuteAsync(bool all = false, bool dryRun = false, BumpType bumpType = BumpType.Patch)
     {
         try
         {
@@ -97,7 +98,6 @@ public class ReleaseCommand
 
             // 5. Show checklist or run all.
             List<ReleaseStep> selectedSteps;
-            BumpType bumpType = BumpType.Patch;
 
             if (all)
             {
@@ -105,13 +105,13 @@ public class ReleaseCommand
             }
             else
             {
-                var result = ShowChecklist(steps, version);
+                var result = ShowChecklist(steps, version, bumpType);
                 if (result == null)
                 {
                     AnsiConsole.MarkupLine("[yellow]Release cancelled.[/]");
                     return 0;
                 }
-                (selectedSteps, bumpType) = result.Value;
+                selectedSteps = result;
             }
 
             if (selectedSteps.Count == 0)
@@ -163,8 +163,13 @@ public class ReleaseCommand
         ];
     }
 
-    private (List<ReleaseStep> steps, BumpType bumpType)? ShowChecklist(List<ReleaseStep> steps, string currentVersion)
+    private List<ReleaseStep>? ShowChecklist(List<ReleaseStep> steps, string currentVersion, BumpType bumpType)
     {
+        // Show what version bump will be applied.
+        var newVersion = CalculateNextVersion(currentVersion, bumpType);
+        AnsiConsole.MarkupLine($"[bold]Version bump:[/] {currentVersion} → {newVersion} [dim]({bumpType.ToString().ToLower()})[/]");
+        AnsiConsole.WriteLine();
+
         // Build choices with disabled state shown.
         var choices = steps.Select(s => s.Enabled
             ? s.Label
@@ -204,28 +209,8 @@ public class ReleaseCommand
             }
         }
 
-        // Ask for bump type if bump is selected.
-        var bumpType = BumpType.Patch;
-        if (selectedSteps.Any(s => s.Id == "bump"))
-        {
-            var bumpChoice = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title($"Bump type (current: [cyan]{currentVersion}[/]):")
-                    .AddChoices("patch", "minor", "major"));
-
-            bumpType = bumpChoice switch
-            {
-                "minor" => BumpType.Minor,
-                "major" => BumpType.Major,
-                _ => BumpType.Patch
-            };
-
-            var newVersion = CalculateNextVersion(currentVersion, bumpType);
-            AnsiConsole.MarkupLine($"  [dim]→ {currentVersion} → {newVersion}[/]");
-        }
-
         AnsiConsole.WriteLine();
-        return (selectedSteps, bumpType);
+        return selectedSteps;
     }
 
     private async Task<int> ExecuteStepsAsync(List<ReleaseStep> steps, BumpType bumpType, string repoRoot)
@@ -331,10 +316,11 @@ public class ReleaseCommand
             """;
 
         AnsiConsole.MarkupLine("[dim]Claude is reviewing documentation...[/]");
+        AnsiConsole.WriteLine();
 
         try
         {
-            await _runner.RunClaudeAsync(prompt, timeoutMs: 300000); // 5 min timeout
+            await _runner.RunClaudeAsync(prompt, timeoutMs: 300000, streamOutput: true);
             return 0;
         }
         catch (Exception ex)
@@ -354,10 +340,11 @@ public class ReleaseCommand
     private async Task<int> ExecutePushAsync()
     {
         AnsiConsole.MarkupLine("Pushing to remote...");
+        AnsiConsole.WriteLine();
 
         try
         {
-            await _git.PushAsync();
+            await _git.PushAsync(streamOutput: true);
             AnsiConsole.MarkupLine("[green]Done.[/]");
             return 0;
         }
@@ -370,13 +357,10 @@ public class ReleaseCommand
 
     private async Task<int> ExecutePublishAsync()
     {
-        AnsiConsole.MarkupLine("Running: ando run -p push --dind");
+        AnsiConsole.MarkupLine("Running: ando run -p push --dind --read-env");
         AnsiConsole.WriteLine();
 
-        var result = await _runner.RunAsync("ando", "run -p push --dind", timeoutMs: 600000);
-        Console.WriteLine(result.Output);
-        if (!string.IsNullOrEmpty(result.Error))
-            Console.Error.WriteLine(result.Error);
+        var result = await _runner.RunAsync("ando", "run -p push --dind --read-env", timeoutMs: 600000, streamOutput: true);
         return result.ExitCode;
     }
 

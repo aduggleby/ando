@@ -58,27 +58,27 @@ dotnet test tests/Ando.Tests
 
 #### Version Management
 
-Bump versions in both CLI and Server projects using the provided script:
+Bump versions in both CLI and Server projects using the built-in bump command:
 
 ```bash
 # Bump patch version (1.0.0 → 1.0.1)
-./scripts/ando-bumpversion.sh
+ando bump
 
 # Bump minor version (1.0.5 → 1.1.0)
-./scripts/ando-bumpversion.sh minor
+ando bump minor
 
 # Bump major version (1.5.3 → 2.0.0)
-./scripts/ando-bumpversion.sh major
+ando bump major
 ```
 
 #### Development Scripts
 
 ```bash
 # Run ando from source (passes all arguments)
-./scripts/ando-dev.sh run
+./ando-dev [args...]
 
-# Run ando with push profile from source
-./scripts/ando-push.sh
+# Example: run build with push profile from source
+./ando-dev -p push
 ```
 
 #### Release Workflow
@@ -160,7 +160,7 @@ tests/
 ├── Ando.Tests/        # CLI unit/integration tests
 ├── Ando.Server.Tests/ # Server tests
 └── Ando.Server.E2E/   # Playwright E2E tests
-scripts/               # Development and release scripts
+scripts/               # Ando hook scripts (pre/post command hooks)
 website/               # Astro documentation site
 ```
 

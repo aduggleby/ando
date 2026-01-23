@@ -40,13 +40,15 @@ public class CliProcessRunner
     /// <param name="stdin">Optional input to write to stdin.</param>
     /// <param name="timeoutMs">Timeout in milliseconds (default: 60 seconds).</param>
     /// <param name="workingDirectory">Working directory (default: current directory).</param>
+    /// <param name="streamOutput">If true, streams output to console in real-time.</param>
     /// <returns>ProcessResult with exit code and captured output.</returns>
     public virtual async Task<ProcessResult> RunAsync(
         string fileName,
         string arguments,
         string? stdin = null,
         int timeoutMs = 60000,
-        string? workingDirectory = null)
+        string? workingDirectory = null,
+        bool streamOutput = false)
     {
         using var cts = new CancellationTokenSource(timeoutMs);
 
@@ -63,7 +65,37 @@ public class CliProcessRunner
         };
 
         using var process = new Process { StartInfo = startInfo };
+
+        var outputBuilder = new System.Text.StringBuilder();
+        var errorBuilder = new System.Text.StringBuilder();
+
+        if (streamOutput)
+        {
+            process.OutputDataReceived += (_, e) =>
+            {
+                if (e.Data != null)
+                {
+                    Console.WriteLine(e.Data);
+                    outputBuilder.AppendLine(e.Data);
+                }
+            };
+            process.ErrorDataReceived += (_, e) =>
+            {
+                if (e.Data != null)
+                {
+                    Console.Error.WriteLine(e.Data);
+                    errorBuilder.AppendLine(e.Data);
+                }
+            };
+        }
+
         process.Start();
+
+        if (streamOutput)
+        {
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+        }
 
         // Write stdin if provided (e.g., prompt for Claude).
         if (stdin != null)
@@ -72,7 +104,26 @@ public class CliProcessRunner
             process.StandardInput.Close();
         }
 
-        // Read stdout and stderr concurrently to avoid deadlocks.
+        if (streamOutput)
+        {
+            try
+            {
+                await process.WaitForExitAsync(cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                process.Kill(entireProcessTree: true);
+                throw new TimeoutException($"Process '{fileName}' timed out after {timeoutMs}ms");
+            }
+
+            return new ProcessResult(
+                process.ExitCode,
+                outputBuilder.ToString(),
+                errorBuilder.ToString()
+            );
+        }
+
+        // Non-streaming: read stdout and stderr concurrently to avoid deadlocks.
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
 
@@ -100,15 +151,17 @@ public class CliProcessRunner
     /// </summary>
     /// <param name="prompt">The prompt to send to Claude.</param>
     /// <param name="timeoutMs">Timeout in milliseconds (default: 2 minutes).</param>
+    /// <param name="streamOutput">If true, streams output to console in real-time.</param>
     /// <returns>Claude's response text.</returns>
     /// <exception cref="Exception">Thrown if Claude CLI fails.</exception>
-    public virtual async Task<string> RunClaudeAsync(string prompt, int timeoutMs = 120000)
+    public virtual async Task<string> RunClaudeAsync(string prompt, int timeoutMs = 120000, bool streamOutput = false)
     {
         var result = await RunAsync(
             "claude",
             "-p --dangerously-skip-permissions",
             stdin: prompt,
-            timeoutMs: timeoutMs
+            timeoutMs: timeoutMs,
+            streamOutput: streamOutput
         );
 
         if (result.ExitCode != 0)

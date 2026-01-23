@@ -188,9 +188,9 @@ public class CliGitOperations
     /// Pushes to the remote.
     /// </summary>
     /// <exception cref="Exception">Thrown if push fails.</exception>
-    public async Task PushAsync()
+    public async Task PushAsync(bool streamOutput = false)
     {
-        var result = await _runner.RunAsync("git", "push", timeoutMs: 120000);
+        var result = await _runner.RunAsync("git", "push", timeoutMs: 120000, streamOutput: streamOutput);
         if (result.ExitCode != 0)
         {
             var error = !string.IsNullOrWhiteSpace(result.Error)
