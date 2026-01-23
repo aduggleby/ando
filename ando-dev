@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Helper script to run ando from source during development
+# Usage: ./ando-dev [args...]
+
+exec dotnet run --project "$(dirname "$0")/src/Ando/Ando.csproj" -- "$@"
