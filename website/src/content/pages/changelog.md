@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.35
+
+**2026-01-24**
+
+- Add automatic confirmation option for version bumping to enable non-interactive workflows
+
 ## 0.9.34
 
 **2026-01-23**
