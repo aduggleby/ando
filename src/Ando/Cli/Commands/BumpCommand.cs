@@ -49,8 +49,9 @@ public class BumpCommand
     /// Executes the bump command.
     /// </summary>
     /// <param name="type">Type of version bump (Patch, Minor, Major).</param>
+    /// <param name="autoConfirm">Skip confirmation prompts and proceed automatically.</param>
     /// <returns>Exit code: 0 for success, 1 for errors.</returns>
-    public async Task<int> ExecuteAsync(BumpType type = BumpType.Patch)
+    public async Task<int> ExecuteAsync(BumpType type = BumpType.Patch, bool autoConfirm = false)
     {
         try
         {
@@ -82,7 +83,7 @@ public class BumpCommand
             // Step 2: Check for uncommitted changes.
             if (await _git.HasUncommittedChangesAsync())
             {
-                _logger.Error("Error: You have uncommitted changes.");
+                _logger.Warning("You have uncommitted changes.");
                 Console.WriteLine();
 
                 var changedFiles = await _git.GetChangedFilesAsync();
@@ -92,17 +93,21 @@ public class BumpCommand
                 }
                 Console.WriteLine();
 
-                Console.Write("Run 'ando commit' to commit them first? [Y/n] ");
-                var response = Console.ReadLine()?.Trim().ToLowerInvariant();
-
-                if (response == "n" || response == "no")
+                if (!autoConfirm)
                 {
-                    return 1;
+                    Console.Write("Run 'ando commit' to commit them first? [Y/n] ");
+                    var response = Console.ReadLine()?.Trim().ToLowerInvariant();
+
+                    if (response == "n" || response == "no")
+                    {
+                        return 1;
+                    }
                 }
 
                 // Run ando commit.
+                _logger.Info("Running commit...");
                 var commitCommand = new CommitCommand(_runner, _logger);
-                var commitResult = await commitCommand.ExecuteAsync();
+                var commitResult = await commitCommand.ExecuteAsync(autoConfirm);
                 if (commitResult != 0)
                 {
                     return commitResult;
@@ -159,30 +164,42 @@ public class BumpCommand
             {
                 Console.WriteLine();
                 _logger.Warning("Warning: Version mismatch detected.");
-                Console.WriteLine();
 
-                // Group by version for display.
-                var byVersion = projectVersions.GroupBy(pv => pv.Version);
-                var versionOptions = byVersion.Select((g, i) => $"  {i + 1}. {g.Key} ({string.Join(", ", g.Select(pv => Path.GetFileName(pv.Project.Path)))})").ToList();
-
-                Console.WriteLine("Which version should be used as the base?");
-                foreach (var option in versionOptions)
+                if (autoConfirm)
                 {
-                    Console.WriteLine(option);
+                    // Auto-select the highest version.
+                    baseVersion = distinctVersions
+                        .OrderByDescending(v => SemVer.TryParse(v, out var sv) ? sv : new SemVer(0, 0, 0))
+                        .First();
+                    _logger.Info($"Auto-selecting highest version: {baseVersion}");
                 }
-
-                Console.Write($"Select [1-{distinctVersions.Count}]: ");
-                var selection = Console.ReadLine()?.Trim();
-
-                if (!int.TryParse(selection, out var selectedIndex) ||
-                    selectedIndex < 1 ||
-                    selectedIndex > distinctVersions.Count)
+                else
                 {
-                    _logger.Error("Invalid selection.");
-                    return 1;
-                }
+                    Console.WriteLine();
 
-                baseVersion = distinctVersions[selectedIndex - 1];
+                    // Group by version for display.
+                    var byVersion = projectVersions.GroupBy(pv => pv.Version);
+                    var versionOptions = byVersion.Select((g, i) => $"  {i + 1}. {g.Key} ({string.Join(", ", g.Select(pv => Path.GetFileName(pv.Project.Path)))})").ToList();
+
+                    Console.WriteLine("Which version should be used as the base?");
+                    foreach (var option in versionOptions)
+                    {
+                        Console.WriteLine(option);
+                    }
+
+                    Console.Write($"Select [1-{distinctVersions.Count}]: ");
+                    var selection = Console.ReadLine()?.Trim();
+
+                    if (!int.TryParse(selection, out var selectedIndex) ||
+                        selectedIndex < 1 ||
+                        selectedIndex > distinctVersions.Count)
+                    {
+                        _logger.Error("Invalid selection.");
+                        return 1;
+                    }
+
+                    baseVersion = distinctVersions[selectedIndex - 1];
+                }
             }
             else
             {
@@ -211,7 +228,7 @@ public class BumpCommand
             }
 
             // Step 8: Generate changelog entry using Claude.
-            var changelogEntry = await GenerateChangelogEntryAsync(baseVersion, newVersion);
+            var changelogEntry = await GenerateChangelogEntryAsync(baseVersion, newVersion, autoConfirm);
 
             // Step 9: Update documentation (changelog, version badges).
             Console.WriteLine();
@@ -269,9 +286,9 @@ public class BumpCommand
     /// <summary>
     /// Generates a changelog entry using Claude based on commit messages and changed files.
     /// Tries to find a git tag matching the version (vX.Y.Z or X.Y.Z format).
-    /// If no tag is found, prompts the user for a changelog entry.
+    /// If no tag is found and autoConfirm is false, prompts the user for a changelog entry.
     /// </summary>
-    private async Task<IReadOnlyList<string>?> GenerateChangelogEntryAsync(string currentVersion, string newVersion)
+    private async Task<IReadOnlyList<string>?> GenerateChangelogEntryAsync(string currentVersion, string newVersion, bool autoConfirm)
     {
         // Try both "vX.Y.Z" and "X.Y.Z" tag formats.
         var tagFormats = new[] { $"v{currentVersion}", currentVersion };
@@ -295,9 +312,16 @@ public class BumpCommand
             }
         }
 
-        // No tag found or no commits since tag - ask user for changelog entry.
-        Console.WriteLine();
+        // No tag found or no commits since tag.
         _logger.Warning($"No git tag found for version {currentVersion}.");
+
+        if (autoConfirm)
+        {
+            // Use default "Version bump" entry.
+            return null;
+        }
+
+        // Ask user for changelog entry.
         Console.Write("Enter changelog entry (or press Enter for 'Version bump'): ");
         var userEntry = Console.ReadLine()?.Trim();
 

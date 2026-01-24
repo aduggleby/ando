@@ -112,7 +112,7 @@ public class BumpCommandTests : IDisposable
     #region Uncommitted Changes Tests
 
     [Fact]
-    public async Task ExecuteAsync_UncommittedChanges_PromptsUser()
+    public async Task ExecuteAsync_UncommittedChanges_ShowsWarning()
     {
         CreateBuildScript(@"var app = Dotnet.Project(""./App.csproj"");");
         CreateCsproj("App.csproj", "1.0.0");
@@ -122,11 +122,11 @@ public class BumpCommandTests : IDisposable
 
         var command = new BumpCommand(_runner, _logger);
 
-        // User would be prompted - we can't easily test Console.ReadLine in unit tests
-        // but we can verify the error message was shown.
+        // With autoConfirm=false (default), user would be prompted.
+        // We can verify the warning message was shown.
         await command.ExecuteAsync(BumpType.Patch);
 
-        _logger.ErrorMessages.ShouldContain(m => m.Contains("uncommitted changes"));
+        _logger.WarningMessages.ShouldContain(m => m.Contains("uncommitted changes"));
     }
 
     #endregion

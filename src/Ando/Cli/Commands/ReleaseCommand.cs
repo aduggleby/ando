@@ -270,7 +270,7 @@ public class ReleaseCommand
     private async Task<int> ExecuteCommitAsync(string repoRoot)
     {
         var commitCommand = new CommitCommand(_runner, _logger);
-        return await commitCommand.ExecuteAsync();
+        return await commitCommand.ExecuteAsync(autoConfirm: true);
     }
 
     private async Task<int> ExecuteDocsUpdateAsync(string repoRoot)
@@ -369,7 +369,7 @@ public class ReleaseCommand
     private async Task<int> ExecuteBumpAsync(BumpType bumpType, string repoRoot)
     {
         var bumpCommand = new BumpCommand(_runner, _logger);
-        return await bumpCommand.ExecuteAsync(bumpType);
+        return await bumpCommand.ExecuteAsync(bumpType, autoConfirm: true);
     }
 
     private async Task<int> ExecutePushAsync()
