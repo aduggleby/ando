@@ -89,12 +89,17 @@ ando bump [patch|minor|major]
 8. Updates documentation (changelog, version badges)
 9. Commits the changes automatically
 
+**Non-interactive mode:** When called via `ando release --all`, bump runs in non-interactive mode:
+- Uncommitted changes are auto-committed without prompting
+- Version mismatches auto-select the highest version
+- Missing git tags use a default "Version bump" changelog entry
+
 **Changelog generation:**
 - Looks for git tags matching the current version (`vX.Y.Z` or `X.Y.Z` format)
 - If a tag is found, gathers commit messages and changed files since that tag
 - Sends context to Claude to generate user-friendly changelog entries
 - Claude produces concise, non-technical descriptions focused on user impact
-- If no tag is found, prompts for a manual changelog entry
+- If no tag is found, prompts for a manual changelog entry (or uses default in non-interactive mode)
 
 **Requirements:**
 - Claude CLI must be installed (`npm install -g @anthropic-ai/claude-code`)
