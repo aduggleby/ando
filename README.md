@@ -83,6 +83,45 @@ ando bump major
 
 #### Release Workflow
 
+Use `ando release` for the full release workflow:
+
+```bash
+# Interactive release (shows checklist)
+ando release
+
+# Run all steps without prompts
+ando release --all
+
+# Preview what would happen
+ando release --dry-run
+
+# Specify version bump type (default: patch)
+ando release --minor
+ando release --major
+```
+
+**What `ando release` does:**
+
+1. **Build Verification** - Runs `ando run --read-env` to verify the build passes before proceeding
+2. **Interactive Checklist** - Presents steps to select:
+   - **Commit** - Commit any uncommitted changes (skipped if working tree is clean)
+   - **Bump** - Bump version in all project files and update CHANGELOG
+   - **Docs** - Update documentation using Claude to analyze changes
+   - **Push** - Push commits to remote (skipped if no remote tracking)
+   - **Publish** - Run `ando run -p push --dind --read-env` for publishing
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--all` | Skip checklist and run all applicable steps |
+| `--dry-run` | Preview what would happen without executing |
+| `--patch` | Bump patch version (1.0.0 → 1.0.1) - default |
+| `--minor` | Bump minor version (1.0.0 → 1.1.0) |
+| `--major` | Bump major version (1.0.0 → 2.0.0) |
+
+**Manual release (without `ando release`):**
+
 ```bash
 # Build and test only
 ando
