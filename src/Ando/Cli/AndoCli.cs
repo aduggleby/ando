@@ -336,10 +336,13 @@ public class AndoCli : IDisposable
                 MountDockerSocket = enableDind,  // For building Docker images
             };
 
-            // Pass DIND setting to container so child builds can inherit it.
+            // Pass DIND setting to container AND current process environment.
+            // Container env is for commands running inside the container.
+            // Process env is for step functions running on host (like Ando.Build).
             if (enableDind)
             {
                 containerConfig.Environment[DindChecker.DindEnvVar] = "1";
+                Environment.SetEnvironmentVariable(DindChecker.DindEnvVar, "1");
             }
 
             // Warm containers are reused for faster subsequent builds.

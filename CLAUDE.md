@@ -224,7 +224,7 @@ Run `npm run build` in the website directory to verify documentation builds corr
    - Scans registered steps before container creation
    - **Also scans child builds** - Parses `Ando.Build(Directory("..."))` calls and recursively checks child `build.csando` files for DIND operations
    - Checks for `--dind` flag, `ando.config` with `dind: true`, or `ANDO_DIND=1` environment variable
-   - **Child builds inherit DIND** - When parent enables DIND, it sets `ANDO_DIND=1` in the container environment, which is passed to child builds via `Ando.Build()`. This prevents child builds from re-prompting for DIND.
+   - **Child builds inherit DIND** - When parent enables DIND, it sets `ANDO_DIND=1` in both the container environment AND the host process environment. The host process env is needed because `Ando.Build` step functions run on the host (they spawn child `ando` processes). This prevents child builds from re-prompting for DIND.
    - Prompts user with options: (Y)es for this run, (a)lways (saves to ando.config), Esc to cancel
    - Current DIND operations: Docker.Build, Docker.Push, Docker.Install, GitHub.PushImage, Playwright.Test
 
