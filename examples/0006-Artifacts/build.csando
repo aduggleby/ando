@@ -15,12 +15,16 @@ var output = Root / "dist";
 // Build the application
 Dotnet.Restore(App);
 Dotnet.Build(App, o => o.Configuration = Configuration.Release);
+
+// For self-contained publish, restore with target runtime first
+Dotnet.Restore(App, o => o.WithRuntime("linux-x64"));
 Dotnet.Publish(App, o => o
     .Output(output)
     .WithConfiguration(Configuration.Release)
     .WithRuntime("linux-x64")
     .AsSelfContained()
-    .AsSingleFile());
+    .AsSingleFile()
+    .SkipRestore());
 
 // Copy artifacts from container to host
 // First param: path inside the container (relative to /workspace or absolute)
