@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.43
+
+**2026-01-26**
+
+- Improve hook configuration to support path operations on the root directory
+
 ## 0.9.42
 
 **2026-01-26**
