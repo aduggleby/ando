@@ -868,23 +868,52 @@ public class AndoCli : IDisposable
         _logger.Warning("API keys, tokens, and passwords. It should be added to .gitignore");
         _logger.Warning("to prevent accidental commits.");
         _logger.Warning("");
-        _logger.Warning("Add this line to your .gitignore file:");
-        _logger.Warning("  .env.ando");
-        _logger.Warning("");
 
-        // Prompt user with y/N (N is default).
-        Console.Write("Continue anyway? [y/N] ");
-        var response = Console.ReadLine()?.Trim().ToLowerInvariant();
+        // Prompt user with options. (A) is default when Enter is pressed.
+        Console.Write("(A)dd to .gitignore (default), (c)ontinue anyway, Esc to exit: ");
+        var keyInfo = Console.ReadKey(intercept: true);
 
-        // Only continue if user explicitly types 'y' or 'yes'.
-        if (response == "y" || response == "yes")
+        // Handle Escape key.
+        if (keyInfo.Key == ConsoleKey.Escape)
         {
             Console.WriteLine();
-            return true;
+            _logger.Info("Build aborted.");
+            return false;
         }
 
-        _logger.Info("Build aborted. Please add .env.ando to your .gitignore file.");
-        return false;
+        // Handle Enter (default to 'a') or explicit key press.
+        var keyChar = keyInfo.Key == ConsoleKey.Enter ? 'a' : char.ToLowerInvariant(keyInfo.KeyChar);
+        Console.WriteLine(keyInfo.Key == ConsoleKey.Enter ? "" : keyInfo.KeyChar.ToString());
+
+        switch (keyChar)
+        {
+            case 'a':
+                // Add .env.ando to .gitignore.
+                var gitignorePath = Path.Combine(rootPath, ".gitignore");
+                try
+                {
+                    // Append to existing .gitignore or create new one.
+                    var existingContent = File.Exists(gitignorePath) ? File.ReadAllText(gitignorePath) : "";
+                    var newLine = existingContent.EndsWith('\n') || string.IsNullOrEmpty(existingContent) ? "" : "\n";
+                    File.AppendAllText(gitignorePath, $"{newLine}.env.ando\n");
+                    _logger.Info("Added .env.ando to .gitignore");
+                    Console.WriteLine();
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Failed to update .gitignore: {ex.Message}");
+                    return false;
+                }
+
+            case 'c':
+                Console.WriteLine();
+                return true;
+
+            default:
+                _logger.Info("Build aborted.");
+                return false;
+        }
     }
 
     // Checks for an environment file in the project directory and prompts the user
