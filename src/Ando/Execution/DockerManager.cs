@@ -119,10 +119,23 @@ public class DockerManager
 
     /// <summary>
     /// Checks if Docker is available on the system.
+    /// Verifies both that the CLI exists and the daemon is reachable.
     /// </summary>
     public bool IsDockerAvailable()
     {
-        return _processRunner.IsAvailable("docker");
+        if (!_processRunner.IsAvailable("docker"))
+            return false;
+
+        // Also verify the daemon is reachable (CLI might exist but socket not mounted).
+        try
+        {
+            var result = _processRunner.ExecuteAsync("docker", ["info"], new CommandOptions { TimeoutMs = 5000 }).GetAwaiter().GetResult();
+            return result.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>
