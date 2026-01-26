@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>ando</AssemblyName>
-    <Version>0.9.36</Version>
+    <Version>0.9.37</Version>
     <!-- Required for Roslyn scripting to work with single-file publishing -->
     <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
 

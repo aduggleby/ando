@@ -3,6 +3,14 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.37
+
+**2026-01-26**
+
+- Add real-time output streaming for shell operations in build scripts
+- Add new `ando docs` command for AI-assisted documentation updates
+- Fix Docker-in-Docker container recreation and build verification
+
 ## 0.9.36
 
 **2026-01-26**
