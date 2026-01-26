@@ -17,14 +17,14 @@ GitHub Container Registry (ghcr.io) provides free container hosting for public r
 
 ### Authentication
 
-GitHub operations require authentication. Set one of these environment variables:
+GitHub operations require authentication. ANDO checks these sources in order:
 
-| Variable | Description |
-|----------|-------------|
-| `GITHUB_TOKEN` | Personal access token or CI token (preferred) |
-| `GH_TOKEN` | Alternative token variable |
+| Method | Description |
+|--------|-------------|
+| `GITHUB_TOKEN` | Environment variable (preferred for CI/CD) |
+| `gh auth login` | Uses token from gh CLI if logged in locally |
 
-For CI/CD, use the built-in `GITHUB_TOKEN` in GitHub Actions.
+For CI/CD, use the built-in `GITHUB_TOKEN` in GitHub Actions. For local development, run `gh auth login` once.
 
 ### Token Permissions
 

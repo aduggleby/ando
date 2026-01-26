@@ -11,8 +11,9 @@ GitHub operations authenticate using one of these methods (checked in order):
 | Method | Description |
 |--------|-------------|
 | `GITHUB_TOKEN` | Environment variable (preferred for CI/CD) |
-| `GH_TOKEN` | Alternative environment variable |
-| `gh auth login` | Uses token from ~/.config/gh/hosts.yml |
+| `gh auth login` | Uses token from gh CLI (for local development) |
+
+For CI/CD pipelines, set the `GITHUB_TOKEN` environment variable. For local development, run `gh auth login` once to authenticate the GitHub CLI.
 
 ## Creating Releases
 
