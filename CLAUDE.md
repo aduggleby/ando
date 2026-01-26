@@ -28,6 +28,7 @@ ANDO is a typed C# build system using Roslyn scripting. Build scripts (`build.cs
 ```
 src/Ando/           # Main CLI and library
   Cli/              # CLI entry point
+  Config/           # Project configuration (ando.config)
   Context/          # BuildPath, PathsContext, VarsContext
   Execution/        # ProcessRunner, DockerManager, ContainerExecutor
   Logging/          # ConsoleLogger, IBuildLogger
@@ -35,6 +36,7 @@ src/Ando/           # Main CLI and library
   References/       # ProjectRef, EfContextRef
   Scripting/        # ScriptHost (Roslyn integration)
   Steps/            # BuildStep, StepRegistry
+  Utilities/        # DindChecker, GitHubScopeChecker, SDK ensurers
   Workflow/         # WorkflowRunner, WorkflowConfig
 tests/Ando.Tests/   # Test project
   Unit/             # Unit tests (Category=Unit)
@@ -218,10 +220,15 @@ Run `npm run build` in the website directory to verify documentation builds corr
    - Changing existing command behavior
    - Adding new operations that affect CLI usage
 
-2. **DIND Mode Detection** - Operations that require Docker-in-Docker (--dind flag) must be detected at startup:
-   - Check if the build script contains operations requiring DIND before execution begins
-   - Warn the user early if DIND is required but --dind flag is not provided
-   - Operations requiring DIND include: Docker.Build, Docker.Push, GitHub.PushImage
+2. **DIND Mode Detection** - Operations that require Docker-in-Docker are automatically detected by `DindChecker`:
+   - Scans registered steps before container creation
+   - Checks for `--dind` flag or `ando.config` with `dind: true`
+   - Prompts user with options: (Y)es for this run, (a)lways (saves to ando.config), Esc to cancel
+   - Current DIND operations: Docker.Build, Docker.Push, GitHub.PushImage
+
+3. **DIND Operations Registry** - When adding new operations that require Docker-in-Docker:
+   - Add the operation name to `DindRequiredOperations` in `src/Ando/Utilities/DindChecker.cs`
+   - Operations requiring DIND include any that need to run `docker` commands inside the build container
 
 ## Documentation Standards
 

@@ -28,6 +28,7 @@
 // - 5: Generic error (Roslyn errors, exceptions, etc.)
 // - 6: .env.ando not gitignored (user declined to continue)
 // - 7: GitHub OAuth scope check failed (user declined to re-authenticate)
+// - 8: DIND check cancelled (user pressed Escape)
 // =============================================================================
 
 using System.Reflection;
@@ -222,24 +223,19 @@ public class AndoCli : IDisposable
                 return 2;
             }
 
-            // Get the host path for Docker configuration.
-            // When running in Docker-in-Docker mode (--dind), ANDO_HOST_ROOT environment variable
-            // can override the host path. This is needed because paths inside the outer container
-            // don't match the actual host filesystem paths that Docker needs for volume mounts.
+            // Get the default host path for configuration checks.
+            // The actual hostRootPath is calculated after DIND check (Step 2c).
             var defaultHostRoot = Path.GetDirectoryName(scriptPath) ?? Environment.CurrentDirectory;
-            var hostRootPath = HasFlag("--dind")
-                ? Environment.GetEnvironmentVariable("ANDO_HOST_ROOT") ?? defaultHostRoot
-                : defaultHostRoot;
 
             // Check that .env.ando is gitignored if it exists.
             // This prevents accidental commits of sensitive environment files.
-            if (!CheckEnvAndoGitIgnoreStatus(hostRootPath))
+            if (!CheckEnvAndoGitIgnoreStatus(defaultHostRoot))
             {
                 return 6; // Exit code for gitignore check failure
             }
 
             // Check for .env file and offer to load it.
-            await PromptToLoadEnvFileAsync(hostRootPath);
+            await PromptToLoadEnvFileAsync(defaultHostRoot);
 
             // Step 2: Load and compile the build script using Roslyn.
             // We load first to read Options.Image before creating the container.
@@ -282,6 +278,27 @@ public class AndoCli : IDisposable
                 return 7; // Exit code for GitHub scope check failure
             }
 
+            // Step 2c: Pre-flight check for Docker-in-Docker requirements.
+            // Detects if build operations need DIND and prompts user if needed.
+            var dindChecker = new DindChecker(_logger);
+            var dindResult = dindChecker.CheckAndPrompt(
+                context.StepRegistry,
+                HasFlag("--dind"),
+                defaultHostRoot);
+
+            if (dindResult == DindCheckResult.Cancelled)
+            {
+                return 8; // Exit code for DIND check cancelled
+            }
+
+            var enableDind = DindChecker.ShouldEnableDind(dindResult);
+
+            // Calculate hostRootPath based on DIND status.
+            // When DIND is enabled, ANDO_HOST_ROOT can override the path for nested containers.
+            var hostRootPath = enableDind
+                ? Environment.GetEnvironmentVariable("ANDO_HOST_ROOT") ?? defaultHostRoot
+                : defaultHostRoot;
+
             // Step 3: Set up Docker container for isolated execution.
             // All ANDO builds run in Docker containers for reproducibility.
             var dockerManager = new DockerManager(_logger);
@@ -309,9 +326,9 @@ public class AndoCli : IDisposable
             {
                 Name = containerName,
                 ProjectRoot = hostRootPath,
-                LocalProjectRoot = HasFlag("--dind") ? defaultHostRoot : null,
+                LocalProjectRoot = enableDind ? defaultHostRoot : null,
                 Image = GetDockerImage(context.Options),
-                MountDockerSocket = HasFlag("--dind"),  // For building Docker images
+                MountDockerSocket = enableDind,  // For building Docker images
             };
 
             // Warm containers are reused for faster subsequent builds.
@@ -725,6 +742,7 @@ public class AndoCli : IDisposable
         Console.WriteLine("  5  Generic error (Roslyn errors, exceptions)");
         Console.WriteLine("  6  .env.ando not gitignored (user declined to continue)");
         Console.WriteLine("  7  GitHub OAuth scope check failed");
+        Console.WriteLine("  8  DIND check cancelled (user pressed Escape)");
         Console.WriteLine();
         Console.WriteLine("Environment Files:");
         Console.WriteLine("  ANDO checks for .env.ando (preferred) or .env in the project root.");
