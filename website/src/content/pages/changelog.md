@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.38
+
+**2026-01-26**
+
+- Add new `ando docs` command to open documentation in the browser
+- Update website tagline and improve documentation
+
 ## 0.9.37
 
 **2026-01-26**
