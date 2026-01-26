@@ -9,17 +9,26 @@
 //
 // Architecture:
 // - Scans registered steps to determine which operations require DIND
+// - Scans child build scripts (via Ando.Build) recursively for DIND operations
 // - Checks if --dind flag was provided or ando.config has dind:true
 // - If needed, prompts user with options: (Y)es, (a)lways, or Esc
 // - "Always" option saves dind:true to ando.config for future runs
+//
+// Child Build Scanning:
+// - Uses text-based regex scanning to detect Ando.Build(Directory("...")) calls
+// - Recursively parses child build.csando files for DIND operations
+// - Handles circular references via visited path tracking
+// - Gracefully handles missing or unreadable child scripts
 //
 // Design Decisions:
 // - Runs on host before container creation to configure mounts correctly
 // - Interactive prompt provides control over Docker socket exposure
 // - Config persistence reduces prompting on subsequent runs
 // - Follows similar pattern to GitHubScopeChecker for consistency
+// - Text-based scanning avoids executing child scripts before DIND is enabled
 // =============================================================================
 
+using System.Text.RegularExpressions;
 using Ando.Config;
 using Ando.Logging;
 using Ando.Steps;
@@ -59,12 +68,27 @@ public class DindChecker
 
     // Operations that require mounting the Docker socket into the build container.
     // Add new operations here when they need to run Docker commands.
+    // See CLAUDE.md "DIND Operations Registry" section for documentation.
     private static readonly HashSet<string> DindRequiredOperations = new(StringComparer.OrdinalIgnoreCase)
     {
         "Docker.Build",
         "Docker.Push",
-        "GitHub.PushImage"
+        "Docker.Install",
+        "GitHub.PushImage",
+        "Playwright.Test"
     };
+
+    // Regex pattern to find Ando.Build calls with Directory paths in script text.
+    // Matches: Ando.Build(Directory("./path")) or Ando.Build(Directory("./path"), ...)
+    private static readonly Regex AndoBuildPattern = new(
+        @"Ando\.Build\s*\(\s*Directory\s*\(\s*""([^""]+)""\s*\)",
+        RegexOptions.Compiled);
+
+    // Regex pattern to find DIND-requiring operation calls in script text.
+    // Used for scanning child build scripts without executing them.
+    private static readonly Regex DindOperationPattern = new(
+        @"\b(Docker\.Build|Docker\.Push|Docker\.Install|GitHub\.PushImage|Playwright\.Test)\s*\(",
+        RegexOptions.Compiled);
 
     public DindChecker(IBuildLogger logger)
     {
@@ -73,6 +97,7 @@ public class DindChecker
 
     /// <summary>
     /// Checks if DIND is required and prompts the user if needed.
+    /// Also scans child builds for DIND requirements.
     /// </summary>
     /// <param name="registry">The step registry containing registered build steps.</param>
     /// <param name="hasDindFlag">Whether --dind flag was provided on command line.</param>
@@ -80,8 +105,20 @@ public class DindChecker
     /// <returns>The result indicating how DIND should be handled.</returns>
     public DindCheckResult CheckAndPrompt(IStepRegistry registry, bool hasDindFlag, string projectRoot)
     {
-        // Determine which DIND operations are in the build.
+        // Determine which DIND operations are in the build (from registered steps).
         var dindOperations = GetDindOperations(registry);
+
+        // Also scan for child builds and check their scripts for DIND operations.
+        // This catches DIND requirements in Ando.Build() targets before we start.
+        var scriptPath = FindBuildScript(projectRoot);
+        if (scriptPath != null)
+        {
+            var childDindOps = ScanScriptAndChildrenForDind(scriptPath, projectRoot);
+            foreach (var op in childDindOps)
+            {
+                dindOperations.Add(op);
+            }
+        }
 
         if (dindOperations.Count == 0)
         {
@@ -140,6 +177,102 @@ public class DindChecker
         }
 
         return operations;
+    }
+
+    /// <summary>
+    /// Finds the build script in the specified directory.
+    /// </summary>
+    private static string? FindBuildScript(string projectRoot)
+    {
+        var scriptPath = Path.Combine(projectRoot, "build.csando");
+        return File.Exists(scriptPath) ? scriptPath : null;
+    }
+
+    /// <summary>
+    /// Scans a build script and all its child builds for DIND-requiring operations.
+    /// This uses text-based scanning to detect operations without executing the scripts.
+    /// </summary>
+    /// <param name="scriptPath">Path to the build script to scan.</param>
+    /// <param name="projectRoot">Root directory of the project.</param>
+    /// <returns>Set of DIND operation names found in the script tree.</returns>
+    internal HashSet<string> ScanScriptAndChildrenForDind(string scriptPath, string projectRoot)
+    {
+        var operations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        ScanScriptRecursive(scriptPath, projectRoot, operations, visited);
+
+        return operations;
+    }
+
+    /// <summary>
+    /// Recursively scans a script and its child builds for DIND operations.
+    /// </summary>
+    private void ScanScriptRecursive(
+        string scriptPath,
+        string projectRoot,
+        HashSet<string> operations,
+        HashSet<string> visited)
+    {
+        // Avoid infinite loops from circular references.
+        var normalizedPath = Path.GetFullPath(scriptPath);
+        if (!visited.Add(normalizedPath))
+        {
+            return;
+        }
+
+        if (!File.Exists(scriptPath))
+        {
+            _logger.Debug($"Child build script not found: {scriptPath}");
+            return;
+        }
+
+        string scriptContent;
+        try
+        {
+            scriptContent = File.ReadAllText(scriptPath);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug($"Could not read script {scriptPath}: {ex.Message}");
+            return;
+        }
+
+        // Find DIND operations in this script.
+        var dindMatches = DindOperationPattern.Matches(scriptContent);
+        foreach (Match match in dindMatches)
+        {
+            var operationName = match.Groups[1].Value;
+            if (operations.Add(operationName))
+            {
+                _logger.Debug($"Found DIND operation in {Path.GetFileName(scriptPath)}: {operationName}");
+            }
+        }
+
+        // Find child builds and scan them recursively.
+        var childBuildMatches = AndoBuildPattern.Matches(scriptContent);
+        foreach (Match match in childBuildMatches)
+        {
+            var relativePath = match.Groups[1].Value;
+            var scriptDir = Path.GetDirectoryName(scriptPath) ?? projectRoot;
+
+            // Resolve the child build path.
+            var childDir = Path.GetFullPath(Path.Combine(scriptDir, relativePath));
+
+            // Check if it's a .csando file or a directory.
+            string childScriptPath;
+            if (relativePath.EndsWith(".csando", StringComparison.OrdinalIgnoreCase))
+            {
+                childScriptPath = childDir;
+            }
+            else
+            {
+                childScriptPath = Path.Combine(childDir, "build.csando");
+            }
+
+            _logger.Debug($"Scanning child build: {childScriptPath}");
+            ScanScriptRecursive(childScriptPath, projectRoot, operations, visited);
+        }
     }
 
     /// <summary>

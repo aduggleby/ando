@@ -222,13 +222,16 @@ Run `npm run build` in the website directory to verify documentation builds corr
 
 2. **DIND Mode Detection** - Operations that require Docker-in-Docker are automatically detected by `DindChecker`:
    - Scans registered steps before container creation
+   - **Also scans child builds** - Parses `Ando.Build(Directory("..."))` calls and recursively checks child `build.csando` files for DIND operations
    - Checks for `--dind` flag or `ando.config` with `dind: true`
    - Prompts user with options: (Y)es for this run, (a)lways (saves to ando.config), Esc to cancel
-   - Current DIND operations: Docker.Build, Docker.Push, GitHub.PushImage
+   - Current DIND operations: Docker.Build, Docker.Push, Docker.Install, GitHub.PushImage, Playwright.Test
 
 3. **DIND Operations Registry** - When adding new operations that require Docker-in-Docker:
    - Add the operation name to `DindRequiredOperations` in `src/Ando/Utilities/DindChecker.cs`
+   - **Also add the operation to `DindOperationPattern` regex** in the same file (for child build scanning)
    - Operations requiring DIND include any that need to run `docker` commands inside the build container
+   - Examples: Docker.Build, Docker.Push, Docker.Install, GitHub.PushImage, Playwright.Test (uses docker-compose for E2E tests)
 
 ## Documentation Standards
 

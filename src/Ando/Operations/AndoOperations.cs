@@ -171,12 +171,16 @@ public class AndoOperations
                 argsList.InsertRange(0, new[] { "-f", buildFileArg });
             }
 
-            // Pass active profiles to child build.
-            var activeProfiles = _profileRegistry.ActiveProfiles;
-            if (activeProfiles.Count > 0)
+            // Pass active profiles to child build, but only if not explicitly overridden.
+            // If WithProfile() was called, use that instead of inheriting from parent.
+            if (string.IsNullOrEmpty(options.Profile))
             {
-                argsList.Add("-p");
-                argsList.Add(string.Join(",", activeProfiles));
+                var activeProfiles = _profileRegistry.ActiveProfiles;
+                if (activeProfiles.Count > 0)
+                {
+                    argsList.Add("-p");
+                    argsList.Add(string.Join(",", activeProfiles));
+                }
             }
 
             var args = argsList.ToArray();

@@ -133,7 +133,11 @@ public class AndoCli : IDisposable
         // - "docs" -> Documentation update
         // - "release" -> Full release workflow
         // This allows "ando" and "ando run" to behave identically.
-        if (_args.Length == 0 || _args[0] == "run" || !_args[0].StartsWith("-") && _args[0] != "clean" && _args[0] != "help" && _args[0] != "verify" && _args[0] != "commit" && _args[0] != "bump" && _args[0] != "docs" && _args[0] != "release")
+        // Also treat options (starting with -) as implicit run command, except -v/-h/--version/--help.
+        var isRunOption = _args.Length > 0 && _args[0].StartsWith("-") &&
+                          _args[0] != "-v" && _args[0] != "--version" &&
+                          _args[0] != "-h" && _args[0] != "--help";
+        if (_args.Length == 0 || _args[0] == "run" || isRunOption || !_args[0].StartsWith("-") && _args[0] != "clean" && _args[0] != "help" && _args[0] != "verify" && _args[0] != "commit" && _args[0] != "bump" && _args[0] != "docs" && _args[0] != "release")
         {
             PrintHeader();
             return await RunCommandAsync();

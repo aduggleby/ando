@@ -261,9 +261,25 @@ public class ReleaseCommand
         var startLine = Console.CursorTop;
         Console.SetCursorPosition(0, startLine);
 
-        AnsiConsole.MarkupLine("[bold]Select steps to run:[/]");
-        AnsiConsole.MarkupLine("[grey](↑↓ navigate, Space toggle, A toggle all, Enter accept, Escape cancel)[/]");
-        AnsiConsole.WriteLine();
+        // Calculate box width based on longest step label.
+        var maxLabelLength = steps.Max(s => s.Label.Length + (s.DisabledReason != null ? s.DisabledReason.Length + 3 : 0));
+        var boxWidth = Math.Max(maxLabelLength + 8, 70); // 8 for "  ● " prefix + padding
+
+        // Draw top border.
+        AnsiConsole.MarkupLine($"[blue]┌{"".PadRight(boxWidth, '─')}┐[/]");
+
+        // Title line.
+        var title = " Select steps to run: ";
+        var titlePadding = boxWidth - title.Length;
+        AnsiConsole.MarkupLine($"[blue]│[/][bold]{title}[/]{new string(' ', titlePadding)}[blue]│[/]");
+
+        // Help line.
+        var help = " (↑↓ navigate, Space toggle, A all, Enter accept, Esc cancel) ";
+        var helpPadding = boxWidth - help.Length;
+        AnsiConsole.MarkupLine($"[blue]│[/][grey]{help}[/]{new string(' ', Math.Max(0, helpPadding))}[blue]│[/]");
+
+        // Separator.
+        AnsiConsole.MarkupLine($"[blue]├{"".PadRight(boxWidth, '─')}┤[/]");
 
         for (int i = 0; i < steps.Count; i++)
         {
@@ -274,19 +290,32 @@ public class ReleaseCommand
             var pointer = isCurrent ? "[cyan]>[/] " : "  ";
             var checkbox = isSelected ? "[green]●[/]" : "[grey]○[/]";
 
+            string content;
+            int contentLength;
+
             if (!step.Enabled)
             {
-                AnsiConsole.MarkupLine($"{pointer}{checkbox} [dim strikethrough]{step.Label}[/] [dim]({step.DisabledReason})[/]");
+                var label = $"{step.Label} ({step.DisabledReason})";
+                content = $"{pointer}{checkbox} [dim strikethrough]{step.Label}[/] [dim]({step.DisabledReason})[/]";
+                contentLength = 4 + label.Length; // "  ● " + label
             }
             else if (isCurrent)
             {
-                AnsiConsole.MarkupLine($"{pointer}{checkbox} [cyan]{step.Label}[/]");
+                content = $"{pointer}{checkbox} [cyan]{step.Label}[/]";
+                contentLength = 4 + step.Label.Length;
             }
             else
             {
-                AnsiConsole.MarkupLine($"{pointer}{checkbox} {step.Label}");
+                content = $"{pointer}{checkbox} {step.Label}";
+                contentLength = 4 + step.Label.Length;
             }
+
+            var padding = boxWidth - contentLength;
+            AnsiConsole.MarkupLine($"[blue]│[/]{content}{new string(' ', Math.Max(0, padding))}[blue]│[/]");
         }
+
+        // Draw bottom border.
+        AnsiConsole.MarkupLine($"[blue]└{"".PadRight(boxWidth, '─')}┘[/]");
 
         // Move cursor back to start for next render.
         Console.SetCursorPosition(0, startLine);
@@ -294,8 +323,8 @@ public class ReleaseCommand
 
     private void ClearSelection(int stepCount)
     {
-        // Clear the selection UI (3 header lines + step lines).
-        var linesToClear = 3 + stepCount;
+        // Clear the selection UI (5 box lines: top, title, help, separator, bottom + step lines).
+        var linesToClear = 5 + stepCount;
         for (int i = 0; i < linesToClear; i++)
         {
             Console.WriteLine(new string(' ', Console.WindowWidth - 1));

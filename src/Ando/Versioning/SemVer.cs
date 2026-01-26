@@ -36,6 +36,7 @@ public enum BumpType
 /// <param name="Patch">Patch version (bug fixes, backwards compatible).</param>
 /// <param name="Prerelease">Optional prerelease identifier (e.g., "beta.1").</param>
 public partial record SemVer(int Major, int Minor, int Patch, string? Prerelease = null)
+    : IComparable<SemVer>
 {
     // Regex pattern for parsing semantic versions.
     // Matches: 1.2.3, 1.2.3-beta, 1.2.3-beta.1, etc.
@@ -110,4 +111,32 @@ public partial record SemVer(int Major, int Minor, int Patch, string? Prerelease
         => Prerelease is null
             ? $"{Major}.{Minor}.{Patch}"
             : $"{Major}.{Minor}.{Patch}-{Prerelease}";
+
+    /// <summary>
+    /// Compares this version to another for ordering.
+    /// Major is compared first, then Minor, then Patch.
+    /// Prerelease versions are considered less than release versions.
+    /// </summary>
+    /// <param name="other">The version to compare to.</param>
+    /// <returns>Negative if this is less, zero if equal, positive if greater.</returns>
+    public int CompareTo(SemVer? other)
+    {
+        if (other is null) return 1;
+
+        var majorCompare = Major.CompareTo(other.Major);
+        if (majorCompare != 0) return majorCompare;
+
+        var minorCompare = Minor.CompareTo(other.Minor);
+        if (minorCompare != 0) return minorCompare;
+
+        var patchCompare = Patch.CompareTo(other.Patch);
+        if (patchCompare != 0) return patchCompare;
+
+        // Prerelease versions are less than release versions (1.0.0-beta < 1.0.0).
+        if (Prerelease is null && other.Prerelease is not null) return 1;
+        if (Prerelease is not null && other.Prerelease is null) return -1;
+        if (Prerelease is null && other.Prerelease is null) return 0;
+
+        return string.Compare(Prerelease, other.Prerelease, StringComparison.Ordinal);
+    }
 }
