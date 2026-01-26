@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.40
+
+**2026-01-26**
+
+- Add option to automatically add `.env.ando` to `.gitignore` when initializing a project
+
 ## 0.9.39
 
 **2026-01-26**
