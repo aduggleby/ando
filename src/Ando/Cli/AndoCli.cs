@@ -34,6 +34,7 @@
 using System.Reflection;
 using System.Security.Cryptography;
 using Ando.Cli.Commands;
+using Ando.Config;
 using Ando.Execution;
 using Ando.Logging;
 using Ando.Profiles;
@@ -959,11 +960,15 @@ public class AndoCli : IDisposable
 
         // Check if auto-load is enabled:
         // 1. --read-env CLI flag was passed
-        // 2. ANDO_AUTO_LOAD_ENV=1 (set by parent build when user chose "always")
-        var autoLoad = HasFlag("--read-env") || Environment.GetEnvironmentVariable(AutoLoadEnvVar) == "1";
+        // 2. ANDO_AUTO_LOAD_ENV=1 (set by parent build when user chose "for this run")
+        // 3. ando.config has readEnv: true
+        var config = ProjectConfig.Load(rootPath);
+        var autoLoad = HasFlag("--read-env") ||
+                       Environment.GetEnvironmentVariable(AutoLoadEnvVar) == "1" ||
+                       config.ReadEnv;
 
-        // If --read-env was passed, also enable for sub-builds.
-        if (HasFlag("--read-env"))
+        // If --read-env was passed or config has readEnv, also enable for sub-builds.
+        if (HasFlag("--read-env") || config.ReadEnv)
         {
             Environment.SetEnvironmentVariable(AutoLoadEnvVar, "1");
         }
@@ -985,9 +990,10 @@ public class AndoCli : IDisposable
 
             // Prompt the user.
             // Y = yes for this build only
-            // a = yes for this build and all sub-builds (auto-load)
+            // r = yes for this run and all sub-builds
+            // a = always (save to ando.config)
             // n = no
-            Console.Write("Load these environment variables? [(Y)es/(n)o/(a)lways] ");
+            Console.Write("Load these environment variables? [(Y)es/(n)o/for this (r)un/(a)lways] ");
             var response = Console.ReadLine()?.Trim().ToLowerInvariant();
 
             if (response == "n" || response == "no")
@@ -997,11 +1003,20 @@ public class AndoCli : IDisposable
                 return;
             }
 
-            // Enable auto-load for sub-builds if user chose "always".
-            if (response == "a" || response == "always")
+            // Enable auto-load for sub-builds if user chose "for this run".
+            if (response == "r" || response == "run")
             {
                 Environment.SetEnvironmentVariable(AutoLoadEnvVar, "1");
                 _logger.Info("Enabled auto-load for this and all sub-builds");
+            }
+
+            // Save to ando.config if user chose "always".
+            if (response == "a" || response == "always")
+            {
+                var newConfig = config with { ReadEnv = true };
+                newConfig.Save(rootPath);
+                Environment.SetEnvironmentVariable(AutoLoadEnvVar, "1");
+                _logger.Info("Saved readEnv:true to ando.config");
             }
         }
 

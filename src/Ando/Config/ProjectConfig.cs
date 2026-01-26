@@ -4,7 +4,7 @@
 // Summary: Project-level configuration stored in ando.config file.
 //
 // This record represents configuration options that can be persisted per-project
-// in an ando.config file. Currently supports DIND (Docker-in-Docker) settings.
+// in an ando.config file. Supports DIND and environment file auto-loading.
 //
 // Architecture:
 // - JSON format for human readability and easy editing
@@ -40,6 +40,13 @@ public record ProjectConfig
     /// </summary>
     [JsonPropertyName("dind")]
     public bool Dind { get; init; } = false;
+
+    /// <summary>
+    /// Whether to automatically load environment variables from .env.ando or .env.
+    /// When true, skips the prompt and loads env vars automatically.
+    /// </summary>
+    [JsonPropertyName("readEnv")]
+    public bool ReadEnv { get; init; } = false;
 
     /// <summary>
     /// Loads project configuration from the specified directory.

@@ -155,4 +155,61 @@ public class ProjectConfigTests : IDisposable
         // Assert
         ProjectConfig.FileName.ShouldBe("ando.config");
     }
+
+    [Fact]
+    public void Load_ParsesReadEnvTrue()
+    {
+        // Arrange
+        var configPath = Path.Combine(_tempDir, ProjectConfig.FileName);
+        File.WriteAllText(configPath, """{"readEnv": true}""");
+
+        // Act
+        var config = ProjectConfig.Load(_tempDir);
+
+        // Assert
+        config.ReadEnv.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Load_ParsesReadEnvFalse()
+    {
+        // Arrange
+        var configPath = Path.Combine(_tempDir, ProjectConfig.FileName);
+        File.WriteAllText(configPath, """{"readEnv": false}""");
+
+        // Act
+        var config = ProjectConfig.Load(_tempDir);
+
+        // Assert
+        config.ReadEnv.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void RoundTrip_PreservesReadEnv()
+    {
+        // Arrange
+        var original = new ProjectConfig { ReadEnv = true };
+
+        // Act
+        original.Save(_tempDir);
+        var loaded = ProjectConfig.Load(_tempDir);
+
+        // Assert
+        loaded.ReadEnv.ShouldBe(original.ReadEnv);
+    }
+
+    [Fact]
+    public void RoundTrip_PreservesBothSettings()
+    {
+        // Arrange
+        var original = new ProjectConfig { Dind = true, ReadEnv = true };
+
+        // Act
+        original.Save(_tempDir);
+        var loaded = ProjectConfig.Load(_tempDir);
+
+        // Assert
+        loaded.Dind.ShouldBe(original.Dind);
+        loaded.ReadEnv.ShouldBe(original.ReadEnv);
+    }
 }
