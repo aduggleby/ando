@@ -65,7 +65,7 @@ Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");
 
 ## Using Profiles
 
-This script uses `DefineProfile` for conditional execution. By default it builds and tests. With the `push` profile, it also publishes to NuGet.org.
+This script uses `DefineProfile` for conditional execution. By default it builds and tests. With the `publish` profile, it also publishes to NuGet.org.
 
 | Command | Behavior |
 |---------|----------|

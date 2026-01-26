@@ -47,7 +47,7 @@ if (release) {
   Git.Tag("v1.0.0");
 }
 
-// Only run when "push" profile is active
+// Only run when "publish" profile is active
 if (publish) {
   Nuget.EnsureAuthenticated();
   Nuget.Pack(app);
