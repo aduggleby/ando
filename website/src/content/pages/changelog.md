@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.41
+
+**2026-01-26**
+
+- Add automatic detection when Docker-in-Docker mode is needed, with an interactive prompt to enable it
+- Add automatic update of the global tool after publishing a new release
+
 ## 0.9.40
 
 **2026-01-26**
