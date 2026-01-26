@@ -6,50 +6,34 @@ toc: true
 
 ## Commands
 
-The CLI provides a small, focused surface area.
-
 | Command | Description |
 |---------|-------------|
-| `ando` | Run the build script (same as 'ando run'). |
-| `ando run` | Run the build script in a Docker container. |
-| `ando commit` | Commit all changes with AI-generated message using Claude. |
-| `ando bump` | Bump version across all projects in build.csando. |
-| `ando release` | Interactive release workflow (commit, docs, bump, push, publish). |
-| `ando verify` | Check build script for errors without executing. |
-| `ando clean` | Remove artifacts, temp files, and containers. |
-| `ando help` | Show available commands and options. |
+| [`ando`](#run-options) | Run the build script (same as 'ando run'). |
+| [`ando run`](#run-options) | Run the build script in a Docker container. |
+| [`ando commit`](#commit-command) | Commit all changes with AI-generated message. |
+| [`ando bump`](#bump-command) | Bump version across all projects. |
+| [`ando release`](#release-command) | Interactive release workflow. |
+| [`ando verify`](#examples) | Check build script for errors without executing. |
+| [`ando clean`](#clean-options) | Remove artifacts, temp files, and containers. |
+| [`ando help`](#examples) | Show available commands and options. |
 
 ## Run Options
-
-Options for the `ando run` command.
 
 | Flag | Description |
 |------|-------------|
 | `-f, --file <file>` | Use a specific build file instead of build.csando. |
 | `-p, --profile <profiles>` | Activate build profiles (comma-separated). |
-| `--read-env` | Load environment file without prompting (also applies to sub-builds). Checks for `.env.ando` first, falls back to `.env`. |
+| `--read-env` | Load environment file without prompting. |
 | `--verbosity <level>` | Set output verbosity (quiet\|minimal\|normal\|detailed). |
 | `--no-color` | Disable colored output. |
-| `--cold` | Always create a fresh container (ignore warm cache). |
+| `--cold` | Always create a fresh container. |
 | `--image <image>` | Use a custom Docker image. |
 | `--dind` | Mount Docker socket for Docker-in-Docker builds. |
 
 ## Commit Command
 
-The `ando commit` command commits all staged and unstaged changes with an AI-generated commit message using Claude.
+Commits all changes with an AI-generated message using Claude.
 
-**Requirements:**
-- Claude CLI must be installed (`npm install -g @anthropic-ai/claude-code`)
-- Must be in a git repository
-
-**How it works:**
-1. Checks for uncommitted changes
-2. Shows the list of changed files
-3. Sends the git diff to Claude to generate a conventional commit message
-4. Displays the generated message and asks for confirmation
-5. Stages all changes and commits with the approved message
-
-**Example output:**
 ```
 $ ando commit
 Analyzing changes...
@@ -63,149 +47,54 @@ docs: add options reference to GitHub provider
 ────────────────────────────────────────
 
 Commit with this message? [Y/n] y
-
-Committed: docs: add options reference to GitHub provider
 ```
+
+**Requirements:** Claude CLI must be installed (`npm install -g @anthropic-ai/claude-code`)
 
 ## Bump Command
 
-The `ando bump` command bumps the version of all projects detected in your `build.csando` file.
+Bumps the version of all projects detected in `build.csando`.
 
-**Usage:**
 ```bash
 ando bump [patch|minor|major]
 ```
 
-**Default:** `patch` - bumps the patch version (1.0.0 → 1.0.1)
-
-**How it works:**
-1. Detects projects from `build.csando` (Dotnet.Project and Npm directories)
-2. Checks for uncommitted changes (offers to run `ando commit` first)
-3. Reads current versions from all detected projects
-4. Validates all versions match (prompts to select base if mismatched)
-5. Calculates the new version based on bump type
-6. Updates all project files (.csproj, package.json)
-7. Generates changelog using Claude from commits and changed files
-8. Updates documentation (changelog, version badges)
-9. Commits the changes automatically
-
-**Non-interactive mode:** When called via `ando release --all`, bump runs in non-interactive mode:
-- Uncommitted changes are auto-committed without prompting
-- Version mismatches auto-select the highest version
-- Missing git tags use a default "Version bump" changelog entry
-
-**Changelog generation:**
-- Looks for git tags matching the current version (`vX.Y.Z` or `X.Y.Z` format)
-- If a tag is found, gathers commit messages and changed files since that tag
-- Sends context to Claude to generate user-friendly changelog entries
-- Claude produces concise, non-technical descriptions focused on user impact
-- If no tag is found, prompts for a manual changelog entry (or uses default in non-interactive mode)
-
-**Requirements:**
-- Claude CLI must be installed (`npm install -g @anthropic-ai/claude-code`)
+**What it does:**
+1. Detects projects from `build.csando` (Dotnet.Project, Npm directories)
+2. Validates all versions match (prompts if mismatched)
+3. Updates all project files (.csproj, package.json)
+4. Generates changelog entry using Claude from commit history
+5. Updates CHANGELOG.md and version badges
+6. Commits the changes
 
 **Supported projects:**
-- `.csproj` files referenced via `Dotnet.Project("path")`
-- `package.json` files in directories used with `Npm.*` operations
-
-**Example output:**
-```
-$ ando bump minor
-Detecting projects...
-
-Detected projects:
-  ./src/App/App.csproj                     1.2.3
-  ./website/package.json                   1.2.3
-
-Bumping minor: 1.2.3 → 1.3.0
-
-Updating project versions:
-  ✓ ./src/App/App.csproj
-  ✓ ./website/package.json
-
-Changes since tag v1.2.3:
-  Commits: 3
-  Files changed: 8
-
-Generating changelog with Claude...
-
-Generated changelog entry:
-  • Add support for custom build profiles
-  • Improve error messages for missing dependencies
-
-Updating documentation:
-  ✓ CHANGELOG.md
-  ✓ README.md
-
-Committed: Bump version to 1.3.0
-```
+- `.csproj` files via `Dotnet.Project("path")`
+- `package.json` in directories used with `Npm.*` operations
 
 ## Release Command
 
-The `ando release` command provides an interactive release workflow that orchestrates multiple steps: commit, documentation update, version bump, push, and publish.
+Interactive release workflow that orchestrates: commit, documentation, bump, push, and publish.
 
-**Usage:**
 ```bash
-ando release           # Interactive checklist (all steps selected by default)
-ando release --all     # Skip checklist, run all applicable steps
-ando release --dry-run # Show what would happen without executing
+ando release           # Interactive checklist
+ando release --all     # Skip checklist, run all steps
+ando release --dry-run # Preview without executing
+ando release --minor   # Specify bump type (default: patch)
 ```
 
 **Steps:**
-1. **Commit** - Commit uncommitted changes (uses `ando commit`)
-2. **Update Documentation** - Uses Claude to review and update docs based on changes
-3. **Bump Version** - Bump version across all projects (uses `ando bump`)
-4. **Push** - Push to remote repository
-5. **Publish** - Run the publish build (`ando run -p push --dind`)
+1. **Build Verification** - Runs `ando run --read-env` first
+2. **Commit** - Commit uncommitted changes (uses `ando commit`)
+3. **Docs** - Uses Claude to review and update documentation based on changes
+4. **Bump** - Bump version across all projects (uses `ando bump`)
+5. **Push** - Push to remote repository
+6. **Publish** - Run `ando run -p push --dind --read-env`
 
-**Smart Defaults:**
-- Steps are contextually enabled/disabled based on repository state
-- Commit is disabled when there are no uncommitted changes
-- Push is disabled when there's no remote tracking branch
-- Publish is disabled when build.csando has no `push` profile
-
-**Example output:**
-```
-$ ando release
-
-ANDO Release Workflow
-─────────────────────
-
-Current state:
-  Branch: main
-  Version: 0.9.23
-  Uncommitted changes: 3 files
-  Website folder: yes
-
-Select steps to run:
-  [x] Commit uncommitted changes
-  [x] Update documentation (Claude)
-  [x] Bump version (0.9.23)
-  [x] Push to remote (origin/main)
-  [x] Run publish build (ando run -p push --dind)
-
-Bump type (current: 0.9.23):
-> patch
-  minor
-  major
-
-Starting release...
-
-Step 1/5: Commit uncommitted changes
-────────────────────────────────────────
-...
-
-Release complete!
-  Version: 0.9.24
-  Commit: abc1234
-  Branch: main
-```
+Steps are contextually enabled/disabled based on repository state.
 
 ## Hooks
 
-ANDO hooks are `.csando` scripts that run automatically before and after CLI commands. They use the same Roslyn scripting as `build.csando`.
-
-### Hook Types
+Hooks are `.csando` scripts that run before/after CLI commands.
 
 | Hook | When it runs |
 |------|--------------|
@@ -214,88 +103,27 @@ ANDO hooks are `.csando` scripts that run automatically before and after CLI com
 | `ando-post-{cmd}.csando` | After specific command |
 | `ando-post.csando` | After ANY command |
 
-Commands with hooks: `bump`, `commit`
+**Search locations:** `./scripts/` then `./`
 
-### Search Locations
+**Available APIs:** `Log.*`, `Env(name)`, `Root`, `Directory(path)`, `Shell.RunAsync(cmd, args)`
 
-Hooks are searched in this order (first found wins):
+**Environment variables:**
 
-1. `./scripts/ando-{hook}.csando`
-2. `./ando-{hook}.csando`
+| Variable | Available in |
+|----------|--------------|
+| `ANDO_COMMAND` | All hooks |
+| `ANDO_OLD_VERSION` | bump hooks |
+| `ANDO_NEW_VERSION` | post-bump |
+| `ANDO_BUMP_TYPE` | bump hooks |
 
-### Execution Order
-
-For `ando bump`:
-
-```
-1. scripts/ando-pre.csando        (general pre-hook)
-2. scripts/ando-pre-bump.csando   (command-specific pre-hook)
-3. [ando bump executes]
-4. scripts/ando-post-bump.csando  (command-specific post-hook)
-5. scripts/ando-post.csando       (general post-hook)
-```
-
-### Available APIs
-
-Hooks have access to these globals:
-
-| Global | Description |
-|--------|-------------|
-| `Log.Info()`, `Log.Warning()`, `Log.Error()` | Logging |
-| `Env(name)` | Environment variables |
-| `Root` | Project root path |
-| `Directory(path)` | Directory reference |
-| `Shell.RunAsync(cmd, args)` | Run shell commands |
-
-### Environment Variables
-
-Hooks receive context via environment variables:
-
-| Variable | Description | Available in |
-|----------|-------------|--------------|
-| `ANDO_COMMAND` | Current command | All hooks |
-| `ANDO_OLD_VERSION` | Version before bump | bump hooks |
-| `ANDO_NEW_VERSION` | Version after bump | post-bump |
-| `ANDO_BUMP_TYPE` | patch, minor, or major | bump hooks |
-
-### Hook Behavior
-
-- **Pre-hooks:** Non-zero exit or exception aborts the command
-- **Post-hooks:** Failures only warn (command already completed)
-- **Missing hooks:** Silently skipped (no error or warning)
-- **Execution:** Hooks run on the host machine (not in Docker)
-
-### Example: Run Tests Before Bump
-
+**Example:**
 ```csharp
 // scripts/ando-pre-bump.csando
-Log.Info("Running tests before bump...");
-
 var result = await Shell.RunAsync("dotnet", "test", "--no-build");
-
-if (result.ExitCode != 0)
-{
-    Log.Error("Tests failed. Aborting bump.");
-    throw new Exception("Tests failed");
-}
-```
-
-### Example: Clean Syncthing Conflicts
-
-```csharp
-// scripts/ando-pre.csando
-var conflicts = Directory.GetFiles(".", "*.sync-conflict-*", SearchOption.AllDirectories);
-
-foreach (var file in conflicts)
-{
-    Log.Info($"Removing: {file}");
-    File.Delete(file);
-}
+if (result.ExitCode != 0) throw new Exception("Tests failed");
 ```
 
 ## Clean Options
-
-Options for the `ando clean` command.
 
 | Flag | Description |
 |------|-------------|
@@ -307,48 +135,28 @@ Options for the `ando clean` command.
 
 ## Examples
 
-Common usage patterns.
-
 ```bash
-# Run the build with default settings
+# Run the build
 ando
 
-# Commit all changes with AI-generated message
+# Run with a profile
+ando -p release
+
+# Commit with AI message
 ando commit
 
-# Bump version (patch by default)
-ando bump
-
-# Bump minor version
+# Bump version
 ando bump minor
 
-# Interactive release workflow
+# Interactive release
 ando release
 
-# Release without interactive prompts
-ando release --all
-
-# Preview what release would do
-ando release --dry-run
-
-# Verify build script without executing
-ando verify
-
-# Run with detailed output
-ando run --verbosity detailed
-
-# Force a fresh container (cold start)
+# Force fresh container
 ando run --cold
 
-# Use a specific Docker image
+# Custom Docker image
 ando run --image mcr.microsoft.com/dotnet/sdk:9.0
-
-# Run with a build profile
-ando -p release
 
 # Clean everything
 ando clean --all
-
-# Only remove the warm container
-ando clean --container
 ```
