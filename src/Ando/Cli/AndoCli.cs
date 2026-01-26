@@ -336,6 +336,12 @@ public class AndoCli : IDisposable
                 MountDockerSocket = enableDind,  // For building Docker images
             };
 
+            // Pass DIND setting to container so child builds can inherit it.
+            if (enableDind)
+            {
+                containerConfig.Environment[DindChecker.DindEnvVar] = "1";
+            }
+
             // Warm containers are reused for faster subsequent builds.
             // The --cold flag forces a fresh container (useful for debugging).
             ContainerInfo container;

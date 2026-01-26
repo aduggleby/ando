@@ -25,6 +25,7 @@ using Ando.Logging;
 using Ando.Profiles;
 using Ando.References;
 using Ando.Steps;
+using Ando.Utilities;
 using Ando.Workflow;
 
 namespace Ando.Operations;
@@ -205,6 +206,14 @@ public class AndoOperations
 
             // Set indent level for child build output formatting.
             commandOptions.Environment[Logging.ConsoleLogger.IndentLevelEnvVar] = childIndent.ToString();
+
+            // Pass DIND setting to child builds so they inherit the parent's DIND mode.
+            // This ensures child builds don't prompt for DIND when parent already enabled it.
+            var parentDind = Environment.GetEnvironmentVariable(DindChecker.DindEnvVar);
+            if (!string.IsNullOrEmpty(parentDind))
+            {
+                commandOptions.Environment[DindChecker.DindEnvVar] = parentDind;
+            }
 
             var result = await runner.ExecuteAsync("ando", args, commandOptions);
 

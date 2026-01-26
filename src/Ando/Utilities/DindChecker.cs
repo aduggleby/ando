@@ -90,6 +90,12 @@ public class DindChecker
         @"\b(Docker\.Build|Docker\.Push|Docker\.Install|GitHub\.PushImage|Playwright\.Test)\s*\(",
         RegexOptions.Compiled);
 
+    /// <summary>
+    /// Environment variable used to pass DIND setting to child builds.
+    /// When set to "1" or "true", child builds automatically enable DIND mode.
+    /// </summary>
+    public const string DindEnvVar = "ANDO_DIND";
+
     public DindChecker(IBuildLogger logger)
     {
         _logger = logger;
@@ -130,6 +136,14 @@ public class DindChecker
         {
             _logger.Debug("DIND enabled via --dind flag");
             return DindCheckResult.EnabledViaFlag;
+        }
+
+        // Check if ANDO_DIND environment variable is set (inherited from parent build).
+        var dindEnv = Environment.GetEnvironmentVariable(DindEnvVar);
+        if (dindEnv == "1" || string.Equals(dindEnv, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.Debug("DIND enabled via ANDO_DIND environment variable (inherited from parent)");
+            return DindCheckResult.EnabledViaConfig; // Treat as config-enabled for parent inheritance
         }
 
         // Check if ando.config has dind:true.

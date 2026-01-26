@@ -77,6 +77,12 @@ public class ContainerConfig
     /// Enable this for builds that create Docker images.
     /// </summary>
     public bool MountDockerSocket { get; set; } = false;
+
+    /// <summary>
+    /// Environment variables to set in the container.
+    /// These are passed to the docker run command via -e flags.
+    /// </summary>
+    public Dictionary<string, string> Environment { get; set; } = new();
 }
 
 /// <summary>
@@ -329,6 +335,12 @@ public class DockerManager
             // This allows containers to reach services on the host (e.g., E2E test servers)
             args.AddRange(["--add-host", "host.docker.internal:host-gateway"]);
             _logger.Info($"  Docker socket mounted for Docker-in-Docker");
+        }
+
+        // Add custom environment variables.
+        foreach (var (key, value) in config.Environment)
+        {
+            args.AddRange(["-e", $"{key}={value}"]);
         }
 
         // Add image and arguments to 'tail' command.

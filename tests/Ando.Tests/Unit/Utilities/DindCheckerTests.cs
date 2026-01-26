@@ -507,4 +507,59 @@ Playwright.Test(Directory("".""));
         // Assert - should detect DIND requirement from child and enable via config
         result.ShouldBe(DindCheckResult.EnabledViaConfig);
     }
+
+    [Fact]
+    public void CheckAndPrompt_ReturnsEnabledViaConfig_WhenAndoDindEnvVarSet()
+    {
+        // Arrange - set ANDO_DIND env var (simulating inheritance from parent build)
+        Environment.SetEnvironmentVariable(DindChecker.DindEnvVar, "1");
+        try
+        {
+            var registry = new StepRegistry();
+            registry.Register("Docker.Build", () => Task.FromResult(true));
+            var checker = new DindChecker(_logger);
+
+            // Act
+            var result = checker.CheckAndPrompt(registry, hasDindFlag: false, _tempDir);
+
+            // Assert - should detect DIND from env var
+            result.ShouldBe(DindCheckResult.EnabledViaConfig);
+            _logger.DebugMessages.ShouldContain(m => m.Contains("ANDO_DIND environment variable"));
+        }
+        finally
+        {
+            // Clean up env var
+            Environment.SetEnvironmentVariable(DindChecker.DindEnvVar, null);
+        }
+    }
+
+    [Fact]
+    public void CheckAndPrompt_EnvVarWithTrueValue_EnablesDind()
+    {
+        // Arrange - test "true" value (case-insensitive)
+        Environment.SetEnvironmentVariable(DindChecker.DindEnvVar, "TRUE");
+        try
+        {
+            var registry = new StepRegistry();
+            registry.Register("Playwright.Test", () => Task.FromResult(true));
+            var checker = new DindChecker(_logger);
+
+            // Act
+            var result = checker.CheckAndPrompt(registry, hasDindFlag: false, _tempDir);
+
+            // Assert
+            result.ShouldBe(DindCheckResult.EnabledViaConfig);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(DindChecker.DindEnvVar, null);
+        }
+    }
+
+    [Fact]
+    public void DindEnvVar_HasCorrectName()
+    {
+        // Assert - verify the constant has the expected value
+        DindChecker.DindEnvVar.ShouldBe("ANDO_DIND");
+    }
 }
