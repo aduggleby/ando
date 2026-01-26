@@ -7,7 +7,7 @@
 // Hooks run on the host machine (not in Docker) and need access to:
 // - Log: Logging operations
 // - Env: Environment variable access
-// - Root: Project root path
+// - Root: Project root path (BuildPath with / operator support)
 // - Directory: Directory reference creation
 // - Shell: Command execution
 //
@@ -15,7 +15,7 @@
 // - Simpler than ScriptGlobals since hooks don't need build operations
 // - Reuses LogOperations for consistent logging
 // - Provides Shell for running arbitrary commands
-// - Root is a string path (not BuildPath) for simplicity
+// - Root is BuildPath for consistency with build scripts (supports / operator)
 // =============================================================================
 
 using Ando.Context;
@@ -32,9 +32,9 @@ namespace Ando.Hooks;
 public class HookGlobals
 {
     /// <summary>
-    /// Project root directory (where build.csando is located).
+    /// Project root directory (where build.csando is located). Allows: Root / "dist"
     /// </summary>
-    public string Root { get; }
+    public BuildPath Root { get; }
 
     /// <summary>
     /// Logging operations for hook output.
@@ -77,7 +77,7 @@ public class HookGlobals
 
     public HookGlobals(string projectRoot, IBuildLogger logger)
     {
-        Root = projectRoot;
+        Root = new BuildPath(projectRoot);
         Log = new HookLogOperations(logger);
         Shell = new ShellOperations(projectRoot, logger);
     }
