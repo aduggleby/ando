@@ -100,40 +100,6 @@ public class GitOperationsTests
 
     #endregion
 
-    #region Add Registration Tests
-
-    [Fact]
-    public void Add_RegistersStep()
-    {
-        _git.Add("file.txt");
-
-        _registry.Steps.ShouldContain(s => s.Name == "Git.Add");
-    }
-
-    [Fact]
-    public void Add_SetsContextToFiles()
-    {
-        _git.Add("file1.txt", "file2.txt");
-
-        var step = _registry.Steps.First(s => s.Name == "Git.Add");
-        step.Context.ShouldContain("file1.txt");
-        step.Context.ShouldContain("file2.txt");
-    }
-
-    #endregion
-
-    #region Commit Registration Tests
-
-    [Fact]
-    public void Commit_RegistersStep()
-    {
-        _git.Commit("Test message");
-
-        _registry.Steps.ShouldContain(s => s.Name == "Git.Commit");
-    }
-
-    #endregion
-
     #region Options Fluent API Tests
 
     [Fact]
@@ -163,14 +129,6 @@ public class GitOperationsTests
     }
 
     [Fact]
-    public void GitCommitOptions_FluentApi_Chainable()
-    {
-        var options = new GitCommitOptions().WithAllowEmpty();
-
-        options.AllowEmpty.ShouldBeTrue();
-    }
-
-    [Fact]
     public void GitTagOptions_Defaults()
     {
         var options = new GitTagOptions();
@@ -189,14 +147,6 @@ public class GitOperationsTests
         options.Branch.ShouldBeNull();
         options.SetUpstream.ShouldBeFalse();
         options.Force.ShouldBeFalse();
-    }
-
-    [Fact]
-    public void GitCommitOptions_Defaults()
-    {
-        var options = new GitCommitOptions();
-
-        options.AllowEmpty.ShouldBeFalse();
     }
 
     #endregion

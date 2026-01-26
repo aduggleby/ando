@@ -224,46 +224,6 @@ public class AzureOperationsTests
     }
 
     [Fact]
-    public void DeleteResourceGroup_RegistersStep()
-    {
-        var azure = CreateAzure();
-
-        azure.DeleteResourceGroup("my-rg");
-
-        Assert.Single(_registry.Steps);
-        Assert.Equal("Azure.DeleteResourceGroup", _registry.Steps[0].Name);
-    }
-
-    [Fact]
-    public async Task DeleteResourceGroup_ExecutesCorrectCommand()
-    {
-        var azure = CreateAzure();
-        azure.DeleteResourceGroup("delete-me-rg");
-
-        await _registry.Steps[0].Execute();
-
-        var cmd = _executor.LastCommand!;
-        Assert.Equal("az", cmd.Command);
-        Assert.Contains("group", cmd.Args);
-        Assert.Contains("delete", cmd.Args);
-        Assert.Contains("--name", cmd.Args);
-        Assert.Equal("delete-me-rg", cmd.GetArgValue("--name"));
-        Assert.Contains("--yes", cmd.Args);
-    }
-
-    [Fact]
-    public async Task DeleteResourceGroup_WithNoWait_IncludesNoWaitFlag()
-    {
-        var azure = CreateAzure();
-        azure.DeleteResourceGroup("delete-me-rg", noWait: true);
-
-        await _registry.Steps[0].Execute();
-
-        var cmd = _executor.LastCommand!;
-        Assert.Contains("--no-wait", cmd.Args);
-    }
-
-    [Fact]
     public async Task AllOperations_ReturnFalse_WhenCommandFails()
     {
         var azure = CreateAzure();

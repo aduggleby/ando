@@ -1,5 +1,5 @@
 ---
-title: EF Core
+title: Entity Framework Core (Ef)
 description: Manage Entity Framework Core migrations and database updates.
 provider: Ef
 ---
@@ -49,16 +49,6 @@ Applies all pending migrations to the database.
 | `context` | DbContext reference from `Ef.DbContextFrom()`. |
 | `connectionString` | Optional connection string. If not provided, uses the connection string from the DbContext's configuration. |
 
-### Ef.AddMigration
-
-Creates a new migration based on model changes.
-
-| Parameter | Description |
-|-----------|-------------|
-| `context` | DbContext reference from `Ef.DbContextFrom()`. |
-| `migrationName` | Name for the migration (e.g., "AddUserTable"). Should describe what the migration does. |
-| `outputDir` | Optional directory for migration files. Defaults to "Migrations" in the project directory. |
-
 ### Ef.Script
 
 Generates an idempotent SQL script for all migrations.
@@ -69,11 +59,3 @@ Generates an idempotent SQL script for all migrations.
 | `outputFile` | Path where the SQL script will be written. |
 | `fromMigration` | Optional starting migration. Only generates SQL for migrations after this point. |
 
-### Ef.RemoveMigration
-
-Removes the last migration (if not applied to the database).
-
-| Parameter | Description |
-|-----------|-------------|
-| `context` | DbContext reference from `Ef.DbContextFrom()`. |
-| `force` | If true, removes the migration even if it has been applied to the database. Use with caution. |

@@ -122,36 +122,6 @@ public class GitOperations : OperationsBase
             remote);
     }
 
-    /// <summary>
-    /// Adds files to the staging area.
-    /// </summary>
-    /// <param name="paths">Paths to add (default: "." for all).</param>
-    public void Add(params string[] paths)
-    {
-        var pathsToAdd = paths.Length > 0 ? paths : ["."];
-
-        RegisterHostCommand("Git.Add",
-            () => new ArgumentBuilder()
-                .Add("add")
-                .Add(pathsToAdd),
-            string.Join(", ", pathsToAdd));
-    }
-
-    /// <summary>
-    /// Commits staged changes.
-    /// </summary>
-    /// <param name="message">The commit message.</param>
-    /// <param name="configure">Optional configuration for the commit.</param>
-    public void Commit(string message, Action<GitCommitOptions>? configure = null)
-    {
-        var options = new GitCommitOptions();
-        configure?.Invoke(options);
-
-        RegisterHostCommand("Git.Commit",
-            () => new ArgumentBuilder()
-                .Add("commit", "-m", message)
-                .AddFlag(options.AllowEmpty, "--allow-empty"));
-    }
 }
 
 /// <summary>Options for 'git tag' command.</summary>
@@ -225,16 +195,3 @@ public class GitPushOptions
     }
 }
 
-/// <summary>Options for 'git commit' command.</summary>
-public class GitCommitOptions
-{
-    /// <summary>Allow creating a commit with no changes.</summary>
-    public bool AllowEmpty { get; set; }
-
-    /// <summary>Allows creating an empty commit.</summary>
-    public GitCommitOptions WithAllowEmpty()
-    {
-        AllowEmpty = true;
-        return this;
-    }
-}

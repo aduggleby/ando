@@ -7,7 +7,7 @@ export const providers = [
   { id: "Cloudflare", href: "/providers/cloudflare", label: "Cloudflare" },
   { id: "Docker", href: "/providers/docker", label: "Docker" },
   { id: "Dotnet", href: "/providers/dotnet", label: "Dotnet" },
-  { id: "Ef", href: "/providers/ef", label: "EF Core" },
+  { id: "Ef", href: "/providers/ef", label: "Entity Framework Core (Ef)" },
   { id: "Functions", href: "/providers/functions", label: "Functions" },
   { id: "Git", href: "/providers/git", label: "Git" },
   { id: "GitHub", href: "/providers/github", label: "GitHub" },

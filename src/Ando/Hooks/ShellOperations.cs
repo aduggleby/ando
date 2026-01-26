@@ -12,9 +12,11 @@
 // - Captures both stdout and stderr
 // - Returns a result object with exit code, output, and error streams
 // - Provides both async and sync variants
+// - Optionally streams output to logger in real-time for visibility
 // =============================================================================
 
 using System.Diagnostics;
+using Ando.Logging;
 
 namespace Ando.Hooks;
 
@@ -35,10 +37,12 @@ public record ShellResult(int ExitCode, string Output, string Error)
 public class ShellOperations
 {
     private readonly string _workingDirectory;
+    private readonly IBuildLogger? _logger;
 
-    public ShellOperations(string workingDirectory)
+    public ShellOperations(string workingDirectory, IBuildLogger? logger = null)
     {
         _workingDirectory = workingDirectory;
+        _logger = logger;
     }
 
     /// <summary>
@@ -47,7 +51,19 @@ public class ShellOperations
     /// <param name="command">The command to run.</param>
     /// <param name="args">Command arguments.</param>
     /// <returns>Shell result with exit code, output, and error.</returns>
-    public async Task<ShellResult> RunAsync(string command, params string[] args)
+    public Task<ShellResult> RunAsync(string command, params string[] args)
+    {
+        return RunAsync(command, showOutput: true, args);
+    }
+
+    /// <summary>
+    /// Runs a shell command asynchronously with control over output visibility.
+    /// </summary>
+    /// <param name="command">The command to run.</param>
+    /// <param name="showOutput">Whether to stream output to the logger.</param>
+    /// <param name="args">Command arguments.</param>
+    /// <returns>Shell result with exit code, output, and error.</returns>
+    public async Task<ShellResult> RunAsync(string command, bool showOutput, params string[] args)
     {
         var psi = new ProcessStartInfo
         {
@@ -68,13 +84,25 @@ public class ShellOperations
         process.OutputDataReceived += (_, e) =>
         {
             if (e.Data != null)
+            {
                 outputBuilder.AppendLine(e.Data);
+                if (showOutput && _logger != null)
+                {
+                    _logger.Info($"    {e.Data}");
+                }
+            }
         };
 
         process.ErrorDataReceived += (_, e) =>
         {
             if (e.Data != null)
+            {
                 errorBuilder.AppendLine(e.Data);
+                if (showOutput && _logger != null)
+                {
+                    _logger.Warning($"    {e.Data}");
+                }
+            }
         };
 
         process.Start();
@@ -97,6 +125,18 @@ public class ShellOperations
     /// <returns>Shell result with exit code, output, and error.</returns>
     public ShellResult Run(string command, params string[] args)
     {
-        return RunAsync(command, args).GetAwaiter().GetResult();
+        return RunAsync(command, showOutput: true, args).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Runs a shell command synchronously with control over output visibility.
+    /// </summary>
+    /// <param name="command">The command to run.</param>
+    /// <param name="showOutput">Whether to stream output to the logger.</param>
+    /// <param name="args">Command arguments.</param>
+    /// <returns>Shell result with exit code, output, and error.</returns>
+    public ShellResult Run(string command, bool showOutput, params string[] args)
+    {
+        return RunAsync(command, showOutput, args).GetAwaiter().GetResult();
     }
 }

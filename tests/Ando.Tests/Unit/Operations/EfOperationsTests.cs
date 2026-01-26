@@ -63,19 +63,6 @@ public class EfOperationsTests
     }
 
     [Fact]
-    public void AddMigration_RegistersStep()
-    {
-        var ef = CreateEf();
-        var project = ProjectRef.From("./src/MyApp/MyApp.csproj");
-        var context = ef.DbContextFrom(project);
-
-        ef.AddMigration(context, "InitialCreate");
-
-        Assert.Single(_registry.Steps);
-        Assert.Equal("Ef.AddMigration", _registry.Steps[0].Name);
-    }
-
-    [Fact]
     public void Script_RegistersStep()
     {
         var ef = CreateEf();
@@ -96,7 +83,6 @@ public class EfOperationsTests
         var context = ef.DbContextFrom(project);
 
         ef.DatabaseUpdate(context);
-        ef.AddMigration(context, "TestMigration");
         ef.Script(context, new BuildPath("/output/script.sql"));
 
         foreach (var step in _registry.Steps)
@@ -125,27 +111,6 @@ public class EfOperationsTests
         Assert.Contains("update", args);
         Assert.Contains("--context", args);
         Assert.Contains("ReportingContext", args);
-    }
-
-    [Fact]
-    public async Task AddMigration_ExecutesCorrectCommand()
-    {
-        var ef = CreateEf();
-        var project = ProjectRef.From("./src/MyApp/MyApp.csproj");
-        var context = ef.DbContextFrom(project, "AppDbContext");
-
-        ef.AddMigration(context, "AddUsersTable");
-
-        await _registry.Steps[0].Execute();
-
-        var (command, args) = _executor.ExecutedCommands[0];
-        Assert.Equal("dotnet", command);
-        Assert.Contains("ef", args);
-        Assert.Contains("migrations", args);
-        Assert.Contains("add", args);
-        Assert.Contains("AddUsersTable", args);
-        Assert.Contains("--context", args);
-        Assert.Contains("AppDbContext", args);
     }
 
     [Fact]
@@ -188,69 +153,6 @@ public class EfOperationsTests
     // Edge case tests
 
     [Fact]
-    public void RemoveMigration_RegistersStep()
-    {
-        var ef = CreateEf();
-        var project = ProjectRef.From("./src/MyApp/MyApp.csproj");
-        var context = ef.DbContextFrom(project);
-
-        ef.RemoveMigration(context);
-
-        _registry.Steps.ShouldHaveSingleItem();
-        _registry.Steps[0].Name.ShouldBe("Ef.RemoveMigration");
-    }
-
-    [Fact]
-    public async Task RemoveMigration_ExecutesCorrectCommand()
-    {
-        var ef = CreateEf();
-        var project = ProjectRef.From("./src/MyApp/MyApp.csproj");
-        var context = ef.DbContextFrom(project, "AppDbContext");
-
-        ef.RemoveMigration(context);
-
-        await _registry.Steps[0].Execute();
-
-        var cmd = _executor.ExecutedCommands[0];
-        cmd.Command.ShouldBe("dotnet");
-        cmd.HasArg("ef").ShouldBeTrue();
-        cmd.HasArg("migrations").ShouldBeTrue();
-        cmd.HasArg("remove").ShouldBeTrue();
-        cmd.HasArg("--context").ShouldBeTrue();
-        cmd.HasArg("AppDbContext").ShouldBeTrue();
-    }
-
-    [Fact]
-    public async Task RemoveMigration_WithForce_AddsForceFlag()
-    {
-        var ef = CreateEf();
-        var project = ProjectRef.From("./src/MyApp/MyApp.csproj");
-        var context = ef.DbContextFrom(project);
-
-        ef.RemoveMigration(context, force: true);
-
-        await _registry.Steps[0].Execute();
-
-        var cmd = _executor.ExecutedCommands[0];
-        cmd.HasArg("--force").ShouldBeTrue();
-    }
-
-    [Fact]
-    public async Task RemoveMigration_WithoutForce_OmitsForceFlag()
-    {
-        var ef = CreateEf();
-        var project = ProjectRef.From("./src/MyApp/MyApp.csproj");
-        var context = ef.DbContextFrom(project);
-
-        ef.RemoveMigration(context, force: false);
-
-        await _registry.Steps[0].Execute();
-
-        var cmd = _executor.ExecutedCommands[0];
-        cmd.HasArg("--force").ShouldBeFalse();
-    }
-
-    [Fact]
     public async Task DatabaseUpdate_WithConnectionString_AddsConnectionFlag()
     {
         var ef = CreateEf();
@@ -264,22 +166,6 @@ public class EfOperationsTests
         var cmd = _executor.ExecutedCommands[0];
         cmd.HasArg("--connection").ShouldBeTrue();
         cmd.HasArg("Server=localhost;Database=MyDb").ShouldBeTrue();
-    }
-
-    [Fact]
-    public async Task AddMigration_WithOutputDir_AddsOutputFlag()
-    {
-        var ef = CreateEf();
-        var project = ProjectRef.From("./src/MyApp/MyApp.csproj");
-        var context = ef.DbContextFrom(project);
-
-        ef.AddMigration(context, "Initial", outputDir: "Data/Migrations");
-
-        await _registry.Steps[0].Execute();
-
-        var cmd = _executor.ExecutedCommands[0];
-        cmd.HasArg("-o").ShouldBeTrue();
-        cmd.HasArg("Data/Migrations").ShouldBeTrue();
     }
 
     [Fact]

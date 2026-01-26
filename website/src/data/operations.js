@@ -169,24 +169,12 @@ export const operations = [
   },
   {
     group: "Ef",
-    name: "Ef.AddMigration",
-    desc: "Create a new EF Core migration.",
-    examples: ['Ef.AddMigration(db, "InitialCreate");', 'Ef.AddMigration(db, "AddUsers", outputDir: "Migrations");'],
-  },
-  {
-    group: "Ef",
     name: "Ef.Script",
     desc: "Generate an idempotent SQL migration script.",
     examples: [
       'Ef.Script(db, Root / "migration.sql");',
       'Ef.Script(db, Root / "migration.sql", fromMigration: "Init");',
     ],
-  },
-  {
-    group: "Ef",
-    name: "Ef.RemoveMigration",
-    desc: "Remove the last migration.",
-    examples: ["Ef.RemoveMigration(db);", "Ef.RemoveMigration(db, force: true);"],
   },
   {
     group: "Npm",
@@ -289,12 +277,6 @@ export const operations = [
     name: "Azure.CreateResourceGroup",
     desc: "Create a resource group if it doesn't exist.",
     examples: ['Azure.CreateResourceGroup("my-rg", "eastus");', 'Azure.CreateResourceGroup("prod-rg", "westeurope");'],
-  },
-  {
-    group: "Azure",
-    name: "Azure.DeleteResourceGroup",
-    desc: "Delete a resource group and all its resources.",
-    examples: ['Azure.DeleteResourceGroup("my-rg");', 'Azure.DeleteResourceGroup("my-rg", noWait: true);'],
   },
   {
     group: "Bicep",
@@ -542,18 +524,6 @@ export const operations = [
     name: "Git.PushTags",
     desc: "Pushes all tags to the remote repository. <strong>Runs on host</strong> (not in container).",
     examples: ["Git.PushTags();", 'Git.PushTags("upstream");'],
-  },
-  {
-    group: "Git",
-    name: "Git.Add",
-    desc: "Adds files to the git staging area. <strong>Runs on host</strong> (not in container).",
-    examples: ['Git.Add("."); // Add all', 'Git.Add("src/", "tests/");'],
-  },
-  {
-    group: "Git",
-    name: "Git.Commit",
-    desc: "Commits staged changes with a message. <strong>Runs on host</strong> (not in container).",
-    examples: ['Git.Commit("Release v1.0.0");', 'Git.Commit("Empty commit", o => o.WithAllowEmpty());'],
   },
   // GitHub operations
   {

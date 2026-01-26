@@ -79,7 +79,7 @@ public class HookGlobals
     {
         Root = projectRoot;
         Log = new HookLogOperations(logger);
-        Shell = new ShellOperations(projectRoot);
+        Shell = new ShellOperations(projectRoot, logger);
     }
 }
 

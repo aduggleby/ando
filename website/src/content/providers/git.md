@@ -19,10 +19,6 @@ Git.Tag("v1.0.0", o => o.WithMessage("Release notes here"));
 
 // Lightweight tag (not annotated)
 Git.Tag("my-tag", o => o.AsLightweight());
-
-// Add and commit changes
-Git.Add(".");
-Git.Commit("Release v1.0.0");
 ```
 
 ## Using with Profiles
@@ -37,8 +33,6 @@ Dotnet.Build(app);
 Dotnet.Test(tests);
 
 if (release) {
-    Git.Add(".");
-    Git.Commit("Release v1.0.0");
     Git.Tag("v1.0.0");
     Git.Push();
     Git.PushTags();
@@ -65,12 +59,6 @@ if (release) {
 | `ToRemote(string)` | Remote to push to (e.g., "origin", "upstream"). Defaults to "origin". |
 | `ToBranch(string)` | Branch to push. Defaults to the current branch. |
 | `WithUpstream()` | Set upstream tracking reference (`-u` flag). The local branch will track the remote branch for future push/pull operations. |
-
-### Git.Commit Options
-
-| Option | Description |
-|--------|-------------|
-| `WithAllowEmpty()` | Allow creating a commit with no changes. Useful for triggering CI builds or marking milestones without code changes. |
 
 ## Notes
 

@@ -308,24 +308,6 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
     }
 
     /// <summary>
-    /// Registers a step to delete a resource group.
-    /// Use with caution - this deletes all resources in the group.
-    /// </summary>
-    /// <param name="name">Resource group name.</param>
-    /// <param name="noWait">If true, don't wait for deletion to complete.</param>
-    public void DeleteResourceGroup(string name, bool noWait = false)
-    {
-        RegisterCommand("Azure.DeleteResourceGroup", "az",
-            () => new ArgumentBuilder()
-                .Add("group", "delete")
-                .Add("--name", name)
-                .Add("--yes")
-                .AddFlag(noWait, "--no-wait")
-                .Add("--output", "none"),
-            name);
-    }
-
-    /// <summary>
     /// Checks if Azure CLI is installed and available on the system.
     /// </summary>
     /// <returns>True if Azure CLI is available, false otherwise.</returns>

@@ -5,6 +5,7 @@
 // =============================================================================
 
 using Ando.Hooks;
+using Ando.Tests.TestFixtures;
 using Shouldly;
 
 namespace Ando.Tests.Unit.Hooks;
@@ -14,10 +15,12 @@ namespace Ando.Tests.Unit.Hooks;
 public class ShellOperationsTests
 {
     private readonly ShellOperations _shell;
+    private readonly TestLogger _logger;
 
     public ShellOperationsTests()
     {
-        _shell = new ShellOperations(Directory.GetCurrentDirectory());
+        _logger = new TestLogger();
+        _shell = new ShellOperations(Directory.GetCurrentDirectory(), _logger);
     }
 
     [Fact]
@@ -80,5 +83,55 @@ public class ShellOperationsTests
 
         result.ExitCode.ShouldBe(0);
         result.Output.ShouldNotBeEmpty();
+    }
+
+    [Fact]
+    public async Task RunAsync_WithLogger_StreamsOutputToLog()
+    {
+        var result = await _shell.RunAsync("echo", "logged output");
+
+        result.Success.ShouldBeTrue();
+        _logger.InfoMessages.ShouldContain(m => m.Contains("logged output"));
+    }
+
+    [Fact]
+    public async Task RunAsync_WithLogger_StreamsStderrAsWarning()
+    {
+        // Use ls on a non-existent path to trigger stderr output.
+        var result = await _shell.RunAsync("ls", "/nonexistent-test-path-xyz");
+
+        // ls writes the error to stderr.
+        _logger.WarningMessages.ShouldContain(m => m.Contains("nonexistent-test-path-xyz"));
+    }
+
+    [Fact]
+    public async Task RunAsync_ShowOutputFalse_DoesNotLog()
+    {
+        var result = await _shell.RunAsync("echo", showOutput: false, "silent output");
+
+        result.Success.ShouldBeTrue();
+        result.Output.ShouldContain("silent output");
+        _logger.InfoMessages.ShouldNotContain(m => m.Contains("silent output"));
+    }
+
+    [Fact]
+    public void Run_ShowOutputFalse_DoesNotLog()
+    {
+        var result = _shell.Run("echo", showOutput: false, "silent sync");
+
+        result.Success.ShouldBeTrue();
+        result.Output.ShouldContain("silent sync");
+        _logger.InfoMessages.ShouldNotContain(m => m.Contains("silent sync"));
+    }
+
+    [Fact]
+    public async Task RunAsync_WithoutLogger_StillCapturesOutput()
+    {
+        var shellWithoutLogger = new ShellOperations(Directory.GetCurrentDirectory());
+
+        var result = await shellWithoutLogger.RunAsync("echo", "no logger");
+
+        result.Success.ShouldBeTrue();
+        result.Output.ShouldContain("no logger");
     }
 }

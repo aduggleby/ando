@@ -247,9 +247,7 @@ Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");
 - Ef.DbContextFrom(project, contextName?) - Reference a DbContext
 - Ef.DatabaseUpdate(context, connectionString?) - Apply pending migrations
 - Ef.DatabaseUpdate(context, outputRef) - Apply migrations with connection from deployment output
-- Ef.AddMigration(context, name) - Create a new migration
 - Ef.Script(context, outputPath) - Generate SQL migration script
-- Ef.RemoveMigration(context) - Remove the last migration
 
 ### Npm
 - Npm.Install(directory) - Run npm install
@@ -266,7 +264,6 @@ Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");
 - Azure.LoginWithManagedIdentity(clientId?) - Login with managed identity
 - Azure.SetSubscription(subscriptionId?) - Set active subscription
 - Azure.CreateResourceGroup(name, location) - Create resource group
-- Azure.DeleteResourceGroup(name) - Delete resource group
 
 ### Bicep
 - Bicep.DeployToResourceGroup(rg, template, options?) - Deploy to resource group, returns BicepDeployment
@@ -336,8 +333,6 @@ PlaywrightTestOptions:
 - Git.Tag(tagName, options?) - Create a git tag (annotated by default)
 - Git.Push(options?) - Push current branch to remote
 - Git.PushTags(remote?) - Push all tags to remote (default: origin)
-- Git.Add(paths...) - Stage files for commit
-- Git.Commit(message, options?) - Commit staged changes
 
 ### GitHub
 - GitHub.CreatePr(options) - Create a pull request (requires gh CLI)
@@ -421,9 +416,6 @@ Activate with CLI: `ando -p release` or `ando -p publish,release`
 - ToRemote(string) - Remote name (default: origin)
 - ToBranch(string) - Branch to push
 - WithUpstream() - Set upstream tracking (-u flag)
-
-### Git.Commit Options
-- WithAllowEmpty() - Allow empty commit
 
 ### GitHub.CreateRelease Options
 - WithTag(string) - Tag name (e.g., "v1.0.0")

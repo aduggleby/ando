@@ -76,22 +76,6 @@ public class EfOperations(StepRegistry registry, IBuildLogger logger, Func<IComm
     }
 
     /// <summary>
-    /// Registers a step to create a new migration.
-    /// </summary>
-    /// <param name="context">DbContext reference.</param>
-    /// <param name="migrationName">Name for the new migration.</param>
-    /// <param name="outputDir">Optional output directory for migration files.</param>
-    public void AddMigration(EfContextRef context, string migrationName, string? outputDir = null)
-    {
-        RegisterCommand("Ef.AddMigration", "dotnet",
-            () => new ArgumentBuilder()
-                .Add("ef", "migrations", "add", migrationName, "--project", context.Project.Path)
-                .AddIf(context.ContextName != "default", "--context", context.ContextName)
-                .AddIfNotNull("-o", outputDir),
-            context.ToString());
-    }
-
-    /// <summary>
     /// Registers a step to generate an idempotent SQL script from migrations.
     /// Idempotent scripts can be safely re-run without causing errors.
     /// </summary>
@@ -108,18 +92,4 @@ public class EfOperations(StepRegistry registry, IBuildLogger logger, Func<IComm
             context.ToString());
     }
 
-    /// <summary>
-    /// Registers a step to remove the last migration.
-    /// </summary>
-    /// <param name="context">DbContext reference.</param>
-    /// <param name="force">Force removal even if migration has been applied.</param>
-    public void RemoveMigration(EfContextRef context, bool force = false)
-    {
-        RegisterCommand("Ef.RemoveMigration", "dotnet",
-            () => new ArgumentBuilder()
-                .Add("ef", "migrations", "remove", "--project", context.Project.Path)
-                .AddIf(context.ContextName != "default", "--context", context.ContextName)
-                .AddFlag(force, "--force"),
-            context.ToString());
-    }
 }
