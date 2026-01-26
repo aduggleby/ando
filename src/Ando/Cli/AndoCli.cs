@@ -128,9 +128,10 @@ public class AndoCli : IDisposable
         // - "clean" -> cleanup command
         // - "commit" -> AI-generated commit
         // - "bump" -> Version bumping
+        // - "docs" -> Documentation update
         // - "release" -> Full release workflow
         // This allows "ando" and "ando run" to behave identically.
-        if (_args.Length == 0 || _args[0] == "run" || !_args[0].StartsWith("-") && _args[0] != "clean" && _args[0] != "help" && _args[0] != "verify" && _args[0] != "commit" && _args[0] != "bump" && _args[0] != "release")
+        if (_args.Length == 0 || _args[0] == "run" || !_args[0].StartsWith("-") && _args[0] != "clean" && _args[0] != "help" && _args[0] != "verify" && _args[0] != "commit" && _args[0] != "bump" && _args[0] != "docs" && _args[0] != "release")
         {
             PrintHeader();
             return await RunCommandAsync();
@@ -156,6 +157,11 @@ public class AndoCli : IDisposable
         if (_args[0] == "bump")
         {
             return await BumpCommandAsync();
+        }
+
+        if (_args[0] == "docs")
+        {
+            return await DocsCommandAsync();
         }
 
         if (_args[0] == "release")
@@ -453,6 +459,15 @@ public class AndoCli : IDisposable
         return await command.ExecuteAsync(bumpType);
     }
 
+    // Handles the 'docs' command which uses Claude to review and update documentation.
+    // Analyzes changes since last tag and prompts Claude to update relevant docs.
+    private async Task<int> DocsCommandAsync()
+    {
+        var runner = new CliProcessRunner();
+        var command = new DocsCommand(runner, _logger);
+        return await command.ExecuteAsync(autoCommit: false);
+    }
+
     // Handles the 'release' command which orchestrates the full release workflow.
     // Presents an interactive checklist for step selection.
     // Supports: ando release [patch|minor|major] [--all] [--dry-run]
@@ -632,6 +647,7 @@ public class AndoCli : IDisposable
         Console.WriteLine("  verify            Check build script for errors without executing");
         Console.WriteLine("  commit            Commit all changes with AI-generated message");
         Console.WriteLine("  bump [type]       Bump version in all projects (patch|minor|major)");
+        Console.WriteLine("  docs              Update documentation using Claude");
         Console.WriteLine("  release [type]    Interactive release workflow (patch|minor|major)");
         Console.WriteLine("  clean             Remove artifacts, temp files, and containers");
         Console.WriteLine("  help, -h, --help  Show this help");
@@ -670,6 +686,12 @@ public class AndoCli : IDisposable
         Console.WriteLine("  minor               Increment minor version: 1.0.0 -> 1.1.0");
         Console.WriteLine("  major               Increment major version: 1.0.0 -> 2.0.0");
         Console.WriteLine();
+        Console.WriteLine("Docs Command:");
+        Console.WriteLine("  Uses Claude to analyze code changes and update documentation.");
+        Console.WriteLine("  Checks diff since last git tag (or all changes if no tag).");
+        Console.WriteLine("  Updates markdown files, website pages, and examples as needed.");
+        Console.WriteLine("  Changes are left uncommitted for review (use 'ando commit' after).");
+        Console.WriteLine();
         Console.WriteLine("Clean Options:");
         Console.WriteLine("  --artifacts         Remove artifacts directory");
         Console.WriteLine("  --temp              Remove .ando/tmp directory");
@@ -686,6 +708,7 @@ public class AndoCli : IDisposable
         Console.WriteLine("  ando commit                   Commit with AI-generated message");
         Console.WriteLine("  ando bump                     Bump patch version");
         Console.WriteLine("  ando bump minor               Bump minor version");
+        Console.WriteLine("  ando docs                     Update documentation with Claude");
         Console.WriteLine("  ando release                  Interactive release workflow (patch bump)");
         Console.WriteLine("  ando release minor            Release with minor version bump");
         Console.WriteLine("  ando release major --all      Release major version, skip checklist");

@@ -8,10 +8,10 @@ toc: true
 
 | Command | Description |
 |---------|-------------|
-| [`ando`](#run-options) | Run the build script (same as 'ando run'). |
-| [`ando run`](#run-options) | Run the build script in a Docker container. |
+| [`ando`](#run-options) | Run the build script in a Docker container. |
 | [`ando commit`](#commit-command) | Commit all changes with AI-generated message. |
 | [`ando bump`](#bump-command) | Bump version across all projects. |
+| [`ando docs`](#docs-command) | Update documentation using Claude. |
 | [`ando release`](#release-command) | Interactive release workflow. |
 | [`ando verify`](#examples) | Check build script for errors without executing. |
 | [`ando clean`](#clean-options) | Remove artifacts, temp files, and containers. |
@@ -71,6 +71,22 @@ ando bump [patch|minor|major]
 - `.csproj` files via `Dotnet.Project("path")`
 - `package.json` in directories used with `Npm.*` operations
 
+## Docs Command
+
+Uses Claude to review code changes and update documentation.
+
+```bash
+ando docs
+```
+
+**What it does:**
+1. Gets diff since last git tag (or all changes if no tag)
+2. Sends changes to Claude with instructions to update relevant docs
+3. Claude updates markdown files, website pages, and examples as needed
+4. Changes are left uncommitted for you to review
+
+**Requirements:** Claude CLI must be installed (`npm install -g @anthropic-ai/claude-code`)
+
 ## Release Command
 
 Interactive release workflow that orchestrates: commit, documentation, bump, push, and publish.
@@ -85,7 +101,7 @@ ando release --minor   # Specify bump type (default: patch)
 **Steps:**
 1. **Build Verification** - Runs `ando run --read-env` first
 2. **Commit** - Commit uncommitted changes (uses `ando commit`)
-3. **Docs** - Uses Claude to review and update documentation based on changes
+3. **Docs** - Update documentation (uses `ando docs`)
 4. **Bump** - Bump version across all projects (uses `ando bump`)
 5. **Push** - Push to remote repository
 6. **Publish** - Run `ando run -p push --dind --read-env`
@@ -147,6 +163,9 @@ ando commit
 
 # Bump version
 ando bump minor
+
+# Update documentation with Claude
+ando docs
 
 # Interactive release
 ando release
