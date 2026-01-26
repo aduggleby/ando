@@ -39,7 +39,7 @@ ANDO automatically detects when your build script uses operations that require D
 
 To skip the prompt, use the `--dind` flag, add `dind: true` to your `ando.config` file, or set the `ANDO_DIND=1` environment variable.
 
-**Child build inheritance:** When a parent build enables DIND, child builds invoked via `Ando.Build()` automatically inherit the DIND setting. The parent passes `ANDO_DIND=1` to the container environment, so child builds won't prompt again for DIND mode.
+**Child build inheritance:** When a parent build enables DIND, child builds invoked via `Ando.Build()` automatically inherit the DIND setting. The parent passes `ANDO_DIND=1` to both the container environment and the host process environment, so child builds won't prompt again for DIND mode. (The host process environment is needed because `Ando.Build` spawns child `ando` processes on the host.)
 
 ## Configuration File
 
