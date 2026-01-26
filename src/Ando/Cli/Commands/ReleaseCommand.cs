@@ -178,47 +178,129 @@ public class ReleaseCommand
         AnsiConsole.MarkupLine($"[bold]Version bump:[/] {currentVersion} → {newVersion} [dim]({bumpType.ToString().ToLower()})[/]");
         AnsiConsole.WriteLine();
 
-        // Build choices with disabled state shown.
-        var choices = steps.Select(s => s.Enabled
-            ? s.Label
-            : $"{s.Label} [dim]({s.DisabledReason})[/]").ToList();
+        // Use custom selection UI that supports Escape to cancel.
+        return ShowCustomSelection(steps);
+    }
 
-        // Find which indices are enabled and should be pre-selected.
-        var enabledIndices = steps.Select((s, i) => (s, i))
-            .Where(x => x.s.Enabled)
-            .Select(x => x.i)
-            .ToList();
+    /// <summary>
+    /// Custom multi-selection UI that supports Escape key to cancel.
+    /// Spectre.Console's MultiSelectionPrompt doesn't support Escape natively.
+    /// </summary>
+    private List<ReleaseStep>? ShowCustomSelection(List<ReleaseStep> steps)
+    {
+        var selections = steps.Select(s => s.Enabled).ToArray();
+        var currentIndex = 0;
 
-        var prompt = new MultiSelectionPrompt<string>()
-            .Title("Select steps to run:")
-            .NotRequired()
-            .PageSize(10)
-            .InstructionsText("[grey](Press [cyan]<space>[/] to toggle, [cyan]<enter>[/] to accept)[/]")
-            .AddChoices(choices);
-
-        // Pre-select enabled steps.
-        foreach (var idx in enabledIndices)
-        {
-            prompt.Select(choices[idx]);
-        }
-
-        var selected = AnsiConsole.Prompt(prompt);
-
-        if (selected.Count == 0)
-            return null;
-
-        // Map selected labels back to steps.
-        var selectedSteps = new List<ReleaseStep>();
+        // Find first enabled step to start on.
         for (int i = 0; i < steps.Count; i++)
         {
-            if (selected.Contains(choices[i]) && steps[i].Enabled)
+            if (steps[i].Enabled)
             {
-                selectedSteps.Add(steps[i]);
+                currentIndex = i;
+                break;
             }
         }
 
+        Console.CursorVisible = false;
+        try
+        {
+            while (true)
+            {
+                // Render the selection UI.
+                RenderSelection(steps, selections, currentIndex);
+
+                var key = Console.ReadKey(intercept: true);
+                switch (key.Key)
+                {
+                    case ConsoleKey.UpArrow:
+                    case ConsoleKey.K: // vim-style
+                        currentIndex = Math.Max(0, currentIndex - 1);
+                        break;
+
+                    case ConsoleKey.DownArrow:
+                    case ConsoleKey.J: // vim-style
+                        currentIndex = Math.Min(steps.Count - 1, currentIndex + 1);
+                        break;
+
+                    case ConsoleKey.Spacebar:
+                        if (steps[currentIndex].Enabled)
+                            selections[currentIndex] = !selections[currentIndex];
+                        break;
+
+                    case ConsoleKey.A: // Toggle all
+                        var allSelected = steps.Select((s, i) => (s, i))
+                            .Where(x => x.s.Enabled)
+                            .All(x => selections[x.i]);
+                        for (int i = 0; i < steps.Count; i++)
+                        {
+                            if (steps[i].Enabled)
+                                selections[i] = !allSelected;
+                        }
+                        break;
+
+                    case ConsoleKey.Enter:
+                        ClearSelection(steps.Count);
+                        var selected = steps.Where((s, i) => selections[i] && s.Enabled).ToList();
+                        return selected.Count > 0 ? selected : null;
+
+                    case ConsoleKey.Escape:
+                        ClearSelection(steps.Count);
+                        return null;
+                }
+            }
+        }
+        finally
+        {
+            Console.CursorVisible = true;
+        }
+    }
+
+    private void RenderSelection(List<ReleaseStep> steps, bool[] selections, int currentIndex)
+    {
+        // Move cursor to start of selection area and clear.
+        var startLine = Console.CursorTop;
+        Console.SetCursorPosition(0, startLine);
+
+        AnsiConsole.MarkupLine("[bold]Select steps to run:[/]");
+        AnsiConsole.MarkupLine("[grey](↑↓ navigate, Space toggle, A toggle all, Enter accept, Escape cancel)[/]");
         AnsiConsole.WriteLine();
-        return selectedSteps;
+
+        for (int i = 0; i < steps.Count; i++)
+        {
+            var step = steps[i];
+            var isSelected = selections[i];
+            var isCurrent = i == currentIndex;
+
+            var pointer = isCurrent ? "[cyan]>[/] " : "  ";
+            var checkbox = isSelected ? "[green]●[/]" : "[grey]○[/]";
+
+            if (!step.Enabled)
+            {
+                AnsiConsole.MarkupLine($"{pointer}{checkbox} [dim strikethrough]{step.Label}[/] [dim]({step.DisabledReason})[/]");
+            }
+            else if (isCurrent)
+            {
+                AnsiConsole.MarkupLine($"{pointer}{checkbox} [cyan]{step.Label}[/]");
+            }
+            else
+            {
+                AnsiConsole.MarkupLine($"{pointer}{checkbox} {step.Label}");
+            }
+        }
+
+        // Move cursor back to start for next render.
+        Console.SetCursorPosition(0, startLine);
+    }
+
+    private void ClearSelection(int stepCount)
+    {
+        // Clear the selection UI (3 header lines + step lines).
+        var linesToClear = 3 + stepCount;
+        for (int i = 0; i < linesToClear; i++)
+        {
+            Console.WriteLine(new string(' ', Console.WindowWidth - 1));
+        }
+        Console.SetCursorPosition(0, Console.CursorTop - linesToClear);
     }
 
     private async Task<int> ExecuteStepsAsync(List<ReleaseStep> steps, BumpType bumpType, string repoRoot)
@@ -316,10 +398,10 @@ public class ReleaseCommand
     {
         AnsiConsole.MarkupLine("[bold]Build Verification[/]");
         AnsiConsole.MarkupLine("──────────────────");
-        AnsiConsole.MarkupLine("Running: ando run --read-env");
+        AnsiConsole.MarkupLine("Running: ando run --dind --read-env");
         AnsiConsole.WriteLine();
 
-        var result = await _runner.RunAsync("ando", "run --read-env", timeoutMs: 600000, streamOutput: true);
+        var result = await _runner.RunAsync("ando", "run --dind --read-env", timeoutMs: 600000, streamOutput: true);
 
         if (result.ExitCode == 0)
         {
