@@ -189,13 +189,24 @@ ssh -i ~/.ssh/id_claude root@138.199.223.171 "sudo -u ando XDG_RUNTIME_DIR=/run/
 
 1. **Website documentation** (`website/src/data/operations.js`) - Update operation descriptions and examples
 2. **Website landing page** (`website/src/pages/index.astro`) - Update the example build.csando section
-3. **Example build.csando files** (`examples/*/build.csando`) - Update all example scripts
-4. **Main build.csando** (`build.csando`) - Update if affected
-5. **Test files** - Update test assertions and embedded scripts
-6. **CLAUDE.md files** - Update if instructions change
-7. **CLI help** - Update the `HelpCommand()` method in `AndoCli.cs` when adding or changing CLI commands/options
+3. **LLM documentation** (`website/public/llms.txt`) - **ALWAYS update when website content changes** - this is the LLM-friendly reference
+4. **Example build.csando files** (`examples/*/build.csando`) - Update all example scripts
+5. **Main build.csando** (`build.csando`) - Update if affected
+6. **Test files** - Update test assertions and embedded scripts
+7. **CLAUDE.md files** - Update if instructions change
+8. **CLI help** - Update the `HelpCommand()` method in `AndoCli.cs` when adding or changing CLI commands/options
 
 Run `npm run build` in the website directory to verify documentation builds correctly.
+
+### LLM Documentation (llms.txt)
+
+**CRITICAL**: The `website/public/llms.txt` file must be kept in sync with the website. This file follows the [llms.txt standard](https://llmstxt.org/) and provides a plain-text reference for LLMs. When updating:
+- CLI commands or options
+- Operations or their signatures
+- Examples or common patterns
+- Provider documentation
+
+...ensure the same changes are reflected in `llms.txt`.
 
 ## CLI Development Rules
 
