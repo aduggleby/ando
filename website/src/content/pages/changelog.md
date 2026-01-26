@@ -3,6 +3,14 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.44
+
+**2026-01-26**
+
+- Add recursive scanning of child builds when detecting Docker-in-Docker requirements
+- Add profile support for child builds, allowing different build configurations
+- Add `readEnv` config option to control environment variable loading and new hook recipes
+
 ## 0.9.43
 
 **2026-01-26**
