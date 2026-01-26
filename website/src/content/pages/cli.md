@@ -29,6 +29,29 @@ toc: true
 | `--image <image>` | Use a custom Docker image. |
 | `--dind` | Mount Docker socket for Docker-in-Docker builds. |
 
+## Docker-in-Docker (DIND)
+
+ANDO automatically detects when your build script uses operations that require Docker-in-Docker mode (such as `Docker.Build`, `Docker.Push`, or `GitHub.PushImage`). If DIND is needed but not enabled, ANDO prompts you:
+
+- **(Y)es** - Enable DIND for this run only
+- **(A)lways** - Enable DIND and save the setting to `ando.config`
+- **Esc** - Cancel the build
+
+To skip the prompt, either use the `--dind` flag or add `dind: true` to your `ando.config` file.
+
+## Configuration File
+
+ANDO supports an optional `ando.config` file in the project root for persisting settings.
+
+```yaml
+# ando.config
+dind: true
+```
+
+| Setting | Description |
+|---------|-------------|
+| `dind` | Enable Docker-in-Docker mode by default. |
+
 ## Environment Files
 
 ANDO looks for environment files in the project root: `.env.ando` (preferred) or `.env` (fallback).
