@@ -37,7 +37,7 @@ ando run
 
 ### Docker-in-Docker (DIND) Detection
 
-ANDO automatically detects when your build script uses operations requiring DIND (Docker.Build, Docker.Push, GitHub.PushImage). If DIND is needed but not enabled, ANDO prompts:
+ANDO automatically detects when your build script uses operations requiring DIND (Docker.Build, Docker.Push, Docker.Install, GitHub.PushImage, Playwright.Test). This detection also scans child builds invoked via `Ando.Build()`. If DIND is needed but not enabled, ANDO prompts:
 - (Y)es - Enable DIND for this run only
 - (A)lways - Enable DIND and save to ando.config
 - Esc - Cancel the build
@@ -51,10 +51,12 @@ ANDO supports an optional `ando.config` file (YAML format) in the project root:
 ```yaml
 # ando.config
 dind: true
+readEnv: true
 ```
 
 Settings:
 - `dind` - Enable Docker-in-Docker mode by default
+- `readEnv` - Automatically load environment files without prompting
 
 ### Environment Files
 
@@ -65,7 +67,13 @@ If `.env.ando` exists but is not in `.gitignore`, ANDO warns about potential sec
 - (C)ontinue anyway - Proceed without modifying `.gitignore`
 - Esc - Abort the build
 
-Use `--read-env` to skip this prompt and load the environment file directly.
+When environment variables are found, ANDO prompts:
+- (Y)es - Load for this run only
+- (n)o - Skip loading
+- for this (r)un - Load for this run and all sub-builds
+- (a)lways - Load and save `readEnv: true` to ando.config
+
+Use `--read-env` or set `readEnv: true` in `ando.config` to skip the prompt and load automatically.
 
 ### Hooks
 
