@@ -24,7 +24,7 @@ var maxAttempts = 30;
 var delaySeconds = 10;
 var available = false;
 
-using var httpClient = new System.Net.Http.HttpClient();
+var httpClient = new System.Net.Http.HttpClient();
 
 for (int i = 0; i < maxAttempts; i++)
 {
@@ -48,6 +48,8 @@ for (int i = 0; i < maxAttempts; i++)
         await System.Threading.Tasks.Task.Delay(delaySeconds * 1000);
     }
 }
+
+httpClient.Dispose();
 
 if (!available)
 {
