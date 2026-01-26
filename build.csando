@@ -4,11 +4,13 @@
 // Profiles:
 // - (default): Build, test, publish executables, create NuGet package
 // - publish: Also pushes to NuGet.org, container registry, creates GitHub release with binaries, and deploys docs
+// - docs: Only deploy the documentation website to Cloudflare
 // - e2e: Force E2E tests to run (even on Ando.Server)
 //
 // Usage:
 //   ando                 # Build and test (E2E tests run locally, skipped on server)
 //   ando -p publish      # Build, test, and push to NuGet.org + container registry + deploy docs
+//   ando -p docs         # Just deploy docs to Cloudflare (skips build/test)
 //   ando -p e2e          # Force E2E tests to run
 //   ando -p publish,e2e  # Publish profile with forced E2E tests
 //
@@ -31,7 +33,16 @@
 
 // Define profiles
 var publish = DefineProfile("publish");
+var docs = DefineProfile("docs");
 var e2e = DefineProfile("e2e");
+
+// Docs-only profile: just deploy the website and exit early
+if (docs && !publish)
+{
+    Log.Info("Deploying documentation website to Cloudflare...");
+    Ando.Build(Directory("./website"), o => o.WithProfile("publish"));
+    return;
+}
 
 // Detect if running on Ando.Server (vs local ando CLI)
 // ANDO_HOST_ROOT is only set when running on Ando.Server

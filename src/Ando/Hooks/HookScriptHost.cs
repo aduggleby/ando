@@ -81,6 +81,7 @@ public class HookScriptHost
                     "System.Linq",
                     "System.Threading.Tasks",
                     "System.Collections.Generic",
+                    "Ando.Context",
                     "Ando.Hooks",
                     "Ando.References");
 

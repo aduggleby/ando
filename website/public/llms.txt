@@ -500,6 +500,7 @@ Activate with CLI: `ando -p release` or `ando -p publish,release`
 - ColdStart(bool) - Force fresh container
 - WithDind(bool) - Enable Docker-in-Docker
 - WithImage(string) - Override Docker image
+- WithProfile(string) - Activate profiles for child build (e.g., "publish" or "test,release")
 
 ## Tips for Writing Build Scripts
 

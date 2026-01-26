@@ -37,6 +37,9 @@ public class AndoBuildOptions
     /// <summary>Custom Docker image for the child build.</summary>
     public string? Image { get; private set; }
 
+    /// <summary>Profiles to activate for the child build (comma-separated).</summary>
+    public string? Profile { get; private set; }
+
     /// <summary>Sets the verbosity level for the child build.</summary>
     public AndoBuildOptions WithVerbosity(string verbosity)
     {
@@ -65,6 +68,13 @@ public class AndoBuildOptions
         return this;
     }
 
+    /// <summary>Sets profiles to activate for the child build.</summary>
+    public AndoBuildOptions WithProfile(string profile)
+    {
+        Profile = profile;
+        return this;
+    }
+
     /// <summary>Builds the CLI arguments for ando run.</summary>
     internal string[] BuildArgs()
     {
@@ -90,6 +100,12 @@ public class AndoBuildOptions
         {
             args.Add("--image");
             args.Add(Image);
+        }
+
+        if (!string.IsNullOrEmpty(Profile))
+        {
+            args.Add("-p");
+            args.Add(Profile);
         }
 
         return args.ToArray();
