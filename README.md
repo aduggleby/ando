@@ -32,14 +32,13 @@ Full documentation is available at **[andobuild.com](https://andobuild.com)**.
 - **Node.js 20+** - For the website and CI Server frontend
 - **Docker** - For running SQL Server and building containers
 
-### Getting Started
+### CLI Development
 
 ```bash
 git clone https://github.com/aduggleby/ando.git
 cd ando
 ```
-
-### CLI Development
+Run a local build of ando CLI on itself.
 
 ```bash
 # Build the CLI
@@ -48,88 +47,13 @@ dotnet build src/Ando
 # Run CLI locally
 dotnet run --project src/Ando -- build
 
-# Install as global tool (from repo root)
-dotnet pack src/Ando -o ./nupkg
-dotnet tool install --global --add-source ./nupkg Ando
-
-# Run tests
-dotnet test tests/Ando.Tests
-```
-
-#### Version Management
-
-Bump versions in both CLI and Server projects using the built-in bump command:
-
-```bash
-# Bump patch version (1.0.0 → 1.0.1)
-ando bump
-
-# Bump minor version (1.0.5 → 1.1.0)
-ando bump minor
-
-# Bump major version (1.5.3 → 2.0.0)
-ando bump major
-```
-
-#### Development Scripts
-
-```bash
-# Run ando from source (passes all arguments)
+# or using helper script which takes same args as ando itself
 ./ando-dev [args...]
 
-# Example: run build with push profile from source
-./ando-dev -p push
+# or install as global tool (from repo root)
+dotnet pack src/Ando -o ./nupkg
+dotnet tool install --global --add-source ./nupkg Ando
 ```
-
-#### Release Workflow
-
-Use `ando release` for the full release workflow:
-
-```bash
-# Interactive release (shows checklist)
-ando release
-
-# Run all steps without prompts
-ando release --all
-
-# Preview what would happen
-ando release --dry-run
-
-# Specify version bump type (default: patch)
-ando release --minor
-ando release --major
-```
-
-**What `ando release` does:**
-
-1. **Build Verification** - Runs `ando run --read-env` to verify the build passes before proceeding
-2. **Interactive Checklist** - Presents steps to select:
-   - **Commit** - Commit any uncommitted changes (skipped if working tree is clean)
-   - **Bump** - Bump version in all project files and update CHANGELOG
-   - **Docs** - Update documentation using Claude to analyze changes
-   - **Push** - Push commits to remote (skipped if no remote tracking)
-   - **Publish** - Run `ando run -p push --dind --read-env` for publishing
-
-**Options:**
-
-| Option | Description |
-|--------|-------------|
-| `--all` | Skip checklist and run all applicable steps |
-| `--dry-run` | Preview what would happen without executing |
-| `--patch` | Bump patch version (1.0.0 → 1.0.1) - default |
-| `--minor` | Bump minor version (1.0.0 → 1.1.0) |
-| `--major` | Bump major version (1.0.0 → 2.0.0) |
-
-**Manual release (without `ando release`):**
-
-```bash
-# Build and test only
-ando
-
-# Push to NuGet.org, build Docker image, tag git, and deploy docs
-ando -p push
-```
-
 ### CI Server Development
 
 The CI Server requires SQL Server and a GitHub App for full functionality.
@@ -180,6 +104,45 @@ dotnet test --filter "Category=Integration"
 # E2E tests (Playwright)
 cd tests/Ando.Server.E2E && npm install && npm test
 ```
+
+## Release Workflow
+
+Use `ando release` or `./ando-dev release` for the full release workflow:
+
+```bash
+# Interactive release (shows checklist)
+ando release
+
+# Run all steps without prompts
+ando release --all
+
+# Preview what would happen
+ando release --dry-run
+
+# Specify version bump type (default: patch)
+ando release --minor
+ando release --major
+```
+
+**What `ando release` does:**
+
+1. **Build Verification** - Runs `ando run --read-env` to verify the build passes before proceeding
+2. **Interactive Checklist** - Presents steps to select:
+   - **Commit** - Commit any uncommitted changes (skipped if working tree is clean)
+   - **Bump** - Bump version in all project files and update CHANGELOG
+   - **Docs** - Update documentation using Claude to analyze changes
+   - **Push** - Push commits to remote (skipped if no remote tracking)
+   - **Publish** - Run `ando run -p push --dind --read-env` for publishing
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--all` | Skip checklist and run all applicable steps |
+| `--dry-run` | Preview what would happen without executing |
+| `--patch` | Bump patch version (1.0.0 → 1.0.1) - default |
+| `--minor` | Bump minor version (1.0.0 → 1.1.0) |
+| `--major` | Bump major version (1.0.0 → 2.0.0) |
 
 ### Project Structure
 
