@@ -1,0 +1,72 @@
+// =============================================================================
+// ando-post-release.csando
+//
+// Post-hook that runs after 'ando release' completes.
+// Waits for the new version to be available on NuGet.org, then reinstalls
+// the ando tool globally to use the newly published version.
+// =============================================================================
+
+// Read the current version from the project file.
+var csprojPath = Root / "src/Ando/Ando.csproj";
+var csprojContent = System.IO.File.ReadAllText(csprojPath);
+var versionMatch = System.Text.RegularExpressions.Regex.Match(csprojContent, @"<Version>([^<]+)</Version>");
+if (!versionMatch.Success)
+{
+    Log.Error("Could not read version from Ando.csproj");
+    return;
+}
+var version = versionMatch.Groups[1].Value;
+Log.Info($"Waiting for ando v{version} to be available on NuGet.org...");
+
+// Poll NuGet API until the version is available (max 5 minutes).
+var nugetUrl = $"https://api.nuget.org/v3-flatcontainer/ando/{version}/ando.nuspec";
+var maxAttempts = 30;
+var delaySeconds = 10;
+var available = false;
+
+using var httpClient = new System.Net.Http.HttpClient();
+
+for (int i = 0; i < maxAttempts; i++)
+{
+    try
+    {
+        var response = await httpClient.GetAsync(nugetUrl);
+        if (response.IsSuccessStatusCode)
+        {
+            available = true;
+            break;
+        }
+    }
+    catch
+    {
+        // Network error, keep trying.
+    }
+
+    if (i < maxAttempts - 1)
+    {
+        Log.Info($"  Not available yet, retrying in {delaySeconds}s... ({i + 1}/{maxAttempts})");
+        await System.Threading.Tasks.Task.Delay(delaySeconds * 1000);
+    }
+}
+
+if (!available)
+{
+    Log.Warning($"Timed out waiting for ando v{version} on NuGet.org");
+    Log.Warning("You can manually update later with: dotnet tool update -g ando");
+    return;
+}
+
+Log.Info($"Version {version} is now available on NuGet.org!");
+Log.Info("Updating global ando tool...");
+
+// Update the global tool.
+var result = await Shell.RunAsync("dotnet", "tool update -g ando");
+if (result.ExitCode == 0)
+{
+    Log.Info("Successfully updated ando tool!");
+}
+else
+{
+    Log.Warning($"Failed to update ando tool (exit code {result.ExitCode})");
+    Log.Warning("You can manually update with: dotnet tool update -g ando");
+}
