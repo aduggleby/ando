@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.36
+
+**2026-01-26**
+
+- Add documentation for the release command
+- Fix incorrect GitHub authentication instructions
+
 ## 0.9.35
 
 **2026-01-24**
