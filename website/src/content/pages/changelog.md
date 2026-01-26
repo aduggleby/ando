@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.42
+
+**2026-01-26**
+
+- Internal improvements to post-release script cleanup handling
+
 ## 0.9.41
 
 **2026-01-26**
