@@ -78,7 +78,7 @@ ANDO hooks are `.csando` scripts that run automatically before and after CLI com
 
 Search locations (first found wins): `./scripts/` then `./`
 
-Available globals in hooks: `Log`, `Env`, `Root`, `Directory`, `Shell.RunAsync(cmd, args)`
+Available globals in hooks: `Log`, `Env`, `Root` (BuildPath with `/` operator), `Directory`, `Shell.RunAsync(cmd, args)`
 
 Environment variables: `ANDO_COMMAND`, `ANDO_OLD_VERSION`, `ANDO_NEW_VERSION`, `ANDO_BUMP_TYPE`
 

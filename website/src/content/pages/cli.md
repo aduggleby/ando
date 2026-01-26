@@ -155,7 +155,7 @@ Hooks are `.csando` scripts that run before/after CLI commands.
 
 **Search locations:** `./scripts/` then `./`
 
-**Available APIs:** `Log.*`, `Env(name)`, `Root`, `Directory(path)`, `Shell.RunAsync(cmd, args)`
+**Available APIs:** `Log.*`, `Env(name)`, `Root` (BuildPath with `/` operator), `Directory(path)`, `Shell.RunAsync(cmd, args)`
 
 **Environment variables:**
 
