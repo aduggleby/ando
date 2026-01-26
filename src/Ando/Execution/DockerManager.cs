@@ -159,6 +159,34 @@ public class DockerManager
     }
 
     /// <summary>
+    /// Checks if the Docker socket is mounted in a container.
+    /// Used to determine if an existing warm container supports --dind mode.
+    /// </summary>
+    public async Task<bool> HasDockerSocketMountedAsync(string containerId)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "docker",
+            ArgumentList = { "inspect", containerId, "--format", "{{range .Mounts}}{{.Source}}{{\"\\n\"}}{{end}}" },
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+
+        using var process = Process.Start(startInfo);
+        if (process == null) return false;
+
+        var output = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        if (process.ExitCode != 0) return false;
+
+        // Check if Docker socket is in the list of mounted sources.
+        return output.Contains("/var/run/docker.sock");
+    }
+
+    /// <summary>
     /// Finds an existing warm container for the project.
     /// </summary>
     public async Task<ContainerInfo?> FindWarmContainerAsync(string containerName)
@@ -196,6 +224,7 @@ public class DockerManager
     /// <summary>
     /// Creates a new container or starts an existing one.
     /// For warm containers, re-copies project files to ensure fresh state.
+    /// If --dind is requested but existing container doesn't have Docker socket, recreates it.
     /// </summary>
     public async Task<ContainerInfo> EnsureContainerAsync(ContainerConfig config)
     {
@@ -203,6 +232,19 @@ public class DockerManager
 
         if (existing != null)
         {
+            // Check if --dind is requested but the existing container doesn't have Docker socket.
+            // This happens when a container was created without --dind and later --dind is needed.
+            if (config.MountDockerSocket)
+            {
+                var hasSocket = await HasDockerSocketMountedAsync(existing.Id);
+                if (!hasSocket)
+                {
+                    _logger.Info($"Recreating container '{config.Name}' to enable Docker-in-Docker mode...");
+                    await RemoveContainerAsync(config.Name);
+                    return await CreateContainerAsync(config);
+                }
+            }
+
             if (!existing.IsRunning)
             {
                 _logger.Debug($"Starting existing container: {config.Name}");
