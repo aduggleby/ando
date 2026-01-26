@@ -29,6 +29,18 @@ toc: true
 | `--image <image>` | Use a custom Docker image. |
 | `--dind` | Mount Docker socket for Docker-in-Docker builds. |
 
+## Environment Files
+
+ANDO looks for environment files in the project root: `.env.ando` (preferred) or `.env` (fallback).
+
+**Security check:** If `.env.ando` exists but is not in `.gitignore`, ANDO warns that the file may contain secrets and prompts you:
+
+- **(A)dd to .gitignore** (default) - Automatically appends `.env.ando` to your `.gitignore` file
+- **(C)ontinue anyway** - Proceed without adding to `.gitignore`
+- **Esc** - Abort the build
+
+Use `--read-env` to skip the prompt and load the environment file without confirmation.
+
 ## Commit Command
 
 Commits all changes with an AI-generated message using Claude.
