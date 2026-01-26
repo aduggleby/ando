@@ -33,6 +33,23 @@ function isInsideContainer(): boolean {
 }
 
 /**
+ * Check if Docker daemon is accessible.
+ * Returns true if we can connect to the Docker daemon.
+ */
+function isDockerAvailable(): boolean {
+  try {
+    const result = spawnSync('docker', ['info'], {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 5000,
+    });
+    return result.status === 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Get the server URL for health checks.
  * Uses host.docker.internal when inside a container (ANDO build).
  */
@@ -135,9 +152,32 @@ async function globalSetup(): Promise<void> {
   console.log('\n=== E2E Test Setup ===\n');
 
   const inContainer = isInsideContainer();
+  const dockerAvailable = isDockerAvailable();
+
   if (inContainer) {
-    console.log('Running inside container (ANDO build with --dind)');
+    console.log('Running inside container');
+
+    if (!dockerAvailable) {
+      // We're inside an ANDO container but Docker is not accessible.
+      // This happens when running without --dind flag.
+      throw new Error(
+        'Docker is not available inside the container.\n' +
+        'E2E tests require Docker-in-Docker mode to manage test containers.\n' +
+        'Run with --dind flag: ando run --dind\n' +
+        'Or run E2E tests directly on the host: cd tests/Ando.Server.E2E && npm test'
+      );
+    }
+
+    console.log('Docker-in-Docker mode detected');
     console.log('Will recreate containers to ensure fresh state...');
+  }
+
+  if (!dockerAvailable) {
+    throw new Error(
+      'Docker is not available.\n' +
+      'E2E tests require Docker to run the test environment.\n' +
+      'Please ensure Docker is installed and running.'
+    );
   }
 
   // When inside a container, always recreate to ensure fresh state.
