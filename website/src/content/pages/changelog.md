@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.46
+
+**2026-01-26**
+
+- Add automatic DIND (Docker-in-Docker) mode inheritance so child builds no longer prompt separately when the parent build already enabled DIND
+
 ## 0.9.45
 
 **2026-01-26**
