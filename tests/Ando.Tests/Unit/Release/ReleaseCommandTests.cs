@@ -32,23 +32,23 @@ public class ReleaseCommandTests : IDisposable
     }
 
     [Fact]
-    public void HasPushProfile_DetectsDefineProfile()
+    public void HasPublishProfile_DetectsDefineProfile()
     {
         var buildScript = Path.Combine(_testDir, "build.csando");
         File.WriteAllText(buildScript, @"
-            var push = DefineProfile(""push"");
+            var publish = DefineProfile(""publish"");
             Dotnet.Build(app);
         ");
 
         var content = File.ReadAllText(buildScript);
-        var hasPush = content.Contains("DefineProfile(\"push\"") ||
-                      content.Contains("DefineProfile('push'");
+        var hasPublish = content.Contains("DefineProfile(\"publish\"") ||
+                         content.Contains("DefineProfile('publish'");
 
-        hasPush.ShouldBeTrue();
+        hasPublish.ShouldBeTrue();
     }
 
     [Fact]
-    public void HasPushProfile_ReturnsFalse_WhenNoPushProfile()
+    public void HasPublishProfile_ReturnsFalse_WhenNoPublishProfile()
     {
         var buildScript = Path.Combine(_testDir, "build.csando");
         File.WriteAllText(buildScript, @"
@@ -57,10 +57,10 @@ public class ReleaseCommandTests : IDisposable
         ");
 
         var content = File.ReadAllText(buildScript);
-        var hasPush = content.Contains("DefineProfile(\"push\"") ||
-                      content.Contains("DefineProfile('push'");
+        var hasPublish = content.Contains("DefineProfile(\"publish\"") ||
+                         content.Contains("DefineProfile('publish'");
 
-        hasPush.ShouldBeFalse();
+        hasPublish.ShouldBeFalse();
     }
 
     [Fact]

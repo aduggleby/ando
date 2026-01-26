@@ -4,21 +4,21 @@
 // Profiles:
 // - (default): Install dependencies and build the Astro site
 // - test: Also run Playwright E2E tests
-// - push: Also run tests and deploy to Cloudflare Pages
+// - publish: Also run tests and deploy to Cloudflare Pages
 //
 // Usage:
-//   ando              # Build only
-//   ando -p test      # Build and run E2E tests
-//   ando -p push      # Build, test, and deploy to Cloudflare
+//   ando                 # Build only
+//   ando -p test         # Build and run E2E tests
+//   ando -p publish      # Build, test, and deploy to Cloudflare
 //
-// Prerequisites (for push profile):
+// Prerequisites (for publish profile):
 // - CLOUDFLARE_API_TOKEN env var set (or enter when prompted)
 // - CLOUDFLARE_ACCOUNT_ID env var set (or enter when prompted)
 // =============================================================================
 
 // Define profiles
 var test = DefineProfile("test");
-var push = DefineProfile("push");
+var publish = DefineProfile("publish");
 
 // Create a directory reference for the website project.
 var website = Directory(".");
@@ -40,8 +40,8 @@ if (test)
     Playwright.Test(website);
 }
 
-// Deploy to Cloudflare (only with -p push)
-if (push)
+// Deploy to Cloudflare (only with -p publish)
+if (publish)
 {
     // Verify Cloudflare authentication.
     Cloudflare.EnsureAuthenticated();

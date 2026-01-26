@@ -13,9 +13,8 @@ toc: true
 | [`ando bump`](#bump-command) | Bump version across all projects. |
 | [`ando docs`](#docs-command) | Update documentation using Claude. |
 | [`ando release`](#release-command) | Interactive release workflow. |
-| [`ando verify`](#examples) | Check build script for errors without executing. |
+| [`ando verify`](#run-options) | Check build script for errors without executing. |
 | [`ando clean`](#clean-options) | Remove artifacts, temp files, and containers. |
-| [`ando help`](#examples) | Show available commands and options. |
 
 ## Run Options
 
@@ -104,7 +103,7 @@ ando release --minor   # Specify bump type (default: patch)
 3. **Docs** - Update documentation (uses `ando docs`)
 4. **Bump** - Bump version across all projects (uses `ando bump`)
 5. **Push** - Push to remote repository
-6. **Publish** - Run `ando run -p push --dind --read-env`
+6. **Publish** - Run `ando run -p publish --dind --read-env`
 
 Steps are contextually enabled/disabled based on repository state.
 
@@ -148,34 +147,3 @@ if (result.ExitCode != 0) throw new Exception("Tests failed");
 | `--cache` | Remove NuGet and npm caches. |
 | `--container` | Remove the project's warm container. |
 | `--all` | Remove all of the above. |
-
-## Examples
-
-```bash
-# Run the build
-ando
-
-# Run with a profile
-ando -p release
-
-# Commit with AI message
-ando commit
-
-# Bump version
-ando bump minor
-
-# Update documentation with Claude
-ando docs
-
-# Interactive release
-ando release
-
-# Force fresh container
-ando run --cold
-
-# Custom Docker image
-ando run --image mcr.microsoft.com/dotnet/sdk:9.0
-
-# Clean everything
-ando clean --all
-```

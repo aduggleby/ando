@@ -47,8 +47,8 @@ export const operations = [
     name: "DefineProfile",
     desc: "Defines a build profile that can be activated via CLI. Returns a `Profile` object that evaluates to `true` when active. Use `-p` or `--profile` CLI flag to activate.",
     examples: [
-      'var release = DefineProfile("release");\nvar push = DefineProfile("push");\n\nDotnet.Build(app);\n\nif (release) {\n  Git.Tag("v1.0.0");\n  GitHub.CreateRelease(o => o.WithTag("v1.0.0"));\n}',
-      "// CLI usage:\n// ando -p release\n// ando -p push,release",
+      'var release = DefineProfile("release");\nvar publish = DefineProfile("publish");\n\nDotnet.Build(app);\n\nif (release) {\n  Git.Tag("v1.0.0");\n  GitHub.CreateRelease(o => o.WithTag("v1.0.0"));\n}',
+      "// CLI usage:\n// ando -p release\n// ando -p publish,release",
     ],
   },
   // Build configuration operations (top-level)

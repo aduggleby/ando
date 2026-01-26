@@ -26,7 +26,7 @@ ando run
 ### Run Options
 
 - `-f, --file <file>` - Use a specific build file instead of build.csando
-- `-p, --profile <profiles>` - Activate build profiles (comma-separated, e.g., `-p push,release`)
+- `-p, --profile <profiles>` - Activate build profiles (comma-separated, e.g., `-p publish,release`)
 - `--read-env` - Load environment file without prompting (checks for `.env.ando` first, falls back to `.env`)
 - `--verbosity <level>` - Set output verbosity (quiet|minimal|normal|detailed)
 - `--no-color` - Disable colored output
@@ -164,9 +164,9 @@ Ando.Build(Directory("./api"), o => o.WithDind().ColdStart());
 // build.csando - Build .NET tool with profiles for conditional publishing
 // Usage:
 //   ando              # Build and test only
-//   ando -p push      # Build, test, and push to NuGet.org + deploy docs
+//   ando -p publish      # Build, test, and push to NuGet.org + deploy docs
 
-var push = DefineProfile("push");
+var publish = DefineProfile("publish");
 
 var project = Dotnet.Project("./src/MyTool/MyTool.csproj");
 var testProject = Dotnet.Project("./tests/MyTool.Tests/MyTool.Tests.csproj");
@@ -200,8 +200,8 @@ foreach (var runtime in runtimes)
 // Create NuGet package for the dotnet tool
 Nuget.Pack(project);
 
-// Push to NuGet.org (only with -p push)
-if (push)
+// Push to NuGet.org (only with -p publish)
+if (publish)
 {
     Nuget.EnsureAuthenticated();
     Nuget.Push(project);
@@ -361,7 +361,7 @@ if (release) {
 }
 ```
 
-Activate with CLI: `ando -p release` or `ando -p push,release`
+Activate with CLI: `ando -p release` or `ando -p publish,release`
 
 ## Options Reference
 

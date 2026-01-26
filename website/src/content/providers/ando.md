@@ -31,7 +31,7 @@ Profiles allow conditional execution of build steps. Define profiles at the top 
 ```csharp
 // Define profiles at the top of your build.csando
 var release = DefineProfile("release");
-var push = DefineProfile("push");
+var publish = DefineProfile("publish");
 
 // Project references
 var app = Dotnet.Project("./src/App/App.csproj");
@@ -48,7 +48,7 @@ if (release) {
 }
 
 // Only run when "push" profile is active
-if (push) {
+if (publish) {
   Nuget.EnsureAuthenticated();
   Nuget.Pack(app);
   Nuget.Push(app, o => o.SkipDuplicate());
@@ -57,7 +57,7 @@ if (push) {
 // CLI usage:
 // ando              # Build and test only
 // ando -p release   # Build, test, publish, and tag
-// ando -p push      # Build, test, pack, and push to NuGet
+// ando -p publish      # Build, test, pack, and push to NuGet
 ```
 
 ## Log

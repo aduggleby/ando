@@ -134,7 +134,7 @@ Nuget.Pack(project, o => o
 Separate build and publish:
 
 ```csharp
-var push = DefineProfile("push");
+var publish = DefineProfile("publish");
 
 var project = Dotnet.Project("./src/MyLib/MyLib.csproj");
 var tests = Dotnet.Project("./tests/MyLib.Tests/MyLib.Tests.csproj");
@@ -149,8 +149,8 @@ Nuget.Pack(project, o => o
     .WithConfiguration(Configuration.Release)
     .Output(Root / "packages"));
 
-// Only push with -p push
-if (push)
+// Only push with -p publish
+if (publish)
 {
     Nuget.Push(Root / "packages" / "*.nupkg", o => o
         .ToSource($"https://nuget.pkg.github.com/{owner}/index.json")
@@ -167,7 +167,7 @@ Usage:
 ando
 
 # Build, test, create package, and push
-ando -p push
+ando -p publish
 ```
 
 ## Multi-Project Publishing
@@ -175,7 +175,7 @@ ando -p push
 Publish multiple packages from a solution:
 
 ```csharp
-var push = DefineProfile("push");
+var publish = DefineProfile("publish");
 var owner = "my-organization";
 
 var projects = new[]
@@ -202,7 +202,7 @@ foreach (var project in projects)
 }
 
 // Push all
-if (push)
+if (publish)
 {
     Nuget.Push(Root / "packages" / "*.nupkg", o => o
         .ToSource($"https://nuget.pkg.github.com/{owner}/index.json")
@@ -246,7 +246,7 @@ jobs:
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ando -p push
+        run: ando -p publish
 ```
 
 ### Package Consumption
@@ -322,13 +322,13 @@ if (pushNuGet)
 Usage:
 ```bash
 # Push to GitHub Packages only
-ando -p push-github
+ando -p publish-github
 
 # Push to NuGet.org only
-ando -p push-nuget
+ando -p publish-nuget
 
 # Push to both
-ando -p push-github,push-nuget
+ando -p publish-github,push-nuget
 ```
 
 ## Full Example: Internal Library
@@ -337,7 +337,7 @@ Complete build script for an internal library:
 
 ```csharp
 // build.csando
-var push = DefineProfile("push");
+var publish = DefineProfile("publish");
 
 var project = Dotnet.Project("./src/MyCompany.Utilities/MyCompany.Utilities.csproj");
 var tests = Dotnet.Project("./tests/MyCompany.Utilities.Tests/MyCompany.Utilities.Tests.csproj");
@@ -362,7 +362,7 @@ Nuget.Pack(project, o => o
     .Output(Root / "packages"));
 
 // Publish
-if (push)
+if (publish)
 {
     var packagePath = Root / "packages" / $"{project.Name}.{version}.nupkg";
 

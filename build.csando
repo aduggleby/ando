@@ -3,14 +3,14 @@
 //
 // Profiles:
 // - (default): Build, test, publish executables, create NuGet package
-// - push: Also pushes to NuGet.org, container registry, creates GitHub release with binaries, and deploys docs
+// - publish: Also pushes to NuGet.org, container registry, creates GitHub release with binaries, and deploys docs
 // - e2e: Force E2E tests to run (even on Ando.Server)
 //
 // Usage:
-//   ando              # Build and test (E2E tests run locally, skipped on server)
-//   ando -p push      # Build, test, and push to NuGet.org + container registry + deploy docs
-//   ando -p e2e       # Force E2E tests to run
-//   ando -p push,e2e  # Push profile with forced E2E tests
+//   ando                 # Build and test (E2E tests run locally, skipped on server)
+//   ando -p publish      # Build, test, and push to NuGet.org + container registry + deploy docs
+//   ando -p e2e          # Force E2E tests to run
+//   ando -p publish,e2e  # Publish profile with forced E2E tests
 //
 // E2E Tests:
 //   E2E tests use docker-compose to spin up SQL Server and web server containers.
@@ -19,18 +19,18 @@
 //   support nested container orchestration.
 //
 // Prerequisites:
-// - NUGET_API_KEY env var set (or enter when prompted) for push profile
-// - Run `ando bump` before push to set the desired version
+// - NUGET_API_KEY env var set (or enter when prompted) for publish profile
+// - Run `ando bump` before publish to set the desired version
 // - For E2E tests: Run with `ando --dind` to enable Docker-in-Docker
 //
 // Output:
 // - dist/{runtime}/ando[.exe] - Platform-specific executables
 // - dist/packages/*.nupkg     - NuGet package for dotnet tool install
-// - ando-server:{version}     - Docker image (push profile only)
+// - ando-server:{version}     - Docker image (publish profile only)
 // =============================================================================
 
 // Define profiles
-var push = DefineProfile("push");
+var publish = DefineProfile("publish");
 var e2e = DefineProfile("e2e");
 
 // Detect if running on Ando.Server (vs local ando CLI)
@@ -124,8 +124,8 @@ foreach (var runtime in runtimes)
 // Create NuGet package for the dotnet tool
 Nuget.Pack(project);
 
-// Push to NuGet.org, container registry, and deploy website (only with push profile)
-if (push)
+// Push to NuGet.org, container registry, and deploy website (only with publish profile)
+if (publish)
 {
     // Push to NuGet (skip if version already exists)
     Nuget.EnsureAuthenticated();

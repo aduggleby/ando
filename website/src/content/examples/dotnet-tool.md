@@ -17,14 +17,14 @@ The workflow performs these steps:
 2. Restores, builds, and tests the project
 3. Publishes self-contained executables for multiple platforms
 4. Creates a NuGet package for the dotnet tool
-5. **(with -p push)** Publishes to NuGet.org and deploys docs
+5. **(with -p publish)** Publishes to NuGet.org and deploys docs
 6. Copies artifacts to the host machine
 
 ## Build Script
 
 ```csharp
 // Define profiles
-var push = DefineProfile("push");
+var publish = DefineProfile("publish");
 
 var project = Dotnet.Project("./src/Ando/Ando.csproj");
 var testProject = Dotnet.Project("./tests/Ando.Tests/Ando.Tests.csproj");
@@ -50,8 +50,8 @@ foreach (var runtime in runtimes)
 // Create NuGet package
 Nuget.Pack(project);
 
-// Push to NuGet.org (only with -p push)
-if (push)
+// Push to NuGet.org (only with -p publish)
+if (publish)
 {
     Nuget.EnsureAuthenticated();
     Nuget.Push(project);
@@ -70,7 +70,7 @@ This script uses `DefineProfile` for conditional execution. By default it builds
 | Command | Behavior |
 |---------|----------|
 | `ando` | Build, test, create NuGet package, copy artifacts |
-| `ando -p push` | All of the above + push to NuGet.org + deploy docs |
+| `ando -p publish` | All of the above + push to NuGet.org + deploy docs |
 
 ## Key Operations
 
@@ -89,5 +89,5 @@ This script uses `DefineProfile` for conditional execution. By default it builds
 ando
 
 # Build, test, and push to NuGet.org
-ando -p push
+ando -p publish
 ```

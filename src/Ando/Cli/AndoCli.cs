@@ -620,7 +620,7 @@ public class AndoCli : IDisposable
         {
             if ((_args[i] == "-p" || _args[i] == "--profile") && i + 1 < _args.Length)
             {
-                // Support comma-separated profiles: -p push,release
+                // Support comma-separated profiles: -p publish,release
                 var value = _args[i + 1];
                 profiles.AddRange(value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
                 i++; // Skip the value on next iteration
@@ -657,7 +657,7 @@ public class AndoCli : IDisposable
         Console.WriteLine("  -f, --file <file>   Use specific build file instead of build.csando");
         Console.WriteLine("  -p, --profile <name>");
         Console.WriteLine("                      Activate build profiles (comma-separated for multiple)");
-        Console.WriteLine("                      Example: -p release or -p push,release");
+        Console.WriteLine("                      Example: -p release or -p publish,release");
         Console.WriteLine("  --read-env          Load env file without prompting (also applies to sub-builds)");
         Console.WriteLine("  --verbosity <level> Set output verbosity: quiet|minimal|normal|detailed");
         Console.WriteLine("  --no-color          Disable colored output (also respects NO_COLOR env var)");
@@ -679,7 +679,7 @@ public class AndoCli : IDisposable
         Console.WriteLine("    2. bump     - Bump version (uses type from command line)");
         Console.WriteLine("    3. docs     - Update documentation using Claude (auto-commits)");
         Console.WriteLine("    4. push     - Push commits to remote");
-        Console.WriteLine("    5. publish  - Run build with push profile (ando run -p push --dind --read-env)");
+        Console.WriteLine("    5. publish  - Run build with publish profile (ando run -p publish --dind --read-env)");
         Console.WriteLine();
         Console.WriteLine("Bump Options:");
         Console.WriteLine("  patch               Increment patch version: 1.0.0 -> 1.0.1 (default)");

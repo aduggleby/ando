@@ -132,7 +132,7 @@ ando release --major
    - **Bump** - Bump version in all project files and update CHANGELOG
    - **Docs** - Update documentation using Claude to analyze changes
    - **Push** - Push commits to remote (skipped if no remote tracking)
-   - **Publish** - Run `ando run -p push --dind --read-env` for publishing
+   - **Publish** - Run `ando run -p publish --dind --read-env` for publishing
 
 **Options:**
 

@@ -162,7 +162,7 @@ Docker.Build("Dockerfile", o => o
 Separate build and publish steps:
 
 ```csharp
-var push = DefineProfile("push");
+var publish = DefineProfile("publish");
 var project = Dotnet.Project("./src/MyApp/MyApp.csproj");
 var version = project.Version;
 
@@ -179,8 +179,8 @@ Docker.Build("Dockerfile", o => o
     .WithTag($"myapp:{version}")
     .WithTag("myapp:latest"));
 
-// Only push with -p push
-if (push)
+// Only push with -p publish
+if (publish)
 {
     GitHub.PushImage("myapp", o => o.WithTag(version));
     GitHub.PushImage("myapp", o => o.WithTag("latest"));
@@ -195,7 +195,7 @@ Usage:
 ando
 
 # Build, test, and push to ghcr.io
-ando -p push
+ando -p publish
 ```
 
 ## GitHub Actions Integration
@@ -227,7 +227,7 @@ jobs:
       - name: Build and push container
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ando -p push
+        run: ando -p publish
 ```
 
 ## Release with Container and Binaries

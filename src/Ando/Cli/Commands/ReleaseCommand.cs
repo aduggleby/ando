@@ -69,7 +69,7 @@ public class ReleaseCommand
             var hasRemote = await _git.HasRemoteTrackingAsync();
             var remoteBranch = hasRemote ? await _git.GetRemoteTrackingBranchAsync() : null;
             var hasWebsite = Directory.Exists(Path.Combine(repoRoot, "website"));
-            var hasPushProfile = HasPushProfile(repoRoot);
+            var hasPublishProfile = HasPublishProfile(repoRoot);
 
             // 3. Display current state.
             AnsiConsole.MarkupLine("[bold]ANDO Release Workflow[/]");
@@ -94,7 +94,7 @@ public class ReleaseCommand
             }
 
             // 4. Build steps.
-            var steps = BuildSteps(hasChanges, hasWebsite, hasPushProfile, hasRemote, remoteBranch, version);
+            var steps = BuildSteps(hasChanges, hasWebsite, hasPublishProfile, hasRemote, remoteBranch, version);
 
             // 5. Show checklist or run all.
             List<ReleaseStep> selectedSteps;
@@ -150,7 +150,7 @@ public class ReleaseCommand
     }
 
     private List<ReleaseStep> BuildSteps(
-        bool hasChanges, bool hasWebsite, bool hasPushProfile,
+        bool hasChanges, bool hasWebsite, bool hasPublishProfile,
         bool hasRemote, string? remoteBranch, string version)
     {
         var mdFiles = Directory.GetFiles(".", "*.md", SearchOption.AllDirectories)
@@ -167,7 +167,7 @@ public class ReleaseCommand
                 : "Update documentation (Claude - markdown only)",
                 hasDocsToUpdate, hasDocsToUpdate ? null : "no documentation files"),
             new("push", $"Push to remote ({remoteBranch ?? "no remote"})", hasRemote, hasRemote ? null : "no remote tracking"),
-            new("publish", "Run publish build (ando run -p push --dind --read-env)", hasPushProfile, hasPushProfile ? null : "no push profile")
+            new("publish", "Run publish build (ando run -p publish --dind --read-env)", hasPublishProfile, hasPublishProfile ? null : "no publish profile")
         ];
     }
 
@@ -305,10 +305,10 @@ public class ReleaseCommand
 
     private async Task<int> ExecutePublishAsync()
     {
-        AnsiConsole.MarkupLine("Running: ando run -p push --dind --read-env");
+        AnsiConsole.MarkupLine("Running: ando run -p publish --dind --read-env");
         AnsiConsole.WriteLine();
 
-        var result = await _runner.RunAsync("ando", "run -p push --dind --read-env", timeoutMs: 600000, streamOutput: true);
+        var result = await _runner.RunAsync("ando", "run -p publish --dind --read-env", timeoutMs: 600000, streamOutput: true);
         return result.ExitCode;
     }
 
@@ -331,15 +331,15 @@ public class ReleaseCommand
         return result.ExitCode;
     }
 
-    private static bool HasPushProfile(string repoRoot)
+    private static bool HasPublishProfile(string repoRoot)
     {
         var buildScript = Path.Combine(repoRoot, "build.csando");
         if (!File.Exists(buildScript))
             return false;
 
         var content = File.ReadAllText(buildScript);
-        return content.Contains("DefineProfile(\"push\"") ||
-               content.Contains("DefineProfile('push'");
+        return content.Contains("DefineProfile(\"publish\"") ||
+               content.Contains("DefineProfile('publish'");
     }
 
     private static string GetCurrentVersion(string repoRoot)
