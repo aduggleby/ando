@@ -616,4 +616,4 @@ All pages are available in markdown format for LLM consumption:
 - https://andobuild.com/recipes/container-github-registry.md - Building Docker images and pushing to GitHub Container Registry (ghcr.io)
 - https://andobuild.com/recipes/nuget-github-packages.md - Publishing NuGet packages to GitHub Packages registry
 - https://andobuild.com/recipes/pre-hook-cleanup.md - Pre-build hook for cleaning Syncthing conflict files and other artifacts
-- https://andobuild.com/recipes/post-release-hook.md - Post-release hook that auto-updates .NET tools after NuGet publish
+- https://andobuild.com/recipes/post-release-hook.md - Post-release hook that auto-updates .NET tools after NuGet publish with retry logic for CDN propagation

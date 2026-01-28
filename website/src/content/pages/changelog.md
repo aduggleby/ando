@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.53
+
+**2026-01-28**
+
+- Improve reliability of global tool update after publishing releases
+
 ## 0.9.52
 
 **2026-01-28**

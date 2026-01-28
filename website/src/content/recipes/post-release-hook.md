@@ -19,7 +19,8 @@ After publishing a new version of a .NET tool to NuGet.org, you often want to up
 When you run `ando release` and publish to NuGet.org:
 1. The package is uploaded
 2. NuGet processes and indexes the package (can take 1-5 minutes)
-3. You need to manually run `dotnet tool update -g <tool>` after it's available
+3. Even after the NuGet API reports availability, CDN propagation can cause `dotnet tool update` to fail
+4. You need to manually run `dotnet tool update -g <tool>` after it's fully available
 
 ## The Solution
 
@@ -85,15 +86,32 @@ if (!available)
 Log.Info($"Version {version} is now available on NuGet.org!");
 Log.Info("Updating global tool...");
 
-// Update the global tool
-var result = await Shell.RunAsync("dotnet", "tool update -g mytool");
-if (result.ExitCode == 0)
+// Update the global tool with retry logic
+// NuGet CDN propagation can cause failures even after the API reports availability
+var updateMaxAttempts = 10;
+var updateDelaySeconds = 15;
+var updateSuccess = false;
+
+for (int attempt = 1; attempt <= updateMaxAttempts; attempt++)
 {
-    Log.Info("Successfully updated tool!");
+    var result = await Shell.RunAsync("dotnet", $"tool update -g mytool --version {version}");
+    if (result.ExitCode == 0)
+    {
+        Log.Info("Successfully updated tool!");
+        updateSuccess = true;
+        break;
+    }
+
+    if (attempt < updateMaxAttempts)
+    {
+        Log.Info($"  Update failed, retrying in {updateDelaySeconds}s... ({attempt}/{updateMaxAttempts})");
+        await System.Threading.Tasks.Task.Delay(updateDelaySeconds * 1000);
+    }
 }
-else
+
+if (!updateSuccess)
 {
-    Log.Warning($"Failed to update tool (exit code {result.ExitCode})");
+    Log.Warning($"Failed to update tool after {updateMaxAttempts} attempts");
     Log.Warning("You can manually update with: dotnet tool update -g mytool");
 }
 ```
