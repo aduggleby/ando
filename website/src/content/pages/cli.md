@@ -193,3 +193,83 @@ if (result.ExitCode != 0) throw new Exception("Tests failed");
 | `--cache` | Remove NuGet and npm caches. |
 | `--container` | Remove the project's warm container. |
 | `--all` | Remove all of the above. |
+
+## Project Files
+
+ANDO uses and creates various files in your project directory:
+
+### Environment Files
+
+| File | Description |
+|------|-------------|
+| `.env.ando` | **Preferred** - Project-specific environment variables. Takes priority over `.env`. |
+| `.env` | **Fallback** - Standard environment file, used if `.env.ando` doesn't exist. |
+
+ANDO prompts before loading environment files (unless `--read-env` flag or `readEnv: true` in config).
+
+### Configuration Files
+
+| File | Description |
+|------|-------------|
+| `ando.config` | YAML configuration file for persistent settings (`dind`, `readEnv`). |
+| `build.csando` | Build script (C# with Roslyn scripting). |
+
+### Generated Files & Directories
+
+| Path | Description |
+|------|-------------|
+| `build.csando.log` | Plain-text log of the last build run. Overwrites on each run. |
+| `.ando/cache/nuget/` | NuGet package cache (mounted into container). |
+| `.ando/cache/npm/` | npm package cache (mounted into container). |
+| `.ando/tmp/` | Temporary files used during builds. |
+| `artifacts/` | Default output directory for build artifacts. |
+
+### Hook Scripts
+
+| File | Description |
+|------|-------------|
+| `ando-pre.csando` | Runs before any command. |
+| `ando-pre-{cmd}.csando` | Runs before a specific command. |
+| `ando-post-{cmd}.csando` | Runs after a specific command. |
+| `ando-post.csando` | Runs after any command. |
+
+Hook scripts are searched in `./scripts/` first, then `./`.
+
+## Logging
+
+ANDO writes a plain-text log to `build.csando.log` in the project root. This file:
+
+- Is **overwritten** on each build run (not appended)
+- Contains the same output as the console (without ANSI color codes)
+- Includes timestamps, step names, and command output
+- Is useful for debugging failed builds or reviewing build history
+
+## Suggested .gitignore
+
+Add these patterns to your `.gitignore` to exclude ANDO-generated files:
+
+```gitignore
+# ANDO build system
+.env.ando
+build.csando.log
+.ando/
+artifacts/
+```
+
+**Explanation:**
+
+| Pattern | Why ignore |
+|---------|------------|
+| `.env.ando` | Contains secrets (API keys, tokens, passwords). ANDO warns if not gitignored. |
+| `build.csando.log` | Build output log, regenerated on each run. |
+| `.ando/` | Cache directories (NuGet, npm) and temp files. Large and machine-specific. |
+| `artifacts/` | Build outputs. Should be regenerated, not committed. |
+
+**Optional:**
+
+```gitignore
+# Optional: exclude config if it contains machine-specific settings
+# ando.config
+```
+
+Most teams commit `ando.config` since it contains project-wide settings like `dind: true`.

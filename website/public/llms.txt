@@ -75,6 +75,42 @@ When environment variables are found, ANDO prompts:
 
 Use `--read-env` or set `readEnv: true` in `ando.config` to skip the prompt and load automatically.
 
+### Project Files
+
+ANDO uses and creates these files/directories:
+
+| Path | Description |
+|------|-------------|
+| `build.csando` | Build script (C# with Roslyn scripting) |
+| `ando.config` | YAML config file for persistent settings |
+| `.env.ando` | Environment variables (preferred, project-specific) |
+| `.env` | Environment variables (fallback) |
+| `build.csando.log` | Plain-text log of last build run (overwritten each run) |
+| `.ando/cache/nuget/` | NuGet package cache (mounted into container) |
+| `.ando/cache/npm/` | npm package cache (mounted into container) |
+| `.ando/tmp/` | Temporary files used during builds |
+| `artifacts/` | Default output directory for build artifacts |
+
+### Logging
+
+ANDO writes a plain-text log to `build.csando.log` in the project root. This file is overwritten on each build run (not appended) and contains the same output as the console without ANSI color codes.
+
+### Suggested .gitignore
+
+```gitignore
+# ANDO build system
+.env.ando
+build.csando.log
+.ando/
+artifacts/
+```
+
+Explanation:
+- `.env.ando` - Contains secrets (API keys, tokens). ANDO warns if not gitignored.
+- `build.csando.log` - Build output log, regenerated on each run.
+- `.ando/` - Cache directories (NuGet, npm) and temp files. Large and machine-specific.
+- `artifacts/` - Build outputs. Should be regenerated, not committed.
+
 ### Hooks
 
 ANDO hooks are `.csando` scripts that run automatically before and after CLI commands:

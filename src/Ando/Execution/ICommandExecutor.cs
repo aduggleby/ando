@@ -31,7 +31,7 @@ public record CommandResult(
 {
     // Factory methods for common result cases.
     public static CommandResult Ok(string? output = null) => new(0, true, null, output);
-    public static CommandResult Failed(int exitCode, string? error = null) => new(exitCode, false, error);
+    public static CommandResult Failed(int exitCode, string? error = null, string? output = null) => new(exitCode, false, error, output);
 }
 
 /// <summary>

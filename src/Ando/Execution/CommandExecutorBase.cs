@@ -161,7 +161,11 @@ public abstract class CommandExecutorBase : ICommandExecutor
                 {
                     // Kill entire process tree to prevent orphaned child processes.
                     process.Kill(entireProcessTree: true);
-                    return CommandResult.Failed(-1, $"Command timed out after {options.TimeoutMs}ms");
+
+                    // Wait briefly for any buffered output to be captured before returning.
+                    await Task.Delay(100);
+                    var timeoutOutput = outputBuilder.ToString().TrimEnd();
+                    return CommandResult.Failed(-1, $"Command timed out after {options.TimeoutMs}ms", timeoutOutput);
                 }
             }
             else
@@ -169,18 +173,34 @@ public abstract class CommandExecutorBase : ICommandExecutor
                 await process.WaitForExitAsync();
             }
 
+            // Give the output handlers a moment to receive any final buffered data.
+            // Docker exec may have slight delays in forwarding output from the container.
+            await Task.Delay(100);
+
             // Wait for all output to be captured before returning.
-            // The process can exit before all output is flushed.
-            await Task.WhenAll(outputComplete.Task, errorComplete.Task);
+            // The process can exit before all output is flushed, especially with
+            // docker exec which may have buffering differences.
+            // Use a timeout to prevent hanging forever if EOF is never received.
+            var outputWaitTask = Task.WhenAll(outputComplete.Task, errorComplete.Task);
+            var completedInTime = await Task.WhenAny(outputWaitTask, Task.Delay(5000)) == outputWaitTask;
+
+            if (!completedInTime)
+            {
+                // Output handlers didn't complete - this can happen with docker exec
+                // when the container process exits abruptly. Log a warning but continue.
+                Logger.Debug("Warning: Output capture timed out, some output may be missing");
+            }
 
             var output = outputBuilder.ToString().TrimEnd();
             return process.ExitCode == 0
                 ? CommandResult.Ok(output)
-                : CommandResult.Failed(process.ExitCode);
+                : CommandResult.Failed(process.ExitCode, output: output);
         }
         catch (Exception ex)
         {
-            return CommandResult.Failed(-1, ex.Message);
+            // Include any captured output even when an exception occurs.
+            var exceptionOutput = outputBuilder.ToString().TrimEnd();
+            return CommandResult.Failed(-1, ex.Message, string.IsNullOrEmpty(exceptionOutput) ? null : exceptionOutput);
         }
     }
 
