@@ -198,7 +198,7 @@ public class DockerOperations(
             // Auto-login to ghcr.io if pushing to it.
             if (options.Push && options.Tags.Any(t => t.Contains("ghcr.io")))
             {
-                if (!await LoginToGhcrAsync())
+                if (!await LoginToGhcrAsync(options.Tags))
                 {
                     return false;
                 }
@@ -271,8 +271,9 @@ public class DockerOperations(
 
     /// <summary>
     /// Logs in to GitHub Container Registry using the GitHub token.
+    /// Extracts the owner from the ghcr.io tag (e.g., ghcr.io/owner/image:tag).
     /// </summary>
-    private async Task<bool> LoginToGhcrAsync()
+    private async Task<bool> LoginToGhcrAsync(List<string> tags)
     {
         if (_gitHubAuthHelper == null)
         {
@@ -287,66 +288,15 @@ public class DockerOperations(
             return false;
         }
 
-        // Get owner from git remote for the username.
-        var owner = await GetGitHubOwnerAsync();
+        // Extract owner from ghcr.io tag.
+        var owner = GhcrHelper.ExtractOwnerFromTags(tags);
         if (string.IsNullOrEmpty(owner))
         {
-            Logger.Error("Could not determine GitHub owner from git remote for ghcr.io login");
+            Logger.Error("Could not extract GitHub owner from ghcr.io tag");
             return false;
         }
 
-        Logger.Info("Logging in to ghcr.io...");
-        var loginScript = $"echo '{token}' | docker login ghcr.io -u {owner} --password-stdin";
-        var loginResult = await ExecutorFactory().ExecuteAsync("bash", ["-c", loginScript]);
-
-        if (!loginResult.Success)
-        {
-            Logger.Error($"Docker login to ghcr.io failed: {loginResult.Error}");
-            return false;
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    /// Gets the GitHub owner from the git remote URL.
-    /// </summary>
-    private async Task<string?> GetGitHubOwnerAsync()
-    {
-        try
-        {
-            var result = await ExecutorFactory().ExecuteAsync("git",
-                ["remote", "get-url", "origin"]);
-
-            if (!result.Success || string.IsNullOrEmpty(result.Output))
-            {
-                return null;
-            }
-
-            var url = result.Output.Trim();
-
-            // Parse owner from various URL formats:
-            // https://github.com/owner/repo.git
-            // git@github.com:owner/repo.git
-            if (url.Contains("github.com"))
-            {
-                var parts = url
-                    .Replace("https://github.com/", "")
-                    .Replace("git@github.com:", "")
-                    .Split('/');
-
-                if (parts.Length >= 1)
-                {
-                    return parts[0];
-                }
-            }
-
-            return null;
-        }
-        catch
-        {
-            return null;
-        }
+        return await GhcrHelper.LoginAsync(ExecutorFactory(), Logger, token, owner);
     }
 }
 

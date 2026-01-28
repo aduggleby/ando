@@ -296,14 +296,9 @@ public class GitHubOperations(
                 return false;
             }
 
-            // Login to ghcr.io using bash to pipe the token.
-            Logger.Debug("Logging in to ghcr.io...");
-            var loginScript = $"echo '{token}' | docker login ghcr.io -u {owner} --password-stdin";
-            var loginResult = await ExecutorFactory().ExecuteAsync("bash", ["-c", loginScript]);
-
-            if (!loginResult.Success)
+            // Login to ghcr.io using shared helper.
+            if (!await GhcrHelper.LoginAsync(ExecutorFactory(), Logger, token, owner))
             {
-                Logger.Error($"Docker login to ghcr.io failed: {loginResult.Error}");
                 return false;
             }
 
