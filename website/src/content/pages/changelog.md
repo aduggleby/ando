@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.49
+
+**2026-01-28**
+
+- Add AI-powered automatic changelog updates during version bumps
+- Add permission checks for AI-assisted operations
+
 ## 0.9.48
 
 **2026-01-28**
