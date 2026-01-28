@@ -362,7 +362,7 @@ public class BumpCommand
             2. **For each changelog file found**, add a new version entry with:
                - Version header: ## {newVersion}
                - Date: **{date}**
-               - 1-3 bullet points describing the changes
+               - As few concise bullet points as possible describing the changes
 
             3. **Writing the changelog entries**:
                - Use simple, non-technical language that end users can understand
