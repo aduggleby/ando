@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.47
+
+**2026-01-28**
+
+- Fix error output capture when commands fail, showing helpful error messages instead of empty output
+- Improve timeout handling to gracefully stop long-running commands
+
 ## 0.9.46
 
 **2026-01-26**
