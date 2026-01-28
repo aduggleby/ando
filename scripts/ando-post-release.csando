@@ -63,13 +63,31 @@ Log.Info("Updating global ando tool...");
 
 // Update the global tool to the specific version we just released.
 // Without --version, dotnet may install a cached/older version due to NuGet index delays.
-var result = await Shell.RunAsync("dotnet", $"tool update -g ando --version {version}");
-if (result.ExitCode == 0)
+// NuGet CDN propagation can take time even after the API reports availability,
+// so retry the update command if it fails.
+var updateMaxAttempts = 10;
+var updateDelaySeconds = 15;
+var updateSuccess = false;
+
+for (int attempt = 1; attempt <= updateMaxAttempts; attempt++)
 {
-    Log.Info("Successfully updated ando tool!");
+    var result = await Shell.RunAsync("dotnet", $"tool update -g ando --version {version}");
+    if (result.ExitCode == 0)
+    {
+        Log.Info("Successfully updated ando tool!");
+        updateSuccess = true;
+        break;
+    }
+
+    if (attempt < updateMaxAttempts)
+    {
+        Log.Info($"  Update failed, retrying in {updateDelaySeconds}s... ({attempt}/{updateMaxAttempts})");
+        await System.Threading.Tasks.Task.Delay(updateDelaySeconds * 1000);
+    }
 }
-else
+
+if (!updateSuccess)
 {
-    Log.Warning($"Failed to update ando tool (exit code {result.ExitCode})");
+    Log.Warning($"Failed to update ando tool after {updateMaxAttempts} attempts");
     Log.Warning("You can manually update with: dotnet tool update -g ando");
 }
