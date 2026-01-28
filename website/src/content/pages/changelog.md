@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.54
+
+**2026-01-28**
+
+- Add support for building multi-architecture Docker images
+
 ## 0.9.53
 
 **2026-01-28**
