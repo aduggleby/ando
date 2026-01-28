@@ -61,8 +61,9 @@ if (!available)
 Log.Info($"Version {version} is now available on NuGet.org!");
 Log.Info("Updating global ando tool...");
 
-// Update the global tool.
-var result = await Shell.RunAsync("dotnet", "tool update -g ando");
+// Update the global tool to the specific version we just released.
+// Without --version, dotnet may install a cached/older version due to NuGet index delays.
+var result = await Shell.RunAsync("dotnet", $"tool update -g ando --version {version}");
 if (result.ExitCode == 0)
 {
     Log.Info("Successfully updated ando tool!");

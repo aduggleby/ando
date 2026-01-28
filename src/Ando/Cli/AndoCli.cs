@@ -118,6 +118,12 @@ public class AndoCli : IDisposable
         Console.WriteLine();
     }
 
+    // Known commands that ANDO supports.
+    private static readonly HashSet<string> KnownCommands = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "run", "verify", "commit", "bump", "docs", "release", "clean", "help"
+    };
+
     /// <summary>
     /// Main entry point that routes to the appropriate command handler.
     /// </summary>
@@ -125,19 +131,32 @@ public class AndoCli : IDisposable
     public async Task<int> RunAsync()
     {
         // Command routing logic:
-        // - No args or "run" or any non-flag argument -> run the build
+        // - No args or "run" -> run the build
+        // - Options starting with - (except -v/-h/--version/--help) -> implicit run
         // - "help", "--help", "-h" -> show help
         // - "clean" -> cleanup command
         // - "commit" -> AI-generated commit
         // - "bump" -> Version bumping
         // - "docs" -> Documentation update
         // - "release" -> Full release workflow
+        // - Unknown commands -> show error and help
         // This allows "ando" and "ando run" to behave identically.
-        // Also treat options (starting with -) as implicit run command, except -v/-h/--version/--help.
+
+        // Check for unknown commands first (before treating as implicit run).
+        if (_args.Length > 0 && !_args[0].StartsWith("-") && !KnownCommands.Contains(_args[0]))
+        {
+            PrintHeader();
+            _logger.Error($"Unknown command: {_args[0]}");
+            _logger.Error("");
+            HelpCommand();
+            return 1;
+        }
+
+        // Treat options (starting with -) as implicit run command, except -v/-h/--version/--help.
         var isRunOption = _args.Length > 0 && _args[0].StartsWith("-") &&
                           _args[0] != "-v" && _args[0] != "--version" &&
                           _args[0] != "-h" && _args[0] != "--help";
-        if (_args.Length == 0 || _args[0] == "run" || isRunOption || !_args[0].StartsWith("-") && _args[0] != "clean" && _args[0] != "help" && _args[0] != "verify" && _args[0] != "commit" && _args[0] != "bump" && _args[0] != "docs" && _args[0] != "release")
+        if (_args.Length == 0 || _args[0] == "run" || isRunOption)
         {
             PrintHeader();
             return await RunCommandAsync();
@@ -186,7 +205,11 @@ public class AndoCli : IDisposable
             return 0;
         }
 
-        _logger.Error($"Unknown command: {_args[0]}");
+        // Unknown flag (shouldn't reach here due to earlier checks, but handle gracefully).
+        PrintHeader();
+        _logger.Error($"Unknown option: {_args[0]}");
+        _logger.Error("");
+        HelpCommand();
         return 1;
     }
 
