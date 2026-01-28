@@ -39,7 +39,7 @@ Unknown commands show an error with the help text (e.g., `ando foo` displays "Un
 
 ### Docker-in-Docker (DIND) Detection
 
-ANDO automatically detects when your build script uses operations requiring DIND (Docker.Build, Docker.Push, Docker.Install, GitHub.PushImage, Playwright.Test). This detection also scans child builds invoked via `Ando.Build()`. If DIND is needed but not enabled, ANDO prompts:
+ANDO automatically detects when your build script uses operations requiring DIND (Docker.Build, Docker.Buildx, Docker.Push, Docker.Install, GitHub.PushImage, Playwright.Test). This detection also scans child builds invoked via `Ando.Build()`. If DIND is needed but not enabled, ANDO prompts:
 - (Y)es - Enable DIND for this run only
 - (A)lways - Enable DIND and save to ando.config
 - Esc - Cancel the build
@@ -406,9 +406,10 @@ BicepDeployment objects provide typed access to deployment outputs:
 - Nuget.Push(path, options?) - Push package from path/glob (default: nuget.org, skips duplicates)
 
 ### Docker
-- Docker.Install() - Install Docker CLI in container (required for Docker.Build with --dind)
+- Docker.Install() - Install Docker CLI in container (required for Docker.Build/Buildx with --dind)
 - Docker.IsAvailable() - Check if Docker CLI and daemon are accessible (returns bool immediately, not a step)
 - Docker.Build(dockerfile, options?) - Build Docker image from Dockerfile
+- Docker.Buildx(dockerfile, options?) - Build multi-arch Docker images using buildx (supports multiple platforms and direct push)
 
 ### Playwright
 - Playwright.Install(directory) - Install browsers AND system dependencies (runs `npx playwright install --with-deps`)
@@ -501,6 +502,14 @@ Activate with CLI: `ando -p release` or `ando -p publish,release`
 - WithContext(string) - Build context directory
 - WithBuildArg(key, value) - Pass build argument to Dockerfile
 - WithPlatform(string) - Target platform (e.g., "linux/amd64", "linux/arm64")
+- WithNoCache() - Disable build cache
+
+### Docker.Buildx Options
+- WithTag(string) - Add image tag (can call multiple times)
+- WithPlatforms(params string[]) - Target platforms (e.g., "linux/amd64", "linux/arm64")
+- WithContext(string) - Build context directory
+- WithBuildArg(key, value) - Pass build argument to Dockerfile
+- WithPush() - Push images to registry after building
 - WithNoCache() - Disable build cache
 
 ### Git.Tag Options
