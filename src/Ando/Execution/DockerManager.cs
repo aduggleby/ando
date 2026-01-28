@@ -9,7 +9,7 @@
 //
 // Architecture:
 // - Creates containers with project files COPIED into /workspace (not mounted)
-// - Mounts cache directories to persist NuGet/npm packages across builds
+// - Package caches (NuGet/npm) persist inside the container via warm container reuse
 // - Uses 'tail -f /dev/null' to keep containers running indefinitely
 // - ContainerExecutor handles command execution within containers
 //
@@ -17,8 +17,7 @@
 // - Project files are copied in (not mounted) for true isolation - Docker
 //   operations cannot modify host files during build execution
 // - Warm containers avoid the overhead of container creation on each build
-// - Alpine-based images for smaller size and faster pulls
-// - Cache directories mounted for faster dependency resolution across builds
+// - Package caches persist in warm containers (no host directories needed)
 // - Artifacts must be explicitly copied back to host after build completion
 // =============================================================================
 
@@ -274,7 +273,7 @@ public class DockerManager
         return await CreateContainerAsync(config);
     }
 
-    // Creates a new container with cache mounts (but NOT project mount).
+    // Creates a new container (project files copied in, caches persist in container).
     // Project files are copied in separately for isolation.
     // Container runs 'tail -f /dev/null' to stay alive indefinitely.
     private async Task<ContainerInfo> CreateContainerAsync(ContainerConfig config)
@@ -283,26 +282,9 @@ public class DockerManager
         _logger.Info($"  Image: {config.Image}");
         _logger.Info($"  Project files will be copied (isolated mode)");
 
-        // Ensure cache directories exist on local filesystem.
-        // Use local path for directory operations since we're inside the current process/container.
-        var localRoot = config.GetLocalProjectRoot();
-        var localCacheDir = Path.Combine(localRoot, ".ando", "cache");
-        var localNugetCacheDir = Path.Combine(localCacheDir, "nuget");
-        var localNpmCacheDir = Path.Combine(localCacheDir, "npm");
-        Directory.CreateDirectory(localNugetCacheDir);
-        Directory.CreateDirectory(localNpmCacheDir);
-
-        // For Docker volume mounts, use the HOST path (ProjectRoot) which Docker can access.
-        // In DinD mode, this differs from the local path used above for directory creation.
-        var hostCacheDir = Path.Combine(config.ProjectRoot, ".ando", "cache");
-        var hostNugetCacheDir = Path.Combine(hostCacheDir, "nuget");
-        var hostNpmCacheDir = Path.Combine(hostCacheDir, "npm");
-
-        _logger.Debug($"  Local cache directory: {localNugetCacheDir}");
-        _logger.Debug($"  Host cache directory for mount: {hostNugetCacheDir}");
-
         // Build the docker run command arguments.
         // Note: Project root is NOT mounted - files are copied in for isolation.
+        // Cache directories live INSIDE the container and persist via warm container reuse.
         var args = new List<string>
         {
             "run",
@@ -310,12 +292,8 @@ public class DockerManager
             "--name", config.Name,             // Named for easy lookup
             "-w", "/workspace",                // Set working directory
             "--entrypoint", "tail",            // Override entrypoint to keep alive
-            // Mount only cache directories for warm container performance.
-            // These persist NuGet packages and npm modules across builds.
-            // Use HOST paths for volume mounts (Docker needs actual host paths).
-            "-v", $"{hostNugetCacheDir}:/workspace/.ando/cache/nuget",
-            "-v", $"{hostNpmCacheDir}:/workspace/.ando/cache/npm",
-            // Configure environment variables for package manager caches.
+            // Configure environment variables for package manager caches inside container.
+            // These caches persist because warm containers are reused across builds.
             "-e", "NUGET_PACKAGES=/workspace/.ando/cache/nuget",
             "-e", "npm_config_cache=/workspace/.ando/cache/npm",
         };
@@ -323,8 +301,7 @@ public class DockerManager
         _logger.Info($"  Container directories:");
         _logger.Info($"    /workspace                    - Project root (copied, isolated)");
         _logger.Info($"    /workspace/artifacts          - Build outputs");
-        _logger.Info($"    /workspace/.ando/cache/nuget  - NuGet package cache (mounted)");
-        _logger.Info($"    /workspace/.ando/cache/npm    - npm package cache (mounted)");
+        _logger.Info($"    /workspace/.ando/cache        - Package caches (persists in warm container)");
 
         // Optional: Mount Docker socket for Docker-in-Docker scenarios.
         // Required when builds need to create Docker images.

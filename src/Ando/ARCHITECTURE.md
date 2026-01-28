@@ -157,8 +157,7 @@ Build Options:
 Clean Options:
   --artifacts                Remove artifacts directory
   --temp                     Remove .ando/tmp
-  --cache                    Remove .ando/cache
-  --container                Remove project's warm container
+  --container                Remove project's warm container (clears package caches)
   --all                      Remove all of above
 ```
 
@@ -292,17 +291,16 @@ var containerConfig = new ContainerConfig
 #### Warm Container Pattern
 1. **First build** - Creates new container, copies project files, runs build
 2. **Subsequent builds** - Reuses running container, re-copies project files for fresh state
-3. **Cache persistence** - NuGet and npm caches mounted so dependencies are preserved
+3. **Cache persistence** - NuGet and npm caches persist inside the warm container
 
 #### Project File Isolation
 - Project files are **copied into** container (not mounted) for true isolation
 - Docker operations cannot modify host files during build
 - On warm container reuse, files are re-copied to ensure fresh build state
+- No host directories are created for caches (caches live inside container only)
 
 #### Volume Mounts
 ```dockerfile
--v ${host_nuget_cache}:/workspace/.ando/cache/nuget
--v ${host_npm_cache}:/workspace/.ando/cache/npm
 -v /var/run/docker.sock:/var/run/docker.sock  # Optional for Docker-in-Docker
 ```
 

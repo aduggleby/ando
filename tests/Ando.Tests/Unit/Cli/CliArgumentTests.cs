@@ -68,7 +68,6 @@ public class CliArgumentTests
 
         output.ShouldContain("--artifacts");
         output.ShouldContain("--temp");
-        output.ShouldContain("--cache");
         output.ShouldContain("--container");
         output.ShouldContain("--all");
     }

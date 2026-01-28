@@ -176,26 +176,31 @@ public class AndoCli : IDisposable
 
         if (_args[0] == "commit")
         {
+            PrintHeader();
             return await CommitCommandAsync();
         }
 
         if (_args[0] == "bump")
         {
+            PrintHeader();
             return await BumpCommandAsync();
         }
 
         if (_args[0] == "docs")
         {
+            PrintHeader();
             return await DocsCommandAsync();
         }
 
         if (_args[0] == "release")
         {
+            PrintHeader();
             return await ReleaseCommandAsync();
         }
 
         if (_args[0] == "clean")
         {
+            PrintHeader();
             return await CleanCommandAsync();
         }
 
@@ -599,18 +604,6 @@ public class AndoCli : IDisposable
             }
         }
 
-        // Remove cached dependencies (NuGet packages, npm modules).
-        // Only removed when explicitly requested, as rebuilding cache is slow.
-        if (HasFlag("--cache") || HasFlag("--all"))
-        {
-            var cachePath = Path.Combine(rootPath, ".ando", "cache");
-            if (Directory.Exists(cachePath))
-            {
-                Directory.Delete(cachePath, recursive: true);
-                _logger.Info($"Removed: {cachePath}");
-            }
-        }
-
         return 0;
     }
 
@@ -619,7 +612,7 @@ public class AndoCli : IDisposable
     private bool HasAnyCleanFlags()
     {
         return HasFlag("--artifacts") || HasFlag("--temp") ||
-               HasFlag("--cache") || HasFlag("--container") || HasFlag("--all");
+               HasFlag("--container") || HasFlag("--all");
     }
 
     // Generates a deterministic container name using the project directory
@@ -749,8 +742,7 @@ public class AndoCli : IDisposable
         Console.WriteLine("Clean Options:");
         Console.WriteLine("  --artifacts         Remove artifacts directory");
         Console.WriteLine("  --temp              Remove .ando/tmp directory");
-        Console.WriteLine("  --cache             Remove .ando/cache (NuGet/npm caches)");
-        Console.WriteLine("  --container         Remove the project's warm Docker container");
+        Console.WriteLine("  --container         Remove the project's warm Docker container (clears caches)");
         Console.WriteLine("  --all               Remove all of the above");
         Console.WriteLine("  (no flags)          Default: remove artifacts and temp only");
         Console.WriteLine();

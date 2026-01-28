@@ -239,8 +239,7 @@ ANDO prompts before loading environment files (unless `--read-env` flag or `read
 | Path | Description |
 |------|-------------|
 | `build.csando.log` | Plain-text log of the last build run. Overwrites on each run. |
-| `.ando/cache/nuget/` | NuGet package cache (mounted into container). |
-| `.ando/cache/npm/` | npm package cache (mounted into container). |
+| `.ando/cache/` | Package caches persist inside warm containers (not on host). |
 | `.ando/tmp/` | Temporary files used during builds. |
 | `artifacts/` | Default output directory for build artifacts. |
 

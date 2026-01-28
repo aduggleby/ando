@@ -106,8 +106,7 @@ ANDO uses and creates these files/directories:
 | `.env.ando` | Environment variables (preferred, project-specific) |
 | `.env` | Environment variables (fallback) |
 | `build.csando.log` | Plain-text log of last build run (overwritten each run) |
-| `.ando/cache/nuget/` | NuGet package cache (mounted into container) |
-| `.ando/cache/npm/` | npm package cache (mounted into container) |
+| `.ando/cache/` | Package caches persist inside warm containers (not on host) |
 | `.ando/tmp/` | Temporary files used during builds |
 | `artifacts/` | Default output directory for build artifacts |
 
