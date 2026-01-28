@@ -210,8 +210,7 @@ if (result.ExitCode != 0) throw new Exception("Tests failed");
 |------|-------------|
 | `--artifacts` | Remove the artifacts directory. |
 | `--temp` | Remove temp directory. |
-| `--cache` | Remove NuGet and npm caches. |
-| `--container` | Remove the project's warm container. |
+| `--container` | Remove the project's warm container (clears package caches). |
 | `--all` | Remove all of the above. |
 
 ## Project Files

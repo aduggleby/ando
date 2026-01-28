@@ -20,7 +20,7 @@ ando run
 - `ando release --all` - Run all applicable release steps non-interactively
 - `ando release --dry-run` - Preview what release would do
 - `ando verify` - Check build script for errors without executing
-- `ando clean` - Remove artifacts, temp files, and containers
+- `ando clean` - Remove artifacts, temp files, and containers (removing container clears caches)
 - `ando help` - Show available commands
 - `ando --version` or `ando -v` - Show version number
 

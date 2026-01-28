@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.51
+
+**2026-01-28**
+
+- Improve build performance by persisting caches inside containers instead of mounting from host
+
 ## 0.9.50
 
 **2026-01-28**
