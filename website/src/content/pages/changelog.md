@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.55
+
+**2026-01-28**
+
+- Improve documentation generation to analyze recent commits for better context
+
 ## 0.9.54
 
 **2026-01-28**
