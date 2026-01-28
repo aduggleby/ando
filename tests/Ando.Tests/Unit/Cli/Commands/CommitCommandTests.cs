@@ -178,6 +178,8 @@ public class CommitCommandTests : IDisposable
         _runner.SetOutput("git", "status --porcelain", " M src/file.cs\n");
         _runner.SetOutput("git", "diff --cached -- . :(exclude)package-lock.json :(exclude)yarn.lock :(exclude)pnpm-lock.yaml :(exclude)*.min.js :(exclude)*.min.css", "");
         _runner.SetOutput("git", "diff -- . :(exclude)package-lock.json :(exclude)yarn.lock :(exclude)pnpm-lock.yaml :(exclude)*.min.js :(exclude)*.min.css", "diff content");
+        // Create ando.config with Claude permission to skip the prompt.
+        File.WriteAllText(Path.Combine(_testDir, "ando.config"), """{"allowClaude": true}""");
     }
 
     #endregion

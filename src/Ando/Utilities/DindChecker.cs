@@ -328,9 +328,10 @@ public class DindChecker
                 return DindCheckResult.EnabledThisRun;
 
             case 'a':
-                // Save to ando.config.
-                var config = new ProjectConfig { Dind = true };
-                config.Save(projectRoot);
+                // Save to ando.config (preserving existing settings).
+                var existingConfig = ProjectConfig.Load(projectRoot);
+                var newConfig = existingConfig with { Dind = true };
+                newConfig.Save(projectRoot);
                 _logger.Info("Saved dind:true to ando.config");
                 Console.WriteLine();
                 return DindCheckResult.EnabledAndSaved;

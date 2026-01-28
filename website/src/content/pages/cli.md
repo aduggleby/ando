@@ -49,12 +49,14 @@ ANDO supports an optional `ando.config` file in the project root for persisting 
 # ando.config
 dind: true
 readEnv: true
+allowClaude: true
 ```
 
 | Setting | Description |
 |---------|-------------|
 | `dind` | Enable Docker-in-Docker mode by default. |
 | `readEnv` | Automatically load environment files without prompting. |
+| `allowClaude` | Allow Claude CLI to run with elevated permissions without prompting. |
 
 ## Environment Files
 
@@ -75,6 +77,26 @@ ANDO looks for environment files in the project root: `.env.ando` (preferred) or
 
 Use `--read-env` or set `readEnv: true` in `ando.config` to skip the prompt and load automatically.
 
+## Claude Integration
+
+Several ANDO commands use Claude CLI for AI-powered features:
+
+| Command | Claude Usage |
+|---------|-------------|
+| `ando commit` | Generates commit messages from diffs |
+| `ando bump` | Generates changelog entries and updates changelog files |
+| `ando docs` | Reviews code changes and updates documentation |
+
+**Requirements:** Claude CLI must be installed (`npm install -g @anthropic-ai/claude-code`)
+
+**Permissions:** Claude runs with `--dangerously-skip-permissions` to allow file edits without interactive prompts. On first use, ANDO prompts you to confirm:
+
+- **(Y)es** - Allow Claude for this run only
+- **(n)o** - Cancel the command
+- **(A)lways** - Allow Claude and save `allowClaude: true` to `ando.config`
+
+To skip the prompt, add `allowClaude: true` to your `ando.config` file.
+
 ## Commit Command
 
 Commits all changes with an AI-generated message using Claude.
@@ -93,8 +115,6 @@ docs: add options reference to GitHub provider
 
 Commit with this message? [Y/n] y
 ```
-
-**Requirements:** Claude CLI must be installed (`npm install -g @anthropic-ai/claude-code`)
 
 ## Bump Command
 

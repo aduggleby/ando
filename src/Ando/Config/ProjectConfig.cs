@@ -49,6 +49,13 @@ public record ProjectConfig
     public bool ReadEnv { get; init; } = false;
 
     /// <summary>
+    /// Whether to allow Claude CLI to run with --dangerously-skip-permissions.
+    /// When true, skips the confirmation prompt for AI-powered commands.
+    /// </summary>
+    [JsonPropertyName("allowClaude")]
+    public bool AllowClaude { get; init; } = false;
+
+    /// <summary>
     /// Loads project configuration from the specified directory.
     /// Returns default configuration if file doesn't exist or is invalid.
     /// </summary>

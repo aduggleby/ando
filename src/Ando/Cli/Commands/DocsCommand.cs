@@ -57,6 +57,14 @@ public class DocsCommand
 
             var repoRoot = Directory.GetCurrentDirectory();
 
+            // Check for Claude permission (this command uses Claude for documentation updates).
+            var claudeChecker = new ClaudePermissionChecker(_logger);
+            var claudeResult = claudeChecker.CheckAndPrompt(repoRoot, "docs");
+            if (!ClaudePermissionChecker.IsAllowed(claudeResult))
+            {
+                return 1;
+            }
+
             // Initialize hook runner.
             var hookRunner = new HookRunner(repoRoot, _logger);
             var hookContext = new HookContext { Command = "docs" };

@@ -64,6 +64,14 @@ public class CommitCommand
 
             // Initialize hook runner.
             var projectRoot = Directory.GetCurrentDirectory();
+
+            // Check for Claude permission (this command uses Claude for AI-generated messages).
+            var claudeChecker = new ClaudePermissionChecker(_logger);
+            var claudeResult = claudeChecker.CheckAndPrompt(projectRoot, "commit");
+            if (!ClaudePermissionChecker.IsAllowed(claudeResult))
+            {
+                return 1;
+            }
             var hookRunner = new HookRunner(projectRoot, _logger);
             var hookContext = new HookContext { Command = "commit" };
 

@@ -65,6 +65,14 @@ public class BumpCommand
 
             var repoRoot = Path.GetDirectoryName(buildScript) ?? ".";
 
+            // Check for Claude permission (this command uses Claude for changelog generation).
+            var claudeChecker = new ClaudePermissionChecker(_logger);
+            var claudeResult = claudeChecker.CheckAndPrompt(repoRoot, "bump");
+            if (!ClaudePermissionChecker.IsAllowed(claudeResult))
+            {
+                return 1;
+            }
+
             // Initialize hook runner.
             var hookRunner = new HookRunner(repoRoot, _logger);
             var hookContext = new HookContext
@@ -227,15 +235,15 @@ public class BumpCommand
                 updatedFiles.Add(project.Path);
             }
 
-            // Step 8: Generate changelog entry using Claude.
-            var changelogEntry = await GenerateChangelogEntryAsync(baseVersion, newVersion, autoConfirm);
+            // Step 8: Update changelog files using Claude.
+            await UpdateChangelogsAsync(baseVersion, newVersion, autoConfirm);
 
-            // Step 9: Update documentation (changelog, version badges).
+            // Step 9: Update version badges in documentation.
             Console.WriteLine();
-            _logger.Info("Updating documentation:");
+            _logger.Info("Updating version badges:");
 
             var docUpdater = new DocumentationUpdater(repoRoot);
-            var docResults = docUpdater.UpdateDocumentation(baseVersion, newVersion, changelogEntry);
+            var docResults = docUpdater.UpdateVersionBadges(baseVersion, newVersion);
 
             foreach (var result in docResults)
             {
@@ -284,11 +292,11 @@ public class BumpCommand
     }
 
     /// <summary>
-    /// Generates a changelog entry using Claude based on commit messages and changed files.
+    /// Updates changelog files using Claude based on commit messages and changed files.
     /// Tries to find a git tag matching the version (vX.Y.Z or X.Y.Z format).
-    /// If no tag is found and autoConfirm is false, prompts the user for a changelog entry.
+    /// If no tag is found, skips changelog update (no changes to document).
     /// </summary>
-    private async Task<IReadOnlyList<string>?> GenerateChangelogEntryAsync(string currentVersion, string newVersion, bool autoConfirm)
+    private async Task UpdateChangelogsAsync(string currentVersion, string newVersion, bool autoConfirm)
     {
         // Try both "vX.Y.Z" and "X.Y.Z" tag formats.
         var tagFormats = new[] { $"v{currentVersion}", currentVersion };
@@ -307,43 +315,36 @@ public class BumpCommand
                     Console.WriteLine($"  Files changed: {changedFiles.Count}");
                     Console.WriteLine();
 
-                    return await GenerateChangelogWithClaudeAsync(messages, changedFiles, newVersion);
+                    await UpdateChangelogsWithClaudeAsync(messages, changedFiles, newVersion);
+                    return;
+                }
+                else
+                {
+                    _logger.Info($"No changes since tag {tag}, skipping changelog update.");
+                    return;
                 }
             }
         }
 
-        // No tag found or no commits since tag.
-        _logger.Warning($"No git tag found for version {currentVersion}.");
-
-        if (autoConfirm)
-        {
-            // Use default "Version bump" entry.
-            return null;
-        }
-
-        // Ask user for changelog entry.
-        Console.Write("Enter changelog entry (or press Enter for 'Version bump'): ");
-        var userEntry = Console.ReadLine()?.Trim();
-
-        if (string.IsNullOrEmpty(userEntry))
-            return null;
-
-        return [userEntry];
+        // No tag found.
+        _logger.Warning($"No git tag found for version {currentVersion}, skipping changelog update.");
     }
 
     /// <summary>
-    /// Calls Claude to generate a concise, non-technical changelog entry.
+    /// Calls Claude to find changelog files and update them with a new version entry.
+    /// Claude will search for changelog files and edit them directly.
     /// </summary>
-    private async Task<IReadOnlyList<string>?> GenerateChangelogWithClaudeAsync(
+    private async Task UpdateChangelogsWithClaudeAsync(
         List<string> commitMessages,
         List<string> changedFiles,
         string newVersion)
     {
         var commitList = string.Join("\n", commitMessages.Select(m => $"- {m}"));
         var fileList = string.Join("\n", changedFiles.Select(f => $"- {f}"));
+        var date = DateTime.Now.ToString("yyyy-MM-dd");
 
         var prompt = $"""
-            Generate a concise changelog entry for version {newVersion}.
+            Update all changelog files in this repository for version {newVersion}.
 
             ## Commit Messages
             {commitList}
@@ -352,62 +353,43 @@ public class BumpCommand
             {fileList}
 
             ## Instructions
-            - Write 1-3 bullet points describing the changes
-            - Use simple, non-technical language that end users can understand
-            - Focus on what changed from a user's perspective, not implementation details
-            - Start each bullet with a verb (Add, Fix, Improve, Update, etc.)
-            - Do NOT include version numbers in the bullet points
-            - Do NOT include file names or technical jargon
-            - If there are only internal/maintenance changes, summarize as "Internal improvements"
 
-            ## Output Format
-            Return ONLY the bullet points, one per line, starting with "- ".
-            Example:
-            - Add support for custom build profiles
-            - Fix issue with version detection on Windows
-            - Improve error messages for missing dependencies
+            1. **Find all changelog files** in this repository:
+               - Look for CHANGELOG.md in the root directory
+               - Look for changelog files in website/ directory (e.g., changelog.md, changelog.mdx, changelog.astro)
+               - Check common locations like docs/, website/src/content/, website/src/pages/
+
+            2. **For each changelog file found**, add a new version entry with:
+               - Version header: ## {newVersion}
+               - Date: **{date}**
+               - 1-3 bullet points describing the changes
+
+            3. **Writing the changelog entries**:
+               - Use simple, non-technical language that end users can understand
+               - Focus on what changed from a user's perspective, not implementation details
+               - Start each bullet with a verb (Add, Fix, Improve, Update, etc.)
+               - Do NOT include version numbers in the bullet points
+               - Do NOT include file names or technical jargon
+               - If there are only internal/maintenance changes, summarize as "Internal improvements"
+               - Use the SAME changelog entries for all files (consistency)
+
+            4. **Placement**: Insert the new entry after any YAML frontmatter but before existing entries.
+
+            5. **Report**: After making changes, list which files you updated.
+
+            If no changelog files are found, say so.
             """;
 
-        _logger.Info("Generating changelog with Claude...");
+        _logger.Info("Claude is updating changelog files...");
+        Console.WriteLine();
 
         try
         {
-            var result = await _runner.RunClaudeAsync(prompt, timeoutMs: 60000, streamOutput: false);
-
-            if (string.IsNullOrWhiteSpace(result))
-            {
-                _logger.Warning("Claude returned empty response, using default.");
-                return null;
-            }
-
-            // Parse the response - extract lines starting with "-".
-            var entries = result
-                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                .Where(line => line.TrimStart().StartsWith("-"))
-                .Select(line => line.TrimStart().TrimStart('-').Trim())
-                .Where(line => !string.IsNullOrWhiteSpace(line))
-                .ToList();
-
-            if (entries.Count == 0)
-            {
-                _logger.Warning("Could not parse Claude response, using default.");
-                return null;
-            }
-
-            Console.WriteLine();
-            _logger.Info("Generated changelog entry:");
-            foreach (var entry in entries)
-            {
-                Console.WriteLine($"  • {entry}");
-            }
-            Console.WriteLine();
-
-            return entries;
+            await _runner.RunClaudeAsync(prompt, timeoutMs: 120000, streamOutput: true);
         }
         catch (Exception ex)
         {
-            _logger.Warning($"Failed to generate changelog with Claude: {ex.Message}");
-            return null;
+            _logger.Warning($"Failed to update changelogs with Claude: {ex.Message}");
         }
     }
 }

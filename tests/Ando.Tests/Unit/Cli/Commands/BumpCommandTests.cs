@@ -165,6 +165,8 @@ public class BumpCommandTests : IDisposable
     private void CreateBuildScript(string content)
     {
         File.WriteAllText(Path.Combine(_testDir, "build.csando"), content);
+        // Create ando.config with Claude permission to skip the prompt.
+        File.WriteAllText(Path.Combine(_testDir, "ando.config"), """{"allowClaude": true}""");
     }
 
     private void CreateCsproj(string relativePath, string version)

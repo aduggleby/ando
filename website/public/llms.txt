@@ -44,6 +44,22 @@ ANDO automatically detects when your build script uses operations requiring DIND
 
 To skip the prompt, use `--dind` flag, add `dind: true` to `ando.config`, or set `ANDO_DIND=1` environment variable. Child builds automatically inherit DIND mode from parent builds (passed via both container and host process environment).
 
+### Claude Integration
+
+Several ANDO commands use Claude CLI for AI-powered features:
+- `ando commit` - Generates commit messages from diffs
+- `ando bump` - Generates changelog entries and updates changelog files
+- `ando docs` - Reviews code changes and updates documentation
+
+Requirements: Claude CLI must be installed (`npm install -g @anthropic-ai/claude-code`)
+
+Permissions: Claude runs with `--dangerously-skip-permissions` to allow file edits without interactive prompts. On first use, ANDO prompts:
+- (Y)es - Allow Claude for this run only
+- (n)o - Cancel the command
+- (A)lways - Allow Claude and save `allowClaude: true` to ando.config
+
+To skip the prompt, add `allowClaude: true` to your `ando.config` file.
+
 ### Configuration File
 
 ANDO supports an optional `ando.config` file (YAML format) in the project root:
@@ -52,11 +68,13 @@ ANDO supports an optional `ando.config` file (YAML format) in the project root:
 # ando.config
 dind: true
 readEnv: true
+allowClaude: true
 ```
 
 Settings:
 - `dind` - Enable Docker-in-Docker mode by default
 - `readEnv` - Automatically load environment files without prompting
+- `allowClaude` - Allow Claude CLI to run with elevated permissions without prompting
 
 ### Environment Files
 
