@@ -70,6 +70,7 @@ public class ReleaseCommand
             var remoteBranch = hasRemote ? await _git.GetRemoteTrackingBranchAsync() : null;
             var hasWebsite = Directory.Exists(Path.Combine(repoRoot, "website"));
             var hasPublishProfile = HasPublishProfile(repoRoot);
+            var (hasChangesSinceTag, lastTag, commitCount) = await _git.GetChangesSinceLastTagAsync();
 
             // 3. Display current state.
             AnsiConsole.MarkupLine("[bold]ANDO Release Workflow[/]");
@@ -79,6 +80,10 @@ public class ReleaseCommand
             AnsiConsole.MarkupLine($"  Branch: [cyan]{branch}[/]");
             AnsiConsole.MarkupLine($"  Version: [cyan]{version}[/]");
             AnsiConsole.MarkupLine($"  Uncommitted changes: [cyan]{(hasChanges ? $"{changedFiles.Count} files" : "none")}[/]");
+            var changesSinceTagText = lastTag == null
+                ? "first release"
+                : hasChangesSinceTag ? $"{commitCount} commits since {lastTag}" : $"none since {lastTag}";
+            AnsiConsole.MarkupLine($"  Changes since last tag: [cyan]{changesSinceTagText}[/]");
             AnsiConsole.MarkupLine($"  Website folder: [cyan]{(hasWebsite ? "yes" : "no")}[/]");
             AnsiConsole.WriteLine();
 
@@ -94,7 +99,7 @@ public class ReleaseCommand
             }
 
             // 4. Build steps.
-            var steps = BuildSteps(hasChanges, hasWebsite, hasPublishProfile, hasRemote, remoteBranch, version);
+            var steps = BuildSteps(hasChanges, hasWebsite, hasPublishProfile, hasRemote, remoteBranch, version, hasChangesSinceTag, lastTag);
 
             // 5. Show checklist or run all.
             List<ReleaseStep> selectedSteps;
@@ -151,17 +156,23 @@ public class ReleaseCommand
 
     private List<ReleaseStep> BuildSteps(
         bool hasChanges, bool hasWebsite, bool hasPublishProfile,
-        bool hasRemote, string? remoteBranch, string version)
+        bool hasRemote, string? remoteBranch, string version,
+        bool hasChangesSinceTag, string? lastTag)
     {
         var mdFiles = Directory.GetFiles(".", "*.md", SearchOption.AllDirectories)
             .Where(f => !f.Contains("node_modules") && !f.Contains("bin") && !f.Contains("obj"))
             .Count();
         var hasDocsToUpdate = hasWebsite || mdFiles > 0;
 
+        // Bump is enabled if there are changes since the last tag OR uncommitted changes
+        // (which will become a commit). We note "if any changes" since the commit step runs first.
+        var canBump = hasChangesSinceTag || hasChanges;
+        var bumpDisabledReason = canBump ? null : $"no changes since {lastTag}";
+
         return
         [
             new("commit", "Commit uncommitted changes", hasChanges, hasChanges ? null : "no changes"),
-            new("bump", $"Bump version ({version})", true, null),
+            new("bump", $"Bump version ({version}) if any changes", canBump, bumpDisabledReason),
             new("docs", hasWebsite
                 ? "Update documentation (Claude)"
                 : "Update documentation (Claude - markdown only)",

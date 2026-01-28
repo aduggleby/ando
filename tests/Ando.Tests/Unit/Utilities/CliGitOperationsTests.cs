@@ -423,4 +423,48 @@ public class CliGitOperationsTests
     }
 
     #endregion
+
+    #region GetChangesSinceLastTagAsync Tests
+
+    [Fact]
+    public async Task GetChangesSinceLastTagAsync_NoTags_ReturnsHasChangesTrue()
+    {
+        _runner.SetResult("git", "describe --tags --abbrev=0", new CliProcessRunner.ProcessResult(128, "", "fatal: No names found"));
+
+        var (hasChanges, lastTag, commitCount) = await _git.GetChangesSinceLastTagAsync();
+
+        hasChanges.ShouldBeTrue();
+        lastTag.ShouldBeNull();
+        commitCount.ShouldBe(-1);
+    }
+
+    [Fact]
+    public async Task GetChangesSinceLastTagAsync_WithCommitsSinceTag_ReturnsHasChangesTrue()
+    {
+        _runner.SetResult("git", "describe --tags --abbrev=0", new CliProcessRunner.ProcessResult(0, "v1.0.0\n", ""));
+        _runner.SetResult("git", "log v1.0.0..HEAD --pretty=format:%s",
+            new CliProcessRunner.ProcessResult(0, "feat: add feature\nfix: bug fix\n", ""));
+
+        var (hasChanges, lastTag, commitCount) = await _git.GetChangesSinceLastTagAsync();
+
+        hasChanges.ShouldBeTrue();
+        lastTag.ShouldBe("v1.0.0");
+        commitCount.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task GetChangesSinceLastTagAsync_NoCommitsSinceTag_ReturnsHasChangesFalse()
+    {
+        _runner.SetResult("git", "describe --tags --abbrev=0", new CliProcessRunner.ProcessResult(0, "v1.0.0\n", ""));
+        _runner.SetResult("git", "log v1.0.0..HEAD --pretty=format:%s",
+            new CliProcessRunner.ProcessResult(0, "", ""));
+
+        var (hasChanges, lastTag, commitCount) = await _git.GetChangesSinceLastTagAsync();
+
+        hasChanges.ShouldBeFalse();
+        lastTag.ShouldBe("v1.0.0");
+        commitCount.ShouldBe(0);
+    }
+
+    #endregion
 }

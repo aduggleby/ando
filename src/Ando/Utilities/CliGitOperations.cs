@@ -251,4 +251,21 @@ public class CliGitOperations
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .ToList();
     }
+
+    /// <summary>
+    /// Checks if there are any commits since the last tag.
+    /// Returns true if no tags exist (first release) or if there are commits since the last tag.
+    /// </summary>
+    public async Task<(bool HasChanges, string? LastTag, int CommitCount)> GetChangesSinceLastTagAsync()
+    {
+        var lastTag = await GetLastTagAsync();
+        if (lastTag == null)
+        {
+            // No tags exist - this is the first release.
+            return (true, null, -1);
+        }
+
+        var commits = await GetCommitMessagesSinceTagAsync(lastTag);
+        return (commits.Count > 0, lastTag, commits.Count);
+    }
 }
