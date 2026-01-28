@@ -4,12 +4,13 @@
 // Summary: CLI command handler for 'ando docs'.
 //
 // This command uses Claude to review code changes and update documentation
-// accordingly. It analyzes the diff since the last tag (or all changes) and
-// prompts Claude to update markdown files, website pages, and examples.
+// accordingly. It gets a list of commits since the last tag and instructs
+// Claude to examine each commit, understand the changes, and update docs.
 //
 // Design Decisions:
-// - Uses git diff to determine what changed since last tag
-// - Sends diff to Claude with instructions to update relevant docs
+// - Uses git log to get commits since last tag (not just diff)
+// - Provides commit hashes so Claude can use `git show` to examine details
+// - Lists changed files per commit for quick overview
 // - Auto-commits documentation changes if any were made
 // - Non-fatal errors (Claude failure) return 0 to not block workflows
 // - Can be called standalone or as part of the release workflow
@@ -76,56 +77,62 @@ public class DocsCommand
                 return 1;
             }
 
-            // Get diff since last tag or all changes.
-            var lastTag = await _git.GetLastTagAsync();
-            var diff = lastTag != null
-                ? await _git.GetDiffSinceTagAsync(lastTag)
-                : await _git.GetDiffAsync();
+            // Get commits since last tag.
+            var (commits, lastTag) = await _git.GetCommitsSinceLastTagAsync();
 
-            if (string.IsNullOrWhiteSpace(diff))
+            if (commits.Count == 0)
             {
-                _logger.Info("No changes to analyze.");
+                _logger.Info("No commits to analyze.");
                 return 0;
             }
 
             _logger.Info(lastTag != null
-                ? $"Analyzing changes since {lastTag}..."
-                : "Analyzing all uncommitted changes...");
+                ? $"Analyzing {commits.Count} commit(s) since {lastTag}..."
+                : $"Analyzing {commits.Count} recent commit(s)...");
 
-            var hasWebsite = Directory.Exists(Path.Combine(repoRoot, "website"));
+            // Format commits for the prompt.
+            var commitList = string.Join("\n", commits.Select(c =>
+                $"- [{c.Hash[..7]}] {c.Subject}\n  Files: {string.Join(", ", c.Files.Take(10))}{(c.Files.Count > 10 ? $" (+{c.Files.Count - 10} more)" : "")}"));
 
             var prompt = $"""
-                Review and update documentation based on these code changes.
+                Review and update documentation based on recent code changes.
 
-                ## Code Changes
-                ```
-                {(diff.Length > 8000 ? diff[..8000] + "\n\n[Diff truncated]" : diff)}
-                ```
+                ## Commits Since {lastTag ?? "beginning"} ({commits.Count} total)
+
+                {commitList}
 
                 ## Instructions
 
-                1. Find all markdown files (*.md) anywhere in the repository
-                2. If a website/ folder exists, also check documentation pages there (*.mdx, *.astro)
-                3. For each documentation file, determine if it needs updates based on the code changes
-                4. Skip CHANGELOG.md (handled separately by version bump)
+                1. For each commit that looks like it adds or changes functionality:
+                   - Use `git show <hash>` or read the changed files to understand what changed
+                   - Determine if it impacts user-facing behavior or API
+
+                2. Find all documentation that may need updates:
+                   - Markdown files (*.md) anywhere in the repository
+                   - Website pages in website/ folder (*.astro, *.js)
+                   - The llms.txt file if it exists (must stay in sync with website)
+
+                3. Skip these files (handled separately):
+                   - CHANGELOG.md (handled by version bump)
+                   - Internal refactoring that doesn't affect public API
 
                 ## What to Update
 
-                **For website pages and README.md:**
-                - New features that need documentation
+                - New features, operations, or commands that need documentation
                 - Changed behavior that affects users
                 - New options, parameters, or configuration
-                - Examples that need updating
-                - Ignore internal refactoring that doesn't affect public API
+                - Examples that need updating or adding
+                - CLI help text if commands changed
 
                 ## Process
 
-                For each file that needs changes:
-                - Read the current content
-                - Make the necessary updates
-                - Show what you're changing before writing
+                1. Examine each significant commit to understand the changes
+                2. For each documentation file that needs updates:
+                   - Read the current content
+                   - Make the necessary updates
+                   - Explain what you're changing
 
-                If no documentation updates are needed, just say so.
+                If no documentation updates are needed, explain why.
                 """;
 
             AnsiConsole.MarkupLine("[dim]Claude is reviewing documentation...[/]");

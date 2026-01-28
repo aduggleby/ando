@@ -574,9 +574,9 @@ export const operations = [
   {
     group: "Docker",
     name: "Docker.Buildx",
-    desc: "Builds multi-architecture Docker images using buildx. Supports building for multiple platforms in a single command and pushing directly to a registry. <strong>Requires <code>--dind</code> CLI flag</strong>. Automatically creates a buildx builder if needed.",
+    desc: "Builds multi-architecture Docker images using buildx. Supports building for multiple platforms in a single command and pushing directly to a registry. <strong>Requires <code>--dind</code> CLI flag</strong>. Automatically creates a buildx builder and handles ghcr.io authentication when pushing.",
     examples: [
-      '// Build for multiple platforms and push to registry\nDocker.Install();\nDocker.Buildx("./Dockerfile", o => o\n  .WithPlatforms("linux/amd64", "linux/arm64")\n  .WithTag("ghcr.io/myorg/myapp:v1.0.0")\n  .WithTag("ghcr.io/myorg/myapp:latest")\n  .WithPush());',
+      '// Build for multiple platforms and push to ghcr.io\nDocker.Install();\nDocker.Buildx("./Dockerfile", o => o\n  .WithPlatforms("linux/amd64", "linux/arm64")\n  .WithTag("ghcr.io/myorg/myapp:v1.0.0")\n  .WithTag("ghcr.io/myorg/myapp:latest")\n  .WithPush());',
       '// Build with build args and custom context\nDocker.Buildx("./src/MyApp/Dockerfile", o => o\n  .WithPlatforms("linux/amd64", "linux/arm64")\n  .WithTag("myapp:v1.0.0")\n  .WithBuildArg("VERSION", "1.0.0")\n  .WithContext("./src")\n  .WithPush());',
     ],
   },

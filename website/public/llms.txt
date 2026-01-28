@@ -51,7 +51,7 @@ To skip the prompt, use `--dind` flag, add `dind: true` to `ando.config`, or set
 Several ANDO commands use Claude CLI for AI-powered features:
 - `ando commit` - Generates commit messages from diffs
 - `ando bump` - Generates changelog entries and updates changelog files
-- `ando docs` - Reviews code changes and updates documentation
+- `ando docs` - Reviews commits since last tag, examines changed files, and updates documentation
 
 Requirements: Claude CLI must be installed (`npm install -g @anthropic-ai/claude-code`)
 
@@ -409,7 +409,7 @@ BicepDeployment objects provide typed access to deployment outputs:
 - Docker.Install() - Install Docker CLI in container (required for Docker.Build/Buildx with --dind)
 - Docker.IsAvailable() - Check if Docker CLI and daemon are accessible (returns bool immediately, not a step)
 - Docker.Build(dockerfile, options?) - Build Docker image from Dockerfile
-- Docker.Buildx(dockerfile, options?) - Build multi-arch Docker images using buildx (supports multiple platforms and direct push)
+- Docker.Buildx(dockerfile, options?) - Build multi-arch Docker images using buildx (auto-handles ghcr.io auth when pushing)
 
 ### Playwright
 - Playwright.Install(directory) - Install browsers AND system dependencies (runs `npx playwright install --with-deps`)

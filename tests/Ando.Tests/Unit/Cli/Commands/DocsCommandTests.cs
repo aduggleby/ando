@@ -69,13 +69,13 @@ public class DocsCommandTests : IDisposable
     public async Task ExecuteAsync_NoChanges_ReturnsSuccess()
     {
         SetupGitRepo();
-        SetupNoChanges();
+        SetupNoCommits();
 
         var command = new DocsCommand(_runner, _logger);
         var result = await command.ExecuteAsync();
 
         result.ShouldBe(0);
-        _logger.InfoMessages.ShouldContain(m => m.Contains("No changes to analyze"));
+        _logger.InfoMessages.ShouldContain(m => m.Contains("No commits to analyze"));
     }
 
     #endregion
@@ -86,7 +86,7 @@ public class DocsCommandTests : IDisposable
     public async Task ExecuteAsync_WithChanges_ShowsAnalyzingMessage()
     {
         SetupGitRepo();
-        SetupWithChanges();
+        SetupWithCommits();
 
         var command = new DocsCommand(_runner, _logger);
         // This will fail at Claude invocation, but we're testing the setup.
@@ -106,8 +106,13 @@ public class DocsCommandTests : IDisposable
     public async Task ExecuteAsync_WithTag_AnalyzesSinceTag()
     {
         SetupGitRepo();
+        // Has a tag.
         _runner.SetOutput("git", "describe --tags --abbrev=0", "v1.0.0\n");
-        _runner.SetOutput("git", "diff v1.0.0..HEAD", "diff content");
+        // Return commits since tag.
+        _runner.SetOutput("git", "log v1.0.0..HEAD --pretty=format:%H|%s", "abc1234567890|feat: add new feature\ndef5678901234|fix: fix bug");
+        // Return files for each commit.
+        _runner.SetOutput("git", "diff-tree --no-commit-id --name-only -r abc1234567890", "src/Feature.cs");
+        _runner.SetOutput("git", "diff-tree --no-commit-id --name-only -r def5678901234", "src/Bug.cs");
         // Create ando.config with Claude permission using ProjectConfig.
         var config = new ProjectConfig { AllowClaude = true };
         config.Save(_testDir);
@@ -133,7 +138,7 @@ public class DocsCommandTests : IDisposable
     public async Task ExecuteAsync_ClaudeFails_ReturnsSuccessWithWarning()
     {
         SetupGitRepo();
-        SetupWithChanges();
+        SetupWithCommits();
         // Mock Claude failure (when RunClaudeAsync is called, it will throw).
         _runner.SetResult("claude", "-p --dangerously-skip-permissions", new CliProcessRunner.ProcessResult(1, "", "command not found"));
 
@@ -154,25 +159,26 @@ public class DocsCommandTests : IDisposable
         _runner.SetResult("git", "rev-parse --git-dir", new CliProcessRunner.ProcessResult(0, ".git", ""));
     }
 
-    private void SetupNoChanges()
+    private void SetupNoCommits()
     {
         // No tag exists.
         _runner.SetResult("git", "describe --tags --abbrev=0", new CliProcessRunner.ProcessResult(128, "", "fatal: No names found"));
-        // GetDiffAsync calls two git diff commands - both return empty.
-        _runner.SetOutput("git", "diff --cached -- . :(exclude)package-lock.json :(exclude)yarn.lock :(exclude)pnpm-lock.yaml :(exclude)*.min.js :(exclude)*.min.css", "");
-        _runner.SetOutput("git", "diff -- . :(exclude)package-lock.json :(exclude)yarn.lock :(exclude)pnpm-lock.yaml :(exclude)*.min.js :(exclude)*.min.css", "");
+        // No commits (empty log output).
+        _runner.SetOutput("git", "log -50 --pretty=format:%H|%s", "");
         // Create ando.config with Claude permission using ProjectConfig.
         var config = new ProjectConfig { AllowClaude = true };
         config.Save(_testDir);
     }
 
-    private void SetupWithChanges()
+    private void SetupWithCommits()
     {
         // No tag exists.
         _runner.SetResult("git", "describe --tags --abbrev=0", new CliProcessRunner.ProcessResult(128, "", "fatal: No names found"));
-        // GetDiffAsync calls two git diff commands - unstaged has changes.
-        _runner.SetOutput("git", "diff --cached -- . :(exclude)package-lock.json :(exclude)yarn.lock :(exclude)pnpm-lock.yaml :(exclude)*.min.js :(exclude)*.min.css", "");
-        _runner.SetOutput("git", "diff -- . :(exclude)package-lock.json :(exclude)yarn.lock :(exclude)pnpm-lock.yaml :(exclude)*.min.js :(exclude)*.min.css", "diff content here");
+        // Return recent commits (no tag case).
+        _runner.SetOutput("git", "log -50 --pretty=format:%H|%s", "abc1234567890|feat: add new feature\ndef5678901234|fix: fix bug");
+        // Return files for each commit.
+        _runner.SetOutput("git", "diff-tree --no-commit-id --name-only -r abc1234567890", "src/Feature.cs");
+        _runner.SetOutput("git", "diff-tree --no-commit-id --name-only -r def5678901234", "src/Bug.cs");
         // Create ando.config with Claude permission using ProjectConfig.
         var config = new ProjectConfig { AllowClaude = true };
         config.Save(_testDir);

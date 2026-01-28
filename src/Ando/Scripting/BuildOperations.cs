@@ -138,7 +138,7 @@ public class BuildOperations
         var gitHubAuthHelper = new GitHubAuthHelper(logger);
         Git = new GitOperations(registry, logger, executorFactory);
         GitHub = new GitHubOperations(registry, logger, executorFactory, gitHubAuthHelper);
-        Docker = new DockerOperations(registry, logger, executorFactory);
+        Docker = new DockerOperations(registry, logger, executorFactory, gitHubAuthHelper);
         Playwright = new PlaywrightOperations(registry, logger, executorFactory, nodeEnsurer);
 
         // Legacy backward compatibility wrapper.

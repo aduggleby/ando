@@ -227,6 +227,79 @@ public class CliGitOperations
     }
 
     /// <summary>
+    /// Gets detailed commit information since a specific tag.
+    /// Each entry includes hash, subject, and list of changed files.
+    /// </summary>
+    /// <param name="tag">The tag to get commits since (e.g., "v1.0.0").</param>
+    /// <returns>List of commit details.</returns>
+    public async Task<List<CommitInfo>> GetDetailedCommitsSinceTagAsync(string tag)
+    {
+        // Get commits with hash and subject, separated by a delimiter.
+        var result = await _runner.RunAsync("git", $"log {tag}..HEAD --pretty=format:%H|%s");
+        if (result.ExitCode != 0)
+            return [];
+
+        var commits = new List<CommitInfo>();
+        var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var line in lines)
+        {
+            var parts = line.Split('|', 2);
+            if (parts.Length < 2) continue;
+
+            var hash = parts[0].Trim();
+            var subject = parts[1].Trim();
+
+            // Get files changed in this commit.
+            var filesResult = await _runner.RunAsync("git", $"diff-tree --no-commit-id --name-only -r {hash}");
+            var files = filesResult.ExitCode == 0
+                ? filesResult.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList()
+                : [];
+
+            commits.Add(new CommitInfo(hash, subject, files));
+        }
+
+        return commits;
+    }
+
+    /// <summary>
+    /// Gets all commits since the last tag (or all commits if no tags).
+    /// Returns detailed commit information including changed files.
+    /// </summary>
+    public async Task<(List<CommitInfo> Commits, string? SinceTag)> GetCommitsSinceLastTagAsync()
+    {
+        var lastTag = await GetLastTagAsync();
+        if (lastTag == null)
+        {
+            // No tags - get recent commits (limit to 50).
+            var result = await _runner.RunAsync("git", "log -50 --pretty=format:%H|%s");
+            if (result.ExitCode != 0)
+                return ([], null);
+
+            var commits = new List<CommitInfo>();
+            foreach (var line in result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var parts = line.Split('|', 2);
+                if (parts.Length < 2) continue;
+
+                var hash = parts[0].Trim();
+                var subject = parts[1].Trim();
+
+                var filesResult = await _runner.RunAsync("git", $"diff-tree --no-commit-id --name-only -r {hash}");
+                var files = filesResult.ExitCode == 0
+                    ? filesResult.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList()
+                    : [];
+
+                commits.Add(new CommitInfo(hash, subject, files));
+            }
+
+            return (commits, null);
+        }
+
+        return (await GetDetailedCommitsSinceTagAsync(lastTag), lastTag);
+    }
+
+    /// <summary>
     /// Checks if a tag exists.
     /// </summary>
     /// <param name="tag">The tag name to check.</param>
@@ -269,3 +342,11 @@ public class CliGitOperations
         return (commits.Count > 0, lastTag, commits.Count);
     }
 }
+
+/// <summary>
+/// Represents detailed information about a git commit.
+/// </summary>
+/// <param name="Hash">The full commit hash.</param>
+/// <param name="Subject">The commit subject (first line of message).</param>
+/// <param name="Files">List of files changed in this commit.</param>
+public record CommitInfo(string Hash, string Subject, List<string> Files);

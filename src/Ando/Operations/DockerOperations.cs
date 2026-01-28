@@ -21,6 +21,7 @@ using System.Diagnostics;
 using Ando.Execution;
 using Ando.Logging;
 using Ando.Steps;
+using Ando.Utilities;
 
 namespace Ando.Operations;
 
@@ -31,9 +32,11 @@ namespace Ando.Operations;
 public class DockerOperations(
     StepRegistry registry,
     IBuildLogger logger,
-    Func<ICommandExecutor> executorFactory)
+    Func<ICommandExecutor> executorFactory,
+    GitHubAuthHelper? gitHubAuthHelper = null)
     : OperationsBase(registry, logger, executorFactory)
 {
+    private readonly GitHubAuthHelper? _gitHubAuthHelper = gitHubAuthHelper;
     /// <summary>
     /// Checks if Docker CLI is available and the Docker daemon is accessible.
     /// Use this to conditionally skip operations that require Docker.
@@ -192,6 +195,15 @@ public class DockerOperations(
                 dockerfilePath = Path.Combine(dockerfile, "Dockerfile");
             }
 
+            // Auto-login to ghcr.io if pushing to it.
+            if (options.Push && options.Tags.Any(t => t.Contains("ghcr.io")))
+            {
+                if (!await LoginToGhcrAsync())
+                {
+                    return false;
+                }
+            }
+
             // Ensure buildx builder exists for multi-platform builds.
             if (options.Platforms.Count > 0)
             {
@@ -255,6 +267,86 @@ public class DockerOperations(
 
             return true;
         }, options.Tags.FirstOrDefault() ?? dockerfile);
+    }
+
+    /// <summary>
+    /// Logs in to GitHub Container Registry using the GitHub token.
+    /// </summary>
+    private async Task<bool> LoginToGhcrAsync()
+    {
+        if (_gitHubAuthHelper == null)
+        {
+            Logger.Error("GitHub authentication not available for ghcr.io login");
+            return false;
+        }
+
+        var token = _gitHubAuthHelper.GetToken();
+        if (string.IsNullOrEmpty(token))
+        {
+            Logger.Error("GitHub token required for pushing to ghcr.io");
+            return false;
+        }
+
+        // Get owner from git remote for the username.
+        var owner = await GetGitHubOwnerAsync();
+        if (string.IsNullOrEmpty(owner))
+        {
+            Logger.Error("Could not determine GitHub owner from git remote for ghcr.io login");
+            return false;
+        }
+
+        Logger.Info("Logging in to ghcr.io...");
+        var loginScript = $"echo '{token}' | docker login ghcr.io -u {owner} --password-stdin";
+        var loginResult = await ExecutorFactory().ExecuteAsync("bash", ["-c", loginScript]);
+
+        if (!loginResult.Success)
+        {
+            Logger.Error($"Docker login to ghcr.io failed: {loginResult.Error}");
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Gets the GitHub owner from the git remote URL.
+    /// </summary>
+    private async Task<string?> GetGitHubOwnerAsync()
+    {
+        try
+        {
+            var result = await ExecutorFactory().ExecuteAsync("git",
+                ["remote", "get-url", "origin"]);
+
+            if (!result.Success || string.IsNullOrEmpty(result.Output))
+            {
+                return null;
+            }
+
+            var url = result.Output.Trim();
+
+            // Parse owner from various URL formats:
+            // https://github.com/owner/repo.git
+            // git@github.com:owner/repo.git
+            if (url.Contains("github.com"))
+            {
+                var parts = url
+                    .Replace("https://github.com/", "")
+                    .Replace("git@github.com:", "")
+                    .Split('/');
+
+                if (parts.Length >= 1)
+                {
+                    return parts[0];
+                }
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }
 
