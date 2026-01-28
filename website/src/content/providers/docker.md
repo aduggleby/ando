@@ -136,4 +136,4 @@ Docker.Buildx("./src/MyApp/Dockerfile", o => o
 - For pushing images, use the registry-specific operations like [GitHub.PushImage](/providers/github#container-registry).
 - If the dockerfile parameter is a directory, ANDO assumes the Dockerfile is inside that directory.
 - `Docker.Buildx` automatically creates a buildx builder named `ando-builder` if one doesn't exist.
-- `Docker.Buildx` with `WithPush()` automatically handles ghcr.io authentication when pushing to GitHub Container Registry (uses `GITHUB_TOKEN` or gh CLI credentials).
+- `Docker.Buildx` with `WithPush()` automatically handles ghcr.io authentication when pushing to GitHub Container Registry (uses `GITHUB_TOKEN` or gh CLI credentials). The owner is extracted from the ghcr.io tag (e.g., `ghcr.io/myorg/myapp` → owner is `myorg`).

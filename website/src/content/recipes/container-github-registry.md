@@ -107,7 +107,9 @@ ENTRYPOINT ["dotnet", "MyApp.dll"]
 
 ## Specifying the Owner
 
-By default, `GitHub.PushImage` detects the owner from your git remote. To specify explicitly:
+By default, `GitHub.PushImage` detects the owner from your git remote (requires `.git` directory). When using `Docker.Buildx` with `WithPush()` to push directly to ghcr.io, the owner is extracted from the image tag itself (e.g., `ghcr.io/myorg/myapp` → owner is `myorg`), which works even in containers without access to git.
+
+To specify the owner explicitly with `GitHub.PushImage`:
 
 ```csharp
 // Push to an organization's registry

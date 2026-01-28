@@ -409,7 +409,7 @@ BicepDeployment objects provide typed access to deployment outputs:
 - Docker.Install() - Install Docker CLI in container (required for Docker.Build/Buildx with --dind)
 - Docker.IsAvailable() - Check if Docker CLI and daemon are accessible (returns bool immediately, not a step)
 - Docker.Build(dockerfile, options?) - Build Docker image from Dockerfile
-- Docker.Buildx(dockerfile, options?) - Build multi-arch Docker images using buildx (auto-handles ghcr.io auth when pushing)
+- Docker.Buildx(dockerfile, options?) - Build multi-arch Docker images using buildx (auto-handles ghcr.io auth when pushing; extracts owner from image tag)
 
 ### Playwright
 - Playwright.Install(directory) - Install browsers AND system dependencies (runs `npx playwright install --with-deps`)

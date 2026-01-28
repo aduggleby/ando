@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.56
+
+**2026-01-28**
+
+- Improve container registry operations to extract owner from image tags directly
+
 ## 0.9.55
 
 **2026-01-28**
