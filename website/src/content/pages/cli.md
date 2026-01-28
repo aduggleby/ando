@@ -145,10 +145,10 @@ ando release --minor   # Specify bump type (default: patch)
 
 **Steps:**
 1. **Build Verification** - Runs `ando run --read-env` first
-2. **Commit** - Commit uncommitted changes (uses `ando commit`)
+2. **Commit** - Commit uncommitted changes (uses `ando commit`) - *skipped if no uncommitted changes*
 3. **Docs** - Update documentation (uses `ando docs`)
-4. **Bump** - Bump version across all projects (uses `ando bump`)
-5. **Push** - Push to remote repository
+4. **Bump** - Bump version across all projects (uses `ando bump`) - *skipped if no changes since last tag*
+5. **Push** - Push to remote repository - *skipped if no remote tracking*
 6. **Publish** - Run `ando run -p publish --dind --read-env`
 
 Steps are contextually enabled/disabled based on repository state.

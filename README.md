@@ -129,7 +129,7 @@ ando release --major
 1. **Build Verification** - Runs `ando run --read-env` to verify the build passes before proceeding
 2. **Interactive Checklist** - Presents steps to select:
    - **Commit** - Commit any uncommitted changes (skipped if working tree is clean)
-   - **Bump** - Bump version in all project files and update CHANGELOG
+   - **Bump** - Bump version in all project files and update CHANGELOG (skipped if no changes since last tag)
    - **Docs** - Update documentation using Claude to analyze changes
    - **Push** - Push commits to remote (skipped if no remote tracking)
    - **Publish** - Run `ando run -p publish --dind --read-env` for publishing

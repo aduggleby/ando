@@ -16,7 +16,7 @@ ando run
 - `ando commit` - Commit all changes with AI-generated message using Claude
 - `ando bump [patch|minor|major]` - Bump version across all projects in build.csando (default: patch)
 - `ando docs` - Update documentation using Claude (analyzes changes and updates relevant docs)
-- `ando release` - Interactive release workflow (commit, docs, bump, push, publish)
+- `ando release` - Interactive release workflow (commit, docs, bump, push, publish). Steps are contextually enabled: commit skipped if no uncommitted changes, bump skipped if no changes since last tag, push skipped if no remote tracking.
 - `ando release --all` - Run all applicable release steps non-interactively
 - `ando release --dry-run` - Preview what release would do
 - `ando verify` - Check build script for errors without executing
