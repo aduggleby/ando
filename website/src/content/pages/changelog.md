@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.52
+
+**2026-01-28**
+
+- Add comprehensive tests for CLI commands
+
 ## 0.9.51
 
 **2026-01-28**
