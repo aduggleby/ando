@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.50
+
+**2026-01-28**
+
+- Fix validation for unknown CLI commands
+- Improve post-release tool update to use specific version
+
 ## 0.9.49
 
 **2026-01-28**

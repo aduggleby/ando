@@ -24,6 +24,8 @@ ando run
 - `ando help` - Show available commands
 - `ando --version` or `ando -v` - Show version number
 
+Unknown commands show an error with the help text (e.g., `ando foo` displays "Unknown command: foo" and lists available commands).
+
 ### Run Options
 
 - `-f, --file <file>` - Use a specific build file instead of build.csando
