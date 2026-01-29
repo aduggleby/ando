@@ -31,7 +31,7 @@ toc: true
 
 ## Docker-in-Docker (DIND)
 
-ANDO automatically detects when your build script uses operations that require Docker-in-Docker mode (such as `Docker.Build`, `Docker.Buildx`, `Docker.Push`, `Docker.Install`, `GitHub.PushImage`, or `Playwright.Test`). This detection also scans child builds invoked via `Ando.Build()`. If DIND is needed but not enabled, ANDO prompts you:
+ANDO automatically detects when your build script uses operations that require Docker-in-Docker mode (such as `Docker.Build`, `Docker.Push`, `Docker.Install`, `GitHub.PushImage`, or `Playwright.Test`). This detection also scans child builds invoked via `Ando.Build()`. If DIND is needed but not enabled, ANDO prompts you:
 
 - **(Y)es** - Enable DIND for this run only
 - **(A)lways** - Enable DIND and save the setting to `ando.config`

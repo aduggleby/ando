@@ -72,7 +72,6 @@ public class DindChecker
     private static readonly HashSet<string> DindRequiredOperations = new(StringComparer.OrdinalIgnoreCase)
     {
         "Docker.Build",
-        "Docker.Buildx",
         "Docker.Push",
         "Docker.Install",
         "GitHub.PushImage",
@@ -88,7 +87,7 @@ public class DindChecker
     // Regex pattern to find DIND-requiring operation calls in script text.
     // Used for scanning child build scripts without executing them.
     private static readonly Regex DindOperationPattern = new(
-        @"\b(Docker\.Build|Docker\.Buildx|Docker\.Push|Docker\.Install|GitHub\.PushImage|Playwright\.Test)\s*\(",
+        @"\b(Docker\.Build|Docker\.Push|Docker\.Install|GitHub\.PushImage|Playwright\.Test)\s*\(",
         RegexOptions.Compiled);
 
     /// <summary>
@@ -236,16 +235,18 @@ public class DindChecker
             return;
         }
 
-        if (!File.Exists(scriptPath))
-        {
-            _logger.Debug($"Child build script not found: {scriptPath}");
-            return;
-        }
-
+        // Read the script file directly without pre-checking existence.
+        // This avoids a TOCTOU race condition where the file could be deleted
+        // between the existence check and the read operation.
         string scriptContent;
         try
         {
             scriptContent = File.ReadAllText(scriptPath);
+        }
+        catch (FileNotFoundException)
+        {
+            _logger.Debug($"Child build script not found: {scriptPath}");
+            return;
         }
         catch (Exception ex)
         {

@@ -1,20 +1,29 @@
 // =============================================================================
 // DockerOperations.cs
 //
-// Summary: Provides Docker CLI operations for build scripts.
+// Summary: Provides Docker CLI operations for build scripts using buildx.
 //
-// DockerOperations exposes docker commands (build) as typed methods for build
-// scripts. Currently focused on building images; pushing is handled by
-// registry-specific operations (e.g., GitHub.PushImage for ghcr.io).
+// DockerOperations exposes docker buildx commands as typed methods for build
+// scripts. Uses buildx for all builds, supporting single or multi-platform
+// builds with optional registry push.
 //
 // Example usage in build.csando:
+//   // Single platform build (loads into local docker)
 //   Docker.Build("Dockerfile", o => o
 //       .WithTag("myapp:v1.0.0")
 //       .WithBuildArg("VERSION", "1.0.0"));
 //
+//   // Multi-platform build with push to registry
+//   Docker.Build("Dockerfile", o => o
+//       .WithTag("ghcr.io/myorg/myapp:v1.0.0")
+//       .WithPlatforms("linux/amd64", "linux/arm64")
+//       .WithPush());
+//
 // Design Decisions:
-// - Minimal scope initially (just Build), expand as needed
-// - Registry push handled by specific providers (GitHub, Azure, etc.)
+// - Uses buildx for all builds (future-proof, supports multi-arch)
+// - Single Build operation with WithPlatform/WithPlatforms options
+// - Auto-login to ghcr.io when pushing (uses GITHUB_TOKEN or gh CLI)
+// - Creates "ando-builder" buildx builder for multi-platform builds
 // =============================================================================
 
 using System.Diagnostics;
@@ -102,7 +111,8 @@ public class DockerOperations(
     }
 
     /// <summary>
-    /// Builds a Docker image from a Dockerfile.
+    /// Builds a Docker image from a Dockerfile using buildx.
+    /// Supports single or multi-platform builds, with optional push to registry.
     /// </summary>
     /// <param name="dockerfile">Path to the Dockerfile or directory containing it.</param>
     /// <param name="configure">Configuration for the build.</param>
@@ -112,78 +122,6 @@ public class DockerOperations(
         configure?.Invoke(options);
 
         Registry.Register("Docker.Build", async () =>
-        {
-            // Determine the context directory and dockerfile path.
-            var dockerfilePath = dockerfile;
-            var contextPath = options.Context ?? ".";
-
-            // If dockerfile is a directory, assume Dockerfile is in it.
-            if (Directory.Exists(dockerfile))
-            {
-                contextPath = dockerfile;
-                dockerfilePath = Path.Combine(dockerfile, "Dockerfile");
-            }
-
-            var argsBuilder = new ArgumentBuilder()
-                .Add("build")
-                .Add("-f", dockerfilePath);
-
-            // Add all tags.
-            foreach (var tag in options.Tags)
-            {
-                argsBuilder.Add("-t", tag);
-            }
-
-            // Add build arguments.
-            foreach (var (key, value) in options.BuildArgs)
-            {
-                argsBuilder.Add("--build-arg", $"{key}={value}");
-            }
-
-            // Add platform if specified.
-            if (!string.IsNullOrEmpty(options.Platform))
-            {
-                argsBuilder.Add("--platform", options.Platform);
-            }
-
-            // Add no-cache flag.
-            argsBuilder.AddFlag(options.NoCache, "--no-cache");
-
-            // Add the context path last.
-            argsBuilder.Add(contextPath);
-
-            var args = argsBuilder.Build();
-
-            Logger.Debug($"docker {string.Join(" ", args)}");
-            var result = await ExecutorFactory().ExecuteAsync("docker", args);
-
-            if (!result.Success)
-            {
-                Logger.Error($"Docker build failed: {result.Error}");
-                return false;
-            }
-
-            if (options.Tags.Count > 0)
-            {
-                Logger.Info($"Built image: {string.Join(", ", options.Tags)}");
-            }
-
-            return true;
-        }, options.Tags.FirstOrDefault() ?? dockerfile);
-    }
-
-    /// <summary>
-    /// Builds a multi-architecture Docker image using buildx.
-    /// Requires Docker buildx to be available (included in modern Docker).
-    /// </summary>
-    /// <param name="dockerfile">Path to the Dockerfile.</param>
-    /// <param name="configure">Configuration for the buildx build.</param>
-    public void Buildx(string dockerfile, Action<DockerBuildxOptions>? configure = null)
-    {
-        var options = new DockerBuildxOptions();
-        configure?.Invoke(options);
-
-        Registry.Register("Docker.Buildx", async () =>
         {
             var dockerfilePath = dockerfile;
             var contextPath = options.Context ?? ".";
@@ -221,7 +159,7 @@ public class DockerOperations(
                 .Add("buildx", "build")
                 .Add("-f", dockerfilePath);
 
-            // Add platforms.
+            // Add platforms (multiple or single).
             if (options.Platforms.Count > 0)
             {
                 argsBuilder.Add("--platform", string.Join(",", options.Platforms));
@@ -242,6 +180,10 @@ public class DockerOperations(
             // Add push flag.
             argsBuilder.AddFlag(options.Push, "--push");
 
+            // Add load flag (loads image into local docker).
+            // Required for single-platform builds without push to make image available locally.
+            argsBuilder.AddFlag(options.Load, "--load");
+
             // Add no-cache flag.
             argsBuilder.AddFlag(options.NoCache, "--no-cache");
 
@@ -255,7 +197,7 @@ public class DockerOperations(
 
             if (!result.Success)
             {
-                Logger.Error($"Docker buildx failed: {result.Error}");
+                Logger.Error($"Docker build failed: {result.Error}");
                 return false;
             }
 
@@ -300,11 +242,14 @@ public class DockerOperations(
     }
 }
 
-/// <summary>Options for 'docker build' command.</summary>
+/// <summary>Options for 'docker buildx build' command.</summary>
 public class DockerBuildOptions
 {
     /// <summary>Image tags (e.g., "myapp:v1.0.0", "myapp:latest").</summary>
     public List<string> Tags { get; } = new();
+
+    /// <summary>Target platforms (e.g., "linux/amd64", "linux/arm64").</summary>
+    public List<string> Platforms { get; } = new();
 
     /// <summary>Build context directory (default: current directory).</summary>
     public string? Context { get; private set; }
@@ -312,8 +257,11 @@ public class DockerBuildOptions
     /// <summary>Build arguments to pass to Docker.</summary>
     public Dictionary<string, string> BuildArgs { get; } = new();
 
-    /// <summary>Target platform (e.g., "linux/amd64").</summary>
-    public string? Platform { get; private set; }
+    /// <summary>Push images to registry after building.</summary>
+    public bool Push { get; private set; }
+
+    /// <summary>Load image into local docker after building (default: true for single-platform builds without push).</summary>
+    public bool Load { get; private set; } = true;
 
     /// <summary>Do not use cache when building.</summary>
     public bool NoCache { get; private set; }
@@ -322,6 +270,21 @@ public class DockerBuildOptions
     public DockerBuildOptions WithTag(string tag)
     {
         Tags.Add(tag);
+        return this;
+    }
+
+    /// <summary>Sets a single target platform (e.g., "linux/amd64").</summary>
+    public DockerBuildOptions WithPlatform(string platform)
+    {
+        Platforms.Clear();
+        Platforms.Add(platform);
+        return this;
+    }
+
+    /// <summary>Adds target platforms for multi-arch builds. Can be called with multiple platforms.</summary>
+    public DockerBuildOptions WithPlatforms(params string[] platforms)
+    {
+        Platforms.AddRange(platforms);
         return this;
     }
 
@@ -339,10 +302,11 @@ public class DockerBuildOptions
         return this;
     }
 
-    /// <summary>Sets the target platform.</summary>
-    public DockerBuildOptions WithPlatform(string platform)
+    /// <summary>Push images to registry after building. Disables --load.</summary>
+    public DockerBuildOptions WithPush()
     {
-        Platform = platform;
+        Push = true;
+        Load = false; // Can't use --load with --push
         return this;
     }
 
@@ -352,68 +316,11 @@ public class DockerBuildOptions
         NoCache = true;
         return this;
     }
-}
 
-/// <summary>Options for 'docker buildx build' command (multi-arch builds).</summary>
-public class DockerBuildxOptions
-{
-    /// <summary>Image tags (e.g., "myapp:v1.0.0", "myapp:latest").</summary>
-    public List<string> Tags { get; } = new();
-
-    /// <summary>Target platforms (e.g., "linux/amd64", "linux/arm64").</summary>
-    public List<string> Platforms { get; } = new();
-
-    /// <summary>Build context directory (default: current directory).</summary>
-    public string? Context { get; private set; }
-
-    /// <summary>Build arguments to pass to Docker.</summary>
-    public Dictionary<string, string> BuildArgs { get; } = new();
-
-    /// <summary>Push images to registry after building.</summary>
-    public bool Push { get; private set; }
-
-    /// <summary>Do not use cache when building.</summary>
-    public bool NoCache { get; private set; }
-
-    /// <summary>Adds an image tag. Can be called multiple times for multiple tags.</summary>
-    public DockerBuildxOptions WithTag(string tag)
+    /// <summary>Disables loading the image into local docker. Useful when only pushing to a registry.</summary>
+    public DockerBuildOptions WithoutLoad()
     {
-        Tags.Add(tag);
-        return this;
-    }
-
-    /// <summary>Adds target platforms. Can be called with multiple platforms.</summary>
-    public DockerBuildxOptions WithPlatforms(params string[] platforms)
-    {
-        Platforms.AddRange(platforms);
-        return this;
-    }
-
-    /// <summary>Sets the build context directory.</summary>
-    public DockerBuildxOptions WithContext(string context)
-    {
-        Context = context;
-        return this;
-    }
-
-    /// <summary>Adds a build argument.</summary>
-    public DockerBuildxOptions WithBuildArg(string key, string value)
-    {
-        BuildArgs[key] = value;
-        return this;
-    }
-
-    /// <summary>Push images to registry after building.</summary>
-    public DockerBuildxOptions WithPush()
-    {
-        Push = true;
-        return this;
-    }
-
-    /// <summary>Disables the build cache.</summary>
-    public DockerBuildxOptions WithNoCache()
-    {
-        NoCache = true;
+        Load = false;
         return this;
     }
 }

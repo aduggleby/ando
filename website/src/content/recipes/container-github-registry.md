@@ -107,7 +107,7 @@ ENTRYPOINT ["dotnet", "MyApp.dll"]
 
 ## Specifying the Owner
 
-By default, `GitHub.PushImage` detects the owner from your git remote (requires `.git` directory). When using `Docker.Buildx` with `WithPush()` to push directly to ghcr.io, the owner is extracted from the image tag itself (e.g., `ghcr.io/myorg/myapp` → owner is `myorg`), which works even in containers without access to git.
+By default, `GitHub.PushImage` detects the owner from your git remote (requires `.git` directory). When using `Docker.Build` with `WithPush()` to push directly to ghcr.io, the owner is extracted from the image tag itself (e.g., `ghcr.io/myorg/myapp` → owner is `myorg`), which works even in containers without access to git.
 
 To specify the owner explicitly with `GitHub.PushImage`:
 
@@ -306,9 +306,11 @@ Use `WithNoCache()` when:
 | Option | Description |
 |--------|-------------|
 | `WithTag(string)` | Add image tag (can call multiple times) |
+| `WithPlatform(string)` | Single target platform (e.g., "linux/amd64") |
+| `WithPlatforms(params string[])` | Multiple target platforms for multi-arch builds |
 | `WithContext(string)` | Build context directory |
 | `WithBuildArg(key, value)` | Pass build argument |
-| `WithPlatform(string)` | Target platform (e.g., "linux/amd64") |
+| `WithPush()` | Push images to registry after building |
 | `WithNoCache()` | Disable build cache |
 
 ### GitHub.PushImage Options

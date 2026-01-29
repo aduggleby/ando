@@ -7,9 +7,18 @@
 // page imports this data and filters to show only its operations.
 //
 // Structure:
-// - Each operation has: group (provider), name, desc, examples
+// - Each operation has: group (provider), name, desc, examples, sourceFile
 // - Providers are derived from the group field
+// - sourceFile is the path to the C# source file (relative to src/Ando/)
 // =============================================================================
+
+// GitHub repository URL for source links
+export const GITHUB_REPO = "https://github.com/aduggleby/ando";
+
+// Generate GitHub source URL from relative path
+export function getSourceUrl(sourceFile) {
+  return `${GITHUB_REPO}/blob/main/src/Ando/${sourceFile}`;
+}
 
 export const operations = [
   // Top-level operations (globals available in build.csando)
@@ -18,18 +27,21 @@ export const operations = [
     name: "Root",
     desc: "The root path of the project (where build.csando is located). Supports path combining with the `/` operator.",
     examples: ['var output = Root / "dist";', "Dotnet.Publish(app, o => o.Output(output));"],
+    sourceFile: "Scripting/ScriptGlobals.cs",
   },
   {
     group: "Ando",
     name: "Temp",
     desc: "Temporary files directory (root/.ando/tmp). Supports path combining with the `/` operator. Use for caches, intermediate files, etc.",
     examples: ['var cache = Temp / "cache";', 'var intermediate = Temp / "build-output";'],
+    sourceFile: "Scripting/ScriptGlobals.cs",
   },
   {
     group: "Ando",
     name: "Env",
     desc: "Gets an environment variable. By default throws if not set. Pass `required: false` to return null instead.",
     examples: ['var apiKey = Env("API_KEY");', 'var optional = Env("OPTIONAL_VAR", required: false);'],
+    sourceFile: "Scripting/ScriptGlobals.cs",
   },
   {
     group: "Ando",
@@ -40,6 +52,7 @@ export const operations = [
       "Npm.Ci(frontend);",
       'Cloudflare.PagesDeploy(frontend / "dist", "my-site");',
     ],
+    sourceFile: "Scripting/ScriptGlobals.cs",
   },
   // DefineProfile (before Ando.* operations)
   {
@@ -50,6 +63,7 @@ export const operations = [
       'var release = DefineProfile("release");\nvar publish = DefineProfile("publish");\n\nDotnet.Build(app);\n\nif (release) {\n  Git.Tag("v1.0.0");\n  GitHub.CreateRelease(o => o.WithTag("v1.0.0"));\n}',
       "// CLI usage:\n// ando -p release\n// ando -p publish,release",
     ],
+    sourceFile: "Scripting/ScriptGlobals.cs",
   },
   // Build configuration operations (top-level)
   {
@@ -57,12 +71,14 @@ export const operations = [
     name: "UseImage",
     desc: "Set the Docker image for the current build container. Must be called before build steps execute.",
     examples: ['UseImage("ubuntu:24.04");', 'UseImage("mcr.microsoft.com/dotnet/sdk:9.0");', 'UseImage("node:22");'],
+    sourceFile: "Operations/AndoOperations.cs",
   },
   {
     group: "Ando",
     name: "CopyArtifactsToHost",
     desc: "Register files to copy from the container to the host after the build completes. The first parameter is the path inside the container (relative to /workspace or absolute), and the second is the destination on the host (relative to project root or absolute).",
     examples: ['CopyArtifactsToHost("dist", "./dist");', 'CopyArtifactsToHost("bin/Release", "./output");'],
+    sourceFile: "Operations/AndoOperations.cs",
   },
   {
     group: "Ando",
@@ -73,6 +89,7 @@ export const operations = [
       'CopyZippedArtifactsToHost("dist", "./dist/binaries.tar.gz");',
       'CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");',
     ],
+    sourceFile: "Operations/AndoOperations.cs",
   },
   {
     group: "Ando",
@@ -83,6 +100,7 @@ export const operations = [
       'Build(Directory("./website") / "deploy.csando");',
       'Build(Directory("./api"), o => o.WithDind());',
     ],
+    sourceFile: "Operations/AndoOperations.cs",
   },
   // Log operation (top-level with methods)
   {
@@ -95,18 +113,21 @@ export const operations = [
       'Log.Error("Failed to connect to server");',
       'Log.Debug("Processing item 5 of 10");',
     ],
+    sourceFile: "Operations/LogOperations.cs",
   },
   {
     group: "Node",
     name: "Node.Install",
     desc: "Install Node.js globally in the container. Skips installation if already present (for warm containers). Calling this method disables automatic Node.js installation for subsequent npm operations. *Note: Npm operations (Ci, Install, Run, Test, Build) automatically install Node.js if not present.*",
     examples: ["Node.Install(); // Installs Node.js v22 (current LTS)", 'Node.Install("20"); // Installs Node.js v20'],
+    sourceFile: "Operations/ToolInstallOperations.cs",
   },
   {
     group: "Dotnet",
     name: "Dotnet.SdkInstall",
     desc: "Install .NET SDK globally in the container. Skips installation if already present (for warm containers). Calling this method disables automatic SDK installation for subsequent operations. *Note: Dotnet operations (Build, Test, Restore, Publish) automatically install the SDK if not present.*",
     examples: ["Dotnet.SdkInstall(); // Installs .NET SDK 9.0", 'Dotnet.SdkInstall("8.0"); // Installs .NET SDK 8.0'],
+    sourceFile: "Operations/DotnetOperations.cs",
   },
   {
     group: "Dotnet",
@@ -117,24 +138,28 @@ export const operations = [
       "Dotnet.Build(app);",
       'Log.Info($"Building {app.Name} version {app.Version}");',
     ],
+    sourceFile: "Operations/DotnetOperations.cs",
   },
   {
     group: "Dotnet",
     name: "Dotnet.Restore",
     desc: "Restore NuGet packages for a project. Automatically installs .NET SDK if not present.",
     examples: ["Dotnet.Restore(App);", "Dotnet.Restore(App, o => o.NoCache = true);"],
+    sourceFile: "Operations/DotnetOperations.cs",
   },
   {
     group: "Dotnet",
     name: "Dotnet.Build",
     desc: "Compile a project with optional configuration. Automatically installs .NET SDK if not present.",
     examples: ["Dotnet.Build(App);", "Dotnet.Build(App, o => o.Configuration = Configuration.Release);"],
+    sourceFile: "Operations/DotnetOperations.cs",
   },
   {
     group: "Dotnet",
     name: "Dotnet.Test",
     desc: "Run unit tests for a project. Automatically installs .NET SDK if not present.",
     examples: ["Dotnet.Test(Tests);", 'Dotnet.Test(Tests, o => o.Filter = "Category=Unit");'],
+    sourceFile: "Operations/DotnetOperations.cs",
   },
   {
     group: "Dotnet",
@@ -144,18 +169,21 @@ export const operations = [
       "Dotnet.Publish(App);",
       'Dotnet.Publish(App, o => o\n  .Output(Root / "dist")\n  .WithConfiguration(Configuration.Release)\n  .WithRuntime("linux-x64")\n  .AsSelfContained()\n  .AsSingleFile());',
     ],
+    sourceFile: "Operations/DotnetOperations.cs",
   },
   {
     group: "Dotnet",
     name: "Dotnet.Tool",
     desc: "Create a reference to a .NET CLI tool for installation.",
     examples: ['var efTool = Dotnet.Tool("dotnet-ef");', 'var efTool = Dotnet.Tool("dotnet-ef", "9.0.0");'],
+    sourceFile: "Operations/DotnetOperations.cs",
   },
   {
     group: "Ef",
     name: "Ef.DbContextFrom",
     desc: "Create a reference to a DbContext in a project.",
     examples: ["var db = Ef.DbContextFrom(DataProject);", 'var db = Ef.DbContextFrom(DataProject, "AppDbContext");'],
+    sourceFile: "Operations/EfOperations.cs",
   },
   {
     group: "Ef",
@@ -166,6 +194,7 @@ export const operations = [
       'Ef.DatabaseUpdate(db, connectionString: "Server=...");',
       'Ef.DatabaseUpdate(db, deployment.Output("sqlConnectionString"));',
     ],
+    sourceFile: "Operations/EfOperations.cs",
   },
   {
     group: "Ef",
@@ -175,36 +204,42 @@ export const operations = [
       'Ef.Script(db, Root / "migration.sql");',
       'Ef.Script(db, Root / "migration.sql", fromMigration: "Init");',
     ],
+    sourceFile: "Operations/EfOperations.cs",
   },
   {
     group: "Npm",
     name: "Npm.Install",
     desc: "Run 'npm install' to install dependencies. Automatically installs Node.js if not present.",
     examples: ['var frontend = Directory("./frontend");', "Npm.Install(frontend);"],
+    sourceFile: "Operations/NpmOperations.cs",
   },
   {
     group: "Npm",
     name: "Npm.Ci",
     desc: "Run 'npm ci' for clean, reproducible installs (preferred for CI). Automatically installs Node.js if not present.",
     examples: ['var frontend = Directory("./frontend");', "Npm.Ci(frontend);"],
+    sourceFile: "Operations/NpmOperations.cs",
   },
   {
     group: "Npm",
     name: "Npm.Run",
     desc: "Run an npm script from package.json. Automatically installs Node.js if not present.",
     examples: ['var frontend = Directory("./frontend");', 'Npm.Run(frontend, "build");', 'Npm.Run(frontend, "lint");'],
+    sourceFile: "Operations/NpmOperations.cs",
   },
   {
     group: "Npm",
     name: "Npm.Test",
     desc: "Run 'npm test'. Automatically installs Node.js if not present.",
     examples: ['var frontend = Directory("./frontend");', "Npm.Test(frontend);"],
+    sourceFile: "Operations/NpmOperations.cs",
   },
   {
     group: "Npm",
     name: "Npm.Build",
     desc: "Run 'npm run build'. Automatically installs Node.js if not present.",
     examples: ['var frontend = Directory("./frontend");', "Npm.Build(frontend);"],
+    sourceFile: "Operations/NpmOperations.cs",
   },
   {
     group: "Playwright",
@@ -216,12 +251,14 @@ export const operations = [
       'Playwright.Test(e2e, o => {\n  o.Workers = 4;\n  o.Reporter = "html";\n});',
       "// Use npm script instead of npx\nPlaywright.Test(e2e, o => o.UseNpmScript = true);",
     ],
+    sourceFile: "Operations/PlaywrightOperations.cs",
   },
   {
     group: "Playwright",
     name: "Playwright.Install",
     desc: "Install Playwright browsers via `npx playwright install`. Call this after npm install and before running tests. Automatically installs Node.js if not present.",
     examples: ['var e2e = Directory("./tests/E2E");\nNpm.Ci(e2e);\nPlaywright.Install(e2e);\nPlaywright.Test(e2e);'],
+    sourceFile: "Operations/PlaywrightOperations.cs",
   },
   {
     group: "Azure",
@@ -232,18 +269,21 @@ export const operations = [
       "// CI/CD: Uses env vars if set",
       "// Local: Uses az login session or prompts for login",
     ],
+    sourceFile: "Operations/AzureOperations.cs",
   },
   {
     group: "Azure",
     name: "Azure.EnsureLoggedIn",
     desc: "Verify the user is logged in to Azure CLI. Fails if not authenticated.",
     examples: ["Azure.EnsureLoggedIn();"],
+    sourceFile: "Operations/AzureOperations.cs",
   },
   {
     group: "Azure",
     name: "Azure.ShowAccount",
     desc: "Display current Azure account information.",
     examples: ["Azure.ShowAccount();"],
+    sourceFile: "Operations/AzureOperations.cs",
   },
   {
     group: "Azure",
@@ -253,6 +293,7 @@ export const operations = [
       "Azure.LoginWithServicePrincipal(clientId, secret, tenantId);",
       "Azure.LoginWithServicePrincipal(); // Uses AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID env vars",
     ],
+    sourceFile: "Operations/AzureOperations.cs",
   },
   {
     group: "Azure",
@@ -262,6 +303,7 @@ export const operations = [
       "Azure.LoginWithManagedIdentity(); // System-assigned",
       'Azure.LoginWithManagedIdentity("client-id"); // User-assigned',
     ],
+    sourceFile: "Operations/AzureOperations.cs",
   },
   {
     group: "Azure",
@@ -271,12 +313,14 @@ export const operations = [
       'Azure.SetSubscription("subscription-id");',
       "Azure.SetSubscription(); // Uses AZURE_SUBSCRIPTION_ID env var",
     ],
+    sourceFile: "Operations/AzureOperations.cs",
   },
   {
     group: "Azure",
     name: "Azure.CreateResourceGroup",
     desc: "Create a resource group if it doesn't exist.",
     examples: ['Azure.CreateResourceGroup("my-rg", "eastus");', 'Azure.CreateResourceGroup("prod-rg", "westeurope");'],
+    sourceFile: "Operations/AzureOperations.cs",
   },
   {
     group: "Bicep",
@@ -286,6 +330,7 @@ export const operations = [
       'var deployment = Bicep.DeployToResourceGroup("my-rg", "./infra/main.bicep");',
       'var deployment = Bicep.DeployToResourceGroup("my-rg", "./main.bicep", o => o\n  .WithParameterFile("./params.json")\n  .WithDeploymentSlot("staging"));\nEf.DatabaseUpdate(db, deployment.Output("sqlConnectionString"));',
     ],
+    sourceFile: "Operations/BicepOperations.cs",
   },
   {
     group: "Bicep",
@@ -295,6 +340,7 @@ export const operations = [
       'var deployment = Bicep.DeployToSubscription("eastus", "./infra/sub.bicep");',
       'var deployment = Bicep.DeployToSubscription("eastus", "./sub.bicep", o => o\n  .WithParameter("environment", "prod"));\nvar resourceGroup = deployment.Output("resourceGroupName");',
     ],
+    sourceFile: "Operations/BicepOperations.cs",
   },
   {
     group: "Bicep",
@@ -304,18 +350,21 @@ export const operations = [
       'Bicep.WhatIf("my-rg", "./infra/main.bicep");',
       'Bicep.WhatIf("my-rg", "./main.bicep", o => o.WithParameterFile("./params.json"));',
     ],
+    sourceFile: "Operations/BicepOperations.cs",
   },
   {
     group: "Bicep",
     name: "Bicep.Build",
     desc: "Compile a Bicep file to ARM JSON template.",
     examples: ['Bicep.Build("./infra/main.bicep");', 'Bicep.Build("./main.bicep", "./output/main.json");'],
+    sourceFile: "Operations/BicepOperations.cs",
   },
   {
     group: "Cloudflare",
     name: "Cloudflare.EnsureAuthenticated",
     desc: "Verify Cloudflare credentials. Prompts interactively if environment variables are not set. See [authentication](/providers/cloudflare#authentication) for setup.",
     examples: ["Cloudflare.EnsureAuthenticated();"],
+    sourceFile: "Operations/CloudflareOperations.cs",
   },
   {
     group: "Cloudflare",
@@ -326,18 +375,21 @@ export const operations = [
       'Cloudflare.PagesDeploy(frontend / "dist", "my-site");',
       'Cloudflare.PagesDeploy(frontend / "build", o => o\n  .WithProjectName("my-site")\n  .WithBranch("main"));',
     ],
+    sourceFile: "Operations/CloudflareOperations.cs",
   },
   {
     group: "Cloudflare",
     name: "Cloudflare.PagesListProjects",
     desc: "List all Cloudflare Pages projects.",
     examples: ["Cloudflare.PagesListProjects();"],
+    sourceFile: "Operations/CloudflareOperations.cs",
   },
   {
     group: "Cloudflare",
     name: "Cloudflare.PagesCreateProject",
     desc: "Create a new Cloudflare Pages project.",
     examples: ['Cloudflare.PagesCreateProject("my-site");', 'Cloudflare.PagesCreateProject("my-site", "develop");'],
+    sourceFile: "Operations/CloudflareOperations.cs",
   },
   {
     group: "Cloudflare",
@@ -347,6 +399,7 @@ export const operations = [
       'Cloudflare.PagesListDeployments("my-site");',
       "Cloudflare.PagesListDeployments(); // Uses CLOUDFLARE_PROJECT_NAME env var",
     ],
+    sourceFile: "Operations/CloudflareOperations.cs",
   },
   {
     group: "Cloudflare",
@@ -357,6 +410,7 @@ export const operations = [
       'Cloudflare.PurgeCache("zone-id-123"); // Direct Zone ID',
       "Cloudflare.PurgeCache(); // Uses CLOUDFLARE_ZONE_ID env var",
     ],
+    sourceFile: "Operations/CloudflareOperations.cs",
   },
   {
     group: "Functions",
@@ -366,6 +420,7 @@ export const operations = [
       'Functions.DeployZip("my-func", "./publish.zip");',
       'Functions.DeployZip("my-func", "./publish.zip", "my-rg", o => o\n  .WithDeploymentSlot("staging"));',
     ],
+    sourceFile: "Operations/FunctionsOperations.cs",
   },
   {
     group: "Functions",
@@ -375,6 +430,7 @@ export const operations = [
       'Functions.Publish("my-func");',
       'Functions.Publish("my-func", "./src/MyFunc", o => o\n  .WithDeploymentSlot("staging")\n  .WithConfiguration("Release"));',
     ],
+    sourceFile: "Operations/FunctionsOperations.cs",
   },
   {
     group: "Functions",
@@ -384,6 +440,7 @@ export const operations = [
       'Functions.DeployWithSwap("my-func", "./publish.zip");',
       'Functions.DeployWithSwap("my-func", "./publish.zip", "staging", "my-rg");',
     ],
+    sourceFile: "Operations/FunctionsOperations.cs",
   },
   {
     group: "Functions",
@@ -393,24 +450,28 @@ export const operations = [
       'Functions.SwapSlots("my-func", "staging");',
       'Functions.SwapSlots("my-func", "staging", "my-rg", "production");',
     ],
+    sourceFile: "Operations/FunctionsOperations.cs",
   },
   {
     group: "Functions",
     name: "Functions.Restart",
     desc: "Restart a function app.",
     examples: ['Functions.Restart("my-func");', 'Functions.Restart("my-func", "my-rg", "staging");'],
+    sourceFile: "Operations/FunctionsOperations.cs",
   },
   {
     group: "Functions",
     name: "Functions.Start",
     desc: "Start a function app.",
     examples: ['Functions.Start("my-func");', 'Functions.Start("my-func", slot: "staging");'],
+    sourceFile: "Operations/FunctionsOperations.cs",
   },
   {
     group: "Functions",
     name: "Functions.Stop",
     desc: "Stop a function app.",
     examples: ['Functions.Stop("my-func");', 'Functions.Stop("my-func", slot: "staging");'],
+    sourceFile: "Operations/FunctionsOperations.cs",
   },
   {
     group: "AppService",
@@ -420,6 +481,7 @@ export const operations = [
       'AppService.DeployZip("my-app", "./publish.zip");',
       'AppService.DeployZip("my-app", "./publish.zip", "my-rg", o => o\n  .WithDeploymentSlot("staging"));',
     ],
+    sourceFile: "Operations/AppServiceOperations.cs",
   },
   {
     group: "AppService",
@@ -429,6 +491,7 @@ export const operations = [
       'AppService.DeployWithSwap("my-app", "./publish.zip");',
       'AppService.DeployWithSwap("my-app", "./publish.zip", "staging", "my-rg");',
     ],
+    sourceFile: "Operations/AppServiceOperations.cs",
   },
   {
     group: "AppService",
@@ -438,6 +501,7 @@ export const operations = [
       'AppService.SwapSlots("my-app", "staging");',
       'AppService.SwapSlots("my-app", "staging", "my-rg", "production");',
     ],
+    sourceFile: "Operations/AppServiceOperations.cs",
   },
   {
     group: "AppService",
@@ -447,42 +511,49 @@ export const operations = [
       'AppService.CreateSlot("my-app", "staging");',
       'AppService.CreateSlot("my-app", "staging", "my-rg", "production");',
     ],
+    sourceFile: "Operations/AppServiceOperations.cs",
   },
   {
     group: "AppService",
     name: "AppService.DeleteSlot",
     desc: "Delete a deployment slot.",
     examples: ['AppService.DeleteSlot("my-app", "staging");', 'AppService.DeleteSlot("my-app", "staging", "my-rg");'],
+    sourceFile: "Operations/AppServiceOperations.cs",
   },
   {
     group: "AppService",
     name: "AppService.ListSlots",
     desc: "List deployment slots for an app service.",
     examples: ['AppService.ListSlots("my-app");', 'AppService.ListSlots("my-app", "my-rg");'],
+    sourceFile: "Operations/AppServiceOperations.cs",
   },
   {
     group: "AppService",
     name: "AppService.Restart",
     desc: "Restart an app service.",
     examples: ['AppService.Restart("my-app");', 'AppService.Restart("my-app", "my-rg", "staging");'],
+    sourceFile: "Operations/AppServiceOperations.cs",
   },
   {
     group: "AppService",
     name: "AppService.Start",
     desc: "Start an app service.",
     examples: ['AppService.Start("my-app");', 'AppService.Start("my-app", slot: "staging");'],
+    sourceFile: "Operations/AppServiceOperations.cs",
   },
   {
     group: "AppService",
     name: "AppService.Stop",
     desc: "Stop an app service.",
     examples: ['AppService.Stop("my-app");', 'AppService.Stop("my-app", slot: "staging");'],
+    sourceFile: "Operations/AppServiceOperations.cs",
   },
   {
     group: "Nuget",
     name: "Nuget.EnsureAuthenticated",
     desc: "Ensures NuGet API key is available for publishing. Prompts interactively if `NUGET_API_KEY` environment variable is not set. Call before Push.",
     examples: ['var app = Dotnet.Project("./src/MyLib/MyLib.csproj");\nNuget.EnsureAuthenticated();\nNuget.Push(app);'],
+    sourceFile: "Operations/NugetOperations.cs",
   },
   {
     group: "Nuget",
@@ -492,6 +563,7 @@ export const operations = [
       'var app = Dotnet.Project("./src/MyLib/MyLib.csproj");\nNuget.Pack(app);',
       'Nuget.Pack(app, o => o.WithVersion("1.0.0"));',
     ],
+    sourceFile: "Operations/NugetOperations.cs",
   },
   {
     group: "Nuget",
@@ -501,6 +573,7 @@ export const operations = [
       'var app = Dotnet.Project("./src/MyLib/MyLib.csproj");\nNuget.Pack(app);\nNuget.EnsureAuthenticated();\nNuget.Push(app, o => o.SkipDuplicates());',
       'Nuget.Push("./packages/MyLib.1.0.0.nupkg");',
     ],
+    sourceFile: "Operations/NugetOperations.cs",
   },
   // Git operations - ALL run on HOST (not in container)
   {
@@ -512,18 +585,21 @@ export const operations = [
       'Git.Tag("v1.0.0", o => o.WithMessage("Release notes here"));',
       'Git.Tag("v1.0.0", o => o.AsLightweight()); // Lightweight tag',
     ],
+    sourceFile: "Operations/GitOperations.cs",
   },
   {
     group: "Git",
     name: "Git.Push",
     desc: "Pushes the current branch to the remote repository. <strong>Runs on host</strong> (not in container).",
     examples: ["Git.Push();", 'Git.Push(o => o.ToRemote("upstream"));', "Git.Push(o => o.WithUpstream()); // -u flag"],
+    sourceFile: "Operations/GitOperations.cs",
   },
   {
     group: "Git",
     name: "Git.PushTags",
     desc: "Pushes all tags to the remote repository. <strong>Runs on host</strong> (not in container).",
     examples: ["Git.PushTags();", 'Git.PushTags("upstream");'],
+    sourceFile: "Operations/GitOperations.cs",
   },
   // GitHub operations
   {
@@ -534,6 +610,7 @@ export const operations = [
       'GitHub.CreatePr(o => o\n  .WithTitle("Add new feature")\n  .WithBody("Description here")\n  .WithBase("main"));',
       'GitHub.CreatePr(o => o.WithTitle("Fix bug").AsDraft());',
     ],
+    sourceFile: "Operations/GitHubOperations.cs",
   },
   {
     group: "GitHub",
@@ -545,6 +622,7 @@ export const operations = [
       'GitHub.CreateRelease(o => o\n  .WithTag("v1.0.0")\n  .WithNotes("## Changes\\n- Fixed bug")\n  .AsPrerelease());',
       'GitHub.CreateRelease(o => o\n  .WithTag("v1.0.0")\n  .WithGeneratedNotes()\n  .WithFiles(\n    "dist/linux-x64/app#app-linux-x64",\n    "dist/win-x64/app.exe#app-win-x64.exe"\n  ));',
     ],
+    sourceFile: "Operations/GitHubOperations.cs",
   },
   {
     group: "GitHub",
@@ -554,6 +632,7 @@ export const operations = [
       'GitHub.PushImage("myapp", o => o.WithTag("latest"));',
       'GitHub.PushImage("myapp", o => o\n  .WithTag("v1.0.0")\n  .WithOwner("my-org"));',
     ],
+    sourceFile: "Operations/GitHubOperations.cs",
   },
   // Docker operations
   {
@@ -561,24 +640,18 @@ export const operations = [
     name: "Docker.Install",
     desc: "Installs the Docker CLI in the container. Required before using <code>Docker.Build</code> when running with <code>--dind</code>. Skips if already installed.",
     examples: ['Docker.Install();\nDocker.Build("Dockerfile", o => o.WithTag("myapp:latest"));'],
+    sourceFile: "Operations/DockerOperations.cs",
   },
   {
     group: "Docker",
     name: "Docker.Build",
-    desc: "Builds a Docker image from a Dockerfile. <strong>Requires <code>--dind</code> CLI flag</strong> to mount the Docker socket. Call <code>Docker.Install()</code> first to install the Docker CLI in the container.",
+    desc: "Builds a Docker image using buildx. Supports single or multi-platform builds with optional push to registry. <strong>Requires <code>--dind</code> CLI flag</strong>. Call <code>Docker.Install()</code> first to install the Docker CLI. Automatically creates a buildx builder for multi-platform builds and handles ghcr.io authentication when pushing.",
     examples: [
-      '// Run with: ando --dind\nDocker.Install();\nDocker.Build("Dockerfile", o => o.WithTag("myapp:latest"));',
-      'Docker.Build("./src/MyApp/Dockerfile", o => o\n  .WithTag("myapp:v1.0.0")\n  .WithBuildArg("VERSION", "1.0.0")\n  .WithPlatform("linux/amd64"));',
+      '// Single platform build (loads into local docker)\nDocker.Install();\nDocker.Build("Dockerfile", o => o.WithTag("myapp:latest"));',
+      '// Build with version and platform\nDocker.Build("./src/MyApp/Dockerfile", o => o\n  .WithTag("myapp:v1.0.0")\n  .WithBuildArg("VERSION", "1.0.0")\n  .WithPlatform("linux/amd64"));',
+      '// Multi-platform build with push to ghcr.io\nDocker.Build("./Dockerfile", o => o\n  .WithPlatforms("linux/amd64", "linux/arm64")\n  .WithTag("ghcr.io/myorg/myapp:v1.0.0")\n  .WithTag("ghcr.io/myorg/myapp:latest")\n  .WithPush());',
     ],
-  },
-  {
-    group: "Docker",
-    name: "Docker.Buildx",
-    desc: "Builds multi-architecture Docker images using buildx. Supports building for multiple platforms in a single command and pushing directly to a registry. <strong>Requires <code>--dind</code> CLI flag</strong>. Automatically creates a buildx builder and handles ghcr.io authentication when pushing.",
-    examples: [
-      '// Build for multiple platforms and push to ghcr.io\nDocker.Install();\nDocker.Buildx("./Dockerfile", o => o\n  .WithPlatforms("linux/amd64", "linux/arm64")\n  .WithTag("ghcr.io/myorg/myapp:v1.0.0")\n  .WithTag("ghcr.io/myorg/myapp:latest")\n  .WithPush());',
-      '// Build with build args and custom context\nDocker.Buildx("./src/MyApp/Dockerfile", o => o\n  .WithPlatforms("linux/amd64", "linux/arm64")\n  .WithTag("myapp:v1.0.0")\n  .WithBuildArg("VERSION", "1.0.0")\n  .WithContext("./src")\n  .WithPush());',
-    ],
+    sourceFile: "Operations/DockerOperations.cs",
   },
 ];
 
