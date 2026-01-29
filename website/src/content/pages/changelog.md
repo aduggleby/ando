@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.57
+
+**2026-01-29**
+
+- Simplify Docker operations by consolidating Build and Buildx into a single Build operation
+- Add source code links to operation documentation on the website
+
 ## 0.9.56
 
 **2026-01-28**

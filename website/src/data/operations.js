@@ -644,6 +644,15 @@ export const operations = [
   },
   {
     group: "Docker",
+    name: "Docker.IsAvailable",
+    desc: "Check if Docker CLI and daemon are accessible. Executes immediately (not registered as a step) and returns a boolean. Useful for conditional logic in build scripts.",
+    examples: [
+      "if (Docker.IsAvailable()) {\n  Docker.Build(\"Dockerfile\", o => o.WithTag(\"myapp:latest\"));\n} else {\n  Log.Warning(\"Docker not available, skipping container build\");\n}",
+    ],
+    sourceFile: "Operations/DockerOperations.cs",
+  },
+  {
+    group: "Docker",
     name: "Docker.Build",
     desc: "Builds a Docker image using buildx. Supports single or multi-platform builds with optional push to registry. <strong>Requires <code>--dind</code> CLI flag</strong>. Call <code>Docker.Install()</code> first to install the Docker CLI. Automatically creates a buildx builder for multi-platform builds and handles ghcr.io authentication when pushing.",
     examples: [
