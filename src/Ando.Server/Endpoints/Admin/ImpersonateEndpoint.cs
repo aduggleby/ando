@@ -27,15 +27,18 @@ public class ImpersonateEndpoint : EndpointWithoutRequest<ImpersonateResponse>
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IImpersonationService _impersonationService;
+    private readonly IAuditLogger _auditLogger;
     private readonly ILogger<ImpersonateEndpoint> _logger;
 
     public ImpersonateEndpoint(
         UserManager<ApplicationUser> userManager,
         IImpersonationService impersonationService,
+        IAuditLogger auditLogger,
         ILogger<ImpersonateEndpoint> logger)
     {
         _userManager = userManager;
         _impersonationService = impersonationService;
+        _auditLogger = auditLogger;
         _logger = logger;
     }
 
@@ -66,13 +69,31 @@ public class ImpersonateEndpoint : EndpointWithoutRequest<ImpersonateResponse>
 
         var success = await _impersonationService.StartImpersonationAsync(currentUserId, targetUserId);
 
+        var adminEmail = User.FindFirst(ClaimTypes.Email)?.Value;
+
         if (success)
         {
-            _logger.LogInformation("Admin {AdminId} started impersonating user {UserId}", currentUserId, targetUserId);
+            _auditLogger.LogAdminAction(
+                "ImpersonationStarted",
+                $"Admin started impersonating user",
+                currentUserId,
+                adminEmail,
+                targetUserId,
+                targetUser.Email);
+
             await SendAsync(new ImpersonateResponse(true), cancellation: ct);
         }
         else
         {
+            _auditLogger.LogAdminAction(
+                "ImpersonationFailed",
+                "Failed to start impersonation",
+                currentUserId,
+                adminEmail,
+                targetUserId,
+                targetUser.Email,
+                success: false);
+
             await SendAsync(new ImpersonateResponse(false, "Failed to start impersonation."), cancellation: ct);
         }
     }

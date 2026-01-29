@@ -18,6 +18,7 @@ using System.Security.Claims;
 using Ando.Server.Contracts.Admin;
 using Ando.Server.Data;
 using Ando.Server.Models;
+using Ando.Server.Services;
 using FastEndpoints;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -31,15 +32,18 @@ public class DeleteUserEndpoint : Endpoint<DeleteUserRequest, DeleteUserResponse
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly AndoDbContext _db;
+    private readonly IAuditLogger _auditLogger;
     private readonly ILogger<DeleteUserEndpoint> _logger;
 
     public DeleteUserEndpoint(
         UserManager<ApplicationUser> userManager,
         AndoDbContext db,
+        IAuditLogger auditLogger,
         ILogger<DeleteUserEndpoint> logger)
     {
         _userManager = userManager;
         _db = db;
+        _auditLogger = auditLogger;
         _logger = logger;
     }
 
@@ -88,13 +92,35 @@ public class DeleteUserEndpoint : Endpoint<DeleteUserRequest, DeleteUserResponse
         await _db.SaveChangesAsync(ct);
 
         // Delete the user
+        var userEmail = user.Email;
+        var projectCount = user.Projects.Count;
         var result = await _userManager.DeleteAsync(user);
+
+        var adminEmail = User.FindFirst(ClaimTypes.Email)?.Value;
+
         if (result.Succeeded)
         {
-            _logger.LogInformation("User {UserId} ({Email}) deleted by admin {AdminId}", userId, user.Email, currentUserId);
+            _auditLogger.LogAdminAction(
+                "UserDeleted",
+                $"User account deleted with {projectCount} projects",
+                currentUserId,
+                adminEmail,
+                userId,
+                userEmail,
+                new Dictionary<string, object> { ["projectsDeleted"] = projectCount });
+
             await SendAsync(new DeleteUserResponse(true), cancellation: ct);
             return;
         }
+
+        _auditLogger.LogAdminAction(
+            "UserDeleteFailed",
+            "Failed to delete user account",
+            currentUserId,
+            adminEmail,
+            userId,
+            userEmail,
+            success: false);
 
         await SendAsync(new DeleteUserResponse(false, "Failed to delete user."), cancellation: ct);
     }

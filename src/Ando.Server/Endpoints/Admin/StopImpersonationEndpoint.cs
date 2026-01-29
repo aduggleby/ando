@@ -22,13 +22,16 @@ namespace Ando.Server.Endpoints.Admin;
 public class StopImpersonationEndpoint : EndpointWithoutRequest<StopImpersonationResponse>
 {
     private readonly IImpersonationService _impersonationService;
+    private readonly IAuditLogger _auditLogger;
     private readonly ILogger<StopImpersonationEndpoint> _logger;
 
     public StopImpersonationEndpoint(
         IImpersonationService impersonationService,
+        IAuditLogger auditLogger,
         ILogger<StopImpersonationEndpoint> logger)
     {
         _impersonationService = impersonationService;
+        _auditLogger = auditLogger;
         _logger = logger;
     }
 
@@ -46,8 +49,16 @@ public class StopImpersonationEndpoint : EndpointWithoutRequest<StopImpersonatio
             return;
         }
 
+        // Get admin info before stopping impersonation
+        var adminId = _impersonationService.OriginalAdminId;
+
         await _impersonationService.StopImpersonationAsync();
-        _logger.LogInformation("Impersonation ended");
+
+        _auditLogger.LogAdminAction(
+            "ImpersonationStopped",
+            "Admin stopped impersonating user",
+            adminId ?? 0,
+            null);
 
         await SendAsync(new StopImpersonationResponse(true), cancellation: ct);
     }

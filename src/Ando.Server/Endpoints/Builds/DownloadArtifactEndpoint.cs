@@ -13,9 +13,11 @@
 // =============================================================================
 
 using System.Security.Claims;
+using Ando.Server.Configuration;
 using Ando.Server.Data;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Ando.Server.Endpoints.Builds;
 
@@ -25,11 +27,16 @@ namespace Ando.Server.Endpoints.Builds;
 public class DownloadArtifactEndpoint : EndpointWithoutRequest
 {
     private readonly AndoDbContext _db;
+    private readonly StorageSettings _storageSettings;
     private readonly ILogger<DownloadArtifactEndpoint> _logger;
 
-    public DownloadArtifactEndpoint(AndoDbContext db, ILogger<DownloadArtifactEndpoint> logger)
+    public DownloadArtifactEndpoint(
+        AndoDbContext db,
+        IOptions<StorageSettings> storageSettings,
+        ILogger<DownloadArtifactEndpoint> logger)
     {
         _db = db;
+        _storageSettings = storageSettings.Value;
         _logger = logger;
     }
 
@@ -62,15 +69,29 @@ public class DownloadArtifactEndpoint : EndpointWithoutRequest
             return;
         }
 
-        if (!System.IO.File.Exists(artifact.StoragePath))
+        // SECURITY: Validate artifact path is within the expected storage directory
+        // to prevent path traversal attacks (OWASP A01:2021 - Broken Access Control)
+        var expectedStorageDir = Path.GetFullPath(_storageSettings.ArtifactsPath);
+        var actualPath = Path.GetFullPath(artifact.StoragePath);
+
+        if (!actualPath.StartsWith(expectedStorageDir, StringComparison.Ordinal))
         {
-            _logger.LogWarning("Artifact file not found: {Path}", artifact.StoragePath);
+            _logger.LogWarning(
+                "Path traversal attempt detected: artifact path {ActualPath} is outside storage directory {ExpectedDir}",
+                actualPath, expectedStorageDir);
+            await SendNotFoundAsync(ct);
+            return;
+        }
+
+        if (!System.IO.File.Exists(actualPath))
+        {
+            _logger.LogWarning("Artifact file not found: {Path}", actualPath);
             await SendNotFoundAsync(ct);
             return;
         }
 
         await SendFileAsync(
-            new FileInfo(artifact.StoragePath),
+            new FileInfo(actualPath),
             artifact.Name,
             cancellation: ct);
     }

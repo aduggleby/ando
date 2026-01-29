@@ -19,8 +19,14 @@ namespace Ando.Server.Models;
 /// </summary>
 public class ProjectSecret
 {
+    /// <summary>
+    /// Unique identifier for this secret.
+    /// </summary>
     public int Id { get; set; }
 
+    /// <summary>
+    /// ID of the project this secret belongs to.
+    /// </summary>
     public int ProjectId { get; set; }
 
     /// <summary>
@@ -39,7 +45,13 @@ public class ProjectSecret
     /// </summary>
     public string EncryptedValue { get; set; } = "";
 
+    /// <summary>
+    /// When the secret was created.
+    /// </summary>
     public DateTime CreatedAt { get; set; }
 
+    /// <summary>
+    /// When the secret value was last updated.
+    /// </summary>
     public DateTime? UpdatedAt { get; set; }
 }

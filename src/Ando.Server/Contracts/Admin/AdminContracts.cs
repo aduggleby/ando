@@ -23,6 +23,15 @@ namespace Ando.Server.Contracts.Admin;
 /// <summary>
 /// Admin dashboard statistics and recent activity.
 /// </summary>
+/// <param name="TotalUsers">Total number of registered users.</param>
+/// <param name="VerifiedUsers">Number of users with verified email addresses.</param>
+/// <param name="UnverifiedUsers">Number of users with unverified email addresses.</param>
+/// <param name="AdminUsers">Number of users with admin role.</param>
+/// <param name="TotalProjects">Total number of projects across all users.</param>
+/// <param name="TotalBuilds">Total number of builds ever created.</param>
+/// <param name="RecentBuilds">Number of builds in the last 24 hours.</param>
+/// <param name="RecentUsers">List of recently registered users.</param>
+/// <param name="RecentBuilds24h">List of builds in the last 24 hours.</param>
 public record AdminDashboardDto(
     int TotalUsers,
     int VerifiedUsers,
@@ -38,6 +47,11 @@ public record AdminDashboardDto(
 /// <summary>
 /// Recent user for dashboard.
 /// </summary>
+/// <param name="Id">User's unique identifier.</param>
+/// <param name="Email">User's email address.</param>
+/// <param name="DisplayName">User's display name.</param>
+/// <param name="CreatedAt">When the user account was created.</param>
+/// <param name="EmailVerified">Whether the user has verified their email.</param>
 public record RecentUserDto(
     int Id,
     string Email,
@@ -49,6 +63,11 @@ public record RecentUserDto(
 /// <summary>
 /// Recent build for dashboard.
 /// </summary>
+/// <param name="Id">Build's unique identifier.</param>
+/// <param name="ProjectName">Name of the project.</param>
+/// <param name="Branch">Git branch that triggered the build.</param>
+/// <param name="Status">Current build status.</param>
+/// <param name="CreatedAt">When the build was created.</param>
 public record RecentBuildDto(
     int Id,
     string ProjectName,
@@ -64,6 +83,13 @@ public record RecentBuildDto(
 /// <summary>
 /// Response containing paginated user list.
 /// </summary>
+/// <param name="Users">List of users for the current page.</param>
+/// <param name="CurrentPage">Current page number (1-based).</param>
+/// <param name="TotalPages">Total number of pages available.</param>
+/// <param name="TotalUsers">Total number of users matching the filter.</param>
+/// <param name="PageSize">Number of users per page.</param>
+/// <param name="SearchQuery">Current search query, if any.</param>
+/// <param name="RoleFilter">Role filter applied, if any.</param>
 public record GetUsersResponse(
     IReadOnlyList<UserListItemDto> Users,
     int CurrentPage,
@@ -77,6 +103,16 @@ public record GetUsersResponse(
 /// <summary>
 /// User summary for list view.
 /// </summary>
+/// <param name="Id">User's unique identifier.</param>
+/// <param name="Email">User's email address.</param>
+/// <param name="DisplayName">User's display name.</param>
+/// <param name="EmailVerified">Whether the user has verified their email.</param>
+/// <param name="IsAdmin">Whether the user has admin role.</param>
+/// <param name="IsLockedOut">Whether the user account is locked.</param>
+/// <param name="CreatedAt">When the user account was created.</param>
+/// <param name="LastLoginAt">When the user last logged in.</param>
+/// <param name="HasGitHubConnection">Whether the user has connected GitHub.</param>
+/// <param name="ProjectCount">Number of projects owned by the user.</param>
 public record UserListItemDto(
     int Id,
     string Email,
@@ -97,6 +133,22 @@ public record UserListItemDto(
 /// <summary>
 /// Full user details for admin view.
 /// </summary>
+/// <param name="Id">User's unique identifier.</param>
+/// <param name="Email">User's email address.</param>
+/// <param name="DisplayName">User's display name.</param>
+/// <param name="AvatarUrl">URL to user's avatar image.</param>
+/// <param name="EmailVerified">Whether the user has verified their email.</param>
+/// <param name="EmailVerificationSentAt">When verification email was last sent.</param>
+/// <param name="IsAdmin">Whether the user has admin role.</param>
+/// <param name="IsLockedOut">Whether the user account is locked.</param>
+/// <param name="LockoutEnd">When the lockout ends.</param>
+/// <param name="CreatedAt">When the user account was created.</param>
+/// <param name="LastLoginAt">When the user last logged in.</param>
+/// <param name="HasGitHubConnection">Whether the user has connected GitHub.</param>
+/// <param name="GitHubLogin">GitHub username if connected.</param>
+/// <param name="GitHubConnectedAt">When GitHub was connected.</param>
+/// <param name="Projects">List of projects owned by the user.</param>
+/// <param name="TotalBuilds">Total number of builds across all projects.</param>
 public record UserDetailsDto(
     int Id,
     string Email,
@@ -119,6 +171,11 @@ public record UserDetailsDto(
 /// <summary>
 /// Project owned by a user (admin view).
 /// </summary>
+/// <param name="Id">Project's unique identifier.</param>
+/// <param name="Name">Project name (repository name).</param>
+/// <param name="Description">Optional project description.</param>
+/// <param name="CreatedAt">When the project was created.</param>
+/// <param name="BuildCount">Total number of builds for this project.</param>
 public record UserProjectDto(
     int Id,
     string Name,
@@ -130,6 +187,7 @@ public record UserProjectDto(
 /// <summary>
 /// Response containing user details.
 /// </summary>
+/// <param name="User">Full user details.</param>
 public record GetUserDetailsResponse(
     UserDetailsDto User
 );
@@ -143,6 +201,9 @@ public record GetUserDetailsResponse(
 /// </summary>
 public class ChangeUserRoleRequest
 {
+    /// <summary>
+    /// The new role to assign to the user.
+    /// </summary>
     [Required]
     public string NewRole { get; set; } = "";
 }
@@ -150,6 +211,8 @@ public class ChangeUserRoleRequest
 /// <summary>
 /// Response from role change.
 /// </summary>
+/// <param name="Success">Whether the operation succeeded.</param>
+/// <param name="Error">Error message if the operation failed.</param>
 public record ChangeUserRoleResponse(
     bool Success,
     string? Error = null
@@ -164,12 +227,17 @@ public record ChangeUserRoleResponse(
 /// </summary>
 public class LockUserRequest
 {
+    /// <summary>
+    /// Number of days to lock the account (1-365).
+    /// </summary>
     public int? LockDays { get; set; }
 }
 
 /// <summary>
 /// Response from lock/unlock operation.
 /// </summary>
+/// <param name="Success">Whether the operation succeeded.</param>
+/// <param name="Error">Error message if the operation failed.</param>
 public record LockUserResponse(
     bool Success,
     string? Error = null
@@ -184,6 +252,9 @@ public record LockUserResponse(
 /// </summary>
 public class DeleteUserRequest
 {
+    /// <summary>
+    /// User's email address to confirm deletion.
+    /// </summary>
     [Required(ErrorMessage = "Please confirm the email address")]
     public string ConfirmEmail { get; set; } = "";
 }
@@ -191,6 +262,8 @@ public class DeleteUserRequest
 /// <summary>
 /// Response from user deletion.
 /// </summary>
+/// <param name="Success">Whether the operation succeeded.</param>
+/// <param name="Error">Error message if the operation failed.</param>
 public record DeleteUserResponse(
     bool Success,
     string? Error = null
@@ -203,6 +276,8 @@ public record DeleteUserResponse(
 /// <summary>
 /// Response from impersonation start.
 /// </summary>
+/// <param name="Success">Whether the operation succeeded.</param>
+/// <param name="Error">Error message if the operation failed.</param>
 public record ImpersonateResponse(
     bool Success,
     string? Error = null
@@ -211,6 +286,7 @@ public record ImpersonateResponse(
 /// <summary>
 /// Response from impersonation stop.
 /// </summary>
+/// <param name="Success">Whether the operation succeeded.</param>
 public record StopImpersonationResponse(
     bool Success
 );
@@ -218,6 +294,9 @@ public record StopImpersonationResponse(
 /// <summary>
 /// Response indicating if currently impersonating.
 /// </summary>
+/// <param name="IsImpersonating">Whether currently impersonating a user.</param>
+/// <param name="OriginalUserId">ID of the original admin user.</param>
+/// <param name="OriginalUserEmail">Email of the original admin user.</param>
 public record ImpersonationStatusResponse(
     bool IsImpersonating,
     int? OriginalUserId = null,
@@ -231,6 +310,12 @@ public record ImpersonationStatusResponse(
 /// <summary>
 /// Response containing paginated admin project list.
 /// </summary>
+/// <param name="Projects">List of projects for the current page.</param>
+/// <param name="CurrentPage">Current page number (1-based).</param>
+/// <param name="TotalPages">Total number of pages available.</param>
+/// <param name="TotalProjects">Total number of projects matching the filter.</param>
+/// <param name="PageSize">Number of projects per page.</param>
+/// <param name="SearchQuery">Current search query, if any.</param>
 public record GetAdminProjectsResponse(
     IReadOnlyList<AdminProjectDto> Projects,
     int CurrentPage,
@@ -243,6 +328,15 @@ public record GetAdminProjectsResponse(
 /// <summary>
 /// Project summary for admin list view.
 /// </summary>
+/// <param name="Id">Project's unique identifier.</param>
+/// <param name="Name">Project name (repository name).</param>
+/// <param name="Description">Optional project description.</param>
+/// <param name="OwnerEmail">Email of the project owner.</param>
+/// <param name="OwnerDisplayName">Display name of the project owner.</param>
+/// <param name="OwnerId">ID of the project owner.</param>
+/// <param name="CreatedAt">When the project was created.</param>
+/// <param name="BuildCount">Total number of builds for this project.</param>
+/// <param name="LastBuildAt">When the last build was started.</param>
 public record AdminProjectDto(
     int Id,
     string Name,

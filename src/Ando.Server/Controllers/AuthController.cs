@@ -63,7 +63,7 @@ public class AuthController : Controller
     {
         if (User.Identity?.IsAuthenticated == true)
         {
-            return Redirect(returnUrl ?? "/");
+            return SafeRedirect(returnUrl);
         }
 
         var errorMessage = error switch
@@ -116,7 +116,7 @@ public class AuthController : Controller
             await _userManager.UpdateAsync(user);
 
             _logger.LogInformation("User {Email} logged in", model.Email);
-            return Redirect(model.ReturnUrl ?? "/");
+            return SafeRedirect(model.ReturnUrl);
         }
 
         if (result.IsLockedOut)
@@ -464,6 +464,21 @@ public class AuthController : Controller
     // -------------------------------------------------------------------------
     // Helper Methods
     // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Safely redirects to a URL, preventing open redirect attacks (OWASP A01:2021).
+    /// Only allows relative URLs within the application.
+    /// </summary>
+    private IActionResult SafeRedirect(string? returnUrl)
+    {
+        // Only allow local (relative) URLs to prevent open redirect attacks
+        if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+        {
+            return Redirect(returnUrl);
+        }
+
+        return Redirect("/");
+    }
 
     /// <summary>
     /// Generates and sends a verification email to the user.

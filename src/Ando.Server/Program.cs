@@ -14,6 +14,7 @@
 // - Hangfire is configured with SQL Server storage
 // =============================================================================
 
+using System.Threading.RateLimiting;
 using Ando.Server.BuildExecution;
 using Ando.Server.Configuration;
 using Ando.Server.Data;
@@ -31,6 +32,7 @@ using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -52,6 +54,8 @@ builder.Services.Configure<EncryptionSettings>(
     builder.Configuration.GetSection(EncryptionSettings.SectionName));
 builder.Services.Configure<TestSettings>(
     builder.Configuration.GetSection(TestSettings.SectionName));
+builder.Services.Configure<RateLimitSettings>(
+    builder.Configuration.GetSection(RateLimitSettings.SectionName));
 
 // =============================================================================
 // Database
@@ -203,6 +207,69 @@ builder.Services.AddAuthorization(options =>
 });
 
 // =============================================================================
+// Rate Limiting
+// =============================================================================
+
+var rateLimitSettings = builder.Configuration
+    .GetSection(RateLimitSettings.SectionName)
+    .Get<RateLimitSettings>() ?? new RateLimitSettings();
+
+if (rateLimitSettings.Enabled)
+{
+    builder.Services.AddRateLimiter(options =>
+    {
+        // Webhook rate limiter (public endpoint, stricter limits)
+        options.AddSlidingWindowLimiter("webhook", limiterOptions =>
+        {
+            limiterOptions.PermitLimit = rateLimitSettings.Webhook.PermitLimit;
+            limiterOptions.Window = TimeSpan.FromSeconds(rateLimitSettings.Webhook.WindowSeconds);
+            limiterOptions.SegmentsPerWindow = 4;
+            limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            limiterOptions.QueueLimit = rateLimitSettings.Webhook.QueueLimit;
+        });
+
+        // API rate limiter (authenticated endpoints)
+        options.AddSlidingWindowLimiter("api", limiterOptions =>
+        {
+            limiterOptions.PermitLimit = rateLimitSettings.Api.PermitLimit;
+            limiterOptions.Window = TimeSpan.FromSeconds(rateLimitSettings.Api.WindowSeconds);
+            limiterOptions.SegmentsPerWindow = 4;
+            limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            limiterOptions.QueueLimit = rateLimitSettings.Api.QueueLimit;
+        });
+
+        // Auth rate limiter (login attempts, strict)
+        options.AddSlidingWindowLimiter("auth", limiterOptions =>
+        {
+            limiterOptions.PermitLimit = rateLimitSettings.Auth.PermitLimit;
+            limiterOptions.Window = TimeSpan.FromSeconds(rateLimitSettings.Auth.WindowSeconds);
+            limiterOptions.SegmentsPerWindow = 4;
+            limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            limiterOptions.QueueLimit = rateLimitSettings.Auth.QueueLimit;
+        });
+
+        // Custom rejection response
+        options.OnRejected = async (context, cancellationToken) =>
+        {
+            context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+            context.HttpContext.Response.ContentType = "application/json";
+
+            var retryAfter = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfterValue)
+                ? retryAfterValue.TotalSeconds
+                : 60;
+
+            context.HttpContext.Response.Headers.RetryAfter = retryAfter.ToString("F0");
+
+            await context.HttpContext.Response.WriteAsJsonAsync(new
+            {
+                error = "Too many requests",
+                retryAfterSeconds = retryAfter
+            }, cancellationToken);
+        };
+    });
+}
+
+// =============================================================================
 // Session (for OAuth state)
 // =============================================================================
 
@@ -322,6 +389,9 @@ builder.Services.AddScoped<CleanupOldBuildsJob>();
 // Configuration Validation
 builder.Services.AddConfigurationValidation();
 
+// Audit Logging
+builder.Services.AddScoped<IAuditLogger, AuditLogger>();
+
 // =============================================================================
 // Build Application
 // =============================================================================
@@ -350,6 +420,12 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 
 app.UseRouting();
+
+// Rate limiting middleware (must be before auth to protect login endpoints)
+if (rateLimitSettings.Enabled)
+{
+    app.UseRateLimiter();
+}
 
 app.UseSession();
 app.UseAuthentication();

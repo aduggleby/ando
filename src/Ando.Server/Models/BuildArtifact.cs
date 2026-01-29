@@ -20,8 +20,14 @@ namespace Ando.Server.Models;
 /// </summary>
 public class BuildArtifact
 {
+    /// <summary>
+    /// Unique identifier for this artifact.
+    /// </summary>
     public int Id { get; set; }
 
+    /// <summary>
+    /// ID of the build that produced this artifact.
+    /// </summary>
     public int BuildId { get; set; }
 
     /// <summary>

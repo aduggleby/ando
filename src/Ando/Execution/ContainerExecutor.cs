@@ -144,8 +144,9 @@ public class ContainerExecutor : CommandExecutorBase
         {
             var fullPath = Path.GetFullPath(path);
 
-            // Check if the path is within the host project root
-            if (fullPath.StartsWith(_hostRootPath, StringComparison.OrdinalIgnoreCase))
+            // Check if the path is within the host project root.
+            // Use Ordinal comparison because Linux paths are case-sensitive.
+            if (fullPath.StartsWith(_hostRootPath, StringComparison.Ordinal))
             {
                 var relativePath = Path.GetRelativePath(_hostRootPath, fullPath);
                 // Convert Windows separators to Unix if needed

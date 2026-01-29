@@ -123,6 +123,14 @@ public interface IGitHubService
 /// <summary>
 /// Repository information from GitHub API.
 /// </summary>
+/// <param name="Id">GitHub's internal ID for the repository.</param>
+/// <param name="FullName">Full repository name (owner/repo).</param>
+/// <param name="HtmlUrl">URL to the repository on GitHub.</param>
+/// <param name="CloneUrl">Git clone URL for the repository.</param>
+/// <param name="DefaultBranch">Default branch of the repository.</param>
+/// <param name="IsPrivate">Whether the repository is private.</param>
+/// <param name="OwnerId">GitHub's internal ID for the owner.</param>
+/// <param name="OwnerLogin">GitHub username or organization name of the owner.</param>
 public record GitHubRepository(
     long Id,
     string FullName,

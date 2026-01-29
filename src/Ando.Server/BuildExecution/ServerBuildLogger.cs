@@ -167,8 +167,10 @@ public class ServerBuildLogger : IBuildLogger
 
             // Broadcast to SignalR clients watching this build.
             // Use explicit camelCase property names to match JavaScript expectations.
+            // Fire-and-forget with explicit discard - we don't want to block logging on SignalR.
+            // Wrap in try-catch to prevent unobserved task exceptions.
             var groupName = BuildLogHub.GetGroupName(_buildId);
-            _hubContext.Clients.Group(groupName)
+            _ = _hubContext.Clients.Group(groupName)
                 .SendAsync("LogEntry", new
                 {
                     id = entry.Id,
@@ -177,7 +179,14 @@ public class ServerBuildLogger : IBuildLogger
                     message = entry.Message,
                     stepName = entry.StepName,
                     timestamp = entry.Timestamp
-                }, _cancellationToken);
+                }, _cancellationToken)
+                .ContinueWith(t =>
+                {
+                    if (t.IsFaulted)
+                    {
+                        // Log failure silently - SignalR delivery is best-effort
+                    }
+                }, TaskContinuationOptions.OnlyOnFaulted);
         }
         catch (OperationCanceledException)
         {

@@ -344,9 +344,15 @@ public class DockerManager
             throw new InvalidOperationException("Failed to start docker process");
         }
 
-        var containerId = (await process.StandardOutput.ReadToEndAsync()).Trim();
-        var error = await process.StandardError.ReadToEndAsync();
+        // Read stdout and stderr in parallel to avoid deadlocks.
+        // If we read sequentially (stdout then stderr), and the process writes
+        // enough to stderr to fill the buffer, the process will block waiting
+        // for stderr to be read while we're still waiting for stdout.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync();
+        var containerId = (await stdoutTask).Trim();
+        var error = await stderrTask;
 
         if (process.ExitCode != 0)
         {

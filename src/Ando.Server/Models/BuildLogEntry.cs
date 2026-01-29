@@ -55,6 +55,9 @@ public class BuildLogEntry
     /// </summary>
     public long Id { get; set; }
 
+    /// <summary>
+    /// ID of the build this entry belongs to.
+    /// </summary>
     public int BuildId { get; set; }
 
     /// <summary>

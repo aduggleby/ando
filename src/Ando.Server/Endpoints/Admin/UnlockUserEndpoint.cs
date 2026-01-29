@@ -13,6 +13,7 @@
 using System.Security.Claims;
 using Ando.Server.Contracts.Admin;
 using Ando.Server.Models;
+using Ando.Server.Services;
 using FastEndpoints;
 using Microsoft.AspNetCore.Identity;
 
@@ -24,13 +25,16 @@ namespace Ando.Server.Endpoints.Admin;
 public class UnlockUserEndpoint : EndpointWithoutRequest<LockUserResponse>
 {
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IAuditLogger _auditLogger;
     private readonly ILogger<UnlockUserEndpoint> _logger;
 
     public UnlockUserEndpoint(
         UserManager<ApplicationUser> userManager,
+        IAuditLogger auditLogger,
         ILogger<UnlockUserEndpoint> logger)
     {
         _userManager = userManager;
+        _auditLogger = auditLogger;
         _logger = logger;
     }
 
@@ -53,7 +57,15 @@ public class UnlockUserEndpoint : EndpointWithoutRequest<LockUserResponse>
         }
 
         await _userManager.SetLockoutEndDateAsync(user, null);
-        _logger.LogInformation("User {UserId} unlocked by admin {AdminId}", userId, currentUserId);
+
+        var adminEmail = User.FindFirst(ClaimTypes.Email)?.Value;
+        _auditLogger.LogAdminAction(
+            "UserUnlocked",
+            "User account unlocked",
+            currentUserId,
+            adminEmail,
+            userId,
+            user.Email);
 
         await SendAsync(new LockUserResponse(true), cancellation: ct);
     }

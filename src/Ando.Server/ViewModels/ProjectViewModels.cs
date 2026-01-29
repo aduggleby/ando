@@ -59,8 +59,19 @@ public enum SortDirection
 /// </summary>
 public class ProjectStatusViewModel
 {
+    /// <summary>
+    /// List of projects with their deployment status.
+    /// </summary>
     public IReadOnlyList<ProjectStatusItem> Projects { get; init; } = [];
+
+    /// <summary>
+    /// Field used for sorting the project list.
+    /// </summary>
     public StatusSortField SortField { get; init; } = StatusSortField.Alphabetical;
+
+    /// <summary>
+    /// Direction of sorting (ascending or descending).
+    /// </summary>
     public SortDirection SortDirection { get; init; } = SortDirection.Ascending;
 }
 
@@ -69,12 +80,39 @@ public class ProjectStatusViewModel
 /// </summary>
 public class ProjectStatusItem
 {
+    /// <summary>
+    /// Unique identifier for the project.
+    /// </summary>
     public int Id { get; init; }
+
+    /// <summary>
+    /// Full repository name in owner/repo format.
+    /// </summary>
     public string RepoFullName { get; init; } = "";
+
+    /// <summary>
+    /// URL to the repository on GitHub.
+    /// </summary>
     public string RepoUrl { get; init; } = "";
+
+    /// <summary>
+    /// When the project was created.
+    /// </summary>
     public DateTime CreatedAt { get; init; }
+
+    /// <summary>
+    /// When the last successful deployment occurred.
+    /// </summary>
     public DateTime? LastDeploymentAt { get; init; }
+
+    /// <summary>
+    /// Current deployment status (NotDeployed, Failed, or Deployed).
+    /// </summary>
     public DeploymentStatus DeploymentStatus { get; init; }
+
+    /// <summary>
+    /// Total number of builds for this project.
+    /// </summary>
     public int TotalBuilds { get; init; }
 }
 
@@ -83,6 +121,9 @@ public class ProjectStatusItem
 /// </summary>
 public class ProjectListViewModel
 {
+    /// <summary>
+    /// List of projects owned by the current user.
+    /// </summary>
     public IReadOnlyList<ProjectListItem> Projects { get; init; } = [];
 }
 
@@ -91,16 +132,49 @@ public class ProjectListViewModel
 /// </summary>
 public class ProjectListItem
 {
+    /// <summary>
+    /// Unique identifier for the project.
+    /// </summary>
     public int Id { get; init; }
+
+    /// <summary>
+    /// Full repository name in owner/repo format.
+    /// </summary>
     public string RepoFullName { get; init; } = "";
+
+    /// <summary>
+    /// URL to the repository on GitHub.
+    /// </summary>
     public string RepoUrl { get; init; } = "";
+
+    /// <summary>
+    /// When the project was created.
+    /// </summary>
     public DateTime CreatedAt { get; init; }
+
+    /// <summary>
+    /// When the last build was started, if any.
+    /// </summary>
     public DateTime? LastBuildAt { get; init; }
+
+    /// <summary>
+    /// Status of the most recent build.
+    /// </summary>
     public BuildStatus? LastBuildStatus { get; init; }
+
+    /// <summary>
+    /// Total number of builds for this project.
+    /// </summary>
     public int TotalBuilds { get; init; }
 
-    // Configuration status
+    /// <summary>
+    /// Whether the project has all required secrets configured.
+    /// </summary>
     public bool IsConfigured { get; init; } = true;
+
+    /// <summary>
+    /// Number of required secrets that are not yet configured.
+    /// </summary>
     public int MissingSecretsCount { get; init; }
 }
 
@@ -109,21 +183,69 @@ public class ProjectListItem
 /// </summary>
 public class ProjectDetailsViewModel
 {
+    /// <summary>
+    /// Unique identifier for the project.
+    /// </summary>
     public int Id { get; init; }
+
+    /// <summary>
+    /// Full repository name in owner/repo format.
+    /// </summary>
     public string RepoFullName { get; init; } = "";
+
+    /// <summary>
+    /// URL to the repository on GitHub.
+    /// </summary>
     public string RepoUrl { get; init; } = "";
+
+    /// <summary>
+    /// Default branch of the repository.
+    /// </summary>
     public string DefaultBranch { get; init; } = "";
+
+    /// <summary>
+    /// Branch filter pattern for triggering builds.
+    /// </summary>
     public string BranchFilter { get; init; } = "";
+
+    /// <summary>
+    /// Whether pull request builds are enabled.
+    /// </summary>
     public bool EnablePrBuilds { get; init; }
+
+    /// <summary>
+    /// Maximum build time in minutes before timeout.
+    /// </summary>
     public int TimeoutMinutes { get; init; }
+
+    /// <summary>
+    /// When the project was created.
+    /// </summary>
     public DateTime CreatedAt { get; init; }
+
+    /// <summary>
+    /// When the last build was started, if any.
+    /// </summary>
     public DateTime? LastBuildAt { get; init; }
 
+    /// <summary>
+    /// List of recent builds for this project.
+    /// </summary>
     public IReadOnlyList<BuildListItem> RecentBuilds { get; init; } = [];
+
+    /// <summary>
+    /// Total number of builds for this project.
+    /// </summary>
     public int TotalBuilds { get; init; }
 
-    // Configuration status
+    /// <summary>
+    /// Whether the project has all required secrets configured.
+    /// </summary>
     public bool IsConfigured { get; init; } = true;
+
+    /// <summary>
+    /// Names of required secrets that are not yet configured.
+    /// </summary>
     public IReadOnlyList<string> MissingSecrets { get; init; } = [];
 }
 
@@ -132,18 +254,69 @@ public class ProjectDetailsViewModel
 /// </summary>
 public class BuildListItem
 {
+    /// <summary>
+    /// Unique identifier for the build.
+    /// </summary>
     public int Id { get; init; }
+
+    /// <summary>
+    /// Full Git commit SHA.
+    /// </summary>
     public string CommitSha { get; init; } = "";
+
+    /// <summary>
+    /// Shortened commit SHA for display (first 8 characters).
+    /// </summary>
     public string ShortCommitSha => CommitSha.Length >= 8 ? CommitSha[..8] : CommitSha;
+
+    /// <summary>
+    /// Git branch that triggered the build.
+    /// </summary>
     public string Branch { get; init; } = "";
+
+    /// <summary>
+    /// Git commit message.
+    /// </summary>
     public string? CommitMessage { get; init; }
+
+    /// <summary>
+    /// Author of the Git commit.
+    /// </summary>
     public string? CommitAuthor { get; init; }
+
+    /// <summary>
+    /// Current status of the build.
+    /// </summary>
     public BuildStatus Status { get; init; }
+
+    /// <summary>
+    /// What triggered this build (push, PR, manual, etc.).
+    /// </summary>
     public BuildTrigger Trigger { get; init; }
+
+    /// <summary>
+    /// When the build was added to the queue.
+    /// </summary>
     public DateTime QueuedAt { get; init; }
+
+    /// <summary>
+    /// When the build started executing.
+    /// </summary>
     public DateTime? StartedAt { get; init; }
+
+    /// <summary>
+    /// When the build finished executing.
+    /// </summary>
     public DateTime? FinishedAt { get; init; }
+
+    /// <summary>
+    /// Total build duration from start to finish.
+    /// </summary>
     public TimeSpan? Duration { get; init; }
+
+    /// <summary>
+    /// Pull request number if this was a PR build.
+    /// </summary>
     public int? PullRequestNumber { get; init; }
 }
 
@@ -169,32 +342,79 @@ public class CreateProjectViewModel
 /// </summary>
 public class ProjectSettingsViewModel
 {
+    /// <summary>
+    /// Unique identifier for the project.
+    /// </summary>
     public int Id { get; init; }
+
+    /// <summary>
+    /// Full repository name in owner/repo format.
+    /// </summary>
     public string RepoFullName { get; init; } = "";
 
-    // Build settings
+    /// <summary>
+    /// Branch filter pattern for triggering builds.
+    /// </summary>
     public string BranchFilter { get; init; } = "";
+
+    /// <summary>
+    /// Whether pull request builds are enabled.
+    /// </summary>
     public bool EnablePrBuilds { get; init; }
+
+    /// <summary>
+    /// Maximum build time in minutes before timeout.
+    /// </summary>
     public int TimeoutMinutes { get; init; }
+
+    /// <summary>
+    /// Custom Docker image to use for builds.
+    /// </summary>
     public string? DockerImage { get; init; }
 
-    // Profile settings
+    /// <summary>
+    /// Selected build profile name.
+    /// </summary>
     public string? Profile { get; init; }
+
+    /// <summary>
+    /// List of available build profiles defined in the repository.
+    /// </summary>
     public IReadOnlyList<string> AvailableProfiles { get; init; } = [];
+
+    /// <summary>
+    /// Whether the selected profile exists in the available profiles.
+    /// </summary>
     public bool IsProfileValid { get; init; } = true;
 
-    // Required secrets (comma-separated list of required env var names)
+    /// <summary>
+    /// Comma-separated list of required environment variable names.
+    /// </summary>
     public string? RequiredSecrets { get; init; }
 
-    // Notification settings
+    /// <summary>
+    /// Whether to send email notifications on build failure.
+    /// </summary>
     public bool NotifyOnFailure { get; init; }
+
+    /// <summary>
+    /// Email address to send failure notifications to.
+    /// </summary>
     public string? NotificationEmail { get; init; }
 
-    // Secrets (names only, never values)
+    /// <summary>
+    /// Names of secrets configured for this project.
+    /// </summary>
     public IReadOnlyList<string> SecretNames { get; init; } = [];
 
-    // Configuration status
+    /// <summary>
+    /// Names of required secrets that are not yet configured.
+    /// </summary>
     public IReadOnlyList<string> MissingSecrets { get; init; } = [];
+
+    /// <summary>
+    /// Whether the project has all required secrets and a valid profile.
+    /// </summary>
     public bool IsConfigured => MissingSecrets.Count == 0 && IsProfileValid;
 }
 
@@ -205,12 +425,39 @@ public class ProjectSettingsViewModel
 /// </summary>
 public class ProjectSettingsFormModel
 {
+    /// <summary>
+    /// Branch filter pattern for triggering builds.
+    /// </summary>
     public string BranchFilter { get; set; } = "";
+
+    /// <summary>
+    /// Whether pull request builds are enabled.
+    /// </summary>
     public bool EnablePrBuilds { get; set; }
+
+    /// <summary>
+    /// Maximum build time in minutes before timeout.
+    /// </summary>
     public int TimeoutMinutes { get; set; } = 15;
+
+    /// <summary>
+    /// Custom Docker image to use for builds.
+    /// </summary>
     public string? DockerImage { get; set; }
+
+    /// <summary>
+    /// Selected build profile name.
+    /// </summary>
     public string? Profile { get; set; }
+
+    /// <summary>
+    /// Whether to send email notifications on build failure.
+    /// </summary>
     public bool NotifyOnFailure { get; set; } = true;
+
+    /// <summary>
+    /// Email address to send failure notifications to.
+    /// </summary>
     public string? NotificationEmail { get; set; }
 }
 
@@ -219,7 +466,14 @@ public class ProjectSettingsFormModel
 /// </summary>
 public class AddSecretFormModel
 {
+    /// <summary>
+    /// Name of the secret (environment variable name).
+    /// </summary>
     public string Name { get; set; } = "";
+
+    /// <summary>
+    /// Secret value to store.
+    /// </summary>
     public string Value { get; set; } = "";
 }
 

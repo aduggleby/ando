@@ -25,6 +25,15 @@ namespace Ando.Server.Contracts.Projects;
 /// <summary>
 /// Project summary for list views.
 /// </summary>
+/// <param name="Id">Project's unique identifier.</param>
+/// <param name="RepoFullName">Full repository name (owner/repo).</param>
+/// <param name="RepoUrl">URL to the repository on GitHub.</param>
+/// <param name="CreatedAt">When the project was created.</param>
+/// <param name="LastBuildAt">When the last build was started.</param>
+/// <param name="LastBuildStatus">Status of the most recent build.</param>
+/// <param name="TotalBuilds">Total number of builds.</param>
+/// <param name="IsConfigured">Whether all required secrets are configured.</param>
+/// <param name="MissingSecretsCount">Number of missing required secrets.</param>
 public record ProjectListItemDto(
     int Id,
     string RepoFullName,
@@ -40,6 +49,19 @@ public record ProjectListItemDto(
 /// <summary>
 /// Full project details for detail view.
 /// </summary>
+/// <param name="Id">Project's unique identifier.</param>
+/// <param name="RepoFullName">Full repository name (owner/repo).</param>
+/// <param name="RepoUrl">URL to the repository on GitHub.</param>
+/// <param name="DefaultBranch">Repository's default branch.</param>
+/// <param name="BranchFilter">Branch filter pattern for builds.</param>
+/// <param name="EnablePrBuilds">Whether PR builds are enabled.</param>
+/// <param name="TimeoutMinutes">Build timeout in minutes.</param>
+/// <param name="CreatedAt">When the project was created.</param>
+/// <param name="LastBuildAt">When the last build was started.</param>
+/// <param name="TotalBuilds">Total number of builds.</param>
+/// <param name="IsConfigured">Whether all required secrets are configured.</param>
+/// <param name="MissingSecrets">Names of missing required secrets.</param>
+/// <param name="RecentBuilds">List of recent builds.</param>
 public record ProjectDetailsDto(
     int Id,
     string RepoFullName,
@@ -59,6 +81,20 @@ public record ProjectDetailsDto(
 /// <summary>
 /// Project settings for the settings page.
 /// </summary>
+/// <param name="Id">Project's unique identifier.</param>
+/// <param name="RepoFullName">Full repository name (owner/repo).</param>
+/// <param name="BranchFilter">Branch filter pattern for builds.</param>
+/// <param name="EnablePrBuilds">Whether PR builds are enabled.</param>
+/// <param name="TimeoutMinutes">Build timeout in minutes.</param>
+/// <param name="DockerImage">Custom Docker image for builds.</param>
+/// <param name="Profile">Selected build profile name.</param>
+/// <param name="AvailableProfiles">Available build profiles from repository.</param>
+/// <param name="IsProfileValid">Whether selected profile exists.</param>
+/// <param name="RequiredSecrets">Comma-separated list of required secret names.</param>
+/// <param name="NotifyOnFailure">Whether to send failure notifications.</param>
+/// <param name="NotificationEmail">Email for failure notifications.</param>
+/// <param name="SecretNames">Names of configured secrets.</param>
+/// <param name="MissingSecrets">Names of missing required secrets.</param>
 public record ProjectSettingsDto(
     int Id,
     string RepoFullName,
@@ -79,6 +115,13 @@ public record ProjectSettingsDto(
 /// <summary>
 /// Project status for deployment status dashboard.
 /// </summary>
+/// <param name="Id">Project's unique identifier.</param>
+/// <param name="RepoFullName">Full repository name (owner/repo).</param>
+/// <param name="RepoUrl">URL to the repository on GitHub.</param>
+/// <param name="CreatedAt">When the project was created.</param>
+/// <param name="LastDeploymentAt">When the last successful deployment occurred.</param>
+/// <param name="DeploymentStatus">Current deployment status.</param>
+/// <param name="TotalBuilds">Total number of builds.</param>
 public record ProjectStatusDto(
     int Id,
     string RepoFullName,
@@ -96,6 +139,7 @@ public record ProjectStatusDto(
 /// <summary>
 /// Response containing list of projects.
 /// </summary>
+/// <param name="Projects">List of projects owned by the user.</param>
 public record GetProjectsResponse(
     IReadOnlyList<ProjectListItemDto> Projects
 );
@@ -103,6 +147,9 @@ public record GetProjectsResponse(
 /// <summary>
 /// Response containing project status list with sorting info.
 /// </summary>
+/// <param name="Projects">List of project statuses.</param>
+/// <param name="SortField">Field used for sorting.</param>
+/// <param name="SortDirection">Sort direction (Ascending/Descending).</param>
 public record GetProjectsStatusResponse(
     IReadOnlyList<ProjectStatusDto> Projects,
     string SortField,
@@ -116,6 +163,7 @@ public record GetProjectsStatusResponse(
 /// <summary>
 /// Response containing project details.
 /// </summary>
+/// <param name="Project">Full project details.</param>
 public record GetProjectResponse(
     ProjectDetailsDto Project
 );
@@ -123,6 +171,7 @@ public record GetProjectResponse(
 /// <summary>
 /// Response containing project settings.
 /// </summary>
+/// <param name="Settings">Project settings.</param>
 public record GetProjectSettingsResponse(
     ProjectSettingsDto Settings
 );
@@ -136,6 +185,9 @@ public record GetProjectSettingsResponse(
 /// </summary>
 public class CreateProjectRequest
 {
+    /// <summary>
+    /// Full repository name in owner/repo format.
+    /// </summary>
     [Required(ErrorMessage = "Repository name is required")]
     public string RepoFullName { get; set; } = "";
 }
@@ -143,11 +195,15 @@ public class CreateProjectRequest
 /// <summary>
 /// Response from project creation.
 /// </summary>
+/// <param name="Success">Whether creation succeeded.</param>
+/// <param name="ProjectId">ID of the created project.</param>
+/// <param name="Error">Error message if creation failed.</param>
+/// <param name="RedirectUrl">URL for GitHub App installation if needed.</param>
 public record CreateProjectResponse(
     bool Success,
     int? ProjectId = null,
     string? Error = null,
-    string? RedirectUrl = null  // For GitHub App installation redirect
+    string? RedirectUrl = null
 );
 
 // =============================================================================
@@ -159,18 +215,47 @@ public record CreateProjectResponse(
 /// </summary>
 public class UpdateProjectSettingsRequest
 {
+    /// <summary>
+    /// Branch filter pattern for triggering builds.
+    /// </summary>
     public string BranchFilter { get; set; } = "";
+
+    /// <summary>
+    /// Whether to enable pull request builds.
+    /// </summary>
     public bool EnablePrBuilds { get; set; }
+
+    /// <summary>
+    /// Build timeout in minutes.
+    /// </summary>
     public int TimeoutMinutes { get; set; } = 15;
+
+    /// <summary>
+    /// Custom Docker image for builds.
+    /// </summary>
     public string? DockerImage { get; set; }
+
+    /// <summary>
+    /// Build profile name to use.
+    /// </summary>
     public string? Profile { get; set; }
+
+    /// <summary>
+    /// Whether to send failure notifications.
+    /// </summary>
     public bool NotifyOnFailure { get; set; } = true;
+
+    /// <summary>
+    /// Email address for failure notifications.
+    /// </summary>
     public string? NotificationEmail { get; set; }
 }
 
 /// <summary>
 /// Response from settings update.
 /// </summary>
+/// <param name="Success">Whether update succeeded.</param>
+/// <param name="Error">Error message if update failed.</param>
 public record UpdateProjectSettingsResponse(
     bool Success,
     string? Error = null
@@ -183,6 +268,8 @@ public record UpdateProjectSettingsResponse(
 /// <summary>
 /// Response from project deletion.
 /// </summary>
+/// <param name="Success">Whether deletion succeeded.</param>
+/// <param name="Error">Error message if deletion failed.</param>
 public record DeleteProjectResponse(
     bool Success,
     string? Error = null
@@ -197,12 +284,18 @@ public record DeleteProjectResponse(
 /// </summary>
 public class TriggerBuildRequest
 {
+    /// <summary>
+    /// Branch to build (defaults to repository's default branch).
+    /// </summary>
     public string? Branch { get; set; }
 }
 
 /// <summary>
 /// Response from build trigger.
 /// </summary>
+/// <param name="Success">Whether the build was triggered.</param>
+/// <param name="BuildId">ID of the created build.</param>
+/// <param name="Error">Error message if trigger failed.</param>
 public record TriggerBuildResponse(
     bool Success,
     int? BuildId = null,
@@ -218,11 +311,17 @@ public record TriggerBuildResponse(
 /// </summary>
 public class SetSecretRequest
 {
+    /// <summary>
+    /// Secret name (uppercase with underscores, e.g., MY_SECRET).
+    /// </summary>
     [Required(ErrorMessage = "Secret name is required")]
     [RegularExpression(@"^[A-Z_][A-Z0-9_]*$",
         ErrorMessage = "Secret name must be uppercase with underscores only (e.g., MY_SECRET)")]
     public string Name { get; set; } = "";
 
+    /// <summary>
+    /// Secret value to store.
+    /// </summary>
     [Required(ErrorMessage = "Secret value is required")]
     public string Value { get; set; } = "";
 }
@@ -230,6 +329,8 @@ public class SetSecretRequest
 /// <summary>
 /// Response from secret operation.
 /// </summary>
+/// <param name="Success">Whether the operation succeeded.</param>
+/// <param name="Error">Error message if operation failed.</param>
 public record SecretResponse(
     bool Success,
     string? Error = null
@@ -240,6 +341,9 @@ public record SecretResponse(
 /// </summary>
 public class BulkImportSecretsRequest
 {
+    /// <summary>
+    /// Content in .env format (KEY=value, one per line).
+    /// </summary>
     [Required(ErrorMessage = "Content is required")]
     public string Content { get; set; } = "";
 }
@@ -247,6 +351,9 @@ public class BulkImportSecretsRequest
 /// <summary>
 /// Response from bulk import operation.
 /// </summary>
+/// <param name="Success">Whether import succeeded.</param>
+/// <param name="ImportedCount">Number of secrets imported.</param>
+/// <param name="Errors">List of import errors, if any.</param>
 public record BulkImportSecretsResponse(
     bool Success,
     int ImportedCount,
@@ -260,6 +367,9 @@ public record BulkImportSecretsResponse(
 /// <summary>
 /// Response from refreshing required secrets detection.
 /// </summary>
+/// <param name="Success">Whether refresh succeeded.</param>
+/// <param name="DetectedSecrets">Required secrets detected from build.csando.</param>
+/// <param name="DetectedProfiles">Available profiles detected from build.csando.</param>
 public record RefreshSecretsResponse(
     bool Success,
     IReadOnlyList<string> DetectedSecrets,
@@ -273,6 +383,19 @@ public record RefreshSecretsResponse(
 /// <summary>
 /// Build summary for list views.
 /// </summary>
+/// <param name="Id">Build's unique identifier.</param>
+/// <param name="CommitSha">Full Git commit SHA.</param>
+/// <param name="ShortCommitSha">Shortened commit SHA for display.</param>
+/// <param name="Branch">Git branch that triggered the build.</param>
+/// <param name="CommitMessage">Git commit message.</param>
+/// <param name="CommitAuthor">Author of the Git commit.</param>
+/// <param name="Status">Current build status.</param>
+/// <param name="Trigger">What triggered this build.</param>
+/// <param name="QueuedAt">When the build was queued.</param>
+/// <param name="StartedAt">When the build started executing.</param>
+/// <param name="FinishedAt">When the build finished.</param>
+/// <param name="Duration">Total build duration.</param>
+/// <param name="PullRequestNumber">PR number if this was a PR build.</param>
 public record BuildListItemDto(
     int Id,
     string CommitSha,

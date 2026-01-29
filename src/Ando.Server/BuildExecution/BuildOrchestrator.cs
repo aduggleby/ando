@@ -327,7 +327,11 @@ public class BuildOrchestrator : IBuildOrchestrator
         {
             // Clone
             _logger.LogInformation("PrepareRepository: Calling Clone");
-            Directory.CreateDirectory(Path.GetDirectoryName(repoPath)!);
+            var parentDir = Path.GetDirectoryName(repoPath);
+            if (!string.IsNullOrEmpty(parentDir))
+            {
+                Directory.CreateDirectory(parentDir);
+            }
             var result = await _gitHubService.CloneRepositoryAsync(
                 project.InstallationId.Value,
                 project.RepoFullName,

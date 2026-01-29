@@ -22,6 +22,7 @@ using Ando.Server.Services;
 using Hangfire;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -57,8 +58,10 @@ public class WebhooksController : ControllerBase
 
     /// <summary>
     /// GitHub webhook endpoint.
+    /// Rate limited to prevent abuse (configurable in appsettings.json).
     /// </summary>
     [HttpPost("github")]
+    [EnableRateLimiting("webhook")]
     public async Task<IActionResult> GitHub()
     {
         // Read raw body for signature verification

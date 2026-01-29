@@ -65,16 +65,22 @@ public class ShellOperations
     /// <returns>Shell result with exit code, output, and error.</returns>
     public async Task<ShellResult> RunAsync(string command, bool showOutput, params string[] args)
     {
+        // SECURITY: Use ArgumentList instead of Arguments string concatenation
+        // to prevent command injection attacks (OWASP A03:2021 - Injection)
         var psi = new ProcessStartInfo
         {
             FileName = command,
-            Arguments = string.Join(" ", args),
             WorkingDirectory = _workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true
         };
+
+        foreach (var arg in args)
+        {
+            psi.ArgumentList.Add(arg);
+        }
 
         using var process = new Process { StartInfo = psi };
 

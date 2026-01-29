@@ -14,6 +14,7 @@
 using System.Security.Claims;
 using Ando.Server.Contracts.Admin;
 using Ando.Server.Models;
+using Ando.Server.Services;
 using FastEndpoints;
 using Microsoft.AspNetCore.Identity;
 
@@ -25,13 +26,16 @@ namespace Ando.Server.Endpoints.Admin;
 public class LockUserEndpoint : Endpoint<LockUserRequest, LockUserResponse>
 {
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IAuditLogger _auditLogger;
     private readonly ILogger<LockUserEndpoint> _logger;
 
     public LockUserEndpoint(
         UserManager<ApplicationUser> userManager,
+        IAuditLogger auditLogger,
         ILogger<LockUserEndpoint> logger)
     {
         _userManager = userManager;
+        _auditLogger = auditLogger;
         _logger = logger;
     }
 
@@ -67,7 +71,20 @@ public class LockUserEndpoint : Endpoint<LockUserRequest, LockUserResponse>
 
         var lockoutEnd = DateTimeOffset.UtcNow.AddDays(req.LockDays.Value);
         await _userManager.SetLockoutEndDateAsync(user, lockoutEnd);
-        _logger.LogInformation("User {UserId} locked for {Days} days by admin {AdminId}", userId, req.LockDays, currentUserId);
+
+        var adminEmail = User.FindFirst(ClaimTypes.Email)?.Value;
+        _auditLogger.LogAdminAction(
+            "UserLocked",
+            $"User account locked for {req.LockDays} days",
+            currentUserId,
+            adminEmail,
+            userId,
+            user.Email,
+            new Dictionary<string, object>
+            {
+                ["lockDays"] = req.LockDays.Value,
+                ["lockoutEnd"] = lockoutEnd.ToString("O")
+            });
 
         await SendAsync(new LockUserResponse(true), cancellation: ct);
     }

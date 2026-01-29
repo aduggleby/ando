@@ -280,9 +280,36 @@ foreach (var batch in items.Chunk(100))
 }
 ```
 
+### XML Documentation Comments
+**IMPORTANT**: All public methods, properties, and classes must have `///` XML documentation comments:
+
+```csharp
+/// <summary>
+/// Brief description of what the property represents.
+/// </summary>
+public int TotalUsers { get; set; }
+
+/// <summary>
+/// Brief description of what the method does.
+/// </summary>
+/// <param name="configuration">Description of the parameter.</param>
+/// <returns>Description of the return value.</returns>
+public DotnetPublishOptions WithConfiguration(Configuration configuration)
+
+/// <summary>
+/// Response containing list of projects.
+/// </summary>
+/// <param name="Projects">List of projects owned by the current user.</param>
+public record GetProjectsResponse(IReadOnlyList<ProjectListItemDto> Projects);
+
+/// <inheritdoc />
+public async Task<Project?> GetProjectAsync(int projectId)
+```
+
 ### Comment Guidelines
 - Use `//` for single-line and short multi-line comments
-- Use `///` XML doc comments for public API documentation
+- Use `///` XML doc comments for public API documentation (methods, properties, classes)
+- Use `<inheritdoc />` on interface implementations
 - Explain the "why" not just the "what"
 - Document design decisions and tradeoffs
 - Comment on non-obvious logic or edge case handling

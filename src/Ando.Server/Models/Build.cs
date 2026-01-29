@@ -59,8 +59,14 @@ public enum BuildTrigger
 /// </summary>
 public class Build
 {
+    /// <summary>
+    /// Unique identifier for this build.
+    /// </summary>
     public int Id { get; set; }
 
+    /// <summary>
+    /// ID of the project this build belongs to.
+    /// </summary>
     public int ProjectId { get; set; }
 
     /// <summary>

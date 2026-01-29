@@ -20,8 +20,14 @@ namespace Ando.Server.Models;
 /// </summary>
 public class Project
 {
+    /// <summary>
+    /// Unique identifier for this project.
+    /// </summary>
     public int Id { get; set; }
 
+    /// <summary>
+    /// ID of the user who owns this project.
+    /// </summary>
     public int OwnerId { get; set; }
 
     /// <summary>
@@ -122,8 +128,14 @@ public class Project
     // Timestamps
     // -------------------------------------------------------------------------
 
+    /// <summary>
+    /// When the project was created.
+    /// </summary>
     public DateTime CreatedAt { get; set; }
 
+    /// <summary>
+    /// When the last build was started for this project.
+    /// </summary>
     public DateTime? LastBuildAt { get; set; }
 
     // -------------------------------------------------------------------------

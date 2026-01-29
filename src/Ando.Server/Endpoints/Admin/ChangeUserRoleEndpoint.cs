@@ -14,6 +14,7 @@
 using System.Security.Claims;
 using Ando.Server.Contracts.Admin;
 using Ando.Server.Models;
+using Ando.Server.Services;
 using FastEndpoints;
 using Microsoft.AspNetCore.Identity;
 
@@ -25,13 +26,16 @@ namespace Ando.Server.Endpoints.Admin;
 public class ChangeUserRoleEndpoint : Endpoint<ChangeUserRoleRequest, ChangeUserRoleResponse>
 {
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IAuditLogger _auditLogger;
     private readonly ILogger<ChangeUserRoleEndpoint> _logger;
 
     public ChangeUserRoleEndpoint(
         UserManager<ApplicationUser> userManager,
+        IAuditLogger auditLogger,
         ILogger<ChangeUserRoleEndpoint> logger)
     {
         _userManager = userManager;
+        _auditLogger = auditLogger;
         _logger = logger;
     }
 
@@ -62,19 +66,37 @@ public class ChangeUserRoleEndpoint : Endpoint<ChangeUserRoleRequest, ChangeUser
         var isCurrentlyAdmin = await _userManager.IsInRoleAsync(user, UserRoles.Admin);
         var wantsAdmin = req.NewRole == UserRoles.Admin;
 
+        var adminEmail = User.FindFirst(ClaimTypes.Email)?.Value;
+
         if (isCurrentlyAdmin && !wantsAdmin)
         {
             // Demote from admin
             await _userManager.RemoveFromRoleAsync(user, UserRoles.Admin);
             await _userManager.AddToRoleAsync(user, UserRoles.User);
-            _logger.LogInformation("User {UserId} demoted from Admin to User by {AdminId}", userId, currentUserId);
+
+            _auditLogger.LogAdminAction(
+                "UserDemoted",
+                $"User demoted from Admin to User",
+                currentUserId,
+                adminEmail,
+                userId,
+                user.Email,
+                new Dictionary<string, object> { ["previousRole"] = "Admin", ["newRole"] = "User" });
         }
         else if (!isCurrentlyAdmin && wantsAdmin)
         {
             // Promote to admin
             await _userManager.RemoveFromRoleAsync(user, UserRoles.User);
             await _userManager.AddToRoleAsync(user, UserRoles.Admin);
-            _logger.LogInformation("User {UserId} promoted to Admin by {AdminId}", userId, currentUserId);
+
+            _auditLogger.LogAdminAction(
+                "UserPromoted",
+                $"User promoted to Admin",
+                currentUserId,
+                adminEmail,
+                userId,
+                user.Email,
+                new Dictionary<string, object> { ["previousRole"] = "User", ["newRole"] = "Admin" });
         }
 
         await SendAsync(new ChangeUserRoleResponse(true), cancellation: ct);

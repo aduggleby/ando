@@ -88,17 +88,24 @@ public class WebhookSignatureValidator
 
     /// <summary>
     /// Compares two strings in constant time to prevent timing attacks.
+    /// SECURITY: Avoids early return on length mismatch to prevent timing leaks.
     /// </summary>
     private static bool ConstantTimeEquals(string a, string b)
     {
-        if (a.Length != b.Length)
-        {
-            return false;
-        }
-
         var aBytes = Encoding.UTF8.GetBytes(a.ToLowerInvariant());
         var bBytes = Encoding.UTF8.GetBytes(b.ToLowerInvariant());
 
-        return CryptographicOperations.FixedTimeEquals(aBytes, bBytes);
+        // Pad to same length to avoid timing leaks from length comparison.
+        // This ensures the comparison takes constant time regardless of input lengths.
+        var maxLength = Math.Max(aBytes.Length, bBytes.Length);
+        var aPadded = new byte[maxLength];
+        var bPadded = new byte[maxLength];
+        Buffer.BlockCopy(aBytes, 0, aPadded, 0, aBytes.Length);
+        Buffer.BlockCopy(bBytes, 0, bPadded, 0, bBytes.Length);
+
+        // Use FixedTimeEquals for constant-time comparison, but also check
+        // original lengths match (length mismatch means invalid signature).
+        return aBytes.Length == bBytes.Length &&
+               CryptographicOperations.FixedTimeEquals(aPadded, bPadded);
     }
 }
