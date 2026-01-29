@@ -42,6 +42,6 @@
     "postProcessors": [],
     "noLangKeyword": false,
     "keepFileLink": false,
-    "disableGitFeatures": false
+    "disableGitFeatures": true
   }
 }

@@ -588,6 +588,23 @@ Activate with CLI: `ando -p release` or `ando -p publish,release`
 7. Always call EnsureAuthenticated() before cloud operations
 8. Use `ando verify` to check scripts without executing
 
+## API Documentation
+
+For detailed C# API documentation including all classes, methods, properties, and XML doc comments, see the API reference:
+
+- https://andobuild.com/apidocs/api/Ando.html - Main Ando namespace (CLI, Operations, Workflow)
+- https://andobuild.com/apidocs/api/Ando.Operations.html - All operation classes (DotnetOperations, DockerOperations, etc.)
+- https://andobuild.com/apidocs/api/Ando.Workflow.html - Workflow execution (WorkflowRunner, BuildStep, StepRegistry)
+- https://andobuild.com/apidocs/api/Ando.Context.html - Build context (BuildPath, PathsContext, VarsContext)
+- https://andobuild.com/apidocs/api/Ando.References.html - Project references (ProjectRef, DirectoryRef, EfContextRef)
+- https://andobuild.com/apidocs/api/Ando.Logging.html - Logging interfaces (IBuildLogger, ConsoleLogger)
+- https://andobuild.com/apidocs/api/Ando.Execution.html - Command execution (ProcessRunner, ContainerExecutor, DockerManager)
+- https://andobuild.com/apidocs/api/Ando.Scripting.html - Roslyn scripting (ScriptHost, ScriptGlobals, BuildOperations)
+- https://andobuild.com/apidocs/api/Ando.Profiles.html - Build profiles (ProfileRegistry, Profile)
+- https://andobuild.com/apidocs/api/Ando.Utilities.html - Utility classes (VersionResolver, GitHubAuthHelper)
+
+The API docs are generated from C# XML documentation comments using DocFX and provide complete type information, method signatures, and usage examples.
+
 ## Markdown Versions
 
 All pages are available in markdown format for LLM consumption:
