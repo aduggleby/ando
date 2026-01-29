@@ -145,6 +145,12 @@ public class ScriptGlobals
     public PlaywrightOperations Playwright { get; }
 
     /// <summary>
+    /// DocFX operations for generating API documentation from C# XML comments.
+    /// Usage: Docfx.Install(), Docfx.BuildAndCopy("./docfx.json", "_apidocs", "./website/public/apidocs")
+    /// </summary>
+    public DocfxOperations Docfx { get; }
+
+    /// <summary>
     /// Legacy .NET SDK installation operations.
     /// Use Dotnet.SdkInstall() instead for new scripts.
     /// Usage: DotnetSdk.Install() or DotnetSdk.Install("9.0")
@@ -213,6 +219,7 @@ public class ScriptGlobals
         GitHub = buildContext.Operations.GitHub;
         Docker = buildContext.Operations.Docker;
         Playwright = buildContext.Operations.Playwright;
+        Docfx = buildContext.Operations.Docfx;
         _profileRegistry = buildContext.ProfileRegistry;
 
         // Legacy backward compatibility.

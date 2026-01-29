@@ -94,7 +94,7 @@ var updateSuccess = false;
 
 for (int attempt = 1; attempt <= updateMaxAttempts; attempt++)
 {
-    var result = await Shell.RunAsync("dotnet", $"tool update -g mytool --version {version}");
+    var result = await Shell.RunAsync("dotnet", "tool", "update", "-g", "mytool", "--version", version);
     if (result.ExitCode == 0)
     {
         Log.Info("Successfully updated tool!");
@@ -187,7 +187,7 @@ if (!string.IsNullOrEmpty(webhookUrl))
 
 // Update local tool
 Log.Info("Updating local tool installation...");
-await Shell.RunAsync("dotnet", "tool update -g myapp");
+await Shell.RunAsync("dotnet", "tool", "update", "-g", "myapp");
 ```
 
 ## Error Handling
@@ -198,7 +198,7 @@ Hooks should handle errors gracefully and not block the user:
 try
 {
     // Attempt the update
-    var result = await Shell.RunAsync("dotnet", "tool update -g mytool");
+    var result = await Shell.RunAsync("dotnet", "tool", "update", "-g", "mytool");
 
     if (result.ExitCode != 0)
     {

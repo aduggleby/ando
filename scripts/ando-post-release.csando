@@ -71,7 +71,7 @@ var updateSuccess = false;
 
 for (int attempt = 1; attempt <= updateMaxAttempts; attempt++)
 {
-    var result = await Shell.RunAsync("dotnet", $"tool update -g ando --version {version}");
+    var result = await Shell.RunAsync("dotnet", "tool", "update", "-g", "ando", "--version", version);
     if (result.ExitCode == 0)
     {
         Log.Info("Successfully updated ando tool!");

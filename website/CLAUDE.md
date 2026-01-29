@@ -163,3 +163,30 @@ The `public/llms.txt` file follows the [llms.txt standard](https://llmstxt.org/)
 - Global variables and functions
 - Common patterns and examples
 - All operations by provider
+
+### API Documentation (Code Documentation)
+
+The Code Documentation at `/apidocs/api/Ando.html` is generated from C# XML documentation comments using DocFX.
+
+**Generating API Docs (via build.csando):**
+
+The `publish` profile automatically generates API docs:
+```bash
+ando -p publish
+```
+
+**Manual generation:**
+
+```bash
+# From the project root (not website folder)
+docfx metadata docfx.json && docfx build docfx.json
+
+# The BuildAndCopy step in the build script handles copying and cleanup
+```
+
+**When to regenerate:**
+- After significant changes to C# code documentation
+- Before deploying the website (done automatically by publish profile)
+- When new public APIs are added
+
+The generated docs are in `.gitignore` (~36MB) and are regenerated during the publish workflow.

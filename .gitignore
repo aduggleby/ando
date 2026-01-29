@@ -72,3 +72,9 @@ publish-to-nas.sh
 
 # Wrangler
 .wrangler/
+
+# DocFX generated files
+api/
+_apidocs/
+docfx/
+website/public/apidocs/

@@ -647,7 +647,7 @@ export const operations = [
     name: "Docker.IsAvailable",
     desc: "Check if Docker CLI and daemon are accessible. Executes immediately (not registered as a step) and returns a boolean. Useful for conditional logic in build scripts.",
     examples: [
-      "if (Docker.IsAvailable()) {\n  Docker.Build(\"Dockerfile\", o => o.WithTag(\"myapp:latest\"));\n} else {\n  Log.Warning(\"Docker not available, skipping container build\");\n}",
+      'if (Docker.IsAvailable()) {\n  Docker.Build("Dockerfile", o => o.WithTag("myapp:latest"));\n} else {\n  Log.Warning("Docker not available, skipping container build");\n}',
     ],
     sourceFile: "Operations/DockerOperations.cs",
   },
@@ -661,6 +661,49 @@ export const operations = [
       '// Multi-platform build with push to ghcr.io\nDocker.Build("./Dockerfile", o => o\n  .WithPlatforms("linux/amd64", "linux/arm64")\n  .WithTag("ghcr.io/myorg/myapp:v1.0.0")\n  .WithTag("ghcr.io/myorg/myapp:latest")\n  .WithPush());',
     ],
     sourceFile: "Operations/DockerOperations.cs",
+  },
+  // DocFX operations
+  {
+    group: "Docfx",
+    name: "Docfx.Install",
+    desc: "Install DocFX as a dotnet global tool if not already installed. DocFX generates API documentation from C# XML documentation comments.",
+    examples: ["Docfx.Install();"],
+    sourceFile: "Operations/DocfxOperations.cs",
+  },
+  {
+    group: "Docfx",
+    name: "Docfx.GenerateDocs",
+    desc: "Generate API documentation from a docfx.json configuration file. Runs both 'docfx metadata' to extract API metadata and 'docfx build' to generate HTML.",
+    examples: ['Docfx.GenerateDocs("./docfx.json");', "Docfx.GenerateDocs(); // Uses default ./docfx.json"],
+    sourceFile: "Operations/DocfxOperations.cs",
+  },
+  {
+    group: "Docfx",
+    name: "Docfx.CopyToDirectory",
+    desc: "Copy generated documentation from the DocFX output directory to a target directory.",
+    examples: ['Docfx.CopyToDirectory("_apidocs", "./website/public/apidocs");'],
+    sourceFile: "Operations/DocfxOperations.cs",
+  },
+  {
+    group: "Docfx",
+    name: "Docfx.BuildAndCopy",
+    desc: "Generate documentation and copy it to the target directory in one step. Combines GenerateDocs, CopyToDirectory, and Cleanup. Creates a redirect index.html that points to the API namespace page.",
+    examples: ['Docfx.Install();\nDocfx.BuildAndCopy("./docfx.json", "_apidocs", "./website/public/apidocs");'],
+    sourceFile: "Operations/DocfxOperations.cs",
+  },
+  {
+    group: "Docfx",
+    name: "Docfx.Cleanup",
+    desc: "Clean up intermediate DocFX files (api/ and output directories).",
+    examples: ['Docfx.Cleanup("_apidocs");', "Docfx.Cleanup(); // Uses default _apidocs"],
+    sourceFile: "Operations/DocfxOperations.cs",
+  },
+  {
+    group: "Docfx",
+    name: "Docfx.IsInstalled",
+    desc: "Check if DocFX is installed as a dotnet global tool. Returns true if available, false otherwise.",
+    examples: ["if (!Docfx.IsInstalled()) {\n  Docfx.Install();\n}"],
+    sourceFile: "Operations/DocfxOperations.cs",
   },
 ];
 

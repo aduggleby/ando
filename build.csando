@@ -175,6 +175,10 @@ if (publish)
             "./dist/osx-arm64/ando"
         ));
 
+    // Generate API documentation from C# XML comments
+    Docfx.Install();
+    Docfx.BuildAndCopy("./docfx.json", "_apidocs", "./website/public/apidocs");
+
     // Build and deploy the documentation website
     Ando.Build(Directory("./website"));
 }
