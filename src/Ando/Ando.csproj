@@ -5,6 +5,8 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Allow running on newer .NET versions (e.g., .NET 10 when built for .NET 9) -->
+    <RollForward>Major</RollForward>
     <AssemblyName>ando</AssemblyName>
     <Version>0.9.58</Version>
     <!-- Required for Roslyn scripting to work with single-file publishing -->
