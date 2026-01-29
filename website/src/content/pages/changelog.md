@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.58
+
+**2026-01-29**
+
+- Add DocFX operations for generating API documentation
+- Internal improvements and test coverage enhancements
+
 ## 0.9.57
 
 **2026-01-29**
