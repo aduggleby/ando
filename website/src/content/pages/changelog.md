@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.59
+
+**2026-01-29**
+
+- Add API documentation links to the LLM reference
+- Internal improvements
+
 ## 0.9.58
 
 **2026-01-29**

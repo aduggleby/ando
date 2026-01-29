@@ -10,6 +10,8 @@ echo 'Log.Info("Hello, World!");' > build.csando
 ando run
 ```
 
+**Runtime Compatibility:** ANDO is built for .NET 9 but runs on .NET 10+ thanks to major version roll-forward. You can use the latest .NET SDK without compatibility issues.
+
 ## CLI Commands
 
 - `ando` or `ando run` - Run the build script in a Docker container
