@@ -54,6 +54,9 @@ public class WorkflowResult
     /// <summary>Whether all steps completed successfully.</summary>
     public bool Success { get; init; }
 
+    /// <summary>Whether the workflow was cancelled by the user (Ctrl+C).</summary>
+    public bool WasCancelled { get; init; }
+
     /// <summary>Total time taken for all steps.</summary>
     public TimeSpan Duration { get; init; }
 

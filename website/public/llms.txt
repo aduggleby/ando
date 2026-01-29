@@ -172,6 +172,7 @@ Pre-hook failure aborts command; post-hook failure only warns.
 | Cloudflare | CloudflareOperations | Cloudflare Pages deployments. |
 | Nuget | NugetOperations | NuGet package operations (pack, push). |
 | Docker | DockerOperations | Docker image building. |
+| Docfx | DocfxOperations | DocFX API documentation generation. |
 | Git | GitOperations | Git version control operations (tag, push). |
 | GitHub | GitHubOperations | GitHub releases, PRs, and container registry. |
 | Ando | AndoOperations | Build configuration, artifacts, and nested builds. |
@@ -410,6 +411,14 @@ BicepDeployment objects provide typed access to deployment outputs:
 - Docker.IsAvailable() - Check if Docker CLI and daemon are accessible (returns bool immediately, not a step)
 - Docker.Build(dockerfile, options?) - Build Docker image using buildx. Supports single or multi-platform builds with optional push to registry. Auto-handles ghcr.io auth when pushing.
 
+### Docfx
+- Docfx.Install() - Install DocFX as a dotnet global tool (skips if already installed)
+- Docfx.IsInstalled() - Check if DocFX is installed (returns bool immediately, not a step)
+- Docfx.GenerateDocs(configPath?) - Generate API documentation from docfx.json (runs metadata + build)
+- Docfx.CopyToDirectory(sourceDir, targetDir) - Copy generated docs to target directory
+- Docfx.BuildAndCopy(configPath, outputDir, targetDir) - Generate docs, copy, and cleanup in one step
+- Docfx.Cleanup(outputDir?) - Remove intermediate DocFX files (api/ and output directories)
+
 ### Playwright
 - Playwright.Install(directory) - Install browsers AND system dependencies (runs `npx playwright install --with-deps`)
 - Playwright.Test(directory, options?) - Run Playwright tests (default: `npx playwright test`)
@@ -596,6 +605,7 @@ All pages are available in markdown format for LLM consumption:
 - https://andobuild.com/providers/azure.md - Azure CLI authentication
 - https://andobuild.com/providers/bicep.md - Azure Bicep deployments
 - https://andobuild.com/providers/cloudflare.md - Cloudflare Pages deployments
+- https://andobuild.com/providers/docfx.md - DocFX API documentation generation
 - https://andobuild.com/providers/docker.md - Docker image building
 - https://andobuild.com/providers/dotnet.md - .NET build, test, publish
 - https://andobuild.com/providers/ef.md - Entity Framework Core migrations

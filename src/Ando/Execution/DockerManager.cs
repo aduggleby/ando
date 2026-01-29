@@ -43,9 +43,10 @@ public record ContainerInfo(
 public class ContainerConfig
 {
     /// <summary>
-    /// Docker image to use. Default is the .NET SDK alpine image.
+    /// Docker image to use. Must be set by the caller.
+    /// The CLI defaults to ubuntu:22.04 if not specified via --image or Options.UseImage().
     /// </summary>
-    public string Image { get; set; } = "mcr.microsoft.com/dotnet/sdk:9.0-alpine";
+    public required string Image { get; set; }
 
     /// <summary>
     /// Container name. Used for warm container lookup and cleanup.

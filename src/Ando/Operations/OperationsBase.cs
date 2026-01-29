@@ -5,6 +5,11 @@
 //
 // OperationsBase provides common fields and helper methods used by all
 // operation classes (DotnetOperations, EfOperations, NpmOperations).
+//
+// Design:
+// - All RegisterCommand overloads delegate to a single internal implementation
+// - CommandOptions building is centralized in BuildCommandOptions()
+// - This reduces code duplication and makes maintenance easier
 // =============================================================================
 
 using Ando.Execution;
@@ -30,6 +35,62 @@ public abstract class OperationsBase
     }
 
     /// <summary>
+    /// Builds CommandOptions from optional working directory and environment variables.
+    /// Centralized to avoid duplication across registration methods.
+    /// </summary>
+    private static CommandOptions BuildCommandOptions(
+        string? workingDirectory,
+        Dictionary<string, string>? environment)
+    {
+        var options = new CommandOptions();
+
+        if (workingDirectory != null)
+        {
+            options.WorkingDirectory = workingDirectory;
+        }
+
+        if (environment != null)
+        {
+            foreach (var (key, value) in environment)
+            {
+                options.Environment[key] = value;
+            }
+        }
+
+        return options;
+    }
+
+    /// <summary>
+    /// Core registration method that all overloads delegate to.
+    /// Takes a function that returns args (evaluated at execution time).
+    /// </summary>
+    private void RegisterCommandCore(
+        string stepName,
+        string command,
+        Func<string[]> getArgs,
+        Func<Task>? ensurer,
+        string? context,
+        string? workingDirectory,
+        Dictionary<string, string>? environment)
+    {
+        Registry.Register(stepName, async () =>
+        {
+            // Run ensurer first if provided (auto-install SDK/runtime if needed).
+            if (ensurer != null)
+            {
+                await ensurer();
+            }
+
+            // Get arguments (evaluated at execution time, not registration time).
+            var args = getArgs();
+            var options = BuildCommandOptions(workingDirectory, environment);
+            var result = await ExecutorFactory().ExecuteAsync(command, args, options);
+
+            return result.Success;
+        }, context);
+    }
+
+    /// <summary>
     /// Registers a step that executes a command with the given arguments.
     /// </summary>
     protected void RegisterCommand(
@@ -40,23 +101,7 @@ public abstract class OperationsBase
         string? workingDirectory = null,
         Dictionary<string, string>? environment = null)
     {
-        Registry.Register(stepName, async () =>
-        {
-            var options = new CommandOptions();
-            if (workingDirectory != null)
-            {
-                options.WorkingDirectory = workingDirectory;
-            }
-            if (environment != null)
-            {
-                foreach (var (key, value) in environment)
-                {
-                    options.Environment[key] = value;
-                }
-            }
-            var result = await ExecutorFactory().ExecuteAsync(command, args, options);
-            return result.Success;
-        }, context);
+        RegisterCommandCore(stepName, command, () => args, null, context, workingDirectory, environment);
     }
 
     /// <summary>
@@ -72,26 +117,7 @@ public abstract class OperationsBase
         string? workingDirectory = null,
         Dictionary<string, string>? environment = null)
     {
-        Registry.Register(stepName, async () =>
-        {
-            // Build arguments at execution time, not registration time.
-            var args = buildArgs().Build();
-
-            var options = new CommandOptions();
-            if (workingDirectory != null)
-            {
-                options.WorkingDirectory = workingDirectory;
-            }
-            if (environment != null)
-            {
-                foreach (var (key, value) in environment)
-                {
-                    options.Environment[key] = value;
-                }
-            }
-            var result = await ExecutorFactory().ExecuteAsync(command, args, options);
-            return result.Success;
-        }, context);
+        RegisterCommandCore(stepName, command, () => buildArgs().Build(), null, context, workingDirectory, environment);
     }
 
     /// <summary>
@@ -107,29 +133,7 @@ public abstract class OperationsBase
         string? workingDirectory = null,
         Dictionary<string, string>? environment = null)
     {
-        Registry.Register(stepName, async () =>
-        {
-            // Run ensurer first (auto-install SDK/runtime if needed).
-            if (ensurer != null)
-            {
-                await ensurer();
-            }
-
-            var options = new CommandOptions();
-            if (workingDirectory != null)
-            {
-                options.WorkingDirectory = workingDirectory;
-            }
-            if (environment != null)
-            {
-                foreach (var (key, value) in environment)
-                {
-                    options.Environment[key] = value;
-                }
-            }
-            var result = await ExecutorFactory().ExecuteAsync(command, args, options);
-            return result.Success;
-        }, context);
+        RegisterCommandCore(stepName, command, () => args, ensurer, context, workingDirectory, environment);
     }
 
     /// <summary>
@@ -146,31 +150,6 @@ public abstract class OperationsBase
         string? workingDirectory = null,
         Dictionary<string, string>? environment = null)
     {
-        Registry.Register(stepName, async () =>
-        {
-            // Run ensurer first (auto-install SDK/runtime if needed).
-            if (ensurer != null)
-            {
-                await ensurer();
-            }
-
-            // Build arguments at execution time, not registration time.
-            var args = buildArgs().Build();
-
-            var options = new CommandOptions();
-            if (workingDirectory != null)
-            {
-                options.WorkingDirectory = workingDirectory;
-            }
-            if (environment != null)
-            {
-                foreach (var (key, value) in environment)
-                {
-                    options.Environment[key] = value;
-                }
-            }
-            var result = await ExecutorFactory().ExecuteAsync(command, args, options);
-            return result.Success;
-        }, context);
+        RegisterCommandCore(stepName, command, () => buildArgs().Build(), ensurer, context, workingDirectory, environment);
     }
 }

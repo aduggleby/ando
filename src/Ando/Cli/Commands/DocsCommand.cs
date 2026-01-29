@@ -44,8 +44,9 @@ public class DocsCommand
     /// Executes the docs command.
     /// </summary>
     /// <param name="autoCommit">Automatically commit documentation changes.</param>
+    /// <param name="workingDirectory">Working directory (defaults to current directory).</param>
     /// <returns>Exit code: 0 for success, 1 for errors.</returns>
-    public async Task<int> ExecuteAsync(bool autoCommit = false)
+    public async Task<int> ExecuteAsync(bool autoCommit = false, string? workingDirectory = null)
     {
         try
         {
@@ -56,7 +57,7 @@ public class DocsCommand
                 return 1;
             }
 
-            var repoRoot = Directory.GetCurrentDirectory();
+            var repoRoot = workingDirectory ?? Directory.GetCurrentDirectory();
 
             // Check for Claude permission (this command uses Claude for documentation updates).
             var claudeChecker = new ClaudePermissionChecker(_logger);
@@ -135,8 +136,11 @@ public class DocsCommand
                 If no documentation updates are needed, explain why.
                 """;
 
-            AnsiConsole.MarkupLine("[dim]Claude is reviewing documentation...[/]");
-            Console.WriteLine();
+            SafeConsoleWrite(() =>
+            {
+                AnsiConsole.MarkupLine("[dim]Claude is reviewing documentation...[/]");
+                Console.WriteLine();
+            });
 
             try
             {
@@ -152,11 +156,11 @@ public class DocsCommand
             // Check if Claude made any changes.
             if (await _git.HasUncommittedChangesAsync())
             {
-                Console.WriteLine();
+                SafeConsoleWrite(() => Console.WriteLine());
 
                 if (autoCommit)
                 {
-                    AnsiConsole.MarkupLine("[dim]Committing documentation changes...[/]");
+                    SafeConsoleWrite(() => AnsiConsole.MarkupLine("[dim]Committing documentation changes...[/]"));
 
                     try
                     {
@@ -189,6 +193,22 @@ public class DocsCommand
         {
             _logger.Error($"Error: {ex.Message}");
             return 1;
+        }
+    }
+
+    /// <summary>
+    /// Safely writes to console, ignoring ObjectDisposedException when console is unavailable.
+    /// This can happen during parallel test execution when console streams are closed.
+    /// </summary>
+    private static void SafeConsoleWrite(Action writeAction)
+    {
+        try
+        {
+            writeAction();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Console output unavailable - continue silently.
         }
     }
 }

@@ -69,7 +69,7 @@ public class VersionResolver
         {
             _logger.Debug("Fetching latest .NET SDK version from release metadata...");
             var response = await _httpClient.GetStringAsync(DotnetReleasesUrl);
-            var json = JsonDocument.Parse(response);
+            using var json = JsonDocument.Parse(response);
 
             // Find the latest stable release (highest support-phase = "active" or "maintenance").
             // The releases-index.json contains an array of release channels.
@@ -126,7 +126,7 @@ public class VersionResolver
         {
             _logger.Debug("Fetching latest Node.js LTS version...");
             var response = await _httpClient.GetStringAsync(NodeReleasesUrl);
-            var json = JsonDocument.Parse(response);
+            using var json = JsonDocument.Parse(response);
 
             // Node releases are sorted by date descending. Find first with lts field set.
             foreach (var release in json.RootElement.EnumerateArray())
@@ -171,7 +171,7 @@ public class VersionResolver
         {
             _logger.Debug("Fetching latest npm version...");
             var response = await _httpClient.GetStringAsync(NpmRegistryUrl);
-            var json = JsonDocument.Parse(response);
+            using var json = JsonDocument.Parse(response);
 
             // Get the latest version from dist-tags.
             var distTags = json.RootElement.GetProperty("dist-tags");

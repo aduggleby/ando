@@ -12,6 +12,7 @@
 // - Each checker is a simple, focused class
 // - Checkers delegate to existing static methods in operation classes
 // - All checkers are collected in ToolAvailabilityRegistry for easy access
+// - Step name prefixes are centralized in ToolRequirements for maintainability
 // =============================================================================
 
 using Ando.Operations;
@@ -19,13 +20,40 @@ using Ando.Operations;
 namespace Ando.Workflow;
 
 /// <summary>
+/// Centralized constants for tool requirements.
+/// Step name prefixes that require specific tools to be installed.
+/// </summary>
+public static class ToolRequirements
+{
+    /// <summary>
+    /// Step prefixes that require Azure CLI.
+    /// </summary>
+    public static readonly string[] AzureCliPrefixes = ["Azure.", "Bicep."];
+
+    /// <summary>
+    /// Step prefixes that require Cloudflare wrangler.
+    /// </summary>
+    public static readonly string[] CloudflarePrefixes = ["Cloudflare."];
+
+    /// <summary>
+    /// Step prefixes that require Azure Functions Core Tools.
+    /// </summary>
+    public static readonly string[] FunctionsPrefixes = ["Functions."];
+
+    /// <summary>
+    /// Checks if a step name matches any of the given prefixes.
+    /// </summary>
+    public static bool MatchesPrefixes(string stepName, string[] prefixes) =>
+        prefixes.Any(prefix => stepName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+}
+
+/// <summary>
 /// Checks availability of Azure CLI for Azure and Bicep operations.
 /// </summary>
 public class AzureCliChecker : IToolAvailabilityChecker
 {
     public bool CanCheck(string stepName) =>
-        stepName.StartsWith("Azure.", StringComparison.OrdinalIgnoreCase) ||
-        stepName.StartsWith("Bicep.", StringComparison.OrdinalIgnoreCase);
+        ToolRequirements.MatchesPrefixes(stepName, ToolRequirements.AzureCliPrefixes);
 
     public bool IsAvailable() => AzureOperations.IsAzureCliAvailable();
 
@@ -40,7 +68,7 @@ public class AzureCliChecker : IToolAvailabilityChecker
 public class CloudflareChecker : IToolAvailabilityChecker
 {
     public bool CanCheck(string stepName) =>
-        stepName.StartsWith("Cloudflare.", StringComparison.OrdinalIgnoreCase);
+        ToolRequirements.MatchesPrefixes(stepName, ToolRequirements.CloudflarePrefixes);
 
     public bool IsAvailable() => CloudflareOperations.IsWranglerAvailable();
 
@@ -55,7 +83,7 @@ public class CloudflareChecker : IToolAvailabilityChecker
 public class FunctionsChecker : IToolAvailabilityChecker
 {
     public bool CanCheck(string stepName) =>
-        stepName.StartsWith("Functions.", StringComparison.OrdinalIgnoreCase);
+        ToolRequirements.MatchesPrefixes(stepName, ToolRequirements.FunctionsPrefixes);
 
     public bool IsAvailable() => FunctionsOperations.IsFuncCliAvailable();
 

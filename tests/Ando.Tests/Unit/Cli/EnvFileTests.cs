@@ -249,4 +249,127 @@ public class EnvFileTests : IDisposable
     }
 
     #endregion
+
+    #region Export Syntax Tests (Phase 4 Enhancement)
+
+    [Fact]
+    public void ParseEnvFile_ExportKeyValue_ParsesCorrectly()
+    {
+        // Arrange - export KEY=VALUE syntax commonly used in shell scripts
+        var envPath = Path.Combine(_tempDir, ".env");
+        File.WriteAllText(envPath, "export API_KEY=secret123");
+
+        // Act
+        var result = AndoCli.ParseEnvFile(envPath);
+
+        // Assert
+        result.ShouldContainKeyAndValue("API_KEY", "secret123");
+    }
+
+    [Fact]
+    public void ParseEnvFile_ExportWithSpaces_ParsesCorrectly()
+    {
+        // Arrange - handle spaces after export
+        var envPath = Path.Combine(_tempDir, ".env");
+        File.WriteAllText(envPath, "export   DATABASE_URL=postgres://localhost:5432/db");
+
+        // Act
+        var result = AndoCli.ParseEnvFile(envPath);
+
+        // Assert
+        result.ShouldContainKeyAndValue("DATABASE_URL", "postgres://localhost:5432/db");
+    }
+
+    [Fact]
+    public void ParseEnvFile_MixedExportAndPlain_ParsesBoth()
+    {
+        // Arrange - mix of export and plain syntax
+        var envPath = Path.Combine(_tempDir, ".env");
+        File.WriteAllText(envPath, "export KEY1=value1\nKEY2=value2\nexport KEY3=value3");
+
+        // Act
+        var result = AndoCli.ParseEnvFile(envPath);
+
+        // Assert
+        result.Count.ShouldBe(3);
+        result.ShouldContainKeyAndValue("KEY1", "value1");
+        result.ShouldContainKeyAndValue("KEY2", "value2");
+        result.ShouldContainKeyAndValue("KEY3", "value3");
+    }
+
+    [Fact]
+    public void ParseEnvFile_ExportWithQuotedValue_ParsesCorrectly()
+    {
+        // Arrange
+        var envPath = Path.Combine(_tempDir, ".env");
+        File.WriteAllText(envPath, "export SECRET=\"my secret value\"");
+
+        // Act
+        var result = AndoCli.ParseEnvFile(envPath);
+
+        // Assert
+        result.ShouldContainKeyAndValue("SECRET", "my secret value");
+    }
+
+    #endregion
+
+    #region Inline Comment Tests (Phase 4 Enhancement)
+
+    [Fact]
+    public void ParseEnvFile_InlineComment_StripsComment()
+    {
+        // Arrange - inline comments after value
+        var envPath = Path.Combine(_tempDir, ".env");
+        File.WriteAllText(envPath, "API_URL=https://api.example.com # Production API");
+
+        // Act
+        var result = AndoCli.ParseEnvFile(envPath);
+
+        // Assert
+        result.ShouldContainKeyAndValue("API_URL", "https://api.example.com");
+    }
+
+    [Fact]
+    public void ParseEnvFile_QuotedValueWithHash_PreservesHash()
+    {
+        // Arrange - hash inside quotes should be preserved (not treated as comment)
+        var envPath = Path.Combine(_tempDir, ".env");
+        File.WriteAllText(envPath, "COLOR=\"#FF5733\"");
+
+        // Act
+        var result = AndoCli.ParseEnvFile(envPath);
+
+        // Assert - hash is part of the value, not a comment
+        result.ShouldContainKeyAndValue("COLOR", "#FF5733");
+    }
+
+    [Fact]
+    public void ParseEnvFile_InlineCommentWithSpaces_StripsCorrectly()
+    {
+        // Arrange
+        var envPath = Path.Combine(_tempDir, ".env");
+        File.WriteAllText(envPath, "PORT=3000   # Default development port");
+
+        // Act
+        var result = AndoCli.ParseEnvFile(envPath);
+
+        // Assert
+        result.ShouldContainKeyAndValue("PORT", "3000");
+    }
+
+    [Fact]
+    public void ParseEnvFile_ExportWithInlineComment_HandlesCorrectly()
+    {
+        // Arrange - combine export syntax with inline comment
+        var envPath = Path.Combine(_tempDir, ".env");
+        File.WriteAllText(envPath, "export NODE_ENV=production # Set to development for local");
+
+        // Act
+        var result = AndoCli.ParseEnvFile(envPath);
+
+        // Assert
+        result.ShouldContainKeyAndValue("NODE_ENV", "production");
+    }
+
+    #endregion
 }

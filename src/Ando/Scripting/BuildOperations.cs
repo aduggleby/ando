@@ -35,6 +35,10 @@ namespace Ando.Scripting;
 /// </summary>
 public class BuildOperations
 {
+    // Static HttpClient shared across all BuildOperations instances.
+    // HttpClient is designed to be long-lived and reused to avoid socket exhaustion.
+    private static readonly HttpClient SharedHttpClient = new HttpClient();
+
     /// <summary>.NET CLI operations.</summary>
     public DotnetOperations Dotnet { get; }
 
@@ -113,9 +117,8 @@ public class BuildOperations
         BuildOptions buildOptions,
         ProfileRegistry profileRegistry)
     {
-        // Create shared HttpClient and version resolver for SDK auto-install.
-        var httpClient = new HttpClient();
-        var versionResolver = new VersionResolver(httpClient, logger);
+        // Create version resolver using shared HttpClient for SDK auto-install.
+        var versionResolver = new VersionResolver(SharedHttpClient, logger);
 
         // Create SDK ensurers that auto-install required runtimes.
         var dotnetEnsurer = new DotnetSdkEnsurer(versionResolver, executorFactory, logger);

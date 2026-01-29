@@ -177,4 +177,99 @@ public class WorkflowRunnerTests
         Assert.Single(_logger.StepsFailed);
         Assert.Equal("FailingStep", _logger.StepsFailed[0].StepName);
     }
+
+    [Fact]
+    public async Task RunAsync_WithCancellation_StopsBeforeNextStep()
+    {
+        var registry = new StepRegistry();
+        var executionOrder = new List<string>();
+        using var cts = new CancellationTokenSource();
+
+        registry.Register("Step1", () =>
+        {
+            executionOrder.Add("Step1");
+            cts.Cancel();  // Cancel after first step
+            return Task.FromResult(true);
+        });
+        registry.Register("Step2", () =>
+        {
+            executionOrder.Add("Step2");
+            return Task.FromResult(true);
+        });
+
+        var runner = new WorkflowRunner(registry, _logger);
+        var options = new BuildOptions();
+
+        var result = await runner.RunAsync(options, cancellationToken: cts.Token);
+
+        Assert.False(result.Success);
+        Assert.True(result.WasCancelled);
+        Assert.Single(executionOrder);
+        Assert.Equal("Step1", executionOrder[0]);
+    }
+
+    [Fact]
+    public async Task RunAsync_WithPreCancelledToken_ReturnsImmediately()
+    {
+        var registry = new StepRegistry();
+        var stepExecuted = false;
+
+        registry.Register("Step1", () =>
+        {
+            stepExecuted = true;
+            return Task.FromResult(true);
+        });
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();  // Cancel before running
+
+        var runner = new WorkflowRunner(registry, _logger);
+        var options = new BuildOptions();
+
+        var result = await runner.RunAsync(options, cancellationToken: cts.Token);
+
+        Assert.False(result.Success);
+        Assert.True(result.WasCancelled);
+        Assert.False(stepExecuted);
+    }
+
+    [Fact]
+    public async Task RunAsync_WithNoCancellation_SetsWasCancelledFalse()
+    {
+        var registry = new StepRegistry();
+        registry.Register("Step1", () => Task.FromResult(true));
+
+        var runner = new WorkflowRunner(registry, _logger);
+        var options = new BuildOptions();
+
+        var result = await runner.RunAsync(options);
+
+        Assert.True(result.Success);
+        Assert.False(result.WasCancelled);
+    }
+
+    [Fact]
+    public async Task RunAsync_WithCancellationDuringStep_CatchesOperationCancelled()
+    {
+        var registry = new StepRegistry();
+        using var cts = new CancellationTokenSource();
+
+        registry.Register("CancellingStep", async () =>
+        {
+            cts.Cancel();
+            cts.Token.ThrowIfCancellationRequested();
+            await Task.CompletedTask;
+            return true;
+        });
+
+        var runner = new WorkflowRunner(registry, _logger);
+        var options = new BuildOptions();
+
+        var result = await runner.RunAsync(options, cancellationToken: cts.Token);
+
+        Assert.False(result.Success);
+        Assert.True(result.WasCancelled);
+        Assert.Equal(1, result.StepsRun);
+        Assert.Contains("Cancelled by user", result.StepResults[0].ErrorMessage);
+    }
 }

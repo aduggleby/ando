@@ -52,6 +52,7 @@ public class AndoCli : IDisposable
 {
     private readonly string[] _args;
     private readonly ConsoleLogger _logger;
+    private readonly CancellationTokenSource _cts = new();
 
     // Extracts version from assembly metadata for display in header.
     // Falls back to "0.0.0" if version is not embedded (e.g., during development).
@@ -73,6 +74,15 @@ public class AndoCli : IDisposable
         // Color detection happens early so error messages can be properly formatted.
         // Respects both --no-color flag and NO_COLOR environment variable.
         _logger = new ConsoleLogger(useColor: !IsNoColorRequested(args), logFilePath: logPath);
+
+        // Set up Ctrl+C handler for graceful cancellation.
+        // e.Cancel = true prevents immediate termination, allowing cleanup.
+        Console.CancelKeyPress += (_, e) =>
+        {
+            e.Cancel = true;  // Prevent immediate termination
+            _cts.Cancel();
+            _logger.Warning("Cancellation requested. Stopping after current step...");
+        };
     }
 
     /// <summary>
@@ -80,6 +90,7 @@ public class AndoCli : IDisposable
     /// </summary>
     public void Dispose()
     {
+        _cts.Dispose();
         _logger.Dispose();
     }
 
@@ -260,6 +271,10 @@ public class AndoCli : IDisposable
             // The actual hostRootPath is calculated after DIND check (Step 2c).
             var defaultHostRoot = Path.GetDirectoryName(scriptPath) ?? Environment.CurrentDirectory;
 
+            // Set verbosity early so all subsequent logs respect the setting.
+            // This must happen before any INFO-level logging (profiles, container info, etc.).
+            _logger.Verbosity = GetVerbosity();
+
             // Check that .env.ando is gitignored if it exists.
             // This prevents accidental commits of sensitive environment files.
             if (!CheckEnvAndoGitIgnoreStatus(defaultHostRoot))
@@ -392,15 +407,15 @@ public class AndoCli : IDisposable
             // Switch the build context to use container execution.
             // All subsequent commands will run via 'docker exec'.
             var containerExecutor = new ContainerExecutor(container.Id, _logger);
+            containerExecutor.SetHostRootPath(hostRootPath);  // Enable host-to-container path translation
             context.SetExecutor(containerExecutor);
             context.SetDockerManager(dockerManager, container.Id, hostRootPath);
 
             // Step 4: Execute the workflow.
             // The WorkflowRunner processes all registered steps in order.
-            _logger.Verbosity = GetVerbosity();
-
+            // Pass cancellation token for graceful shutdown on Ctrl+C.
             var runner = new WorkflowRunner(context.StepRegistry, _logger);
-            var result = await runner.RunAsync(context.Options, scriptPath);
+            var result = await runner.RunAsync(context.Options, scriptPath, _cts.Token);
 
             // Step 5: Copy artifacts from container to host.
             // This copies any files registered via Artifacts.CopyToHost().
@@ -1078,8 +1093,10 @@ public class AndoCli : IDisposable
     // Parses a .env file into key-value pairs.
     // Supports:
     // - KEY=VALUE format
+    // - export KEY=VALUE format (shell-compatible)
     // - Comments starting with #
-    // - Quoted values (single or double quotes)
+    // - Inline comments: KEY=value # comment
+    // - Quoted values (single or double quotes) - hash inside quotes is preserved
     // - Empty lines are ignored
     internal static Dictionary<string, string> ParseEnvFile(string path)
     {
@@ -1093,6 +1110,10 @@ public class AndoCli : IDisposable
             if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith('#'))
                 continue;
 
+            // Handle 'export KEY=VALUE' syntax (common in shell scripts).
+            if (trimmed.StartsWith("export ", StringComparison.OrdinalIgnoreCase))
+                trimmed = trimmed[7..].TrimStart();
+
             // Find the first = sign.
             var equalsIndex = trimmed.IndexOf('=');
             if (equalsIndex <= 0)
@@ -1101,11 +1122,23 @@ public class AndoCli : IDisposable
             var key = trimmed[..equalsIndex].Trim();
             var value = trimmed[(equalsIndex + 1)..].Trim();
 
-            // Remove surrounding quotes if present.
-            if ((value.StartsWith('"') && value.EndsWith('"')) ||
-                (value.StartsWith('\'') && value.EndsWith('\'')))
+            // Check if value is quoted.
+            var isQuoted = (value.StartsWith('"') && value.EndsWith('"')) ||
+                          (value.StartsWith('\'') && value.EndsWith('\''));
+
+            if (isQuoted)
             {
+                // Remove surrounding quotes, preserve content including any # characters.
                 value = value[1..^1];
+            }
+            else
+            {
+                // For unquoted values, strip inline comments.
+                var commentIndex = value.IndexOf('#');
+                if (commentIndex > 0)
+                {
+                    value = value[..commentIndex].TrimEnd();
+                }
             }
 
             result[key] = value;

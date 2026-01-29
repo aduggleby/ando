@@ -1,0 +1,95 @@
+// =============================================================================
+// ando-pre-docs.csando
+//
+// Pre-hook that runs before 'ando docs' starts.
+// Generates API documentation from C# XML comments using DocFX and copies
+// the output to the website's public folder. This runs first so Claude can
+// review and update the generated API docs if needed.
+// =============================================================================
+
+Log.Info("Generating API documentation with DocFX...");
+
+// Check if DocFX is installed.
+var listResult = await Shell.RunAsync("dotnet", false, "tool", "list", "-g");
+var isInstalled = listResult.Output?.Contains("docfx", StringComparison.OrdinalIgnoreCase) == true;
+
+if (!isInstalled)
+{
+    Log.Info("Installing DocFX...");
+    var installResult = await Shell.RunAsync("dotnet", "tool", "install", "-g", "docfx");
+    if (installResult.ExitCode != 0)
+    {
+        Log.Error("Failed to install DocFX");
+        return;
+    }
+}
+
+// Run docfx metadata to extract API documentation from source.
+Log.Info("Extracting API metadata...");
+var metadataResult = await Shell.RunAsync("docfx", "metadata", "./docfx.json");
+if (metadataResult.ExitCode != 0)
+{
+    Log.Error("Failed to extract API metadata");
+    return;
+}
+
+// Run docfx build to generate the HTML documentation.
+Log.Info("Building documentation site...");
+var buildResult = await Shell.RunAsync("docfx", "build", "./docfx.json");
+if (buildResult.ExitCode != 0)
+{
+    Log.Error("Failed to build documentation");
+    return;
+}
+
+// Copy to website public folder.
+var sourceDir = "_apidocs";
+var targetDir = Root / "website/public/apidocs";
+
+Log.Info($"Copying documentation to {targetDir}...");
+
+// Remove existing target directory.
+if (System.IO.Directory.Exists(targetDir))
+{
+    System.IO.Directory.Delete(targetDir, recursive: true);
+}
+
+// Copy source to target.
+CopyDirectory(sourceDir, targetDir);
+
+// Cleanup intermediate files.
+Log.Info("Cleaning up intermediate files...");
+if (System.IO.Directory.Exists("api"))
+{
+    System.IO.Directory.Delete("api", recursive: true);
+}
+if (System.IO.Directory.Exists(sourceDir))
+{
+    System.IO.Directory.Delete(sourceDir, recursive: true);
+}
+
+Log.Info("API documentation generated successfully!");
+
+// Helper function to recursively copy a directory.
+void CopyDirectory(string source, string destination)
+{
+    var dir = new System.IO.DirectoryInfo(source);
+    if (!dir.Exists)
+    {
+        throw new System.IO.DirectoryNotFoundException($"Source directory not found: {source}");
+    }
+
+    System.IO.Directory.CreateDirectory(destination);
+
+    // Copy files.
+    foreach (var file in dir.GetFiles())
+    {
+        file.CopyTo(System.IO.Path.Combine(destination, file.Name), overwrite: true);
+    }
+
+    // Copy subdirectories recursively.
+    foreach (var subDir in dir.GetDirectories())
+    {
+        CopyDirectory(subDir.FullName, System.IO.Path.Combine(destination, subDir.Name));
+    }
+}

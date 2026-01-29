@@ -38,12 +38,17 @@ public class WorkflowRunner(StepRegistry registry, IBuildLogger logger)
     /// </summary>
     /// <param name="options">Build options (configuration, etc.).</param>
     /// <param name="scriptPath">Path to build script for logging context.</param>
+    /// <param name="cancellationToken">Token to cancel the workflow execution.</param>
     /// <returns>Result containing success status and detailed step results.</returns>
-    public async Task<WorkflowResult> RunAsync(BuildOptions options, string? scriptPath = null)
+    public async Task<WorkflowResult> RunAsync(
+        BuildOptions options,
+        string? scriptPath = null,
+        CancellationToken cancellationToken = default)
     {
         var workflowStopwatch = Stopwatch.StartNew();
         var stepResults = new List<StepResult>();
         var overallSuccess = true;
+        var wasCancelled = false;
 
         // Log workflow start with total step count for progress tracking.
         logger.WorkflowStarted("build", scriptPath, registry.Steps.Count);
@@ -51,6 +56,14 @@ public class WorkflowRunner(StepRegistry registry, IBuildLogger logger)
         // Execute each step sequentially.
         foreach (var step in registry.Steps)
         {
+            // Check for cancellation before each step.
+            if (cancellationToken.IsCancellationRequested)
+            {
+                wasCancelled = true;
+                logger.Warning("Build cancelled by user.");
+                overallSuccess = false;
+                break;
+            }
             // Handle log steps specially - single line output, no completion message.
             if (step.IsLogStep)
             {
@@ -108,6 +121,23 @@ public class WorkflowRunner(StepRegistry registry, IBuildLogger logger)
                     break; // Fail-fast: don't continue after failure
                 }
             }
+            catch (OperationCanceledException)
+            {
+                // Cancellation requested during step execution.
+                stepStopwatch.Stop();
+                wasCancelled = true;
+                logger.Warning($"Step '{step.Name}' cancelled.");
+                stepResults.Add(new StepResult
+                {
+                    StepName = step.Name,
+                    Context = step.Context,
+                    Success = false,
+                    Duration = stepStopwatch.Elapsed,
+                    ErrorMessage = "Cancelled by user"
+                });
+                overallSuccess = false;
+                break;
+            }
             catch (Exception ex)
             {
                 // Step threw an exception - wrap in result with full exception details.
@@ -145,6 +175,7 @@ public class WorkflowRunner(StepRegistry registry, IBuildLogger logger)
         {
             WorkflowName = "build",
             Success = overallSuccess,
+            WasCancelled = wasCancelled,
             Duration = workflowStopwatch.Elapsed,
             StepResults = stepResults
         };

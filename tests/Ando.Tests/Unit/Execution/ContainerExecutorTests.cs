@@ -8,6 +8,7 @@
 // - Working directory is passed via -w flag
 // - Environment variables are passed via -e flags
 // - Container path conversion works correctly
+// - SetHostRootPath enables host-to-container path translation
 // =============================================================================
 
 using System.Diagnostics;
@@ -185,5 +186,102 @@ public class ContainerExecutorTests
         var startInfo = executor.TestPrepareProcessStartInfo("dotnet", ["build"], options);
 
         startInfo.ArgumentList.ShouldContain("/some/other/path");
+    }
+
+    // =============================================================================
+    // SetHostRootPath Tests - Verify host-to-container path translation
+    // =============================================================================
+
+    [Fact]
+    public void SetHostRootPath_WithHostPath_EnablesPathTranslation()
+    {
+        // Arrange - set up executor with host root path
+        var executor = new TestableContainerExecutor("my-container", _logger);
+        var hostRoot = Path.GetFullPath("/home/user/projects/myapp");
+        executor.SetHostRootPath(hostRoot);
+
+        // Act - use an absolute host path within the project
+        var hostPath = Path.Combine(hostRoot, "src", "MyApp");
+        var options = new CommandOptions { WorkingDirectory = hostPath };
+        var startInfo = executor.TestPrepareProcessStartInfo("dotnet", ["build"], options);
+
+        // Assert - path should be translated to container path
+        startInfo.ArgumentList.ShouldContain("/workspace/src/MyApp");
+    }
+
+    [Fact]
+    public void SetHostRootPath_WithNestedPath_TranslatesCorrectly()
+    {
+        // Arrange
+        var executor = new TestableContainerExecutor("my-container", _logger);
+        var hostRoot = Path.GetFullPath("/home/user/projects/myapp");
+        executor.SetHostRootPath(hostRoot);
+
+        // Act - use a deeply nested path
+        var hostPath = Path.Combine(hostRoot, "src", "Ando", "Execution");
+        var options = new CommandOptions { WorkingDirectory = hostPath };
+        var startInfo = executor.TestPrepareProcessStartInfo("dotnet", ["build"], options);
+
+        // Assert
+        startInfo.ArgumentList.ShouldContain("/workspace/src/Ando/Execution");
+    }
+
+    [Fact]
+    public void SetHostRootPath_WithPathOutsideProject_LogsWarning()
+    {
+        // Arrange
+        var executor = new TestableContainerExecutor("my-container", _logger);
+        executor.SetHostRootPath("/home/user/projects/myapp");
+
+        // Act - use a path outside the project root
+        var options = new CommandOptions { WorkingDirectory = "/home/user/other-project" };
+        executor.TestPrepareProcessStartInfo("dotnet", ["build"], options);
+
+        // Assert - should log a warning about inaccessible path
+        _logger.WarningMessages.ShouldContain(m => m.Contains("outside the project root"));
+    }
+
+    [Fact]
+    public void SetHostRootPath_NotCalled_AbsolutePathUnchanged()
+    {
+        // Arrange - do NOT call SetHostRootPath
+        var executor = new TestableContainerExecutor("my-container", _logger);
+
+        // Act - use an absolute path (without host root set, it stays unchanged)
+        var options = new CommandOptions { WorkingDirectory = "/home/user/projects/myapp/src" };
+        var startInfo = executor.TestPrepareProcessStartInfo("dotnet", ["build"], options);
+
+        // Assert - path should not be translated (no host root set)
+        startInfo.ArgumentList.ShouldContain("/home/user/projects/myapp/src");
+    }
+
+    [Fact]
+    public void SetHostRootPath_WithContainerPath_NotTranslated()
+    {
+        // Arrange
+        var executor = new TestableContainerExecutor("my-container", _logger);
+        executor.SetHostRootPath("/home/user/projects/myapp");
+
+        // Act - use a path already in container format
+        var options = new CommandOptions { WorkingDirectory = "/workspace/src/MyApp" };
+        var startInfo = executor.TestPrepareProcessStartInfo("dotnet", ["build"], options);
+
+        // Assert - already a container path, should not be changed
+        startInfo.ArgumentList.ShouldContain("/workspace/src/MyApp");
+    }
+
+    [Fact]
+    public void SetHostRootPath_WithRelativePath_PrependsWorkDir()
+    {
+        // Arrange
+        var executor = new TestableContainerExecutor("my-container", _logger);
+        executor.SetHostRootPath("/home/user/projects/myapp");
+
+        // Act - relative paths should still prepend workdir
+        var options = new CommandOptions { WorkingDirectory = "src/MyApp" };
+        var startInfo = executor.TestPrepareProcessStartInfo("dotnet", ["build"], options);
+
+        // Assert - relative paths prepend container workdir
+        startInfo.ArgumentList.ShouldContain("/workspace/src/MyApp");
     }
 }

@@ -72,7 +72,8 @@ public class DocsCommandTests : IDisposable
         SetupNoCommits();
 
         var command = new DocsCommand(_runner, _logger);
-        var result = await command.ExecuteAsync();
+        // Pass explicit working directory to avoid race condition with parallel tests.
+        var result = await command.ExecuteAsync(autoCommit: false, workingDirectory: _testDir);
 
         result.ShouldBe(0);
         _logger.InfoMessages.ShouldContain(m => m.Contains("No commits to analyze"));
@@ -90,9 +91,10 @@ public class DocsCommandTests : IDisposable
 
         var command = new DocsCommand(_runner, _logger);
         // This will fail at Claude invocation, but we're testing the setup.
+        // Pass explicit working directory to avoid race condition with parallel tests.
         try
         {
-            await command.ExecuteAsync();
+            await command.ExecuteAsync(autoCommit: false, workingDirectory: _testDir);
         }
         catch
         {
@@ -118,9 +120,10 @@ public class DocsCommandTests : IDisposable
         config.Save(_testDir);
 
         var command = new DocsCommand(_runner, _logger);
+        // Pass explicit working directory to avoid race condition with parallel tests.
         try
         {
-            await command.ExecuteAsync();
+            await command.ExecuteAsync(autoCommit: false, workingDirectory: _testDir);
         }
         catch
         {
@@ -143,7 +146,8 @@ public class DocsCommandTests : IDisposable
         _runner.SetResult("claude", "-p --dangerously-skip-permissions", new CliProcessRunner.ProcessResult(1, "", "command not found"));
 
         var command = new DocsCommand(_runner, _logger);
-        var result = await command.ExecuteAsync();
+        // Pass explicit working directory to avoid race condition with parallel tests.
+        var result = await command.ExecuteAsync(autoCommit: false, workingDirectory: _testDir);
 
         // DocsCommand returns success even when Claude fails (non-fatal).
         result.ShouldBe(0);

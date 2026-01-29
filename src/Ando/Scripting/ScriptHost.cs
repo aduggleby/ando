@@ -37,6 +37,34 @@ public class ScriptHost(IBuildLogger logger)
     private List<string> _activeProfiles = [];
 
     /// <summary>
+    /// Creates the ScriptOptions used by both LoadScriptAsync and VerifyScriptAsync.
+    /// Centralizes the Roslyn configuration to avoid duplication.
+    /// </summary>
+    private static ScriptOptions CreateScriptOptions()
+    {
+        return ScriptOptions.Default
+            .WithReferences(
+                typeof(BuildContext).Assembly,  // ANDO types
+                typeof(object).Assembly,        // mscorlib/System.Private.CoreLib
+                typeof(Console).Assembly,       // System.Console
+                typeof(File).Assembly,          // System.IO
+                typeof(Task).Assembly,          // System.Threading.Tasks
+                typeof(Enumerable).Assembly)    // System.Linq
+            .WithImports(
+                "System",
+                "System.IO",
+                "System.Linq",
+                "System.Threading.Tasks",
+                "System.Collections.Generic",
+                "Ando.Context",
+                "Ando.Profiles",
+                "Ando.References",
+                "Ando.Operations",
+                "Ando.Workflow",
+                "Ando.Steps");
+    }
+
+    /// <summary>
     /// Sets the active profiles from CLI arguments.
     /// Call this before LoadScriptAsync to ensure profiles are available.
     /// </summary>
@@ -72,26 +100,7 @@ public class ScriptHost(IBuildLogger logger)
 
         // Configure Roslyn with required assemblies and namespace imports.
         // This allows scripts to use ANDO types without explicit using statements.
-        var options = ScriptOptions.Default
-            .WithReferences(
-                typeof(BuildContext).Assembly,  // ANDO types
-                typeof(object).Assembly,        // mscorlib/System.Private.CoreLib
-                typeof(Console).Assembly,       // System.Console
-                typeof(File).Assembly,          // System.IO
-                typeof(Task).Assembly,          // System.Threading.Tasks
-                typeof(Enumerable).Assembly)    // System.Linq
-            .WithImports(
-                "System",
-                "System.IO",
-                "System.Linq",
-                "System.Threading.Tasks",
-                "System.Collections.Generic",
-                "Ando.Context",
-                "Ando.Profiles",
-                "Ando.References",
-                "Ando.Operations",
-                "Ando.Workflow",
-                "Ando.Steps");
+        var options = CreateScriptOptions();
 
         try
         {
@@ -133,26 +142,7 @@ public class ScriptHost(IBuildLogger logger)
         var scriptContent = await File.ReadAllTextAsync(scriptPath);
 
         // Configure Roslyn with the same options used for actual execution.
-        var options = ScriptOptions.Default
-            .WithReferences(
-                typeof(BuildContext).Assembly,
-                typeof(object).Assembly,
-                typeof(Console).Assembly,
-                typeof(File).Assembly,
-                typeof(Task).Assembly,
-                typeof(Enumerable).Assembly)
-            .WithImports(
-                "System",
-                "System.IO",
-                "System.Linq",
-                "System.Threading.Tasks",
-                "System.Collections.Generic",
-                "Ando.Context",
-                "Ando.Profiles",
-                "Ando.References",
-                "Ando.Operations",
-                "Ando.Workflow",
-                "Ando.Steps");
+        var options = CreateScriptOptions();
 
         // Create and compile the script without running it.
         var script = CSharpScript.Create(scriptContent, options, typeof(ScriptGlobals));

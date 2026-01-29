@@ -4,13 +4,14 @@
 // Profiles:
 // - (default): Build, test, publish executables, create NuGet package
 // - publish: Also pushes to NuGet.org, container registry, creates GitHub release with binaries, and deploys docs
-// - docs: Only deploy the documentation website to Cloudflare
+// - docs: Deploy the documentation website to Cloudflare (run `ando docs` first to generate API docs)
 // - e2e: Force E2E tests to run (even on Ando.Server)
 //
 // Usage:
 //   ando                 # Build and test (E2E tests run locally, skipped on server)
 //   ando -p publish      # Build, test, and push to NuGet.org + container registry + deploy docs
-//   ando -p docs         # Just deploy docs to Cloudflare (skips build/test)
+//   ando docs            # Generate API docs (pre-hook) + update docs with Claude
+//   ando -p docs         # Deploy docs to Cloudflare (skips build/test)
 //   ando -p e2e          # Force E2E tests to run
 //   ando -p publish,e2e  # Publish profile with forced E2E tests
 //
@@ -23,6 +24,7 @@
 // Prerequisites:
 // - NUGET_API_KEY env var set (or enter when prompted) for publish profile
 // - Run `ando bump` before publish to set the desired version
+// - Run `ando docs` before publish/docs profile to generate API documentation
 // - For E2E tests: Run with `ando --dind` to enable Docker-in-Docker
 //
 // Output:
@@ -175,11 +177,8 @@ if (publish)
             "./dist/osx-arm64/ando"
         ));
 
-    // Generate API documentation from C# XML comments
-    Docfx.Install();
-    Docfx.BuildAndCopy("./docfx.json", "_apidocs", "./website/public/apidocs");
-
     // Build and deploy the documentation website
+    // API docs are generated via `ando docs` pre-hook
     Ando.Build(Directory("./website"));
 }
 
