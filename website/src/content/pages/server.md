@@ -17,13 +17,15 @@ The ANDO CI Server runs your `build.csando` scripts automatically when you push 
 
 ## Installation
 
+### Linux/Ubuntu Server
+
 Run the installer from your local machine:
 
 ```bash
 curl -fsSL https://andobuild.com/server-install.sh | bash -s user@your-server-ip
 ```
 
-### Install Options
+#### Install Options
 
 ```bash
 # Build image locally instead of pulling from ghcr.io
@@ -32,6 +34,12 @@ curl -fsSL https://andobuild.com/server-install.sh | bash -s user@your-server-ip
 # Use an existing SQL Server instead of deploying a container
 ./server-install.sh --external-sql user@your-server-ip
 ```
+
+### TrueNAS SCALE
+
+For TrueNAS SCALE installations, see the dedicated guide: **[TrueNAS Installation](/server-truenas)**
+
+This guide covers installing ANDO as a custom app using the TrueNAS Apps interface.
 
 ## GitHub App Configuration
 

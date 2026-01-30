@@ -615,6 +615,8 @@ All pages are available in markdown format for LLM consumption:
 - https://andobuild.com/index.md - Homepage and overview
 - https://andobuild.com/about.md - About ANDO
 - https://andobuild.com/cli.md - CLI reference
+- https://andobuild.com/server.md - CI Server installation (Linux/Ubuntu)
+- https://andobuild.com/server-truenas.md - CI Server installation on TrueNAS SCALE
 - https://andobuild.com/changelog.md - Release history
 - https://andobuild.com/license.md - License information
 

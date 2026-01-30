@@ -473,8 +473,8 @@ if (!app.Environment.IsEnvironment("Testing"))
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AndoDbContext>();
 
-    // Ensure database and tables exist
-    db.Database.EnsureCreated();
+    // Apply pending migrations and create database if needed
+    db.Database.Migrate();
 
     // Seed roles
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
