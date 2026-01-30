@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.60
+
+**2026-01-30**
+
+- Add proper database migrations for Ando.Server instead of auto-creating schema
+- Add TrueNAS deployment documentation for self-hosted installations
+
 ## 0.9.59
 
 **2026-01-29**
