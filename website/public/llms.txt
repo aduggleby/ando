@@ -53,9 +53,30 @@ To skip the prompt, use `--dind` flag, add `dind: true` to `ando.config`, or set
 Several ANDO commands use Claude CLI for AI-powered features:
 - `ando commit` - Generates commit messages from diffs
 - `ando bump` - Generates changelog entries and updates changelog files
-- `ando docs` - Reviews commits since last tag, examines changed files, and updates documentation
+- `ando docs` - Reviews commits since last tag and updates documentation
 
 Requirements: Claude CLI must be installed (`npm install -g @anthropic-ai/claude-code`)
+
+### Docs Command Details
+
+The `ando docs` command searches for and updates these files:
+
+| Pattern | Location | Description |
+|---------|----------|-------------|
+| `*.md` | Anywhere | Markdown documentation files |
+| `*.astro` | `website/` | Astro page components |
+| `*.js` | `website/` | JavaScript data files |
+| `llms.txt` | `public/` | LLM-friendly documentation |
+
+Files skipped:
+- `CHANGELOG.md` - Handled by `ando bump`
+- Internal refactoring - Only user-facing changes
+
+What triggers updates:
+- New features, operations, or commands
+- Changed behavior affecting users
+- New options, parameters, or configuration
+- Examples that need updating
 
 Permissions: Claude runs with `--dangerously-skip-permissions` to allow file edits without interactive prompts. On first use, ANDO prompts:
 - (Y)es - Allow Claude for this run only

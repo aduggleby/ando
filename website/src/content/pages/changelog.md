@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.61
+
+**2026-01-31**
+
+- Simplify email service configuration in Ando.Server
+- Internal improvements
+
 ## 0.9.60
 
 **2026-01-30**

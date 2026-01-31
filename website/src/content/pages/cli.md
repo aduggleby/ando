@@ -145,10 +145,53 @@ ando docs
 ```
 
 **What it does:**
-1. Gets diff since last git tag (or all changes if no tag)
-2. Sends changes to Claude with instructions to update relevant docs
-3. Claude updates markdown files, website pages, and examples as needed
+1. Gets commits since last git tag (or recent commits if no tag)
+2. Analyzes each commit to understand what changed
+3. Finds and updates relevant documentation files
 4. Changes are left uncommitted for you to review
+
+### Files Searched and Updated
+
+Claude searches for and updates these file types:
+
+| Pattern | Location | Description |
+|---------|----------|-------------|
+| `*.md` | Anywhere | Markdown documentation files |
+| `*.astro` | `website/` | Astro page components |
+| `*.js` | `website/` | JavaScript data files (operations, providers) |
+| `llms.txt` | `public/` | LLM-friendly documentation (must stay in sync) |
+
+### Files Skipped
+
+| File | Reason |
+|------|--------|
+| `CHANGELOG.md` | Handled separately by `ando bump` |
+| Internal refactoring | Only user-facing changes need docs |
+
+### What Triggers Updates
+
+Claude looks for commits that affect:
+
+- **New features** - Operations, commands, or capabilities
+- **Changed behavior** - Modified functionality that affects users
+- **New options** - Parameters, flags, or configuration settings
+- **Examples** - New use cases or updated patterns
+- **CLI help** - Command descriptions or usage
+
+### Example Output
+
+```
+$ ando docs
+Analyzing 5 commit(s) since v0.9.58...
+Claude is reviewing documentation...
+
+Reading website/src/data/operations.js...
+Updating Docker.Build options documentation...
+Reading website/public/llms.txt...
+Adding new --platform flag to llms.txt...
+
+Documentation updated. Review changes and commit when ready.
+```
 
 **Requirements:** Claude CLI must be installed (`npm install -g @anthropic-ai/claude-code`)
 
