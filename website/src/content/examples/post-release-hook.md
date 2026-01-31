@@ -28,6 +28,14 @@ Create a post-release hook that polls the NuGet API and updates automatically:
 
 **scripts/ando-post-release.csando:**
 ```csharp
+// Skip if the release failed
+var exitCode = Env("ANDO_EXIT_CODE", required: false);
+if (exitCode != "0")
+{
+    Log.Warning($"Release failed (exit code {exitCode}), skipping auto-update");
+    return;
+}
+
 // Read the current version from the project file
 var csprojPath = Root / "src/MyTool/MyTool.csproj";
 var csprojContent = System.IO.File.ReadAllText(csprojPath);

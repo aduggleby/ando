@@ -142,8 +142,9 @@ public class ReleaseCommand
 
             var exitCode = await ExecuteStepsAsync(selectedSteps, bumpType, repoRoot);
 
-            // Run post-hooks.
-            await hookRunner.RunHooksAsync(HookRunner.HookType.Post, "release", hookContext);
+            // Run post-hooks with exit code so they can check success/failure.
+            var postHookContext = hookContext with { ExitCode = exitCode };
+            await hookRunner.RunHooksAsync(HookRunner.HookType.Post, "release", postHookContext);
 
             return exitCode;
         }

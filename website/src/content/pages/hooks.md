@@ -70,6 +70,7 @@ These environment variables are available in hooks:
 | Variable | Available In | Description |
 |----------|--------------|-------------|
 | `ANDO_COMMAND` | All hooks | The command being executed (`run`, `bump`, `commit`, etc.) |
+| `ANDO_EXIT_CODE` | Post-hooks only | Exit code of the command (`0` = success) |
 | `ANDO_OLD_VERSION` | `bump` hooks | Version before the bump |
 | `ANDO_NEW_VERSION` | `post-bump` only | Version after the bump |
 | `ANDO_BUMP_TYPE` | `bump` hooks | Type of bump: `patch`, `minor`, or `major` |
@@ -184,6 +185,14 @@ Update the local tool installation after publishing:
 
 ```csharp
 // scripts/ando-post-release.csando
+
+// Skip if the release failed
+var exitCode = Env("ANDO_EXIT_CODE", required: false);
+if (exitCode != "0")
+{
+    Log.Warning($"Release failed (exit code {exitCode}), skipping auto-update");
+    return;
+}
 
 var version = Env("ANDO_NEW_VERSION", required: false);
 if (string.IsNullOrEmpty(version))

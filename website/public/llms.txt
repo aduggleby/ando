@@ -182,6 +182,7 @@ ANDO supports pre-build and post-build hooks - `.csando` scripts that run automa
 | Variable | Available In | Description |
 |----------|--------------|-------------|
 | `ANDO_COMMAND` | All hooks | Command being executed |
+| `ANDO_EXIT_CODE` | Post-hooks only | Exit code (`0` = success) |
 | `ANDO_OLD_VERSION` | bump hooks | Version before bump |
 | `ANDO_NEW_VERSION` | post-bump | Version after bump |
 | `ANDO_BUMP_TYPE` | bump hooks | patch, minor, or major |
@@ -200,6 +201,10 @@ if (result.ExitCode != 0) throw new Exception("Tests must pass");
 **Example post-hook (auto-update after release):**
 ```csharp
 // scripts/ando-post-release.csando
+// Skip if release failed
+var exitCode = Env("ANDO_EXIT_CODE", required: false);
+if (exitCode != "0") return;
+
 await Shell.RunAsync("dotnet", "tool", "update", "-g", "mytool");
 Log.Info("Tool updated!");
 ```

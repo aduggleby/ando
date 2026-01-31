@@ -9,6 +9,7 @@
 // - ANDO_OLD_VERSION: Version before bump (bump hooks only)
 // - ANDO_NEW_VERSION: Version after bump (post-bump hooks only)
 // - ANDO_BUMP_TYPE: Type of bump (patch, minor, major)
+// - ANDO_EXIT_CODE: Exit code of the command (post-hooks only, "0" for success)
 // =============================================================================
 
 namespace Ando.Hooks;
@@ -39,6 +40,11 @@ public record HookContext
     public string? BumpType { get; init; }
 
     /// <summary>
+    /// The exit code of the command (post-hooks only). 0 means success.
+    /// </summary>
+    public int? ExitCode { get; init; }
+
+    /// <summary>
     /// Converts the context to a dictionary of environment variables.
     /// </summary>
     public Dictionary<string, string> ToEnvironment()
@@ -56,6 +62,9 @@ public record HookContext
 
         if (BumpType != null)
             env["ANDO_BUMP_TYPE"] = BumpType;
+
+        if (ExitCode != null)
+            env["ANDO_EXIT_CODE"] = ExitCode.Value.ToString();
 
         return env;
     }
