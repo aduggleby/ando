@@ -56,6 +56,8 @@ builder.Services.Configure<TestSettings>(
     builder.Configuration.GetSection(TestSettings.SectionName));
 builder.Services.Configure<RateLimitSettings>(
     builder.Configuration.GetSection(RateLimitSettings.SectionName));
+builder.Services.Configure<ServerSettings>(
+    builder.Configuration.GetSection(ServerSettings.SectionName));
 
 // =============================================================================
 // Database
@@ -360,10 +362,6 @@ builder.Services.AddScoped<IEmailService>(sp =>
 
     return settings.Value.Provider switch
     {
-        EmailProvider.Azure => new AzureEmailService(
-            settings, viewEngine, tempDataProvider, sp,
-            loggerFactory.CreateLogger<AzureEmailService>()),
-
         EmailProvider.Smtp => new SmtpEmailService(
             settings, viewEngine, tempDataProvider, sp,
             loggerFactory.CreateLogger<SmtpEmailService>()),
@@ -378,6 +376,7 @@ builder.Services.AddScoped<IEmailService>(sp =>
 
 // Admin / Impersonation
 builder.Services.AddScoped<IImpersonationService, ImpersonationService>();
+builder.Services.AddSingleton<IUrlService, UrlService>();
 
 // Project Management
 builder.Services.AddScoped<IProjectService, ProjectService>();

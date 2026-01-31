@@ -1,7 +1,7 @@
 ---
 title: Pre-Build Cleanup Hook
-description: Clean up Syncthing conflict files and other artifacts before builds to prevent errors.
-difficulty: beginner
+description: Clean up Syncthing conflict files and other artifacts before builds.
+category: Hooks
 tags:
   - hooks
   - cleanup

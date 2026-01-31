@@ -28,15 +28,18 @@ public class ResendVerificationEndpoint : EndpointWithoutRequest<ResendVerificat
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IEmailService _emailService;
+    private readonly IUrlService _urlService;
     private readonly ILogger<ResendVerificationEndpoint> _logger;
 
     public ResendVerificationEndpoint(
         UserManager<ApplicationUser> userManager,
         IEmailService emailService,
+        IUrlService urlService,
         ILogger<ResendVerificationEndpoint> logger)
     {
         _userManager = userManager;
         _emailService = emailService;
+        _urlService = urlService;
         _logger = logger;
     }
 
@@ -84,8 +87,7 @@ public class ResendVerificationEndpoint : EndpointWithoutRequest<ResendVerificat
         user.EmailVerificationSentAt = DateTime.UtcNow;
         await _userManager.UpdateAsync(user);
 
-        var baseUrl = HttpContext.Request.Scheme + "://" + HttpContext.Request.Host;
-        var verifyUrl = $"{baseUrl}/auth/verify-email?userId={user.Id}&token={token}";
+        var verifyUrl = _urlService.BuildUrl($"/auth/verify-email?userId={user.Id}&token={token}", HttpContext);
 
         try
         {

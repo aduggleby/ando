@@ -1,7 +1,7 @@
 ---
-title: Playwright E2E Tests in ANDO Builds
+title: Playwright E2E Tests
 description: Run browser-based end-to-end tests inside ANDO builds using Docker-in-Docker mode.
-difficulty: intermediate
+category: Testing
 tags:
   - testing
   - playwright

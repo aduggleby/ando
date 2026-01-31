@@ -1,6 +1,7 @@
 ---
 title: .NET CLI Tool + NuGet
 description: Build a .NET CLI tool for multiple platforms, create a NuGet package, and publish with profiles.
+category: .NET
 tags:
   - dotnet
   - nuget

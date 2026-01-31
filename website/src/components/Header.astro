@@ -2,12 +2,10 @@
 import { providers } from "../data/providers.js";
 
 const navLinks = [
-  { href: "/#cli", label: "Commands" },
   { href: "/cli", label: "CLI" },
   { href: "/server", label: "CI Server" },
   { href: "/examples", label: "Examples" },
-  { href: "/recipes", label: "Recipes" },
-  { href: "/#ops", label: "Operations" },
+  { href: "/llm-prompt", label: "LLM Prompt" },
 ];
 ---
 
@@ -26,7 +24,7 @@ const navLinks = [
     <!-- Mobile menu button -->
     <button
       id="mobile-menu-btn"
-      class="flex items-center justify-center rounded p-2 text-zinc-600 hover:bg-zinc-100 md:hidden dark:text-zinc-400 dark:hover:bg-zinc-800"
+      class="flex items-center justify-center rounded p-2 text-zinc-600 hover:bg-zinc-100 lg:hidden dark:text-zinc-400 dark:hover:bg-zinc-800"
       aria-label="Toggle menu"
     >
       <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -34,7 +32,7 @@ const navLinks = [
       </svg>
     </button>
     <!-- Desktop navigation -->
-    <div class="hidden items-center gap-6 md:flex">
+    <div class="hidden items-center gap-6 lg:flex">
       {
         navLinks.map(({ href, label }) => (
           <a
@@ -83,7 +81,7 @@ const navLinks = [
   <!-- Mobile navigation menu -->
   <div
     id="mobile-menu"
-    class="mb-8 hidden rounded-lg border border-zinc-200 bg-zinc-50 p-4 md:hidden dark:border-zinc-700 dark:bg-zinc-800"
+    class="mb-8 hidden rounded-lg border border-zinc-200 bg-zinc-50 p-4 lg:hidden dark:border-zinc-700 dark:bg-zinc-800"
   >
     <div class="flex flex-col gap-3">
       {

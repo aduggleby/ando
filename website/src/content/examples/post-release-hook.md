@@ -1,7 +1,7 @@
 ---
 title: Post-Release Auto-Update Hook
-description: Automatically update your global .NET tool after publishing a new version to NuGet.
-difficulty: intermediate
+description: Automatically update your global .NET tool after publishing to NuGet.
+category: Hooks
 tags:
   - hooks
   - nuget

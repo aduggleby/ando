@@ -1,7 +1,7 @@
 ---
-title: NuGet Packages with GitHub Packages
+title: NuGet to GitHub Packages
 description: Build and publish NuGet packages to GitHub Packages registry.
-difficulty: intermediate
+category: GitHub
 tags:
   - nuget
   - github

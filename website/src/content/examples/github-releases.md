@@ -1,7 +1,7 @@
 ---
-title: GitHub Release Management
+title: GitHub Releases
 description: Create GitHub releases with auto-generated notes, version tags, and file uploads.
-difficulty: beginner
+category: GitHub
 tags:
   - github
   - releases

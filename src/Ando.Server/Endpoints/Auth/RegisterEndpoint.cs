@@ -31,17 +31,20 @@ public class RegisterEndpoint : Endpoint<RegisterRequest, RegisterResponse>
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly IEmailService _emailService;
+    private readonly IUrlService _urlService;
     private readonly ILogger<RegisterEndpoint> _logger;
 
     public RegisterEndpoint(
         UserManager<ApplicationUser> userManager,
         SignInManager<ApplicationUser> signInManager,
         IEmailService emailService,
+        IUrlService urlService,
         ILogger<RegisterEndpoint> logger)
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _emailService = emailService;
+        _urlService = urlService;
         _logger = logger;
     }
 
@@ -123,8 +126,7 @@ public class RegisterEndpoint : Endpoint<RegisterRequest, RegisterResponse>
         await _userManager.UpdateAsync(user);
 
         // Build verification URL (frontend will handle this route)
-        var baseUrl = HttpContext.Request.Scheme + "://" + HttpContext.Request.Host;
-        var verifyUrl = $"{baseUrl}/auth/verify-email?userId={user.Id}&token={token}";
+        var verifyUrl = _urlService.BuildUrl($"/auth/verify-email?userId={user.Id}&token={token}", HttpContext);
 
         try
         {

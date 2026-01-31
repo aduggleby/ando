@@ -3,7 +3,7 @@
 //
 // Summary: Configuration settings for email service provider selection.
 //
-// Supports multiple email providers: Resend, Azure Communication Services, SMTP.
+// Supports multiple email providers: Resend and SMTP.
 // The Provider setting determines which implementation is used at runtime.
 //
 // Design Decisions:
@@ -23,11 +23,6 @@ public enum EmailProvider
     /// Resend API (https://resend.com).
     /// </summary>
     Resend,
-
-    /// <summary>
-    /// Azure Email Communication Service.
-    /// </summary>
-    Azure,
 
     /// <summary>
     /// Direct SMTP connection.
@@ -66,11 +61,6 @@ public class EmailSettings
     public ResendProviderSettings Resend { get; set; } = new();
 
     /// <summary>
-    /// Settings for Azure Email Communication Service.
-    /// </summary>
-    public AzureProviderSettings Azure { get; set; } = new();
-
-    /// <summary>
     /// Settings for SMTP provider.
     /// </summary>
     public SmtpProviderSettings Smtp { get; set; } = new();
@@ -78,7 +68,7 @@ public class EmailSettings
 
 /// <summary>
 /// Resend-specific settings.
-/// Also supports Resend-compatible API providers by setting a custom BaseUrl.
+/// Also supports Resend-compatible API providers (e.g., SelfMX) by setting a custom BaseUrl.
 /// </summary>
 public class ResendProviderSettings
 {
@@ -89,20 +79,9 @@ public class ResendProviderSettings
 
     /// <summary>
     /// Base URL for the Resend API. Defaults to official Resend API.
-    /// Set to a custom URL for Resend-compatible providers (e.g., "https://resendalternative.com/api").
+    /// Set to a custom URL for Resend-compatible providers (e.g., "https://api.selfmx.com/").
     /// </summary>
     public string BaseUrl { get; set; } = "https://api.resend.com/";
-}
-
-/// <summary>
-/// Azure Email Communication Service settings.
-/// </summary>
-public class AzureProviderSettings
-{
-    /// <summary>
-    /// Azure Communication Services connection string.
-    /// </summary>
-    public string ConnectionString { get; set; } = "";
 }
 
 /// <summary>

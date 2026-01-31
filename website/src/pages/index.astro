@@ -3,7 +3,6 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import CodeBlock from "../components/CodeBlock.astro";
 import { getOperationsGroupedByProvider, operations, getAnchorId } from "../data/operations.js";
 import { getProviderLinks } from "../data/providers.js";
-
 type Operation = { group: string; name: string; desc: string; examples?: string[] };
 const groupedOperations = getOperationsGroupedByProvider() as [string, Operation[]][];
 const totalOperations = operations.length;
@@ -134,6 +133,23 @@ Cloudflare.PurgeCache("example.com");`;
       C# code defines projects, tools, workflow settings, and operations. Compose builds with nested scripts.
     </p>
     <CodeBlock code={exampleBuildCode} lang="csharp" filename="build.csando" />
+  </section>
+
+  <section id="examples" class="mb-10 md:mb-16">
+    <h2 class="mb-2 text-xl font-bold text-zinc-900 sm:text-2xl dark:text-white">Examples</h2>
+    <p class="mb-4 text-zinc-500 sm:mb-6 dark:text-zinc-400">
+      Real-world build scripts and advanced patterns to get you started.
+    </p>
+    <a
+      href="/examples"
+      class="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 font-medium text-zinc-700 transition-colors hover:border-cyan-500 hover:bg-cyan-50 hover:text-cyan-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:border-cyan-500 dark:hover:bg-cyan-900/20 dark:hover:text-cyan-400"
+    >
+      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+        ></path>
+      </svg>
+      Browse all examples
+    </a>
   </section>
 
   <section id="ops" class="mb-10 md:mb-16">

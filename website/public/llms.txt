@@ -615,6 +615,7 @@ All pages are available in markdown format for LLM consumption:
 - https://andobuild.com/index.md - Homepage and overview
 - https://andobuild.com/about.md - About ANDO
 - https://andobuild.com/cli.md - CLI reference
+- https://andobuild.com/llm-prompt.md - LLM prompt for adding ANDO to projects
 - https://andobuild.com/server.md - CI Server installation (Linux/Ubuntu)
 - https://andobuild.com/server-truenas.md - CI Server installation on TrueNAS SCALE
 - https://andobuild.com/changelog.md - Release history
@@ -639,15 +640,40 @@ All pages are available in markdown format for LLM consumption:
 - https://andobuild.com/providers/playwright.md - Playwright E2E testing
 
 ### Examples
-- https://andobuild.com/examples/index.md - Examples overview
-- https://andobuild.com/examples/astro.md - Astro + Cloudflare Pages example
-- https://andobuild.com/examples/dotnet-tool.md - .NET CLI tool with NuGet publishing and profiles
+- https://andobuild.com/examples/index.md - All examples by category
 
-### Recipes
-- https://andobuild.com/recipes/index.md - Recipes overview
-- https://andobuild.com/recipes/playwright-e2e-tests.md - Running Playwright E2E tests with Docker-in-Docker (--dind), container detection, and automatic system dependency installation
-- https://andobuild.com/recipes/github-releases.md - GitHub Release Management with auto-generated notes, version tags, and binary uploads
-- https://andobuild.com/recipes/container-github-registry.md - Building Docker images and pushing to GitHub Container Registry (ghcr.io)
-- https://andobuild.com/recipes/nuget-github-packages.md - Publishing NuGet packages to GitHub Packages registry
-- https://andobuild.com/recipes/pre-hook-cleanup.md - Pre-build hook for cleaning Syncthing conflict files and other artifacts
-- https://andobuild.com/recipes/post-release-hook.md - Post-release hook that auto-updates .NET tools after NuGet publish with retry logic for CDN propagation
+**.NET**
+- https://andobuild.com/examples/dotnet-tool.md - .NET CLI tool with NuGet publishing
+- https://andobuild.com/examples/ef-migrations.md - EF Core database migrations
+- https://andobuild.com/examples/git-versioning.md - Git tag versioning and semantic versioning
+- https://andobuild.com/examples/docfx-api-docs.md - DocFX API documentation generation
+- https://andobuild.com/examples/monorepo-build.md - Monorepo orchestration with Ando.Build
+- https://andobuild.com/examples/nuget-publishing.md - NuGet.org package publishing
+
+**Frontend**
+- https://andobuild.com/examples/astro.md - Astro + Cloudflare Pages
+- https://andobuild.com/examples/cloudflare-workers.md - Cloudflare Workers serverless deployment
+- https://andobuild.com/examples/react-spa.md - React/Vue SPA with Vite
+
+**Full Stack**
+- https://andobuild.com/examples/fullstack-deploy.md - .NET API + JS frontend deployment
+
+**Azure**
+- https://andobuild.com/examples/azure-app-service.md - Azure App Service deployment
+- https://andobuild.com/examples/azure-functions.md - Azure Functions deployment
+- https://andobuild.com/examples/bicep-infrastructure.md - Bicep infrastructure as code
+
+**Docker**
+- https://andobuild.com/examples/container-github-registry.md - Docker to GitHub Container Registry
+- https://andobuild.com/examples/docker-compose.md - Docker Compose multi-container apps
+
+**GitHub**
+- https://andobuild.com/examples/github-releases.md - GitHub releases with auto-generated notes
+- https://andobuild.com/examples/nuget-github-packages.md - NuGet to GitHub Packages
+
+**Testing**
+- https://andobuild.com/examples/playwright-e2e-tests.md - Playwright E2E tests
+
+**Hooks**
+- https://andobuild.com/examples/pre-hook-cleanup.md - Pre-build cleanup hook
+- https://andobuild.com/examples/post-release-hook.md - Post-release auto-update hook

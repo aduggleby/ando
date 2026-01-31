@@ -1,15 +1,15 @@
-// Provider metadata for navigation and linking (sorted alphabetically)
+// Provider metadata for navigation and linking (Ando first, then alphabetically)
 export const providers = [
   { id: "Ando", href: "/providers/ando", label: "Ando" },
-  { id: "AppService", href: "/providers/appservice", label: "App Service" },
-  { id: "Azure", href: "/providers/azure", label: "Azure" },
-  { id: "Bicep", href: "/providers/bicep", label: "Bicep" },
+  { id: "AppService", href: "/providers/appservice", label: "Azure App Service" },
+  { id: "Azure", href: "/providers/azure", label: "Azure CLI" },
+  { id: "Bicep", href: "/providers/bicep", label: "Azure Bicep" },
+  { id: "Functions", href: "/providers/functions", label: "Azure Functions" },
   { id: "Cloudflare", href: "/providers/cloudflare", label: "Cloudflare" },
   { id: "Docker", href: "/providers/docker", label: "Docker" },
   { id: "Docfx", href: "/providers/docfx", label: "DocFX" },
   { id: "Dotnet", href: "/providers/dotnet", label: "Dotnet" },
-  { id: "Ef", href: "/providers/ef", label: "Entity Framework Core (Ef)" },
-  { id: "Functions", href: "/providers/functions", label: "Functions" },
+  { id: "Ef", href: "/providers/ef", label: "Entity Framework Core" },
   { id: "Git", href: "/providers/git", label: "Git" },
   { id: "GitHub", href: "/providers/github", label: "GitHub" },
   { id: "Node", href: "/providers/node", label: "Node" },

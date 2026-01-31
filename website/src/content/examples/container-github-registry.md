@@ -1,7 +1,7 @@
 ---
-title: Container Building and Publishing to GitHub
+title: Docker to GitHub Registry
 description: Build Docker images and push to GitHub Container Registry (ghcr.io).
-difficulty: beginner
+category: Docker
 tags:
   - docker
   - github

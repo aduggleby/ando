@@ -35,10 +35,11 @@ public class ConfigurationValidator
         IOptions<GitHubSettings> gitHubSettings,
         IOptions<EncryptionSettings> encryptionSettings,
         IOptions<TestSettings> testSettings,
+        IOptions<ServerSettings> serverSettings,
         IWebHostEnvironment environment)
     {
         _environment = environment;
-        ValidateConfiguration(configuration, gitHubSettings.Value, encryptionSettings.Value, testSettings.Value);
+        ValidateConfiguration(configuration, gitHubSettings.Value, encryptionSettings.Value, testSettings.Value, serverSettings.Value);
     }
 
     /// <summary>
@@ -55,7 +56,8 @@ public class ConfigurationValidator
         IConfiguration configuration,
         GitHubSettings gitHubSettings,
         EncryptionSettings encryptionSettings,
-        TestSettings testSettings)
+        TestSettings testSettings,
+        ServerSettings serverSettings)
     {
         // Skip validation in Testing/E2E environment (uses test doubles)
         if (_environment.IsEnvironment("Testing") || _environment.IsEnvironment("E2E"))
@@ -131,6 +133,19 @@ public class ConfigurationValidator
             if (string.IsNullOrEmpty(gitHubSettings.AppId))
             {
                 _errors.Add("GitHub:AppId is required. Set via environment variable: GitHub__AppId");
+            }
+
+            // ---------------------------------------------------------------------
+            // Server Base URL (required for production)
+            // ---------------------------------------------------------------------
+            if (string.IsNullOrEmpty(serverSettings.BaseUrl))
+            {
+                _errors.Add("Server:BaseUrl is required (e.g., https://ci.example.com). Set via environment variable: Server__BaseUrl");
+            }
+            else if (!serverSettings.BaseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+                     !serverSettings.BaseUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            {
+                _errors.Add("Server:BaseUrl must include the scheme (e.g., https://ci.example.com)");
             }
 
             // ---------------------------------------------------------------------

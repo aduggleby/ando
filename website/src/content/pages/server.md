@@ -63,6 +63,45 @@ Create a GitHub App with these settings:
 
 Subscribe to: Push, Pull request
 
+## Server Configuration
+
+Configure the server's public URL in your `.env` file. This is required for generating links in emails (verification, password reset).
+
+```bash
+Server__BaseUrl=https://ci.yourdomain.com
+```
+
+The URL must include the scheme (`https://`) and should not have a trailing slash.
+
+## Email Configuration
+
+ANDO requires an email service for user registration, password reset, and build failure notifications. Configure one of the following providers in your `.env` file:
+
+### Option A: Resend-Compatible API (Recommended)
+
+```bash
+Email__Provider=Resend
+Email__FromAddress=noreply@yourdomain.com
+Email__Resend__ApiKey=your_api_key
+Email__Resend__BaseUrl=https://api.selfmx.com/
+```
+
+Works with any Resend-compatible email API such as [SelfMX](https://selfmx.com). For the official Resend service, omit `BaseUrl` or set it to `https://api.resend.com/`.
+
+### Option B: SMTP
+
+```bash
+Email__Provider=Smtp
+Email__FromAddress=noreply@yourdomain.com
+Email__Smtp__Host=smtp.yourdomain.com
+Email__Smtp__Port=587
+Email__Smtp__Username=your-username
+Email__Smtp__Password=your-password
+Email__Smtp__UseSsl=true
+```
+
+Works with any SMTP provider (Gmail, SendGrid, Mailgun, your own mail server, etc.)
+
 ## Server Management
 
 Management scripts installed to `/opt/ando/scripts/`:

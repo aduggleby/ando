@@ -1,6 +1,7 @@
 ---
 title: Astro + Cloudflare Pages
 description: Build an Astro site and deploy it to Cloudflare Pages with cache purging.
+category: Frontend
 tags:
   - astro
   - cloudflare

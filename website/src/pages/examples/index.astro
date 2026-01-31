@@ -4,49 +4,95 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
 const examplesCollection = await getCollection("examples");
 
-// Map to the expected format
-const examples = examplesCollection.map((example) => ({
-  title: example.data.title,
-  href: `/examples/${example.slug}`,
-  description: example.data.description,
-  tags: example.data.tags || [],
-}));
+// Group examples by category
+const examplesByCategory = examplesCollection.reduce(
+  (acc, example) => {
+    const category = example.data.category;
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    acc[category].push({
+      title: example.data.title,
+      href: `/examples/${example.slug}`,
+      description: example.data.description,
+      tags: example.data.tags || [],
+    });
+    return acc;
+  },
+  {} as Record<string, { title: string; href: string; description: string; tags: string[] }[]>
+);
+
+// Define category order
+const categoryOrder = [".NET", "Frontend", "Full Stack", "Azure", "Docker", "GitHub", "Testing", "Hooks"];
+
+// Sort categories by defined order, unknown categories go last
+const sortedCategories = Object.keys(examplesByCategory).sort((a, b) => {
+  const indexA = categoryOrder.indexOf(a);
+  const indexB = categoryOrder.indexOf(b);
+  if (indexA === -1 && indexB === -1) return a.localeCompare(b);
+  if (indexA === -1) return 1;
+  if (indexB === -1) return -1;
+  return indexA - indexB;
+});
+
+// Create slug from category name
+const slugify = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
 ---
 
 <BaseLayout
   title="Examples - ANDO"
-  description="Real-world examples of ANDO build scripts."
+  description="Real-world examples of ANDO build scripts organized by technology."
   alternateMarkdownUrl="/examples/index.md"
 >
-  <div class="max-w-3xl">
-    <section id="top" class="mb-8 md:mb-12">
-      <h1 class="mb-2 text-2xl font-bold text-zinc-900 sm:text-3xl dark:text-white">Examples</h1>
-      <p class="text-zinc-500 dark:text-zinc-400">Real-world build scripts you can use as starting points.</p>
-    </section>
+  <div class="flex gap-12">
+    <div class="max-w-4xl flex-1">
+      <section id="top" class="mb-8 md:mb-12">
+        <h1 class="mb-2 text-2xl font-bold text-zinc-900 sm:text-3xl dark:text-white">Examples</h1>
+        <p class="text-zinc-500 dark:text-zinc-400">Real-world build scripts organized by technology.</p>
+      </section>
 
-    <section>
-      <div class="grid gap-4">
+      <div id="content">
         {
-          examples.map((example) => (
-            <a
-              href={example.href}
-              class="group block rounded-lg border border-zinc-200 p-5 transition-colors hover:border-cyan-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:border-cyan-500 dark:hover:bg-zinc-800/50"
-            >
-              <h2 class="mb-2 text-lg font-semibold text-zinc-900 group-hover:text-cyan-600 dark:text-white dark:group-hover:text-cyan-400">
-                {example.title}
-              </h2>
-              <p class="mb-3 text-sm text-zinc-600 dark:text-zinc-400">{example.description}</p>
-              <div class="flex flex-wrap gap-2">
-                {example.tags.map((tag) => (
-                  <span class="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                    {tag}
-                  </span>
+          sortedCategories.map((category) => (
+            <section id={slugify(category)} class="mb-10">
+              <h2 class="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-200">{category}</h2>
+              <div class="grid gap-4">
+                {examplesByCategory[category].map((example) => (
+                  <a
+                    href={example.href}
+                    class="group block rounded-lg border border-zinc-200 p-5 transition-colors hover:border-cyan-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:border-cyan-500 dark:hover:bg-zinc-800/50"
+                  >
+                    <h3 class="mb-2 text-lg font-semibold text-zinc-900 group-hover:text-cyan-600 dark:text-white dark:group-hover:text-cyan-400">
+                      {example.title}
+                    </h3>
+                    <p class="mb-3 text-sm text-zinc-600 dark:text-zinc-400">{example.description}</p>
+                    <div class="flex flex-wrap gap-2">
+                      {example.tags.map((tag) => (
+                        <span class="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </a>
                 ))}
               </div>
-            </a>
+            </section>
           ))
         }
       </div>
-    </section>
+    </div>
+
+    <aside class="hidden w-48 shrink-0 lg:block">
+      <nav id="toc" class="sticky top-8">
+        <h4 class="mb-3 text-xs font-semibold tracking-wider text-zinc-400 uppercase">Categories</h4>
+        <ul id="toc-list" class="space-y-2 text-sm"></ul>
+      </nav>
+    </aside>
   </div>
+
+  <script is:inline src="/scripts/toc.js"></script>
 </BaseLayout>

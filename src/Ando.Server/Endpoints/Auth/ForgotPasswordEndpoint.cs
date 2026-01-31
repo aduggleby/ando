@@ -26,15 +26,18 @@ public class ForgotPasswordEndpoint : Endpoint<ForgotPasswordRequest, ForgotPass
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IEmailService _emailService;
+    private readonly IUrlService _urlService;
     private readonly ILogger<ForgotPasswordEndpoint> _logger;
 
     public ForgotPasswordEndpoint(
         UserManager<ApplicationUser> userManager,
         IEmailService emailService,
+        IUrlService urlService,
         ILogger<ForgotPasswordEndpoint> logger)
     {
         _userManager = userManager;
         _emailService = emailService;
+        _urlService = urlService;
         _logger = logger;
     }
 
@@ -53,8 +56,9 @@ public class ForgotPasswordEndpoint : Endpoint<ForgotPasswordRequest, ForgotPass
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
 
             // Build reset URL (frontend will handle this route)
-            var baseUrl = HttpContext.Request.Scheme + "://" + HttpContext.Request.Host;
-            var resetUrl = $"{baseUrl}/auth/reset-password?email={Uri.EscapeDataString(req.Email)}&token={Uri.EscapeDataString(token)}";
+            var resetUrl = _urlService.BuildUrl(
+                $"/auth/reset-password?email={Uri.EscapeDataString(req.Email)}&token={Uri.EscapeDataString(token)}",
+                HttpContext);
 
             // Send password reset email
             try

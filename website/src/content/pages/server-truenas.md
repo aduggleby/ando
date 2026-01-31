@@ -29,6 +29,8 @@ You will need these values during installation:
 | `GitHub__ClientSecret` | OAuth Client Secret from GitHub App settings |
 | `GitHub__WebhookSecret` | Secret for validating webhook payloads |
 | `Encryption__Key` | Base64-encoded 32-byte key (generate with `openssl rand -base64 32`) |
+| `Server__BaseUrl` | Your server's public URL (e.g., `https://ci.example.com`) |
+| Email provider | API key or SMTP credentials (see Step 1) |
 
 ### Create Dataset and Directories
 
@@ -119,6 +121,21 @@ services:
       - GitHub__WebhookSecret=YOUR_WEBHOOK_SECRET
       # Generate with: openssl rand -base64 32
       - Encryption__Key=YOUR_ENCRYPTION_KEY
+      # Public URL for email links (verification, password reset)
+      - Server__BaseUrl=https://your-domain.com
+      # Email configuration (choose one provider)
+      # Option A: Resend-compatible API (recommended) - e.g., SelfMX
+      - Email__FromAddress=noreply@yourdomain.com
+      - Email__Provider=Resend
+      - Email__Resend__ApiKey=YOUR_API_KEY
+      - Email__Resend__BaseUrl=https://api.selfmx.com/
+      # For official Resend, omit BaseUrl or use: https://api.resend.com/
+      # Option B: SMTP
+      # - Email__Provider=Smtp
+      # - Email__Smtp__Host=smtp.yourdomain.com
+      # - Email__Smtp__Port=587
+      # - Email__Smtp__Username=YOUR_SMTP_USER
+      # - Email__Smtp__Password=YOUR_SMTP_PASSWORD
     volumes:
       # Docker socket for running builds
       - /var/run/docker.sock:/var/run/docker.sock
@@ -144,6 +161,10 @@ services:
 | `YOUR_CLIENT_SECRET` | GitHub OAuth Client Secret |
 | `YOUR_WEBHOOK_SECRET` | GitHub webhook secret |
 | `YOUR_ENCRYPTION_KEY` | Base64 key from `openssl rand -base64 32` |
+| `https://your-domain.com` | Your server's public URL (for email links) |
+| `YOUR_API_KEY` | API key for your Resend-compatible email provider (e.g., SelfMX) |
+| `https://api.selfmx.com/` | Base URL for your email provider's API |
+| `noreply@yourdomain.com` | Your verified sender email address |
 
 ## Step 5: Install
 
