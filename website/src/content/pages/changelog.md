@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.62
+
+**2026-01-31**
+
+- Add dedicated hooks documentation page
+
 ## 0.9.61
 
 **2026-01-31**
