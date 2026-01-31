@@ -153,22 +153,58 @@ Explanation:
 - `.ando/` - Cache directories (NuGet, npm) and temp files. Large and machine-specific.
 - `artifacts/` - Build outputs. Should be regenerated, not committed.
 
-### Hooks
+### Hooks (Pre-Build and Post-Build)
 
-ANDO hooks are `.csando` scripts that run automatically before and after CLI commands:
+ANDO supports pre-build and post-build hooks - `.csando` scripts that run automatically before and after CLI commands. Hooks execute on the host machine (not in Docker).
 
-- `ando-pre.csando` - Before ANY command
-- `ando-pre-{cmd}.csando` - Before specific command (e.g., `ando-pre-bump.csando`)
-- `ando-post-{cmd}.csando` - After specific command
-- `ando-post.csando` - After ANY command
+**Hook Types:**
+| Hook | When It Runs |
+|------|--------------|
+| `ando-pre.csando` | Before **every** command |
+| `ando-post.csando` | After **every** command |
+| `ando-pre-{cmd}.csando` | Before a **specific** command |
+| `ando-post-{cmd}.csando` | After a **specific** command |
 
-Search locations (first found wins): `./scripts/` then `./`
+**File Locations (first found wins):**
+1. `./scripts/ando-{hook}.csando`
+2. `./ando-{hook}.csando`
 
-Available globals in hooks: `Log`, `Env`, `Root` (BuildPath with `/` operator), `Directory`, `Shell.RunAsync(cmd, args)`
+**Hook API:**
+| Global | Description |
+|--------|-------------|
+| `Root` | Project root path (supports `/` operator) |
+| `Log` | Logging: `Log.Info()`, `Log.Warning()`, `Log.Error()` |
+| `Shell` | Execute commands: `await Shell.RunAsync("cmd", "args")` |
+| `Env(name)` | Get environment variable |
+| `Directory(path)` | Create directory reference |
 
-Environment variables: `ANDO_COMMAND`, `ANDO_OLD_VERSION`, `ANDO_NEW_VERSION`, `ANDO_BUMP_TYPE`
+**Environment Variables:**
+| Variable | Available In | Description |
+|----------|--------------|-------------|
+| `ANDO_COMMAND` | All hooks | Command being executed |
+| `ANDO_OLD_VERSION` | bump hooks | Version before bump |
+| `ANDO_NEW_VERSION` | post-bump | Version after bump |
+| `ANDO_BUMP_TYPE` | bump hooks | patch, minor, or major |
 
-Pre-hook failure aborts command; post-hook failure only warns.
+**Behavior:**
+- Pre-hook failure aborts the command
+- Post-hook failure only warns (command already completed)
+
+**Example pre-hook (validate before bump):**
+```csharp
+// scripts/ando-pre-bump.csando
+var result = await Shell.RunAsync("dotnet", "test", "--no-build");
+if (result.ExitCode != 0) throw new Exception("Tests must pass");
+```
+
+**Example post-hook (auto-update after release):**
+```csharp
+// scripts/ando-post-release.csando
+await Shell.RunAsync("dotnet", "tool", "update", "-g", "mytool");
+Log.Info("Tool updated!");
+```
+
+Full documentation: https://andobuild.com/hooks
 
 ## Key Facts
 
@@ -636,6 +672,7 @@ All pages are available in markdown format for LLM consumption:
 - https://andobuild.com/index.md - Homepage and overview
 - https://andobuild.com/about.md - About ANDO
 - https://andobuild.com/cli.md - CLI reference
+- https://andobuild.com/hooks.md - Pre-build and post-build hooks
 - https://andobuild.com/llm-prompt.md - LLM prompt for adding ANDO to projects
 - https://andobuild.com/server.md - CI Server installation (Linux/Ubuntu)
 - https://andobuild.com/server-truenas.md - CI Server installation on TrueNAS SCALE

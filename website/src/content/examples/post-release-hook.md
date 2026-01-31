@@ -217,5 +217,6 @@ catch (Exception ex)
 
 ## See Also
 
-- [Pre-Build Cleanup Hook](/recipes/pre-hook-cleanup) - Clean up files before builds
-- [GitHub Release Management](/recipes/github-releases) - Create releases with ANDO
+- [Pre-Build Cleanup Hook](/examples/pre-hook-cleanup) - Clean up files before builds
+- [GitHub Releases](/examples/github-releases) - Create releases with ANDO
+- [Hooks Reference](/hooks) - Full hooks documentation

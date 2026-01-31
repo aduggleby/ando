@@ -158,4 +158,5 @@ if (command == "run")
 
 ## See Also
 
-- [Post-Release Auto-Update Hook](/recipes/post-release-hook) - Auto-update tools after publishing
+- [Post-Release Auto-Update Hook](/examples/post-release-hook) - Auto-update tools after publishing
+- [Hooks Reference](/hooks) - Full hooks documentation

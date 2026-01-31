@@ -218,7 +218,7 @@ Steps are contextually enabled/disabled based on repository state.
 
 ## Hooks
 
-Hooks are `.csando` scripts that run before/after CLI commands.
+ANDO supports pre-build and post-build hooks that run before and after CLI commands. Hooks are `.csando` scripts that execute on the host machine.
 
 | Hook | When it runs |
 |------|--------------|
@@ -227,25 +227,14 @@ Hooks are `.csando` scripts that run before/after CLI commands.
 | `ando-post-{cmd}.csando` | After specific command |
 | `ando-post.csando` | After ANY command |
 
-**Search locations:** `./scripts/` then `./`
-
-**Available APIs:** `Log.*`, `Env(name)`, `Root` (BuildPath with `/` operator), `Directory(path)`, `Shell.RunAsync(cmd, args)`
-
-**Environment variables:**
-
-| Variable | Available in |
-|----------|--------------|
-| `ANDO_COMMAND` | All hooks |
-| `ANDO_OLD_VERSION` | bump hooks |
-| `ANDO_NEW_VERSION` | post-bump |
-| `ANDO_BUMP_TYPE` | bump hooks |
-
-**Example:**
+**Quick example:**
 ```csharp
 // scripts/ando-pre-bump.csando
 var result = await Shell.RunAsync("dotnet", "test", "--no-build");
 if (result.ExitCode != 0) throw new Exception("Tests failed");
 ```
+
+👉 **[See full Hooks documentation](/hooks)** for file locations, available APIs, environment variables, and more examples.
 
 ## Clean Options
 
