@@ -473,7 +473,7 @@ BicepDeployment objects provide typed access to deployment outputs:
 ### Docker
 - Docker.Install() - Install Docker CLI in container (required for Docker.Build with --dind)
 - Docker.IsAvailable() - Check if Docker CLI and daemon are accessible (returns bool immediately, not a step)
-- Docker.Build(dockerfile, options?) - Build Docker image using buildx. Supports single or multi-platform builds with optional push to registry. Auto-handles ghcr.io auth when pushing.
+- Docker.Build(dockerfile, options?) - Build Docker image using buildx. Supports single or multi-platform builds with optional push to registry. **Recommended**: Use WithPush() for atomic build+push to ensure both version and latest tags point to the same manifest. Auto-handles ghcr.io auth when pushing.
 
 ### Docfx
 - Docfx.Install() - Install DocFX as a dotnet global tool (skips if already installed)
@@ -506,7 +506,7 @@ PlaywrightTestOptions:
 ### GitHub
 - GitHub.CreatePr(options) - Create a pull request (requires gh CLI)
 - GitHub.CreateRelease(options) - Create a GitHub release with optional file uploads (use WithFiles() to attach assets, supports path#name syntax)
-- GitHub.PushImage(imageName, options?) - Push Docker image to ghcr.io
+- GitHub.PushImage(imageName, options?) - **Deprecated**: Use Docker.Build with WithPush() instead for atomic builds.
 
 ### Profiles
 Profiles allow conditional execution of build steps:
@@ -570,12 +570,12 @@ Activate with CLI: `ando -p release` or `ando -p publish,release`
 - WithoutSymbols(bool) - Don't push .snupkg
 
 ### Docker.Build Options
-- WithTag(string) - Add image tag (can call multiple times)
+- WithTag(string) - Add image tag (can call multiple times). Use full registry path for push (e.g., "ghcr.io/org/app:v1")
 - WithPlatform(string) - Single target platform (e.g., "linux/amd64")
 - WithPlatforms(params string[]) - Multiple target platforms for multi-arch builds (e.g., "linux/amd64", "linux/arm64")
 - WithContext(string) - Build context directory
 - WithBuildArg(key, value) - Pass build argument to Dockerfile
-- WithPush() - Push images to registry after building (disables --load)
+- WithPush() - **Recommended**: Push images to registry atomically during build. Ensures all tags point to same manifest.
 - WithNoCache() - Disable build cache
 - WithoutLoad() - Disable loading image into local docker (useful when only pushing)
 
@@ -605,10 +605,6 @@ Activate with CLI: `ando -p release` or `ando -p publish,release`
 - WithBase(string) - Target branch (e.g., "main")
 - WithHead(string) - Source branch
 - AsDraft() - Create as draft PR
-
-### GitHub.PushImage Options
-- WithTag(string) - Image tag
-- WithOwner(string) - GitHub user/org (auto-detected if not set)
 
 ### Bicep.Deploy Options
 - WithName(string) - Custom deployment name

@@ -627,10 +627,9 @@ export const operations = [
   {
     group: "GitHub",
     name: "GitHub.PushImage",
-    desc: "Pushes a Docker image to GitHub Container Registry (ghcr.io). The image must already be built locally. Automatically handles authentication using `GITHUB_TOKEN` or gh CLI config.",
+    desc: "Pushes a Docker image to GitHub Container Registry (ghcr.io). <strong>Deprecated:</strong> Use <code>Docker.Build</code> with <code>WithPush()</code> instead for atomic builds.",
     examples: [
-      'GitHub.PushImage("myapp", o => o.WithTag("latest"));',
-      'GitHub.PushImage("myapp", o => o\n  .WithTag("v1.0.0")\n  .WithOwner("my-org"));',
+      '// Use Docker.Build with WithPush() for atomic build+push\nDocker.Build("Dockerfile", o => o\n  .WithPlatforms("linux/amd64", "linux/arm64")\n  .WithTag("ghcr.io/myorg/myapp:v1.0.0")\n  .WithTag("ghcr.io/myorg/myapp:latest")\n  .WithPush());',
     ],
     sourceFile: "Operations/GitHubOperations.cs",
   },
@@ -654,11 +653,11 @@ export const operations = [
   {
     group: "Docker",
     name: "Docker.Build",
-    desc: "Builds a Docker image using buildx. Supports single or multi-platform builds with optional push to registry. <strong>Requires <code>--dind</code> CLI flag</strong>. Call <code>Docker.Install()</code> first to install the Docker CLI. Automatically creates a buildx builder for multi-platform builds and handles ghcr.io authentication when pushing.",
+    desc: "Builds a Docker image using buildx. Supports single or multi-platform builds with optional push to registry. <strong>Requires <code>--dind</code> CLI flag</strong>. Call <code>Docker.Install()</code> first to install the Docker CLI. Automatically creates a buildx builder for multi-platform builds and handles ghcr.io authentication when pushing. <strong>Recommended</strong>: Use <code>WithPush()</code> for atomic build+push to ensure both version and latest tags point to the same manifest.",
     examples: [
-      '// Single platform build (loads into local docker)\nDocker.Install();\nDocker.Build("Dockerfile", o => o.WithTag("myapp:latest"));',
-      '// Build with version and platform\nDocker.Build("./src/MyApp/Dockerfile", o => o\n  .WithTag("myapp:v1.0.0")\n  .WithBuildArg("VERSION", "1.0.0")\n  .WithPlatform("linux/amd64"));',
-      '// Multi-platform build with push to ghcr.io\nDocker.Build("./Dockerfile", o => o\n  .WithPlatforms("linux/amd64", "linux/arm64")\n  .WithTag("ghcr.io/myorg/myapp:v1.0.0")\n  .WithTag("ghcr.io/myorg/myapp:latest")\n  .WithPush());',
+      '// Recommended: Atomic multi-arch build+push to ghcr.io\n// Ensures all tags point to the same manifest\nDocker.Install();\nDocker.Build("./Dockerfile", o => o\n  .WithPlatforms("linux/amd64", "linux/arm64")\n  .WithTag("ghcr.io/myorg/myapp:v1.0.0")\n  .WithTag("ghcr.io/myorg/myapp:latest")\n  .WithPush());',
+      '// Single platform build with push\nDocker.Build("./src/MyApp/Dockerfile", o => o\n  .WithTag("ghcr.io/myorg/myapp:v1.0.0")\n  .WithBuildArg("VERSION", "1.0.0")\n  .WithPush());',
+      '// Local build only (no push, loads into local docker)\nDocker.Build("Dockerfile", o => o.WithTag("myapp:dev"));',
     ],
     sourceFile: "Operations/DockerOperations.cs",
   },

@@ -30,40 +30,36 @@ For CI/CD, use the built-in `GITHUB_TOKEN` in GitHub Actions. For local developm
 
 Your token needs the `write:packages` scope to push images. Create a token at [github.com/settings/tokens](https://github.com/settings/tokens).
 
-## Basic Container Build and Push
+## Recommended: Atomic Build and Push
 
-Build a Docker image and push it to ghcr.io:
+**Best practice**: Use `Docker.Build` with `WithPush()` to build and push in a single atomic operation. This ensures:
+- Both version and latest tags point to the same manifest
+- No cache staleness issues between build and push
+- Multi-platform support works correctly
+- Simpler, more reliable builds
 
 ```csharp
 var version = "1.0.0";
 
-// Build the Docker image
+// Build and push in one atomic operation
+Docker.Install();
 Docker.Build("Dockerfile", o => o
-    .WithTag($"myapp:{version}"));
-
-// Push to GitHub Container Registry
-GitHub.PushImage("myapp", o => o
-    .WithTag(version));
+    .WithPlatforms("linux/amd64", "linux/arm64")
+    .WithTag($"ghcr.io/my-org/myapp:{version}")
+    .WithTag("ghcr.io/my-org/myapp:latest")
+    .WithPush());
 ```
 
-The image will be available at `ghcr.io/{owner}/myapp:1.0.0`.
+The image will be available at `ghcr.io/my-org/myapp:1.0.0` and `ghcr.io/my-org/myapp:latest`, with both tags pointing to identical multi-arch manifests.
 
-## Multi-tag Images
+## Why Atomic Build+Push?
 
-Push the same image with multiple tags (version + latest):
+Using `WithPush()` leverages buildx's `--push` flag to atomically build and push:
 
-```csharp
-var version = "1.2.3";
-
-// Build with multiple tags
-Docker.Build("Dockerfile", o => o
-    .WithTag($"myapp:{version}")
-    .WithTag("myapp:latest"));
-
-// Push both tags
-GitHub.PushImage("myapp", o => o.WithTag(version));
-GitHub.PushImage("myapp", o => o.WithTag("latest"));
-```
+- All tags point to the same manifest (no cache staleness)
+- Multi-platform builds work correctly
+- Single operation, fewer network round-trips
+- Automatic ghcr.io authentication
 
 ## Full .NET Application Workflow
 
@@ -85,14 +81,13 @@ Dotnet.Publish(project, o => o
     .WithConfiguration(Configuration.Release)
     .WithRuntime("linux-x64"));
 
-// Build Docker image
+// Build and push multi-arch image atomically
+Docker.Install();
 Docker.Build("Dockerfile", o => o
-    .WithTag($"myapp:{version}")
-    .WithTag("myapp:latest"));
-
-// Push to ghcr.io
-GitHub.PushImage("myapp", o => o.WithTag(version));
-GitHub.PushImage("myapp", o => o.WithTag("latest"));
+    .WithPlatforms("linux/amd64", "linux/arm64")
+    .WithTag($"ghcr.io/my-org/myapp:{version}")
+    .WithTag("ghcr.io/my-org/myapp:latest")
+    .WithPush());
 ```
 
 ### Dockerfile Example
@@ -105,24 +100,7 @@ EXPOSE 8080
 ENTRYPOINT ["dotnet", "MyApp.dll"]
 ```
 
-## Specifying the Owner
-
-By default, `GitHub.PushImage` detects the owner from your git remote (requires `.git` directory). When using `Docker.Build` with `WithPush()` to push directly to ghcr.io, the owner is extracted from the image tag itself (e.g., `ghcr.io/myorg/myapp` → owner is `myorg`), which works even in containers without access to git.
-
-To specify the owner explicitly with `GitHub.PushImage`:
-
-```csharp
-// Push to an organization's registry
-GitHub.PushImage("myapp", o => o
-    .WithTag(version)
-    .WithOwner("my-organization"));
-
-// Result: ghcr.io/my-organization/myapp:1.0.0
-```
-
-## Build Arguments and Platforms
-
-### Passing Build Arguments
+## Build Arguments
 
 Inject version numbers or build metadata into the image:
 
@@ -131,9 +109,11 @@ var version = "1.0.0";
 var buildNumber = Env("BUILD_NUMBER", required: false) ?? "local";
 
 Docker.Build("Dockerfile", o => o
-    .WithTag($"myapp:{version}")
+    .WithPlatforms("linux/amd64", "linux/arm64")
+    .WithTag($"ghcr.io/my-org/myapp:{version}")
     .WithBuildArg("VERSION", version)
-    .WithBuildArg("BUILD_NUMBER", buildNumber));
+    .WithBuildArg("BUILD_NUMBER", buildNumber)
+    .WithPush());
 ```
 
 Access in Dockerfile:
@@ -142,21 +122,6 @@ ARG VERSION
 ARG BUILD_NUMBER
 ENV APP_VERSION=${VERSION}
 ENV APP_BUILD=${BUILD_NUMBER}
-```
-
-### Cross-Platform Builds
-
-Build for a specific platform (useful for ARM servers):
-
-```csharp
-Docker.Build("Dockerfile", o => o
-    .WithTag($"myapp:{version}")
-    .WithPlatform("linux/amd64"));
-
-// Or for ARM64 (e.g., AWS Graviton, Apple Silicon)
-Docker.Build("Dockerfile", o => o
-    .WithTag($"myapp:{version}")
-    .WithPlatform("linux/arm64"));
 ```
 
 ## Conditional Publishing with Profiles
@@ -172,22 +137,22 @@ var version = project.Version;
 Dotnet.Build(project);
 Dotnet.Test(Dotnet.Project("./tests/MyApp.Tests/MyApp.Tests.csproj"));
 
-// Always build the Docker image (for verification)
+// Always publish for container (for verification)
 Dotnet.Publish(project, o => o
     .Output(Root / "publish")
     .WithConfiguration(Configuration.Release));
 
-Docker.Build("Dockerfile", o => o
-    .WithTag($"myapp:{version}")
-    .WithTag("myapp:latest"));
-
-// Only push with -p publish
+// Only build and push container with -p publish
 if (publish)
 {
-    GitHub.PushImage("myapp", o => o.WithTag(version));
-    GitHub.PushImage("myapp", o => o.WithTag("latest"));
+    Docker.Install();
+    Docker.Build("Dockerfile", o => o
+        .WithPlatforms("linux/amd64", "linux/arm64")
+        .WithTag($"ghcr.io/my-org/myapp:{version}")
+        .WithTag("ghcr.io/my-org/myapp:latest")
+        .WithPush());
 
-    Log.Info($"Pushed ghcr.io/{Env("GITHUB_REPOSITORY_OWNER", required: false) ?? "owner"}/myapp:{version}");
+    Log.Info($"Pushed ghcr.io/my-org/myapp:{version}");
 }
 ```
 
@@ -252,14 +217,14 @@ if (release)
         .Output(Root / "publish")
         .WithConfiguration(Configuration.Release));
 
-    // Build and push container
+    // Build and push container atomically
+    Docker.Install();
     Docker.Build("Dockerfile", o => o
-        .WithTag($"myapp:{version}")
-        .WithTag("myapp:latest")
-        .WithBuildArg("VERSION", version));
-
-    GitHub.PushImage("myapp", o => o.WithTag(version));
-    GitHub.PushImage("myapp", o => o.WithTag("latest"));
+        .WithPlatforms("linux/amd64", "linux/arm64")
+        .WithTag($"ghcr.io/my-org/myapp:{version}")
+        .WithTag("ghcr.io/my-org/myapp:latest")
+        .WithBuildArg("VERSION", version)
+        .WithPush());
 
     // Create GitHub release
     Git.Tag($"v{version}", o => o.WithSkipIfExists());
@@ -273,7 +238,7 @@ if (release)
 ## Container Image
 
 ```bash
-docker pull ghcr.io/${{GITHUB_REPOSITORY}}:{version}
+docker pull ghcr.io/my-org/myapp:{version}
 ```
 
 ## What's Changed
@@ -284,14 +249,38 @@ See commit history for changes.
 }
 ```
 
+## Single Platform Builds
+
+For simpler use cases without multi-arch requirements:
+
+```csharp
+// Single platform build with push
+Docker.Build("Dockerfile", o => o
+    .WithPlatform("linux/amd64")
+    .WithTag($"ghcr.io/my-org/myapp:{version}")
+    .WithPush());
+```
+
+## Local Development (Build Only)
+
+For local testing, build without pushing:
+
+```csharp
+// Build and load into local Docker (no push)
+Docker.Build("Dockerfile", o => o
+    .WithTag("myapp:dev"));
+```
+
 ## Clean Builds
 
 Force a fresh Docker build without cache:
 
 ```csharp
 Docker.Build("Dockerfile", o => o
-    .WithTag($"myapp:{version}")
-    .WithNoCache());
+    .WithPlatforms("linux/amd64", "linux/arm64")
+    .WithTag($"ghcr.io/my-org/myapp:{version}")
+    .WithNoCache()
+    .WithPush());
 ```
 
 Use `WithNoCache()` when:
@@ -305,20 +294,13 @@ Use `WithNoCache()` when:
 
 | Option | Description |
 |--------|-------------|
-| `WithTag(string)` | Add image tag (can call multiple times) |
+| `WithTag(string)` | Add image tag (can call multiple times). Use full registry path for push (e.g., `ghcr.io/org/app:v1`) |
 | `WithPlatform(string)` | Single target platform (e.g., "linux/amd64") |
-| `WithPlatforms(params string[])` | Multiple target platforms for multi-arch builds |
+| `WithPlatforms(params string[])` | Multiple target platforms for multi-arch builds (e.g., "linux/amd64", "linux/arm64") |
 | `WithContext(string)` | Build context directory |
 | `WithBuildArg(key, value)` | Pass build argument |
-| `WithPush()` | Push images to registry after building |
+| `WithPush()` | Push images to registry after building (recommended) |
 | `WithNoCache()` | Disable build cache |
-
-### GitHub.PushImage Options
-
-| Option | Description |
-|--------|-------------|
-| `WithTag(string)` | Image tag to push |
-| `WithOwner(string)` | GitHub user/org (auto-detected if not set) |
 
 ## See Also
 

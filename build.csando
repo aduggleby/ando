@@ -147,15 +147,16 @@ if (publish)
     // Install Docker CLI (needed for --dind mode)
     Docker.Install();
 
-    // Build server Docker image with version tag
+    // Build multi-arch image and push to ghcr.io in one atomic operation.
+    // Using WithPush() ensures both version and latest tags point to the same manifest,
+    // avoiding cache staleness issues that can occur with separate build/push steps.
+    Log.Info("Building and pushing Docker image...");
     Docker.Build("./src/Ando.Server/Dockerfile", o => o
-        .WithTag($"ando-server:{version}")
-        .WithContext("."));
-
-    // Push container image to GitHub Container Registry (ghcr.io)
-    GitHub.PushImage("ando-server", o => o
-        .WithTag(version)
-        .WithOwner("aduggleby"));
+        .WithPlatforms("linux/amd64", "linux/arm64")
+        .WithTag($"ghcr.io/aduggleby/ando-server:{version}")
+        .WithTag("ghcr.io/aduggleby/ando-server:latest")
+        .WithContext(".")
+        .WithPush());
 
     // Tag git repo with version (skip if already exists)
     Git.Tag($"v{version}", o => o.WithSkipIfExists());

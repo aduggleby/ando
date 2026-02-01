@@ -43,19 +43,19 @@ GitHub.CreateRelease(o => o
 
 ## Container Registry
 
-Push Docker images to GitHub Container Registry (ghcr.io). The image must be built locally first.
+Use `Docker.Build` with `WithPush()` for atomic build+push operations. This ensures all tags point to the same manifest.
 
 ```csharp
-// Build and push Docker image to GitHub Container Registry
-Docker.Build("Dockerfile", o => o.WithTag("myapp:v1.0.0"));
-
-GitHub.PushImage("myapp", o => o
-    .WithTag("v1.0.0")
-    .WithOwner("my-org"));
-
-// Push with latest tag
-GitHub.PushImage("myapp", o => o.WithTag("latest"));
+// Build and push atomically to ghcr.io
+Docker.Install();
+Docker.Build("./Dockerfile", o => o
+    .WithPlatforms("linux/amd64", "linux/arm64")
+    .WithTag("ghcr.io/my-org/myapp:v1.0.0")
+    .WithTag("ghcr.io/my-org/myapp:latest")
+    .WithPush());
 ```
+
+See the [Docker provider](/providers/docker) for full details.
 
 ## Pull Requests
 
@@ -99,15 +99,8 @@ GitHub.CreatePr(o => o
 | `WithHead(string)` | Source branch containing changes. Defaults to current branch. |
 | `AsDraft()` | Create as a draft PR. Draft PRs indicate work-in-progress and can't be merged until marked ready. |
 
-### GitHub.PushImage Options
-
-| Option | Description |
-|--------|-------------|
-| `WithTag(string)` | Image tag to push (e.g., "v1.0.0", "latest"). The full image name becomes `ghcr.io/{owner}/{name}:{tag}`. |
-| `WithOwner(string)` | GitHub user or organization that owns the image. Auto-detected from git remote if not specified. |
-
 ## Notes
 
 - GitHub operations require the `gh` CLI to be installed.
 - Version tags are automatically prefixed with 'v' if not already present (e.g., "1.0.0" becomes "v1.0.0").
-- For `PushImage`, the owner is auto-detected from the git remote if not specified.
+- For container images, use `Docker.Build` with `WithPush()` for atomic builds to ghcr.io.
