@@ -3,6 +3,18 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.64
+
+**2026-02-01**
+
+- Improve documentation for atomic Docker build and push operations
+
+## 0.9.63
+
+**2026-01-31**
+
+- Add exit code to post-hook context for release command
+
 ## 0.9.62
 
 **2026-01-31**
