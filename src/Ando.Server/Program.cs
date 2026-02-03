@@ -398,6 +398,28 @@ builder.Services.AddScoped<IAuditLogger, AuditLogger>();
 var app = builder.Build();
 
 // =============================================================================
+// Startup Banner
+// =============================================================================
+
+var version = typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown";
+var banner = $"""
+
+     █████╗ ███╗   ██╗██████╗  ██████╗
+    ██╔══██╗████╗  ██║██╔══██╗██╔═══██╗
+    ███████║██╔██╗ ██║██║  ██║██║   ██║
+    ██╔══██║██║╚██╗██║██║  ██║██║   ██║
+    ██║  ██║██║ ╚████║██████╔╝╚██████╔╝
+    ╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝  ╚═════╝
+                              v{version}
+
+    Build System Server
+    Environment: {app.Environment.EnvironmentName}
+
+""";
+Console.WriteLine(banner);
+app.Logger.LogInformation("Ando Server v{Version} starting in {Environment} environment", version, app.Environment.EnvironmentName);
+
+// =============================================================================
 // Middleware Pipeline
 // =============================================================================
 
