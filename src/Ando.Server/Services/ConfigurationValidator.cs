@@ -36,10 +36,11 @@ public class ConfigurationValidator
         IOptions<EncryptionSettings> encryptionSettings,
         IOptions<TestSettings> testSettings,
         IOptions<ServerSettings> serverSettings,
+        IOptions<BuildSettings> buildSettings,
         IWebHostEnvironment environment)
     {
         _environment = environment;
-        ValidateConfiguration(configuration, gitHubSettings.Value, encryptionSettings.Value, testSettings.Value, serverSettings.Value);
+        ValidateConfiguration(configuration, gitHubSettings.Value, encryptionSettings.Value, testSettings.Value, serverSettings.Value, buildSettings.Value);
     }
 
     /// <summary>
@@ -57,7 +58,8 @@ public class ConfigurationValidator
         GitHubSettings gitHubSettings,
         EncryptionSettings encryptionSettings,
         TestSettings testSettings,
-        ServerSettings serverSettings)
+        ServerSettings serverSettings,
+        BuildSettings buildSettings)
     {
         // Skip validation in Testing/E2E environment (uses test doubles)
         if (_environment.IsEnvironment("Testing") || _environment.IsEnvironment("E2E"))
@@ -151,7 +153,7 @@ public class ConfigurationValidator
             // ---------------------------------------------------------------------
             // Docker Security (required for production)
             // ---------------------------------------------------------------------
-            ValidateDockerRootless();
+            ValidateDockerRootless(buildSettings);
         }
     }
 
@@ -160,8 +162,14 @@ public class ConfigurationValidator
     /// Running Docker as root is a security risk as it allows container escapes
     /// to gain full root access to the host system.
     /// </summary>
-    private void ValidateDockerRootless()
+    private void ValidateDockerRootless(BuildSettings buildSettings)
     {
+        // Skip validation if user has acknowledged the risk (e.g., TrueNAS SCALE)
+        if (buildSettings.AcknowledgeRootDockerRisk)
+        {
+            return;
+        }
+
         try
         {
             var startInfo = new ProcessStartInfo

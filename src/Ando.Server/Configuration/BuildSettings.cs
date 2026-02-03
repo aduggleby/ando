@@ -80,4 +80,14 @@ public class BuildSettings
     /// For rootless Docker: /var/run/user/{UID}/docker.sock
     /// </summary>
     public string DockerSocketPath { get; set; } = "/var/run/docker.sock";
+
+    /// <summary>
+    /// Acknowledges the security risk of running Docker as root.
+    /// When true, bypasses the rootless Docker validation check.
+    /// Use this on platforms like TrueNAS SCALE where Docker runs as root
+    /// and cannot be configured for rootless mode.
+    /// WARNING: Running Docker as root allows container escapes to gain
+    /// root access to the host system.
+    /// </summary>
+    public bool AcknowledgeRootDockerRisk { get; set; } = false;
 }

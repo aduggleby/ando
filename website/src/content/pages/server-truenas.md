@@ -22,15 +22,15 @@ Before starting, ensure you have:
 
 You will need these values during installation:
 
-| Setting | Description |
-|---------|-------------|
-| `GitHub__AppId` | Your GitHub App's numeric ID |
-| `GitHub__ClientId` | OAuth Client ID from GitHub App settings |
-| `GitHub__ClientSecret` | OAuth Client Secret from GitHub App settings |
-| `GitHub__WebhookSecret` | Secret for validating webhook payloads |
-| `Encryption__Key` | Base64-encoded 32-byte key (generate with `openssl rand -base64 32`) |
-| `Server__BaseUrl` | Your server's public URL (e.g., `https://ci.example.com`) |
-| Email provider | API key or SMTP credentials (see Step 1) |
+| Setting                 | Description                                                          |
+| ----------------------- | -------------------------------------------------------------------- |
+| `GitHub__AppId`         | Your GitHub App's numeric ID                                         |
+| `GitHub__ClientId`      | OAuth Client ID from GitHub App settings                             |
+| `GitHub__ClientSecret`  | OAuth Client Secret from GitHub App settings                         |
+| `GitHub__WebhookSecret` | Secret for validating webhook payloads                               |
+| `Encryption__Key`       | Base64-encoded 32-byte key (generate with `openssl rand -base64 32`) |
+| `Server__BaseUrl`       | Your server's public URL (e.g., `https://ci.example.com`)            |
+| Email provider          | API key or SMTP credentials (see Step 1)                             |
 
 ### Create Dataset and Directories
 
@@ -108,10 +108,13 @@ Paste the following YAML, replacing the placeholder values:
 services:
   ando-server:
     image: ghcr.io/aduggleby/ando-server:latest
+    pull_policy: always
     ports:
       - "8080:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
+      # TrueNAS runs Docker as root - acknowledge this security consideration
+      - Build__AcknowledgeRootDockerRisk=true
       # Update connection string with your SQL Server details
       - ConnectionStrings__DefaultConnection=Server=YOUR_TRUENAS_IP,1433;Database=AndoServer;User Id=ando;Password=YOUR_ANDO_PASSWORD;TrustServerCertificate=true
       # Replace with your GitHub App credentials
@@ -150,21 +153,21 @@ services:
 
 ### Values to Replace
 
-| Placeholder | Replace With |
-|-------------|--------------|
-| `YOUR_TRUENAS_IP` | Your TrueNAS host IP address (e.g., `192.168.1.100`) |
-| `1433` | The port your SQL Server is mapped to (change if different) |
-| `YOUR_ANDO_PASSWORD` | The password you set for the `ando` login in Step 1 |
-| `YOUR_POOL` | Your TrueNAS pool name (e.g., `tank`, `data`) |
-| `YOUR_APP_ID` | GitHub App numeric ID |
-| `YOUR_CLIENT_ID` | GitHub OAuth Client ID |
-| `YOUR_CLIENT_SECRET` | GitHub OAuth Client Secret |
-| `YOUR_WEBHOOK_SECRET` | GitHub webhook secret |
-| `YOUR_ENCRYPTION_KEY` | Base64 key from `openssl rand -base64 32` |
-| `https://your-domain.com` | Your server's public URL (for email links) |
-| `YOUR_API_KEY` | API key for your Resend-compatible email provider (e.g., SelfMX) |
-| `https://api.selfmx.com/` | Base URL for your email provider's API |
-| `noreply@yourdomain.com` | Your verified sender email address |
+| Placeholder               | Replace With                                                     |
+| ------------------------- | ---------------------------------------------------------------- |
+| `YOUR_TRUENAS_IP`         | Your TrueNAS host IP address (e.g., `192.168.1.100`)             |
+| `1433`                    | The port your SQL Server is mapped to (change if different)      |
+| `YOUR_ANDO_PASSWORD`      | The password you set for the `ando` login in Step 1              |
+| `YOUR_POOL`               | Your TrueNAS pool name (e.g., `tank`, `data`)                    |
+| `YOUR_APP_ID`             | GitHub App numeric ID                                            |
+| `YOUR_CLIENT_ID`          | GitHub OAuth Client ID                                           |
+| `YOUR_CLIENT_SECRET`      | GitHub OAuth Client Secret                                       |
+| `YOUR_WEBHOOK_SECRET`     | GitHub webhook secret                                            |
+| `YOUR_ENCRYPTION_KEY`     | Base64 key from `openssl rand -base64 32`                        |
+| `https://your-domain.com` | Your server's public URL (for email links)                       |
+| `YOUR_API_KEY`            | API key for your Resend-compatible email provider (e.g., SelfMX) |
+| `https://api.selfmx.com/` | Base URL for your email provider's API                           |
+| `noreply@yourdomain.com`  | Your verified sender email address                               |
 
 ## Step 5: Install
 
@@ -196,11 +199,11 @@ your-domain.com {
 
 Update your GitHub App settings:
 
-| Setting | Value |
-|---------|-------|
-| Homepage URL | `https://your-domain.com` |
+| Setting      | Value                                          |
+| ------------ | ---------------------------------------------- |
+| Homepage URL | `https://your-domain.com`                      |
 | Callback URL | `https://your-domain.com/auth/github/callback` |
-| Webhook URL | `https://your-domain.com/webhooks/github` |
+| Webhook URL  | `https://your-domain.com/webhooks/github`      |
 
 ## Verification
 
@@ -229,6 +232,7 @@ The container will restart with the new version.
 ### Container Won't Start
 
 Check that:
+
 - All dataset paths exist and are accessible
 - The `github-app.pem` file is uploaded to the config directory
 - Environment variables are correctly formatted (no extra spaces)
@@ -243,6 +247,7 @@ Check that:
 ### Builds Fail with Docker Errors
 
 Verify:
+
 - The Docker socket path `/var/run/docker.sock` exists on your TrueNAS system
 - The `privileged: true` setting is in place
 
