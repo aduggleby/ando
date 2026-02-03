@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.66
+
+**2026-02-03**
+
+- Add option to bypass rootless Docker validation for TrueNAS deployments
+
 ## 0.9.65
 
 **2026-02-03**

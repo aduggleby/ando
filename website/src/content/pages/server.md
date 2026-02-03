@@ -73,6 +73,16 @@ Server__BaseUrl=https://ci.yourdomain.com
 
 The URL must include the scheme (`https://`) and should not have a trailing slash.
 
+### Docker Security
+
+By default, ANDO CI Server validates that Docker is running in rootless mode for enhanced security. On platforms where Docker runs as root and cannot be configured for rootless mode (such as TrueNAS SCALE), you can bypass this check:
+
+```bash
+Build__AcknowledgeRootDockerRisk=true
+```
+
+**Warning**: Running Docker as root allows container escapes to gain root access to the host system. Only use this option on platforms that require it.
+
 ## Email Configuration
 
 ANDO requires an email service for user registration, password reset, and build failure notifications. Configure one of the following providers in your `.env` file:
