@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.65
+
+**2026-02-03**
+
+- Add ASCII art startup banner with version info to server
+
 ## 0.9.64
 
 **2026-02-01**
