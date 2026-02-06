@@ -108,17 +108,37 @@ public class CommandOptionsTests
     }
 
     [Fact]
+    public void Default_SuppressOutputIsFalse()
+    {
+        var options = new CommandOptions();
+
+        options.SuppressOutput.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void SuppressOutput_CanBeSet()
+    {
+        var options = new CommandOptions();
+
+        options.SuppressOutput = true;
+
+        options.SuppressOutput.ShouldBeTrue();
+    }
+
+    [Fact]
     public void AllProperties_CanBeSetTogether()
     {
         var options = new CommandOptions
         {
             WorkingDirectory = "/app",
-            TimeoutMs = 60000
+            TimeoutMs = 60000,
+            SuppressOutput = true
         };
         options.Environment["CI"] = "true";
 
         options.WorkingDirectory.ShouldBe("/app");
         options.TimeoutMs.ShouldBe(60000);
+        options.SuppressOutput.ShouldBeTrue();
         options.Environment["CI"].ShouldBe("true");
     }
 }

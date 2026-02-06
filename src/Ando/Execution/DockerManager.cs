@@ -86,6 +86,22 @@ public class ContainerConfig
 }
 
 /// <summary>
+/// Result of checking Docker availability on the system.
+/// Used to provide specific, actionable error messages.
+/// </summary>
+public enum DockerAvailability
+{
+    /// <summary>Docker CLI is installed and daemon is running.</summary>
+    Available,
+
+    /// <summary>Docker CLI is not installed or not on PATH.</summary>
+    CliNotInstalled,
+
+    /// <summary>Docker CLI is installed but the daemon is not running.</summary>
+    DaemonNotRunning
+}
+
+/// <summary>
 /// Manages Docker container lifecycle for isolated build execution.
 /// Implements warm container pattern for fast subsequent builds.
 /// </summary>
@@ -124,24 +140,38 @@ public class DockerManager
     }
 
     /// <summary>
-    /// Checks if Docker is available on the system.
-    /// Verifies both that the CLI exists and the daemon is reachable.
+    /// Checks Docker availability with a detailed failure reason.
+    /// Distinguishes between CLI not installed and daemon not running
+    /// to provide actionable, platform-specific error messages.
     /// </summary>
-    public bool IsDockerAvailable()
+    public DockerAvailability CheckDockerAvailability()
     {
         if (!_processRunner.IsAvailable("docker"))
-            return false;
+            return DockerAvailability.CliNotInstalled;
 
-        // Also verify the daemon is reachable (CLI might exist but socket not mounted).
+        // CLI exists - verify the daemon is reachable.
+        // Use SuppressOutput to avoid dumping `docker info` output on failure.
         try
         {
-            var result = _processRunner.ExecuteAsync("docker", ["info"], new CommandOptions { TimeoutMs = 5000 }).GetAwaiter().GetResult();
-            return result.ExitCode == 0;
+            var result = _processRunner.ExecuteAsync("docker", ["info"],
+                new CommandOptions { TimeoutMs = 5000, SuppressOutput = true }).GetAwaiter().GetResult();
+            return result.ExitCode == 0
+                ? DockerAvailability.Available
+                : DockerAvailability.DaemonNotRunning;
         }
         catch
         {
-            return false;
+            return DockerAvailability.DaemonNotRunning;
         }
+    }
+
+    /// <summary>
+    /// Checks if Docker is available on the system.
+    /// Convenience wrapper around <see cref="CheckDockerAvailability"/>.
+    /// </summary>
+    public bool IsDockerAvailable()
+    {
+        return CheckDockerAvailability() == DockerAvailability.Available;
     }
 
     /// <summary>
@@ -306,6 +336,9 @@ public class DockerManager
 
         // Optional: Mount Docker socket for Docker-in-Docker scenarios.
         // Required when builds need to create Docker images.
+        // Note: /var/run/docker.sock works cross-platform. On Windows and macOS,
+        // Docker Desktop translates this path internally so containers can always
+        // use the Unix socket path regardless of the host OS.
         if (config.MountDockerSocket)
         {
             args.AddRange(["-v", "/var/run/docker.sock:/var/run/docker.sock"]);
@@ -380,6 +413,17 @@ public class DockerManager
     /// </summary>
     public async Task CopyProjectToContainerAsync(string containerId, string projectRoot)
     {
+        // Verify tar is available on the host before attempting to create the archive.
+        if (!_processRunner.IsAvailable("tar"))
+        {
+            var message = "The 'tar' command is required but was not found.";
+            if (OperatingSystem.IsWindows())
+            {
+                message += " Please ensure Windows 10 1803+ (which includes tar) or install tar via Git for Windows.";
+            }
+            throw new InvalidOperationException(message);
+        }
+
         // First, clean the workspace (except cache directories).
         // This ensures a fresh state for each build.
         await ExecuteInContainerAsync(containerId, "sh", ["-c",

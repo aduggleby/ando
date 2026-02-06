@@ -304,7 +304,7 @@ public class DindChecker
             _logger.Warning($"  - {op}");
         }
         _logger.Warning("");
-        _logger.Warning("This will mount /var/run/docker.sock into the build container.");
+        _logger.Warning("This will give the build container access to Docker.");
         _logger.Warning("");
 
         Console.Write("Enable DIND? (Y)es for this run, (a)lways (save to ando.config), Esc to exit: ");

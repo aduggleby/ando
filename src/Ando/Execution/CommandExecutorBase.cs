@@ -116,6 +116,7 @@ public abstract class CommandExecutorBase : ICommandExecutor
         var outputBuilder = new System.Text.StringBuilder();
 
         // Stream stdout lines to the logger as they arrive.
+        // When SuppressOutput is true, capture output but don't log it.
         process.OutputDataReceived += (sender, e) =>
         {
             if (e.Data == null)
@@ -124,13 +125,15 @@ public abstract class CommandExecutorBase : ICommandExecutor
             }
             else
             {
-                Logger.Info(e.Data);
+                if (!options.SuppressOutput)
+                    Logger.Info(e.Data);
                 outputBuilder.AppendLine(e.Data);
             }
         };
 
         // Stream stderr to the logger as well.
         // Many tools use stderr for progress output, so we treat it as info.
+        // When SuppressOutput is true, discard stderr silently.
         process.ErrorDataReceived += (sender, e) =>
         {
             if (e.Data == null)
@@ -139,7 +142,8 @@ public abstract class CommandExecutorBase : ICommandExecutor
             }
             else
             {
-                Logger.Info(e.Data);
+                if (!options.SuppressOutput)
+                    Logger.Info(e.Data);
             }
         };
 
@@ -218,6 +222,10 @@ public abstract class CommandExecutorBase : ICommandExecutor
     /// </summary>
     protected virtual void LogCommand(string command, string[] args, CommandOptions options)
     {
+        // Skip debug logging when output is suppressed (e.g., internal availability checks).
+        if (options.SuppressOutput)
+            return;
+
         // Build the full command string for logging
         var escapedArgs = args.Select(a => a.Contains(' ') ? $"\"{a}\"" : a);
         var fullCommand = $"{command} {string.Join(" ", escapedArgs)}";

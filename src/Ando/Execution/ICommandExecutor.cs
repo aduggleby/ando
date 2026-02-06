@@ -78,6 +78,14 @@ public class CommandOptions
     /// Output is not captured in this mode.
     /// </summary>
     public bool Interactive { get; set; } = false;
+
+    /// <summary>
+    /// Whether to suppress output from the command.
+    /// When true, stdout/stderr are captured but not streamed through the logger,
+    /// and debug logging of the command itself is skipped.
+    /// Useful for internal checks (e.g., `docker info`) where output is noise.
+    /// </summary>
+    public bool SuppressOutput { get; set; } = false;
 }
 
 /// <summary>

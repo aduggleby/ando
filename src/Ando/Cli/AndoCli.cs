@@ -350,16 +350,41 @@ public class AndoCli : IDisposable
             // Step 3: Set up Docker container for isolated execution.
             // All ANDO builds run in Docker containers for reproducibility.
             var dockerManager = new DockerManager(_logger);
-            if (!dockerManager.IsDockerAvailable())
+            var dockerAvailability = dockerManager.CheckDockerAvailability();
+            if (dockerAvailability != DockerAvailability.Available)
             {
-                _logger.Error("Docker is not available");
+                switch (dockerAvailability)
+                {
+                    case DockerAvailability.CliNotInstalled:
+                        _logger.Error("Docker is not installed.");
+                        _logger.Error("");
+                        _logger.Error("ANDO requires Docker to run builds in isolated containers.");
+                        _logger.Error("");
+                        _logger.Error("Install Docker:");
+                        _logger.Error(dockerManager.GetDockerInstallInstructions());
+                        _logger.Error("");
+                        _logger.Error("Or visit: https://docs.docker.com/get-docker/");
+                        break;
+
+                    case DockerAvailability.DaemonNotRunning:
+                        _logger.Error("Docker is installed but not running.");
+                        _logger.Error("");
+                        if (OperatingSystem.IsWindows())
+                        {
+                            _logger.Error("Please start Docker Desktop from the Start menu or system tray.");
+                        }
+                        else if (OperatingSystem.IsMacOS())
+                        {
+                            _logger.Error("Please start Docker Desktop from the Applications folder or menu bar.");
+                        }
+                        else
+                        {
+                            _logger.Error("Start the Docker daemon with:");
+                            _logger.Error("  sudo systemctl start docker");
+                        }
+                        break;
+                }
                 _logger.Error("");
-                _logger.Error("ANDO requires Docker to run builds in isolated containers.");
-                _logger.Error("");
-                _logger.Error("Install Docker:");
-                _logger.Error(dockerManager.GetDockerInstallInstructions());
-                _logger.Error("");
-                _logger.Error("Or visit: https://docs.docker.com/get-docker/");
                 return 3;
             }
 
