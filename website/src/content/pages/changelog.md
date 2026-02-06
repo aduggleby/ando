@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.72
+
+**2026-02-06**
+
+- Fix email sender address validation and improve email service reliability
+
 ## 0.9.71
 
 **2026-02-06**
