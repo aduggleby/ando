@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.68
+
+**2026-02-06**
+
+- Switch email delivery to Resend for improved reliability
+- Improve authentication error handling
+
 ## 0.9.66
 
 **2026-02-03**

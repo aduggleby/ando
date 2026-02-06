@@ -69,7 +69,7 @@ Ando.Server is a cloud-native CI/CD platform built on ASP.NET Core that orchestr
 │                 External Integrations                        │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
 │  │ GitHub API  │  │ Docker      │  │ Email Provider      │  │
-│  │ (App/OAuth) │  │ Engine      │  │ (Resend/Azure/SMTP) │  │
+│  │ (App/OAuth) │  │ Engine      │  │ (Resend/SMTP)       │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -420,9 +420,8 @@ Detects available profiles from build scripts.
 Pluggable email providers.
 
 **Providers:**
-1. **Resend** (default) - API-based transactional email
-2. **Azure** - Azure Communication Services
-3. **SMTP** - Direct SMTP connection
+1. **Resend** (default) - Transactional email via Resend .NET SDK (IResend)
+2. **SMTP** - Direct SMTP connection
 
 **Methods:**
 ```csharp
