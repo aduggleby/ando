@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.70
+
+**2026-02-06**
+
+- Redirect to dashboard after registration instead of showing a separate success page
+
 ## 0.9.69
 
 **2026-02-06**
