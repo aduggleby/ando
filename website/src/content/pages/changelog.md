@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.71
+
+**2026-02-06**
+
+- Fix email service registration for improved reliability
+- Normalize file permissions across the project
+
 ## 0.9.70
 
 **2026-02-06**
