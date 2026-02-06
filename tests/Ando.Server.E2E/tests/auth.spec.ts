@@ -9,7 +9,7 @@
  */
 
 import { test, expect } from '../fixtures/test-fixtures';
-import { LoginPage, DashboardPage } from '../pages';
+import { LoginPage, RegisterPage, DashboardPage } from '../pages';
 
 test.describe('Authentication', () => {
   test.describe('Unauthenticated Access', () => {
@@ -66,6 +66,52 @@ test.describe('Authentication', () => {
       await loginPage.goto();
 
       await expect(loginPage.registerLink).toBeVisible();
+    });
+  });
+
+  test.describe('Registration', () => {
+    test('displays register page correctly', async ({ page }) => {
+      const registerPage = new RegisterPage(page);
+      await registerPage.goto();
+
+      await registerPage.expectToBeVisible();
+      await registerPage.expectFormVisible();
+    });
+
+    test('register page has login link', async ({ page }) => {
+      const registerPage = new RegisterPage(page);
+      await registerPage.goto();
+
+      await expect(registerPage.loginLink).toBeVisible();
+    });
+
+    test('shows validation error for mismatched passwords', async ({ page }) => {
+      const registerPage = new RegisterPage(page);
+      await registerPage.goto();
+
+      await registerPage.emailInput.fill('test-validation@example.com');
+      await registerPage.passwordInput.fill('TestPass123');
+      await registerPage.confirmPasswordInput.fill('DifferentPass');
+      await registerPage.submitButton.click();
+
+      // MVC server-side validation shows error via asp-validation-for span
+      await registerPage.expectValidationError(/Passwords do not match/);
+    });
+
+    test('successful registration redirects to dashboard', async ({ page }) => {
+      const uniqueEmail = `e2e-register-${Date.now()}@example.com`;
+
+      const registerPage = new RegisterPage(page);
+      await registerPage.goto();
+      await registerPage.register(uniqueEmail, 'TestPassword1');
+
+      // Should redirect to dashboard after successful registration
+      await expect(page).toHaveURL('/', { timeout: 10000 });
+
+      const dashboard = new DashboardPage(page);
+      await dashboard.expectToBeVisible();
+
+      // No explicit cleanup needed — E2E database is ephemeral
     });
   });
 

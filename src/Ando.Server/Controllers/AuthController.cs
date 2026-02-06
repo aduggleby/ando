@@ -193,7 +193,9 @@ public class AuthController : Controller
             // Sign in the user immediately
             await _signInManager.SignInAsync(user, isPersistent: false);
 
-            return RedirectToAction("RegisterSuccess", new { email = model.Email, isFirst = isFirstUser });
+            // Redirect straight to dashboard — the email verification banner
+            // on the layout already reminds users to verify their email
+            return Redirect("/");
         }
 
         // Handle registration errors
