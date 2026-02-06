@@ -25,7 +25,7 @@ export const operations = [
   {
     group: "Ando",
     name: "Root",
-    desc: "The root path of the project (where build.csando is located). Supports path combining with the `/` operator.",
+    desc: 'The root path of the project (where build.csando is located). Returns <code>BuildPath</code>, not <code>DirectoryRef</code>. Use for path construction and string arguments. For operations requiring <code>DirectoryRef</code> (Npm, Cloudflare, etc.), use <code>Directory(".")</code> instead. Supports path combining with the <code>/</code> operator.',
     examples: ['var output = Root / "dist";', "Dotnet.Publish(app, o => o.Output(output));"],
     sourceFile: "Scripting/ScriptGlobals.cs",
   },
@@ -39,18 +39,23 @@ export const operations = [
   {
     group: "Ando",
     name: "Env",
-    desc: "Gets an environment variable. By default throws if not set. Pass `required: false` to return null instead.",
-    examples: ['var apiKey = Env("API_KEY");', 'var optional = Env("OPTIONAL_VAR", required: false);'],
+    desc: "Gets an environment variable. <strong>Global function</strong> — call as <code>Env()</code>, not <code>Ando.Env()</code>. By default throws if not set. Pass <code>required: false</code> to return null. The second parameter is a <code>bool</code>, not a default value — use null-coalescing (<code>??</code>) for defaults.",
+    examples: [
+      'var apiKey = Env("API_KEY");',
+      'var optional = Env("OPTIONAL_VAR", required: false);',
+      'var lang = Env("SITE_LANG", required: false) ?? "en";',
+    ],
     sourceFile: "Scripting/ScriptGlobals.cs",
   },
   {
     group: "Ando",
     name: "Directory",
-    desc: "Creates a reference to a directory. Used with Npm and Cloudflare operations. Supports path combining with the `/` operator.",
+    desc: 'Creates a <code>DirectoryRef</code> — required by operations that need a working directory (Npm, Cloudflare, Playwright, Ando.Build). <strong>Global function</strong> — call as <code>Directory()</code>. Note: <code>Root</code> returns <code>BuildPath</code>, not <code>DirectoryRef</code>. Use <code>Directory(".")</code> when an operation needs a reference to the project root. Supports path combining with the <code>/</code> operator.',
     examples: [
       'var frontend = Directory("./frontend");',
       "Npm.Ci(frontend);",
       'Cloudflare.PagesDeploy(frontend / "dist", "my-site");',
+      'Npm.Ci(Directory(".")); // Use Directory(".") instead of Root',
     ],
     sourceFile: "Scripting/ScriptGlobals.cs",
   },
@@ -58,7 +63,7 @@ export const operations = [
   {
     group: "Ando",
     name: "DefineProfile",
-    desc: "Defines a build profile that can be activated via CLI. Returns a `Profile` object that evaluates to `true` when active. Use `-p` or `--profile` CLI flag to activate.",
+    desc: "Defines a build profile that can be activated via CLI. Takes a <strong>single argument</strong> (the profile name). Returns a <code>Profile</code> object with implicit <code>bool</code> conversion — use directly in <code>if</code> statements. There is no <code>HasProfile()</code> or <code>Profile()</code> function. Use <code>-p</code> or <code>--profile</code> CLI flag to activate.",
     examples: [
       'var release = DefineProfile("release");\nvar publish = DefineProfile("publish");\n\nDotnet.Build(app);\n\nif (release) {\n  Git.Tag("v1.0.0");\n  GitHub.CreateRelease(o => o.WithTag("v1.0.0"));\n}',
       "// CLI usage:\n// ando -p release\n// ando -p publish,release",

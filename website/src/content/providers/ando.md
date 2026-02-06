@@ -6,27 +6,66 @@ provider: Ando
 
 ## Globals
 
-These globals are available in all build.csando scripts without any prefix or import.
+These globals are available in all build.csando scripts without any prefix or import. `Env()`, `Directory()`, and `DefineProfile()` are **global functions** — call them directly, not as methods on the `Ando` object.
 
 ```csharp
-// Directory reference
+// Directory reference (returns DirectoryRef)
 var frontend = Directory("./frontend");
 
-// Path construction with / operator
+// Path construction with / operator (Root returns BuildPath)
 var output = Root / "dist";
 var cache = Temp / "build-cache";
 
-// Access environment variables
+// Access environment variables (global function, not Ando.Env)
 var dbUrl = Env("DATABASE_URL");
 var apiKey = Env("API_KEY", required: false);
+var lang = Env("SITE_LANG", required: false) ?? "en";
 
 // Use regular C# variables for custom values
 var buildNumber = "123";
 ```
 
+## Environment Variables
+
+The `Env()` function retrieves environment variables. The second parameter is `required:` (a `bool`), NOT a default value string.
+
+```csharp
+// Required (default) - throws if not set
+var apiKey = Env("API_KEY");
+
+// Optional - returns null if not set
+var optional = Env("OPTIONAL_VAR", required: false);
+
+// Optional with default value - use null-coalescing (??)
+var lang = Env("SITE_LANG", required: false) ?? "en";
+
+// WRONG: second parameter is bool, not a default value
+// var lang = Env("SITE_LANG", "en");  // Compile error!
+```
+
+There is no `SetEnv()` function. Set environment variables via `.env.ando` files, OS environment, or CI/CD configuration.
+
+## BuildPath vs DirectoryRef
+
+ANDO has two path types. Operations like `Npm.Ci()`, `Cloudflare.PagesDeploy()`, `Playwright.Test()`, and `Ando.Build()` require `DirectoryRef`, not `BuildPath`.
+
+```csharp
+// Root returns BuildPath - use for path construction
+var outputPath = Root / "dist";
+Dotnet.Publish(app, o => o.Output(outputPath));  // OK: accepts string/BuildPath
+
+// Directory() returns DirectoryRef - use for operations
+var frontend = Directory("./frontend");
+Npm.Ci(frontend);  // OK: requires DirectoryRef
+
+// WRONG: Npm.Ci(Root) - BuildPath is not DirectoryRef
+// Use Directory(".") to reference the project root as DirectoryRef:
+Npm.Ci(Directory("."));  // OK
+```
+
 ## Profiles
 
-Profiles allow conditional execution of build steps. Define profiles at the top of your script and activate them via the `-p` CLI flag.
+Profiles allow conditional execution of build steps. `DefineProfile()` takes a **single argument** (the name) and returns a `Profile` with implicit `bool` conversion. There is no `HasProfile()`, `HasAnyProfile()`, or `Profile()` function.
 
 ```csharp
 // Define profiles at the top of your build.csando

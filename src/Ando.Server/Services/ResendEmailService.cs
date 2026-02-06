@@ -1,35 +1,34 @@
 // =============================================================================
 // ResendEmailService.cs
 //
-// Summary: Email service implementation using Resend API.
+// Summary: Email service implementation using Resend SDK.
 //
-// Sends transactional emails via the Resend API (https://resend.com).
+// Sends transactional emails via the Resend .NET SDK (https://resend.com).
 // Inherits Razor view rendering from BaseEmailService.
 //
 // Design Decisions:
-// - Uses HttpClient for API calls (configured in DI)
+// - Uses official Resend NuGet SDK (IResend) instead of raw HttpClient
 // - API key from configuration determines if emails are sent
 // - Gracefully skips sending if not configured
 // =============================================================================
 
-using System.Net.Http.Headers;
-using System.Text.Json;
 using Ando.Server.Configuration;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.Extensions.Options;
+using Resend;
 
 namespace Ando.Server.Services;
 
 /// <summary>
-/// Email service implementation using Resend API.
+/// Email service implementation using Resend SDK.
 /// </summary>
 public class ResendEmailService : BaseEmailService
 {
-    private readonly HttpClient _httpClient;
+    private readonly IResend _resendClient;
 
     public ResendEmailService(
-        IHttpClientFactory httpClientFactory,
+        IResend resendClient,
         IOptions<EmailSettings> settings,
         IRazorViewEngine viewEngine,
         ITempDataProvider tempDataProvider,
@@ -37,7 +36,7 @@ public class ResendEmailService : BaseEmailService
         ILogger<ResendEmailService> logger)
         : base(settings, viewEngine, tempDataProvider, serviceProvider, logger)
     {
-        _httpClient = httpClientFactory.CreateClient("Resend");
+        _resendClient = resendClient;
     }
 
     /// <inheritdoc />
@@ -53,34 +52,17 @@ public class ResendEmailService : BaseEmailService
 
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Post, "emails");
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-
-            var body = new
+            var message = new EmailMessage
             {
-                from = GetFromString(),
-                to = new[] { to },
-                subject,
-                html = htmlBody
+                From = GetFromString(),
+                Subject = subject,
+                HtmlBody = htmlBody
             };
+            message.To.Add(to);
 
-            request.Content = new StringContent(
-                JsonSerializer.Serialize(body),
-                System.Text.Encoding.UTF8,
-                "application/json");
+            await _resendClient.EmailSendAsync(message);
 
-            var response = await _httpClient.SendAsync(request);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                var error = await response.Content.ReadAsStringAsync();
-                Logger.LogError("Failed to send email via Resend: {Status} - {Error}",
-                    response.StatusCode, error);
-            }
-            else
-            {
-                Logger.LogInformation("Sent email via Resend to {To}: {Subject}", to, subject);
-            }
+            Logger.LogInformation("Sent email via Resend to {To}: {Subject}", to, subject);
         }
         catch (Exception ex)
         {

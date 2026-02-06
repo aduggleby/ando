@@ -218,22 +218,125 @@ Full documentation: https://andobuild.com/hooks
 - No `using` statements needed - namespaces are pre-imported
 - Operations register steps that execute in order
 
+## Scripting Basics
+
+Build scripts are C# code executed via Roslyn scripting. Everything in the script runs at the top level (no class or method wrappers needed). The following are available as **globals** — no prefix or import required.
+
+### Global Functions (NOT on the Ando object)
+
+These are standalone functions, NOT methods on the `Ando` object:
+
+```csharp
+// CORRECT - these are global functions:
+var dir = Directory("./frontend");
+var key = Env("API_KEY");
+var release = DefineProfile("release");
+
+// WRONG - these are NOT on the Ando object:
+// var dir = Ando.Directory("./frontend");  // ERROR
+// var key = Ando.Env("API_KEY");           // ERROR
+```
+
+### Environment Variables (Env)
+
+The `Env()` function gets environment variables. Its signature is:
+```
+string? Env(string name, bool required = true)
+```
+
+Three usage patterns:
+```csharp
+// 1. Required (default) - throws if not set
+var apiKey = Env("API_KEY");
+
+// 2. Optional - returns null if not set
+var optional = Env("OPTIONAL_VAR", required: false);
+
+// 3. Optional with default - use null-coalescing
+var lang = Env("SITE_LANG", required: false) ?? "en";
+```
+
+**Important:** The second parameter is `required:` (a bool), NOT a default value. `Env("NAME", "default")` will NOT compile — use `Env("NAME", required: false) ?? "default"` instead.
+
+There is no `SetEnv()` function. Environment variables must be set externally via `.env.ando` files, the OS environment, or CI/CD configuration.
+
+### Two Path Types: BuildPath vs DirectoryRef
+
+ANDO has two path types that serve different purposes:
+
+| Type | Created By | Used For |
+|------|-----------|----------|
+| `BuildPath` | `Root`, `Temp`, path `/` operator | Path construction and string arguments |
+| `DirectoryRef` | `Directory()` function | Operations that need a working directory (Npm, Cloudflare, Playwright, Ando.Build) |
+
+```csharp
+// BuildPath - for path construction and string arguments
+var outputPath = Root / "dist";              // BuildPath
+Dotnet.Publish(app, o => o.Output(outputPath)); // OK: accepts string/BuildPath
+
+// DirectoryRef - for operations that need a working directory
+var frontend = Directory("./frontend");      // DirectoryRef
+Npm.Ci(frontend);                            // OK: requires DirectoryRef
+
+// WRONG: Root is BuildPath, not DirectoryRef
+// Npm.Ci(Root);                             // ERROR: type mismatch
+// Use Directory(".") instead:
+Npm.Ci(Directory("."));                      // OK
+```
+
+`DirectoryRef` also supports the `/` operator:
+```csharp
+var site = Directory("./frontend");
+Cloudflare.PagesDeploy(site / "dist", "my-project");  // DirectoryRef / string = DirectoryRef
+```
+
+### Profiles
+
+Profiles allow conditional execution. `DefineProfile()` takes a single argument (the name) and returns a `Profile` object that you **must capture in a variable**. The `Profile` object has implicit `bool` conversion — it evaluates to `true` when that profile is active (activated via `-p` CLI flag):
+
+```csharp
+// Define at the top of your script — capture the return value
+var release = DefineProfile("release");     // Returns Profile object
+var publish = DefineProfile("publish");
+
+// The Profile variable evaluates to true/false in if statements
+if (release) {
+    Git.Tag("v1.0.0");         // Only runs when: ando -p release
+}
+
+if (publish) {
+    Nuget.Push(app);            // Only runs when: ando -p publish
+}
+
+// Activate via CLI:
+// ando -p release
+// ando -p publish,release  (multiple profiles)
+```
+
+**Note:** There is no `HasProfile()`, `HasAnyProfile()`, or `Profile("name")` function. The only way to define and check profiles is `DefineProfile()` + `if (profile)`.
+
 ## Global Variables
+
+### Path Globals
 
 | Variable | Type | Description |
 |----------|------|-------------|
-| Root | BuildPath | Project root directory. Supports `/` operator for paths. |
-| Temp | BuildPath | Temporary files directory (root/.ando/tmp). Supports `/` operator for paths. |
-| Env | Function | Get environment variable. Throws if not set by default. Use Env("NAME", required: false) to return null. |
+| Root | BuildPath | Project root directory (where build.csando is). Supports `/` operator for path joining. Use for path construction, NOT for operations requiring DirectoryRef. |
+| Temp | BuildPath | Temporary files directory (root/.ando/tmp). Supports `/` operator for path joining. |
+
+### Operation Objects
+
+| Variable | Type | Description |
+|----------|------|-------------|
 | Dotnet | DotnetOperations | .NET CLI operations (build, test, publish). |
 | Ef | EfOperations | Entity Framework Core operations. |
-| Npm | NpmOperations | npm operations (install, run, ci). |
+| Npm | NpmOperations | npm operations (install, run, ci). Requires DirectoryRef arguments. |
 | Node | NodeInstallOperations | Node.js installation. |
 | Azure | AzureOperations | Azure CLI authentication. |
 | Bicep | BicepOperations | Azure Bicep deployments. |
 | AppService | AppServiceOperations | Azure App Service deployments. |
 | Functions | FunctionsOperations | Azure Functions deployments. |
-| Cloudflare | CloudflareOperations | Cloudflare Pages deployments. |
+| Cloudflare | CloudflareOperations | Cloudflare Pages deployments. Requires DirectoryRef arguments. |
 | Nuget | NugetOperations | NuGet package operations (pack, push). |
 | Docker | DockerOperations | Docker image building. |
 | Docfx | DocfxOperations | DocFX API documentation generation. |
@@ -241,13 +344,15 @@ Full documentation: https://andobuild.com/hooks
 | GitHub | GitHubOperations | GitHub releases, PRs, and container registry. |
 | Ando | AndoOperations | Build configuration, artifacts, and nested builds. |
 | Log | LogOperations | Logging (Info, Warning, Error, Debug). |
+| Playwright | PlaywrightOperations | Playwright E2E testing. Requires DirectoryRef arguments. |
 
 ## Global Functions
 
-| Function | Returns | Description |
-|----------|---------|-------------|
-| Directory(path?) | DirectoryRef | Create a directory reference. Defaults to "." if no path. |
-| DefineProfile(name) | Profile | Define a build profile for conditional execution. Activate with `-p name`. |
+| Function | Signature | Returns | Description |
+|----------|-----------|---------|-------------|
+| Directory | Directory(path = ".") | DirectoryRef | Create a directory reference for use with operations like Npm, Cloudflare, Playwright, and Ando.Build. |
+| Env | Env(name, required = true) | string? | Get environment variable. Throws if not set by default. Use `Env("NAME", required: false) ?? "default"` for optional with default. |
+| DefineProfile | DefineProfile(name) | Profile | Define a build profile. Returns Profile with implicit bool conversion. Activate with `-p name`. |
 
 ## Common Patterns
 
@@ -509,13 +614,15 @@ PlaywrightTestOptions:
 - GitHub.PushImage(imageName, options?) - **Deprecated**: Use Docker.Build with WithPush() instead for atomic builds.
 
 ### Profiles
-Profiles allow conditional execution of build steps:
+Profiles allow conditional execution of build steps. `DefineProfile()` returns a `Profile` object — capture it in a variable. It evaluates to `true` when that profile is active:
 ```csharp
+// Capture the Profile in a variable
 var release = DefineProfile("release");
 
 Dotnet.Build(app);
 Dotnet.Test(tests);
 
+// Profile evaluates to true when activated via -p flag
 if (release) {
     Git.Tag("v1.0.0");
     GitHub.CreateRelease(o => o
@@ -647,6 +754,18 @@ Activate with CLI: `ando -p release` or `ando -p publish,release`
 6. Options are configured via fluent lambdas: o => o.Output(...).WithRuntime(...)
 7. Always call EnsureAuthenticated() before cloud operations
 8. Use `ando verify` to check scripts without executing
+
+## Common Mistakes
+
+| Mistake | Error | Fix |
+|---------|-------|-----|
+| `Ando.Env("NAME")` | CS1061: 'AndoOperations' does not contain 'Env' | Use `Env("NAME")` — it's a global function |
+| `Env("NAME", "default")` | CS1503: cannot convert from 'string' to 'bool' | Use `Env("NAME", required: false) ?? "default"` |
+| `DefineProfile("name", "desc")` | CS1501: No overload takes 2 arguments | Use `DefineProfile("name")` — single argument only |
+| `HasProfile("name")` | CS0103: 'HasProfile' does not exist | Use `var p = DefineProfile("name"); if (p) { ... }` |
+| `Ando.SetEnv("NAME", "value")` | CS1061: 'AndoOperations' does not contain 'SetEnv' | Set env vars via `.env.ando` files or OS environment |
+| `Npm.Ci(Root)` | CS1503: cannot convert 'BuildPath' to 'DirectoryRef' | Use `Npm.Ci(Directory("."))` |
+| `Profile("name")` | CS0119: 'Profile' is a type | Use `DefineProfile("name")` to create profiles |
 
 ## API Documentation
 

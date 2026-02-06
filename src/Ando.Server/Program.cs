@@ -35,6 +35,7 @@ using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Resend;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -323,13 +324,18 @@ builder.Services.AddHttpClient("GitHub", client =>
     client.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
 });
 
-// Resend base URL is configurable to support Resend-compatible providers
-var resendBaseUrl = builder.Configuration["Email:Resend:BaseUrl"] ?? "https://api.resend.com/";
-builder.Services.AddHttpClient("Resend", client =>
+// Resend SDK (supports custom ApiUrl for Resend-compatible providers like SelfMX)
+var emailSettings = builder.Configuration
+    .GetSection(EmailSettings.SectionName)
+    .Get<EmailSettings>() ?? new EmailSettings();
+builder.Services.AddOptions();
+builder.Services.AddHttpClient<ResendClient>();
+builder.Services.Configure<ResendClientOptions>(o =>
 {
-    client.BaseAddress = new Uri(resendBaseUrl);
-    client.DefaultRequestHeaders.Add("Accept", "application/json");
+    o.ApiToken = emailSettings.Resend.ApiKey;
+    o.ApiUrl = emailSettings.Resend.BaseUrl.TrimEnd('/');
 });
+builder.Services.AddTransient<IResend, ResendClient>();
 
 // =============================================================================
 // Custom Services
@@ -368,7 +374,7 @@ builder.Services.AddScoped<IEmailService>(sp =>
 
         // Default to Resend
         _ => new ResendEmailService(
-            sp.GetRequiredService<IHttpClientFactory>(),
+            sp.GetRequiredService<IResend>(),
             settings, viewEngine, tempDataProvider, sp,
             loggerFactory.CreateLogger<ResendEmailService>())
     };
