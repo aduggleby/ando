@@ -329,13 +329,16 @@ var emailSettings = builder.Configuration
     .GetSection(EmailSettings.SectionName)
     .Get<EmailSettings>() ?? new EmailSettings();
 builder.Services.AddOptions();
-builder.Services.Configure<ResendClientOptions>(o =>
+// Use factory pattern to create ResendClient with fresh HttpClient (avoids DI HttpClient issues)
+builder.Services.AddScoped<IResend>(sp =>
 {
-    o.ApiToken = emailSettings.Resend.ApiKey;
-    o.ApiUrl = emailSettings.Resend.BaseUrl.TrimEnd('/');
+    var options = new ResendClientOptions
+    {
+        ApiToken = emailSettings.Resend.ApiKey,
+        ApiUrl = emailSettings.Resend.BaseUrl?.TrimEnd('/') ?? "https://api.resend.com"
+    };
+    return ResendClient.Create(options);
 });
-// Register ResendClient with HttpClientFactory - this also registers IResend
-builder.Services.AddHttpClient<IResend, ResendClient>();
 
 // =============================================================================
 // Custom Services

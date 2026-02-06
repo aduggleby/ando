@@ -52,9 +52,11 @@ public class ResendEmailService : BaseEmailService
 
         try
         {
+            // Resend .NET SDK validates "From" as a raw email address (no display name).
+            // Use FromAddress directly to avoid client-side validation errors.
             var message = new EmailMessage
             {
-                From = GetFromString(),
+                From = Settings.FromAddress,
                 Subject = subject,
                 HtmlBody = htmlBody
             };
