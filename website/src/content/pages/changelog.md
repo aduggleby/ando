@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.69
+
+**2026-02-06**
+
+- Improve Docker availability checks with specific error messages
+
 ## 0.9.68
 
 **2026-02-06**

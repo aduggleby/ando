@@ -12,6 +12,12 @@ ando run
 
 **Runtime Compatibility:** ANDO is built for .NET 9 but runs on .NET 10+ thanks to major version roll-forward. You can use the latest .NET SDK without compatibility issues.
 
+## Prerequisites
+
+ANDO requires Docker to run builds in isolated containers. If Docker is not available, ANDO shows specific error messages:
+- Docker not installed: Shows installation instructions for your platform.
+- Docker daemon not running: Shows platform-specific instructions to start Docker Desktop (Windows/macOS) or the Docker daemon (Linux).
+
 ## CLI Commands
 
 - `ando` or `ando run` - Run the build script in a Docker container

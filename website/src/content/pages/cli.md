@@ -4,6 +4,13 @@ description: Command-line interface reference for the ANDO build tool.
 toc: true
 ---
 
+## Prerequisites
+
+ANDO requires **Docker** to run builds in isolated containers. If Docker is not available, ANDO shows specific error messages:
+
+- **Docker not installed** - Shows installation instructions for your platform with a link to the Docker website.
+- **Docker daemon not running** - Shows platform-specific instructions to start Docker Desktop (Windows/macOS) or the Docker daemon (Linux).
+
 ## Commands
 
 | Command | Description |
