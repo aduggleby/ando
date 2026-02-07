@@ -51,6 +51,9 @@ if (docs && !publish)
 var isOnServer = Env("ANDO_HOST_ROOT", required: false) != null;
 
 var project = Dotnet.Project("./src/Ando/Ando.csproj");
+// Included so `ando bump` (and therefore `ando release`) keeps the server assembly version in sync.
+// We don't build/publish the server here directly; the Docker build handles that.
+var serverProject = Dotnet.Project("./src/Ando.Server/Ando.Server.csproj");
 var testProject = Dotnet.Project("./tests/Ando.Tests/Ando.Tests.csproj");
 
 // Get version from the project file.

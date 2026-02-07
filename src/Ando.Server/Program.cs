@@ -133,8 +133,13 @@ builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
 builder.Services.AddAuthentication(options =>
     {
         // Prefer API tokens when present; otherwise fall back to Identity cookies.
+        // NOTE: AddIdentity sets DefaultAuthenticateScheme to the cookie scheme.
+        // If we don't override it here, Bearer/X-Api-Token will never be evaluated.
         options.DefaultScheme = ApiTokenAuthentication.PolicyScheme;
+        options.DefaultAuthenticateScheme = ApiTokenAuthentication.PolicyScheme;
         options.DefaultChallengeScheme = ApiTokenAuthentication.PolicyScheme;
+        // Keep sign-in operations (creating cookies) on the Identity cookie scheme.
+        options.DefaultSignInScheme = IdentityConstants.ApplicationScheme;
     })
     .AddPolicyScheme(ApiTokenAuthentication.PolicyScheme, "API token or cookie auth", options =>
     {
