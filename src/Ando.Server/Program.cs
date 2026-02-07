@@ -35,7 +35,6 @@ using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using Resend;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -324,20 +323,12 @@ builder.Services.AddHttpClient("GitHub", client =>
     client.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
 });
 
-// Resend SDK (supports custom ApiUrl for Resend-compatible providers like SelfMX)
-var emailSettings = builder.Configuration
-    .GetSection(EmailSettings.SectionName)
-    .Get<EmailSettings>() ?? new EmailSettings();
-builder.Services.AddOptions();
-// Use factory pattern to create ResendClient with fresh HttpClient (avoids DI HttpClient issues)
-builder.Services.AddScoped<IResend>(sp =>
+// Resend-compatible email API client (raw HttpClient; detailed failure logging is done in ResendEmailService)
+builder.Services.AddHttpClient("Resend", client =>
 {
-    var options = new ResendClientOptions
-    {
-        ApiToken = emailSettings.Resend.ApiKey,
-        ApiUrl = emailSettings.Resend.BaseUrl?.TrimEnd('/') ?? "https://api.resend.com"
-    };
-    return ResendClient.Create(options);
+    // Keep auth/register bounded even if the email provider is slow/down.
+    client.Timeout = TimeSpan.FromSeconds(15);
+    client.DefaultRequestHeaders.Add("User-Agent", "Ando-Server");
 });
 
 // =============================================================================
@@ -368,6 +359,7 @@ builder.Services.AddScoped<IEmailService>(sp =>
     var viewEngine = sp.GetRequiredService<IRazorViewEngine>();
     var tempDataProvider = sp.GetRequiredService<ITempDataProvider>();
     var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+    var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
 
     return settings.Value.Provider switch
     {
@@ -377,7 +369,7 @@ builder.Services.AddScoped<IEmailService>(sp =>
 
         // Default to Resend
         _ => new ResendEmailService(
-            sp.GetRequiredService<IResend>(),
+            httpClientFactory,
             settings, viewEngine, tempDataProvider, sp,
             loggerFactory.CreateLogger<ResendEmailService>())
     };

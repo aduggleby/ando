@@ -21,6 +21,8 @@ using Ando.Release;
 using Ando.Utilities;
 using Ando.Versioning;
 using Spectre.Console;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace Ando.Cli.Commands;
 
@@ -50,6 +52,9 @@ public class ReleaseCommand
     /// <returns>Exit code: 0 for success, 1 for errors.</returns>
     public async Task<int> ExecuteAsync(bool all = false, bool dryRun = false, BumpType bumpType = BumpType.Patch)
     {
+        var startedAt = DateTimeOffset.Now;
+        var sw = Stopwatch.StartNew();
+
         try
         {
             // 1. Check prerequisites.
@@ -140,7 +145,7 @@ public class ReleaseCommand
                 return buildResult;
             }
 
-            var exitCode = await ExecuteStepsAsync(selectedSteps, bumpType, repoRoot);
+            var exitCode = await ExecuteStepsAsync(selectedSteps, bumpType, repoRoot, version, bumpType, startedAt, sw);
 
             // Run post-hooks with exit code so they can check success/failure.
             var postHookContext = hookContext with { ExitCode = exitCode };
@@ -152,6 +157,10 @@ public class ReleaseCommand
         {
             _logger.Error($"Error: {ex.Message}");
             return 1;
+        }
+        finally
+        {
+            sw.Stop();
         }
     }
 
@@ -344,7 +353,14 @@ public class ReleaseCommand
         Console.SetCursorPosition(0, Console.CursorTop - linesToClear);
     }
 
-    private async Task<int> ExecuteStepsAsync(List<ReleaseStep> steps, BumpType bumpType, string repoRoot)
+    private async Task<int> ExecuteStepsAsync(
+        List<ReleaseStep> steps,
+        BumpType bumpType,
+        string repoRoot,
+        string originalVersion,
+        BumpType requestedBumpType,
+        DateTimeOffset startedAt,
+        Stopwatch sw)
     {
         var stepNumber = 0;
         var totalSteps = steps.Count;
@@ -378,14 +394,34 @@ public class ReleaseCommand
         }
 
         // Show summary.
+        static string Esc(string value) => Markup.Escape(value);
+
+        var finishedAt = DateTimeOffset.Now;
         var newVersion = GetCurrentVersion(repoRoot);
         var commitHash = await _git.GetCurrentCommitShortAsync();
         var branch = await _git.GetCurrentBranchAsync();
 
-        AnsiConsole.MarkupLine("[green bold]Release complete![/]");
-        AnsiConsole.MarkupLine($"  Version: [cyan]{newVersion}[/]");
-        AnsiConsole.MarkupLine($"  Commit: [cyan]{commitHash}[/]");
-        AnsiConsole.MarkupLine($"  Branch: [cyan]{branch}[/]");
+        var stepList = string.Join(", ", steps.Select(s => s.Id));
+        var bumpApplied = steps.Any(s => s.Id == "bump");
+        var bumpText = bumpApplied
+            ? $"{originalVersion} -> {newVersion} ({requestedBumpType.ToString().ToLowerInvariant()})"
+            : $"skipped (requested: {requestedBumpType.ToString().ToLowerInvariant()})";
+
+        var publishRan = steps.Any(s => s.Id == "publish");
+        var profilesUsed = publishRan ? "publish" : "none";
+
+        AnsiConsole.MarkupLine("[green bold]Release completed.[/]");
+        AnsiConsole.MarkupLine($"  Repo: [cyan]{Esc(repoRoot)}[/]");
+        AnsiConsole.MarkupLine($"  Steps: [cyan]{Esc(stepList)}[/]");
+        AnsiConsole.MarkupLine($"  Bump: [cyan]{Esc(bumpText)}[/]");
+        AnsiConsole.MarkupLine($"  Profiles used: [cyan]{Esc(profilesUsed)}[/]");
+        AnsiConsole.MarkupLine($"  Version: [cyan]{Esc(newVersion)}[/]");
+        AnsiConsole.MarkupLine($"  Commit: [cyan]{Esc(commitHash)}[/]");
+        AnsiConsole.MarkupLine($"  Branch: [cyan]{Esc(branch)}[/]");
+        AnsiConsole.MarkupLine($"  Duration: [cyan]{Esc(sw.Elapsed.ToString())}[/]");
+        AnsiConsole.MarkupLine($"  Started: [cyan]{Esc(startedAt.ToString("yyyy-MM-dd HH:mm:ss zzz"))}[/]");
+        AnsiConsole.MarkupLine($"  Finished: [cyan]{Esc(finishedAt.ToString("yyyy-MM-dd HH:mm:ss zzz"))}[/]");
+        AnsiConsole.MarkupLine($"  Runtime: [cyan]{Esc(RuntimeInformation.FrameworkDescription)}[/] on [cyan]{Esc(RuntimeInformation.OSDescription.Trim())}[/] ([cyan]{Esc(RuntimeInformation.ProcessArchitecture.ToString())}[/])");
 
         return 0;
     }
