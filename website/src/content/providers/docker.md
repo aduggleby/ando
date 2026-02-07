@@ -148,6 +148,7 @@ Docker.Build("Dockerfile", o => o.WithTag("myapp:dev"));
 
 - Docker operations require Docker to be installed on the host machine.
 - `Docker.Build` requires the `--dind` flag (Docker-in-Docker mode).
+- **CI Server**: When running on the ANDO CI Server, the Docker CLI is automatically installed in DIND build containers. `Docker.Install()` is still recommended in build scripts for portability (it is a no-op if Docker is already present).
 - Use `WithPush()` for atomic build+push to ensure all tags point to the same manifest.
 - If the dockerfile parameter is a directory, ANDO assumes the Dockerfile is inside that directory.
 - For multi-platform builds, ANDO automatically creates a buildx builder named `ando-builder` if one doesn't exist.

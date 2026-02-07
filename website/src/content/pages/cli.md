@@ -48,6 +48,8 @@ To skip the prompt, use the `--dind` flag, add `dind: true` to your `ando.config
 
 **Child build inheritance:** When a parent build enables DIND, child builds invoked via `Ando.Build()` automatically inherit the DIND setting. The parent passes `ANDO_DIND=1` to both the container environment and the host process environment, so child builds won't prompt again for DIND mode. (The host process environment is needed because `Ando.Build` spawns child `ando` processes on the host.)
 
+**CI Server:** When running on the ANDO CI Server, the Docker CLI is automatically installed in the build container for DIND builds. You do not need to call `Docker.Install()` in your build script — though it is harmless to include.
+
 ## Configuration File
 
 ANDO supports an optional `ando.config` file in the project root for persisting settings.

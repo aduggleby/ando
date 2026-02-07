@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.80
+
+**2026-02-07**
+
+- Automatically install Docker CLI in build containers when Docker-in-Docker mode is enabled
+
 ## 0.9.79
 
 **2026-02-07**

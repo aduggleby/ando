@@ -73,6 +73,10 @@ Server__BaseUrl=https://ci.yourdomain.com
 
 The URL must include the scheme (`https://`) and should not have a trailing slash.
 
+### Docker-in-Docker Builds
+
+When a build requires DIND mode (e.g., `Docker.Build`, `Docker.Push`), the server automatically installs the Docker CLI inside the build container if it is not already present. This supports Alpine and Debian/Ubuntu-based images. You do not need to call `Docker.Install()` in your build script when running on the CI server — though it is harmless to include.
+
 ### Docker Security
 
 By default, ANDO CI Server validates that Docker is running in rootless mode for enhanced security. On platforms where Docker runs as root and cannot be configured for rootless mode (such as TrueNAS SCALE), you can bypass this check:
