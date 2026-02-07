@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.74
+
+**2026-02-07**
+
+- Improve email delivery failure logging
+
 ## 0.9.73
 
 **2026-02-07**
