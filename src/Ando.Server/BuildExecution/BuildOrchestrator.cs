@@ -524,6 +524,10 @@ public class BuildOrchestrator : IBuildOrchestrator
         };
 
         startInfo.ArgumentList.Add("exec");
+        // docker exec does not reliably inherit the container's working directory.
+        // Running from /workspace ensures ando can find build.csando in the repo root.
+        startInfo.ArgumentList.Add("-w");
+        startInfo.ArgumentList.Add("/workspace");
         startInfo.ArgumentList.Add(containerId);
         startInfo.ArgumentList.Add("/tmp/ando-tools/ando");
         startInfo.ArgumentList.Add("run");
@@ -627,6 +631,9 @@ public class BuildOrchestrator : IBuildOrchestrator
         };
 
         startInfo.ArgumentList.Add("exec");
+        // Keep exec commands consistent with the repo root inside the build container.
+        startInfo.ArgumentList.Add("-w");
+        startInfo.ArgumentList.Add("/workspace");
         startInfo.ArgumentList.Add(containerId);
         foreach (var a in argsAfterContainerId)
         {
