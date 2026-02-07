@@ -34,6 +34,7 @@ public class AuthController : Controller
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly AndoDbContext _db;
     private readonly IEmailService _emailService;
+    private readonly IUrlService _urlService;
     private readonly ILogger<AuthController> _logger;
 
     public AuthController(
@@ -41,12 +42,14 @@ public class AuthController : Controller
         SignInManager<ApplicationUser> signInManager,
         AndoDbContext db,
         IEmailService emailService,
+        IUrlService urlService,
         ILogger<AuthController> logger)
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _db = db;
         _emailService = emailService;
+        _urlService = urlService;
         _logger = logger;
     }
 
@@ -274,11 +277,13 @@ public class AuthController : Controller
         {
             // Generate password reset token
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-            var resetUrl = Url.Action(
+            var resetPath = Url.Action(
                 "ResetPassword",
                 "Auth",
-                new { email = model.Email, token },
-                Request.Scheme);
+                new { email = model.Email, token });
+            var resetUrl = _urlService.BuildUrl(
+                resetPath ?? "/auth/reset-password",
+                HttpContext);
 
             // Send password reset email
             try
@@ -496,8 +501,10 @@ public class AuthController : Controller
         var verifyUrl = Url.Action(
             "VerifyEmail",
             "Auth",
-            new { userId = user.Id.ToString(), token },
-            Request.Scheme);
+            new { userId = user.Id.ToString(), token });
+        var verifyLink = _urlService.BuildUrl(
+            verifyUrl ?? "/auth/verify-email",
+            HttpContext);
 
         try
         {
@@ -507,7 +514,7 @@ public class AuthController : Controller
                 $"""
                 <h2>Welcome to Ando CI!</h2>
                 <p>Please verify your email address by clicking the link below:</p>
-                <p><a href="{verifyUrl}">Verify Email</a></p>
+                <p><a href="{verifyLink}">Verify Email</a></p>
                 <p>If you didn't create an account, you can safely ignore this email.</p>
                 """);
 

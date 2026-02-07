@@ -64,8 +64,10 @@ public class UrlService : IUrlService
             return _serverSettings.BaseUrl.TrimEnd('/');
         }
 
-        // Fall back to request-based URL for development
-        if (httpContext != null && _environment.IsDevelopment())
+        // Fall back to request-based URL for non-production environments.
+        // Production should always set Server:BaseUrl (validated on startup) to avoid
+        // generating internal/container hostnames behind reverse proxies.
+        if (httpContext != null && !_environment.IsProduction())
         {
             return $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
         }

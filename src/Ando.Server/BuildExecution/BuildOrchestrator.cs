@@ -18,6 +18,7 @@
 // =============================================================================
 
 using System.Diagnostics;
+using System.Reflection;
 using Ando.Server.Configuration;
 using Ando.Server.Data;
 using Ando.Server.GitHub;
@@ -166,6 +167,7 @@ public class BuildOrchestrator : IBuildOrchestrator
                     GetBuildUrl(build));
             }
 
+            buildLogger.Info($"Server Ando version: {GetServerAndoVersion()}");
             buildLogger.Info($"Starting build for {project.RepoFullName}");
             buildLogger.Info($"Branch: {build.Branch}, Commit: {build.ShortCommitSha}");
 
@@ -495,6 +497,23 @@ public class BuildOrchestrator : IBuildOrchestrator
             ServerBuildLogger logger,
             CancellationToken cancellationToken)
     {
+        // Ensure the Ando CLI exists inside the build container.
+        // The build container image is user-configurable and typically is a plain .NET SDK image.
+        // Install/update the latest Ando .NET tool on every build for correctness over caching.
+        logger.Info("Installing Ando CLI (latest)...");
+        var toolOk = await EnsureAndoCliInstalledAsync(containerId, logger, cancellationToken);
+        if (!toolOk)
+        {
+            return (false, 0, 0, 1, "Failed to install Ando CLI in build container");
+        }
+
+        // Log the installed version for debugging.
+        await RunDockerExecAsync(
+            containerId,
+            ["/tmp/ando-tools/ando", "--version"],
+            logger,
+            cancellationToken);
+
         // Execute ando build inside container
         var startInfo = new ProcessStartInfo
         {
@@ -506,8 +525,7 @@ public class BuildOrchestrator : IBuildOrchestrator
 
         startInfo.ArgumentList.Add("exec");
         startInfo.ArgumentList.Add(containerId);
-        startInfo.ArgumentList.Add("dotnet");
-        startInfo.ArgumentList.Add("/ando/ando.dll");
+        startInfo.ArgumentList.Add("/tmp/ando-tools/ando");
         startInfo.ArgumentList.Add("run");
         startInfo.ArgumentList.Add("--dind"); // Enable Docker-in-Docker for nested builds
         startInfo.ArgumentList.Add("--read-env"); // Auto-load .env files without prompting (non-interactive)
@@ -562,6 +580,98 @@ public class BuildOrchestrator : IBuildOrchestrator
 
         // TODO: Parse step counts from output or get from build log
         return (success, 0, 0, success ? 0 : 1, success ? null : "Build failed");
+    }
+
+    private static string GetServerAndoVersion()
+    {
+        // The server references the Ando project, so this reflects the Ando assembly version
+        // that the server is running with (not the build container's tool version).
+        var asm = typeof(Ando.Logging.LogLevel).Assembly;
+        var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        if (!string.IsNullOrWhiteSpace(info))
+        {
+            return info;
+        }
+
+        return asm.GetName().Version?.ToString() ?? "unknown";
+    }
+
+    private async Task<bool> EnsureAndoCliInstalledAsync(
+        string containerId,
+        ServerBuildLogger logger,
+        CancellationToken cancellationToken)
+    {
+        // Use a fixed tool-path to avoid PATH/global tool issues.
+        // Prefer update (fast when already installed), fall back to install.
+        var shellCmd = "dotnet tool update --tool-path /tmp/ando-tools ando || dotnet tool install --tool-path /tmp/ando-tools ando";
+        var exitCode = await RunDockerExecAsync(
+            containerId,
+            ["sh", "-c", shellCmd],
+            logger,
+            cancellationToken);
+        return exitCode == 0;
+    }
+
+    private async Task<int> RunDockerExecAsync(
+        string containerId,
+        IReadOnlyList<string> argsAfterContainerId,
+        ServerBuildLogger logger,
+        CancellationToken cancellationToken)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "docker",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+
+        startInfo.ArgumentList.Add("exec");
+        startInfo.ArgumentList.Add(containerId);
+        foreach (var a in argsAfterContainerId)
+        {
+            startInfo.ArgumentList.Add(a);
+        }
+
+        // Log the command for debugging
+        var cmdArgs = string.Join(" ", startInfo.ArgumentList.Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
+        _logger.LogInformation("RunDockerExec: docker {Args}", cmdArgs);
+
+        using var process = Process.Start(startInfo);
+        if (process == null)
+        {
+            logger.Output("Failed to start docker exec process");
+            return 1;
+        }
+
+        var outputTask = Task.Run(async () =>
+        {
+            while (!process.StandardOutput.EndOfStream)
+            {
+                var line = await process.StandardOutput.ReadLineAsync(cancellationToken);
+                if (line != null)
+                {
+                    logger.Output(line);
+                }
+            }
+        }, cancellationToken);
+
+        var errorTask = Task.Run(async () =>
+        {
+            while (!process.StandardError.EndOfStream)
+            {
+                var line = await process.StandardError.ReadLineAsync(cancellationToken);
+                if (line != null)
+                {
+                    logger.Output(line);
+                }
+            }
+        }, cancellationToken);
+
+        await process.WaitForExitAsync(cancellationToken);
+        await Task.WhenAll(outputTask, errorTask);
+
+        return process.ExitCode;
     }
 
     /// <summary>
