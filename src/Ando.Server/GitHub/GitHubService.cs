@@ -143,8 +143,9 @@ public class GitHubService : IGitHubService
                 return false;
             }
 
-            // Checkout specific commit
-            return await RunGitCommandAsync(targetDirectory, "checkout", commitSha);
+            // Checkout the specific commit *on the branch* so the working copy is not left in
+            // detached-HEAD state. This matters for publish profiles that include Git.Push.
+            return await RunGitCommandAsync(targetDirectory, "checkout", "-B", branch, commitSha);
         }
         catch (Exception ex)
         {
@@ -180,8 +181,9 @@ public class GitHubService : IGitHubService
                 return false;
             }
 
-            // Checkout specific commit
-            return await RunGitCommandAsync(repoDirectory, "checkout", commitSha);
+            // Checkout the specific commit *on the branch* so the working copy is not left in
+            // detached-HEAD state. This matters for publish profiles that include Git.Push.
+            return await RunGitCommandAsync(repoDirectory, "checkout", "-B", branch, commitSha);
         }
         catch (Exception ex)
         {
