@@ -36,12 +36,14 @@ public class AndoDbContext : IdentityDbContext<ApplicationUser, ApplicationRole,
     public DbSet<Build> Builds => Set<Build>();
     public DbSet<BuildLogEntry> BuildLogEntries => Set<BuildLogEntry>();
     public DbSet<BuildArtifact> BuildArtifacts => Set<BuildArtifact>();
+    public DbSet<ApiToken> ApiTokens => Set<ApiToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
         ConfigureUser(modelBuilder);
+        ConfigureApiToken(modelBuilder);
         ConfigureProject(modelBuilder);
         ConfigureProjectSecret(modelBuilder);
         ConfigureBuild(modelBuilder);
@@ -83,6 +85,37 @@ public class AndoDbContext : IdentityDbContext<ApplicationUser, ApplicationRole,
             entity.HasMany(e => e.Projects)
                 .WithOne(p => p.Owner)
                 .HasForeignKey(p => p.OwnerId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // ApiToken Configuration
+    // -------------------------------------------------------------------------
+    private static void ConfigureApiToken(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ApiToken>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            entity.Property(e => e.Prefix)
+                .IsRequired()
+                .HasMaxLength(20);
+
+            entity.Property(e => e.TokenHash)
+                .IsRequired()
+                .HasMaxLength(200);
+
+            entity.HasIndex(e => new { e.UserId, e.Prefix });
+            entity.HasIndex(e => e.RevokedAt);
+
+            entity.HasOne(e => e.User)
+                .WithMany(u => u.ApiTokens)
+                .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

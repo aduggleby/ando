@@ -102,6 +102,11 @@ public class ApplicationUser : IdentityUser<int>
     /// </summary>
     public ICollection<Project> Projects { get; set; } = [];
 
+    /// <summary>
+    /// API tokens created by this user.
+    /// </summary>
+    public ICollection<ApiToken> ApiTokens { get; set; } = [];
+
     // -------------------------------------------------------------------------
     // Helper Properties
     // -------------------------------------------------------------------------

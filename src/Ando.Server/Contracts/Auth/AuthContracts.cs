@@ -184,6 +184,59 @@ public record ResetPasswordResponse(
 );
 
 // =============================================================================
+// API Tokens
+// =============================================================================
+
+/// <summary>
+/// Request to create a personal API token.
+/// </summary>
+public class CreateApiTokenRequest
+{
+    /// <summary>
+    /// Friendly name for the token (e.g., "CI script", "Laptop").
+    /// </summary>
+    [Required(ErrorMessage = "Name is required")]
+    [StringLength(100, MinimumLength = 2, ErrorMessage = "Name must be between 2 and 100 characters")]
+    public string Name { get; set; } = "";
+}
+
+/// <summary>
+/// API token metadata returned by list operations (never includes the raw token).
+/// </summary>
+public record ApiTokenDto(
+    int Id,
+    string Name,
+    string Prefix,
+    DateTime CreatedAtUtc,
+    DateTime? LastUsedAtUtc,
+    DateTime? RevokedAtUtc
+);
+
+/// <summary>
+/// Response from token creation. The raw token is only returned once.
+/// </summary>
+public record CreateApiTokenResponse(
+    bool Success,
+    ApiTokenDto? Token = null,
+    string? Value = null,
+    string? Error = null
+);
+
+/// <summary>
+/// Response containing a user's tokens.
+/// </summary>
+public record ListApiTokensResponse(
+    IReadOnlyList<ApiTokenDto> Tokens
+);
+
+/// <summary>
+/// Response from revocation attempt.
+/// </summary>
+public record RevokeApiTokenResponse(
+    bool Success
+);
+
+// =============================================================================
 // Verify Email
 // =============================================================================
 

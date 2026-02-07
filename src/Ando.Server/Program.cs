@@ -15,6 +15,7 @@
 // =============================================================================
 
 using System.Threading.RateLimiting;
+using Ando.Server.Auth;
 using Ando.Server.BuildExecution;
 using Ando.Server.Configuration;
 using Ando.Server.Data;
@@ -27,11 +28,13 @@ using FastEndpoints;
 using FastEndpoints.Swagger;
 using Hangfire;
 using Hangfire.States;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -124,6 +127,39 @@ builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
 .AddDefaultTokenProviders();
 
 // =============================================================================
+// Authentication (API tokens + cookies)
+// =============================================================================
+
+builder.Services.AddAuthentication(options =>
+    {
+        // Prefer API tokens when present; otherwise fall back to Identity cookies.
+        options.DefaultScheme = ApiTokenAuthentication.PolicyScheme;
+        options.DefaultChallengeScheme = ApiTokenAuthentication.PolicyScheme;
+    })
+    .AddPolicyScheme(ApiTokenAuthentication.PolicyScheme, "API token or cookie auth", options =>
+    {
+        options.ForwardDefaultSelector = context =>
+        {
+            var authz = context.Request.Headers.Authorization.ToString();
+            if (!string.IsNullOrWhiteSpace(authz) &&
+                authz.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                return ApiTokenAuthentication.Scheme;
+            }
+
+            if (context.Request.Headers.ContainsKey(ApiTokenAuthentication.ApiTokenHeaderName))
+            {
+                return ApiTokenAuthentication.Scheme;
+            }
+
+            return IdentityConstants.ApplicationScheme;
+        };
+    })
+    .AddScheme<AuthenticationSchemeOptions, ApiTokenAuthenticationHandler>(
+        ApiTokenAuthentication.Scheme,
+        _ => { });
+
+// =============================================================================
 // Hangfire (Background Jobs)
 // Skip in E2E environment - E2E tests don't need background job processing
 // =============================================================================
@@ -207,6 +243,12 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("RequireAdmin", policy =>
         policy.RequireRole(UserRoles.Admin));
 });
+
+// =============================================================================
+// API Token Service
+// =============================================================================
+
+builder.Services.AddScoped<IApiTokenService, ApiTokenService>();
 
 // =============================================================================
 // Rate Limiting
@@ -452,6 +494,23 @@ if (rateLimitSettings.Enabled)
 app.UseSession();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Default-secure: require authentication for all /api endpoints unless explicitly AllowAnonymous.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api"))
+    {
+        var endpoint = context.GetEndpoint();
+        var allowsAnonymous = endpoint?.Metadata.GetMetadata<IAllowAnonymous>() != null;
+        if (!allowsAnonymous && context.User.Identity?.IsAuthenticated != true)
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
+        }
+    }
+
+    await next();
+});
 
 // =============================================================================
 // FastEndpoints (REST API)
