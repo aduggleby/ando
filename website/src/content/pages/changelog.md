@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.77
+
+**2026-02-07**
+
+- Fix API token authentication not being evaluated correctly
+
 ## 0.9.76
 
 **2026-02-07**
