@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.73
+
+**2026-02-07**
+
+- Fix file permissions across build scripts and documentation
+
 ## 0.9.72
 
 **2026-02-06**
