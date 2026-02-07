@@ -524,6 +524,15 @@ public class BuildOrchestrator : IBuildOrchestrator
             return (false, 0, 0, 1, "Failed to install Ando CLI in build container");
         }
 
+        // The build runs with `--dind`, which relies on the Docker CLI inside the build container
+        // (the daemon is provided by mounting the host's /var/run/docker.sock).
+        logger.Info("Ensuring Docker CLI is installed in build container...");
+        var dockerOk = await EnsureDockerCliInstalledAsync(containerId, logger, cancellationToken);
+        if (!dockerOk)
+        {
+            return (false, 0, 0, 1, "Docker CLI is required in the build container (docker.sock alone is not enough)");
+        }
+
         // Log the installed version for debugging.
         await RunDockerExecAsync(
             containerId,
@@ -751,6 +760,51 @@ public class BuildOrchestrator : IBuildOrchestrator
             logger,
             cancellationToken);
         return exitCode == 0;
+    }
+
+    private async Task<bool> EnsureDockerCliInstalledAsync(
+        string containerId,
+        ServerBuildLogger logger,
+        CancellationToken cancellationToken)
+    {
+        // Fast path: already installed.
+        var checkExit = await RunDockerExecAsync(
+            containerId,
+            ["sh", "-c", "command -v docker >/dev/null 2>&1"],
+            logger,
+            cancellationToken);
+        if (checkExit == 0)
+        {
+            return true;
+        }
+
+        // Best-effort install across common base images.
+        // - Alpine: `apk add docker-cli` (fallback to `docker`)
+        // - Debian/Ubuntu: `apt-get install docker.io`
+        var installCmd =
+            "set -euo pipefail; " +
+            "if command -v docker >/dev/null 2>&1; then exit 0; fi; " +
+            "if command -v apk >/dev/null 2>&1; then apk add --no-cache docker-cli || apk add --no-cache docker; exit 0; fi; " +
+            "if command -v apt-get >/dev/null 2>&1; then apt-get update && apt-get install -y --no-install-recommends docker.io && rm -rf /var/lib/apt/lists/*; exit 0; fi; " +
+            "echo 'Unsupported base image: cannot install docker CLI automatically' >&2; exit 1;";
+
+        var installExit = await RunDockerExecAsync(
+            containerId,
+            ["sh", "-c", installCmd],
+            logger,
+            cancellationToken);
+        if (installExit != 0)
+        {
+            return false;
+        }
+
+        // Verify.
+        var versionExit = await RunDockerExecAsync(
+            containerId,
+            ["docker", "--version"],
+            logger,
+            cancellationToken);
+        return versionExit == 0;
     }
 
     private async Task<int> RunDockerExecAsync(

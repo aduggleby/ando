@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.79
+
+**2026-02-07**
+
+- Automatically resolve host paths from container bind mounts during builds
+
 ## 0.9.78
 
 **2026-02-07**
