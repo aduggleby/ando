@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.78
+
+**2026-02-07**
+
+- Fix build commands running in the wrong directory inside containers
+
 ## 0.9.77
 
 **2026-02-07**
