@@ -386,6 +386,15 @@ public class ReleaseCommand
 
             if (result != 0)
             {
+                // Docs updates rely on Claude CLI and are helpful but non-essential to publishing.
+                // Treat failures as non-fatal so releases can proceed in environments without Claude.
+                if (step.Id == "docs")
+                {
+                    AnsiConsole.MarkupLine($"[yellow]Step '{step.Label}' failed - continuing.[/]");
+                    AnsiConsole.WriteLine();
+                    continue;
+                }
+
                 AnsiConsole.MarkupLine($"[red]Step '{step.Label}' failed.[/]");
                 return result;
             }
