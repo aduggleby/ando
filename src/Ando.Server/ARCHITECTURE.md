@@ -501,7 +501,8 @@ Deletes old build records based on retention policy.
    └─ Return container ID
 
 4. Build Execution
-   ├─ docker exec: dotnet /ando/ando.dll run --dind --read-env [-p profile]
+   ├─ Install Ando CLI from NuGet (dotnet tool install/update → /tmp/ando-tools/ando)
+   ├─ docker exec: /tmp/ando-tools/ando run --dind --read-env [-p profile]
    ├─ Stream stdout/stderr to ServerBuildLogger
    └─ Return success/failure + step counts
 

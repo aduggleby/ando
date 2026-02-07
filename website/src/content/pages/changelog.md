@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.75
+
+**2026-02-07**
+
+- Install Ando CLI from NuGet in build containers for improved reliability
+- Fix URL generation in the server
+
 ## 0.9.74
 
 **2026-02-07**
