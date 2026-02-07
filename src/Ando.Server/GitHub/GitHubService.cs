@@ -115,11 +115,14 @@ public class GitHubService : IGitHubService
         string repoFullName,
         string branch,
         string commitSha,
-        string targetDirectory)
+        string targetDirectory,
+        string? gitTokenOverride = null)
     {
         try
         {
-            var token = await GetInstallationTokenAsync(installationId);
+            var token = !string.IsNullOrWhiteSpace(gitTokenOverride)
+                ? gitTokenOverride
+                : await GetInstallationTokenAsync(installationId);
             if (string.IsNullOrEmpty(token))
             {
                 return false;
@@ -160,11 +163,14 @@ public class GitHubService : IGitHubService
         string repoFullName,
         string branch,
         string commitSha,
-        string repoDirectory)
+        string repoDirectory,
+        string? gitTokenOverride = null)
     {
         try
         {
-            var token = await GetInstallationTokenAsync(installationId);
+            var token = !string.IsNullOrWhiteSpace(gitTokenOverride)
+                ? gitTokenOverride
+                : await GetInstallationTokenAsync(installationId);
             if (string.IsNullOrEmpty(token))
             {
                 return false;

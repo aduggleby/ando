@@ -342,6 +342,24 @@ public class BuildOrchestrator : IBuildOrchestrator
 
         _logger.LogInformation("PrepareRepository: InstallationId={InstallationId}", project.InstallationId.Value);
 
+        // If the user has configured a GITHUB_TOKEN secret, prefer it for git clone/fetch/push operations.
+        // The GitHub App installation token used by the server may not have write permissions for all repos,
+        // which breaks publish profiles that include Git.Push/Git.PushTags.
+        string? gitTokenOverride = null;
+        try
+        {
+            var gitHubTokenSecret = project.Secrets.FirstOrDefault(s =>
+                string.Equals(s.Name, "GITHUB_TOKEN", StringComparison.OrdinalIgnoreCase));
+            if (gitHubTokenSecret != null)
+            {
+                gitTokenOverride = _encryption.Decrypt(gitHubTokenSecret.EncryptedValue);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "PrepareRepository: Failed to decrypt GITHUB_TOKEN for project {ProjectId}", project.Id);
+        }
+
         var dirExists = Directory.Exists(repoPath);
         _logger.LogInformation("PrepareRepository: Directory exists={DirExists}", dirExists);
 
@@ -354,7 +372,8 @@ public class BuildOrchestrator : IBuildOrchestrator
                 project.RepoFullName,
                 build.Branch,
                 build.CommitSha,
-                repoPath);
+                repoPath,
+                gitTokenOverride);
             _logger.LogInformation("PrepareRepository: FetchAndCheckout returned {Result}", result);
             return result;
         }
@@ -372,7 +391,8 @@ public class BuildOrchestrator : IBuildOrchestrator
                 project.RepoFullName,
                 build.Branch,
                 build.CommitSha,
-                repoPath);
+                repoPath,
+                gitTokenOverride);
             _logger.LogInformation("PrepareRepository: Clone returned {Result}", result);
             return result;
         }

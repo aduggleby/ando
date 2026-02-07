@@ -52,12 +52,17 @@ public interface IGitHubService
     /// <param name="branch">Branch to clone.</param>
     /// <param name="commitSha">Specific commit to checkout.</param>
     /// <param name="targetDirectory">Directory to clone into.</param>
+    /// <param name="gitTokenOverride">
+    /// Optional GitHub token to use for git operations (clone/fetch/push) instead of an installation token.
+    /// Useful when build scripts need to push tags/commits and the GitHub App token lacks write permissions.
+    /// </param>
     Task<bool> CloneRepositoryAsync(
         long installationId,
         string repoFullName,
         string branch,
         string commitSha,
-        string targetDirectory);
+        string targetDirectory,
+        string? gitTokenOverride = null);
 
     /// <summary>
     /// Fetches latest changes for an already cloned repository.
@@ -67,12 +72,17 @@ public interface IGitHubService
     /// <param name="branch">Branch to fetch.</param>
     /// <param name="commitSha">Specific commit to checkout.</param>
     /// <param name="repoDirectory">Directory containing the repository.</param>
+    /// <param name="gitTokenOverride">
+    /// Optional GitHub token to use for git operations (fetch/checkout/push) instead of an installation token.
+    /// Useful when build scripts need to push tags/commits and the GitHub App token lacks write permissions.
+    /// </param>
     Task<bool> FetchAndCheckoutAsync(
         long installationId,
         string repoFullName,
         string branch,
         string commitSha,
-        string repoDirectory);
+        string repoDirectory,
+        string? gitTokenOverride = null);
 
     /// <summary>
     /// Gets an installation access token for API calls.
