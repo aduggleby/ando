@@ -103,6 +103,12 @@ public class Build
     /// </summary>
     public int? PullRequestNumber { get; set; }
 
+    /// <summary>
+    /// Build profile used for this build (copied from the project's selected profile when queued).
+    /// Null means default build (no profile).
+    /// </summary>
+    public string? Profile { get; set; }
+
     // -------------------------------------------------------------------------
     // Build State
     // -------------------------------------------------------------------------

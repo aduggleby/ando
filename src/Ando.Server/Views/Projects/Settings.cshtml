@@ -281,6 +281,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         form.addEventListener('input', checkForChanges);
         form.addEventListener('change', checkForChanges);
+        // Avoid the "Leave site?" warning when the user intentionally saves.
+        form.addEventListener('submit', () => {
+            hasUnsavedChanges = false;
+            const bar = document.getElementById('unsaved-bar');
+            if (bar) bar.style.display = 'none';
+        });
     }
 });
 

@@ -112,11 +112,12 @@ public class BuildOrchestrator : IBuildOrchestrator
             project.SetAvailableProfiles(detectedProfiles);
             await db.SaveChangesAsync(cancellationToken);
 
-            // Validate selected profile still exists
-            if (!string.IsNullOrWhiteSpace(project.Profile) && !project.IsProfileValid())
+            // Validate the build's profile still exists
+            if (!string.IsNullOrWhiteSpace(build.Profile) &&
+                !detectedProfiles.Contains(build.Profile, StringComparer.OrdinalIgnoreCase))
             {
                 build.Status = BuildStatus.Failed;
-                build.ErrorMessage = $"Invalid profile configuration: Profile '{project.Profile}' no longer exists in build.csando. " +
+                build.ErrorMessage = $"Invalid profile configuration: Profile '{build.Profile}' no longer exists in build.csando. " +
                     $"Available profiles: {(detectedProfiles.Count > 0 ? string.Join(", ", detectedProfiles) : "(none)")}. " +
                     "Please update the project settings to select a valid profile or clear the profile setting.";
                 build.FinishedAt = DateTime.UtcNow;
@@ -124,7 +125,7 @@ public class BuildOrchestrator : IBuildOrchestrator
 
                 _logger.LogWarning(
                     "Build {BuildId} failed due to invalid profile '{Profile}' in project {ProjectId}",
-                    buildId, project.Profile, project.Id);
+                    buildId, build.Profile, project.Id);
                 return;
             }
         }
@@ -163,6 +164,21 @@ public class BuildOrchestrator : IBuildOrchestrator
             repoPathHost = await ResolveHostPathForServerPathAsync(repoPathServer, linkedCts.Token);
         }
 
+        // Provide a GitHub token to the build container for operations that need it (ghcr push, releases, etc.).
+        // Prefer an explicitly-configured secret; otherwise fall back to the GitHub App installation token.
+        string? githubTokenForBuild = null;
+        if (project.InstallationId.HasValue)
+        {
+            try
+            {
+                githubTokenForBuild = await _gitHubService.GetInstallationTokenAsync(project.InstallationId.Value);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to get installation token for project {ProjectId}", project.Id);
+            }
+        }
+
         try
         {
             // Update status to running
@@ -198,7 +214,7 @@ public class BuildOrchestrator : IBuildOrchestrator
 
             // Step 2: Create build container (uses host path for Docker volume mount)
             buildLogger.Info("Creating build container...");
-            containerId = await CreateBuildContainerAsync(project, repoPathHost, linkedCts.Token);
+            containerId = await CreateBuildContainerAsync(project, repoPathHost, githubTokenForBuild, linkedCts.Token);
             if (string.IsNullOrEmpty(containerId))
             {
                 throw new Exception("Failed to create build container");
@@ -208,12 +224,12 @@ public class BuildOrchestrator : IBuildOrchestrator
 
             // Step 3: Execute build
             buildLogger.Info("Executing build script...");
-            if (!string.IsNullOrWhiteSpace(project.Profile))
+            if (!string.IsNullOrWhiteSpace(build.Profile))
             {
-                buildLogger.Info($"Using profile: {project.Profile}");
+                buildLogger.Info($"Using profile: {build.Profile}");
             }
             var buildResult = await ExecuteBuildInContainerAsync(
-                containerId, project.Profile, build, buildLogger, linkedCts.Token);
+                containerId, build.Profile, build, buildLogger, linkedCts.Token);
 
             // Step 4: Collect artifacts
             if (buildResult.success)
@@ -425,6 +441,7 @@ public class BuildOrchestrator : IBuildOrchestrator
     private async Task<string?> CreateBuildContainerAsync(
         Project project,
         string repoPath,
+        string? githubToken,
         CancellationToken cancellationToken)
     {
         _logger.LogInformation("CreateBuildContainer: Starting for repo path {RepoPath}", repoPath);
@@ -459,11 +476,26 @@ public class BuildOrchestrator : IBuildOrchestrator
         startInfo.ArgumentList.Add("/workspace");
 
         // Add environment variables from secrets (decrypted)
+        var hasGitHubTokenSecret = false;
         foreach (var secret in project.Secrets)
         {
             var decryptedValue = _encryption.Decrypt(secret.EncryptedValue);
             startInfo.ArgumentList.Add("-e");
             startInfo.ArgumentList.Add($"{secret.Name}={decryptedValue}");
+            if (string.Equals(secret.Name, "GITHUB_TOKEN", StringComparison.OrdinalIgnoreCase))
+            {
+                hasGitHubTokenSecret = true;
+            }
+        }
+
+        // If the project hasn't explicitly configured a GitHub token secret, provide the GitHub App
+        // installation token. This enables ghcr pushes and GitHub release operations in build scripts.
+        if (!hasGitHubTokenSecret && !string.IsNullOrWhiteSpace(githubToken))
+        {
+            startInfo.ArgumentList.Add("-e");
+            startInfo.ArgumentList.Add($"GITHUB_TOKEN={githubToken}");
+            startInfo.ArgumentList.Add("-e");
+            startInfo.ArgumentList.Add($"GITHUB_REPOSITORY={project.RepoFullName}");
         }
 
         // Set ANDO_HOST_ROOT for Docker-in-Docker path mapping.
@@ -478,8 +510,25 @@ public class BuildOrchestrator : IBuildOrchestrator
         startInfo.ArgumentList.Add("-f");
         startInfo.ArgumentList.Add("/dev/null");
 
-        // Log the full command for debugging
-        var cmdArgs = string.Join(" ", startInfo.ArgumentList.Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
+        // Log a redacted version of the command (do not leak secrets).
+        var redactedArgs = new List<string>();
+        for (var i = 0; i < startInfo.ArgumentList.Count; i++)
+        {
+            var a = startInfo.ArgumentList[i];
+            if (a == "-e" && i + 1 < startInfo.ArgumentList.Count)
+            {
+                var kv = startInfo.ArgumentList[i + 1];
+                var eq = kv.IndexOf('=');
+                var key = eq > 0 ? kv[..eq] : kv;
+                redactedArgs.Add("-e");
+                redactedArgs.Add($"{key}=REDACTED");
+                i++; // skip value arg (already redacted)
+                continue;
+            }
+
+            redactedArgs.Add(a);
+        }
+        var cmdArgs = string.Join(" ", redactedArgs.Select(a => a.Contains(' ') ? $"\"{a}\"" : a));
         _logger.LogInformation("CreateBuildContainer: Running docker {Args}", cmdArgs);
 
         using var process = Process.Start(startInfo);

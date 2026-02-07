@@ -57,6 +57,7 @@ public record BuildDetailsDto(
     string? CommitMessage,
     string? CommitAuthor,
     int? PullRequestNumber,
+    string? Profile,
     string Status,
     string Trigger,
     DateTime QueuedAt,

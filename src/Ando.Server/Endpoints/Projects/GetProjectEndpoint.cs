@@ -85,6 +85,7 @@ public class GetProjectEndpoint : EndpointWithoutRequest<GetProjectResponse>
                 project.RepoUrl,
                 project.DefaultBranch,
                 project.BranchFilter,
+                project.Profile,
                 project.EnablePrBuilds,
                 project.TimeoutMinutes,
                 project.CreatedAt,

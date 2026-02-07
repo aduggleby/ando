@@ -193,7 +193,13 @@ public class DockerOperations(
             var args = argsBuilder.Build();
 
             Logger.Debug($"docker {string.Join(" ", args)}");
-            var result = await ExecutorFactory().ExecuteAsync("docker", args);
+            // Docker builds (especially multi-arch buildx builds) can easily exceed the
+            // default command timeout. Use a higher default for builds.
+            var cmdOptions = new CommandOptions
+            {
+                TimeoutMs = options.TimeoutMs
+            };
+            var result = await ExecutorFactory().ExecuteAsync("docker", args, cmdOptions);
 
             if (!result.Success)
             {
@@ -245,6 +251,10 @@ public class DockerOperations(
 /// <summary>Options for 'docker buildx build' command.</summary>
 public class DockerBuildOptions
 {
+    // Docker builds can be slow (e.g., multi-arch with QEMU). Default to 30 minutes
+    // to avoid spurious failures; callers can override if desired.
+    private const int DefaultBuildTimeoutMs = 30 * 60 * 1000;
+
     /// <summary>Image tags (e.g., "myapp:v1.0.0", "myapp:latest").</summary>
     public List<string> Tags { get; } = new();
 
@@ -265,6 +275,9 @@ public class DockerBuildOptions
 
     /// <summary>Do not use cache when building.</summary>
     public bool NoCache { get; private set; }
+
+    /// <summary>Timeout for the docker build command (milliseconds).</summary>
+    public int TimeoutMs { get; private set; } = DefaultBuildTimeoutMs;
 
     /// <summary>Adds an image tag. Can be called multiple times for multiple tags.</summary>
     public DockerBuildOptions WithTag(string tag)
@@ -321,6 +334,13 @@ public class DockerBuildOptions
     public DockerBuildOptions WithoutLoad()
     {
         Load = false;
+        return this;
+    }
+
+    /// <summary>Overrides the docker build timeout.</summary>
+    public DockerBuildOptions WithTimeoutMinutes(int minutes)
+    {
+        TimeoutMs = Math.Max(1, minutes) * 60 * 1000;
         return this;
     }
 }

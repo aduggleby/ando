@@ -51,8 +51,12 @@ public class BuildService : IBuildService
         BuildTrigger trigger,
         string? commitMessage = null,
         string? commitAuthor = null,
-        int? pullRequestNumber = null)
+        int? pullRequestNumber = null,
+        string? profile = null)
     {
+        // Snapshot the profile at queue time so builds are reproducible even if the project changes later.
+        var project = await _db.Projects.FindAsync(projectId);
+
         // Create build record
         var build = new Build
         {
@@ -63,6 +67,7 @@ public class BuildService : IBuildService
             CommitMessage = commitMessage?.Length > 500 ? commitMessage[..500] : commitMessage,
             CommitAuthor = commitAuthor,
             PullRequestNumber = pullRequestNumber,
+            Profile = profile ?? project?.Profile,
             Status = BuildStatus.Queued,
             QueuedAt = DateTime.UtcNow
         };
@@ -71,7 +76,6 @@ public class BuildService : IBuildService
         await _db.SaveChangesAsync();
 
         // Update project last build time
-        var project = await _db.Projects.FindAsync(projectId);
         if (project != null)
         {
             project.LastBuildAt = DateTime.UtcNow;
@@ -184,7 +188,8 @@ public class BuildService : IBuildService
             BuildTrigger.Manual,
             originalBuild.CommitMessage,
             originalBuild.CommitAuthor,
-            originalBuild.PullRequestNumber);
+            originalBuild.PullRequestNumber,
+            originalBuild.Profile);
     }
 
     /// <inheritdoc />

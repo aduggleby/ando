@@ -79,7 +79,8 @@ public class RetryBuildEndpoint : EndpointWithoutRequest<RetryBuildResponse>
             BuildTrigger.Manual,
             build.CommitMessage,
             build.CommitAuthor,
-            build.PullRequestNumber);
+            build.PullRequestNumber,
+            build.Profile);
 
         await SendAsync(new RetryBuildResponse(true, newBuildId), cancellation: ct);
     }

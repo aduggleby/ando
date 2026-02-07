@@ -150,6 +150,23 @@ test.describe('Project Settings', () => {
     await settings.expectSuccessMessage(/settings updated/i);
   });
 
+  test('saving settings does not show an unsaved-changes leave-page prompt', async ({ authedPage, testProject }) => {
+    const settings = new ProjectSettingsPage(authedPage);
+    await settings.goto(testProject.id);
+
+    let dialogSeen = false;
+    authedPage.on('dialog', async (dialog) => {
+      dialogSeen = true;
+      await dialog.accept();
+    });
+
+    await settings.updateBranchFilter('main,develop');
+    await settings.saveSettings();
+
+    await settings.expectSuccessMessage(/settings updated/i);
+    expect(dialogSeen).toBe(false);
+  });
+
   test('can enable PR builds', async ({ authedPage, testProject }) => {
     const settings = new ProjectSettingsPage(authedPage);
     await settings.goto(testProject.id);

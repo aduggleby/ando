@@ -35,7 +35,8 @@ public interface IBuildService
         BuildTrigger trigger,
         string? commitMessage = null,
         string? commitAuthor = null,
-        int? pullRequestNumber = null);
+        int? pullRequestNumber = null,
+        string? profile = null);
 
     /// <summary>
     /// Gets a build by ID with related project data.

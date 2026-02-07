@@ -68,6 +68,7 @@ public record ProjectDetailsDto(
     string RepoUrl,
     string DefaultBranch,
     string BranchFilter,
+    string? Profile,
     bool EnablePrBuilds,
     int TimeoutMinutes,
     DateTime CreatedAt,

@@ -223,12 +223,18 @@ public class TestController : ControllerBase
             RepoUrl = $"https://github.com/{fullName}",
             DefaultBranch = request.DefaultBranch ?? "main",
             BranchFilter = request.BranchFilter ?? "main",
+            Profile = request.Profile,
             EnablePrBuilds = request.EnablePrBuilds,
             TimeoutMinutes = request.TimeoutMinutes ?? 15,
             NotifyOnFailure = request.NotifyOnFailure,
             NotificationEmail = request.NotificationEmail ?? user.Email,
             CreatedAt = DateTime.UtcNow
         };
+
+        if (request.AvailableProfiles is { Count: > 0 })
+        {
+            project.SetAvailableProfiles(request.AvailableProfiles);
+        }
 
         _db.Projects.Add(project);
         await _db.SaveChangesAsync();
@@ -306,6 +312,7 @@ public class TestController : ControllerBase
             QueuedAt = DateTime.UtcNow,
             StartedAt = request.Status == BuildStatus.Running ? DateTime.UtcNow : null,
             PullRequestNumber = request.PullRequestNumber,
+            Profile = project.Profile,
             // Set a fake job ID for test builds so cancel works
             HangfireJobId = $"test-job-{uniqueId}"
         };
@@ -560,6 +567,8 @@ public record CreateTestProjectRequest
     public string? RepoName { get; init; }
     public string? DefaultBranch { get; init; }
     public string? BranchFilter { get; init; }
+    public string? Profile { get; init; }
+    public List<string>? AvailableProfiles { get; init; }
     public bool EnablePrBuilds { get; init; }
     public int? TimeoutMinutes { get; init; }
     public bool NotifyOnFailure { get; init; } = true;

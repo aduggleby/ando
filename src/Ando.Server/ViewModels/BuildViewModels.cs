@@ -64,6 +64,11 @@ public class BuildDetailsViewModel
     public int? PullRequestNumber { get; init; }
 
     /// <summary>
+    /// Build profile used for this build (null means default build).
+    /// </summary>
+    public string? Profile { get; init; }
+
+    /// <summary>
     /// Current status of the build.
     /// </summary>
     public BuildStatus Status { get; init; }

@@ -78,14 +78,18 @@
             <span class="info-label">Author</span>
             <span class="info-value">@(Model.CommitAuthor ?? "Unknown")</span>
         </div>
-        <div class="info-item">
-            <span class="info-label">Trigger</span>
-            <span class="info-value">@Model.Trigger</span>
-        </div>
-        <div class="info-item">
-            <span class="info-label">Queued</span>
-            <span class="info-value">@Model.QueuedAt.ToString("MMM d, yyyy HH:mm:ss")</span>
-        </div>
+	        <div class="info-item">
+	            <span class="info-label">Trigger</span>
+	            <span class="info-value">@Model.Trigger</span>
+	        </div>
+	        <div class="info-item">
+	            <span class="info-label">Profile</span>
+	            <span class="info-value">@(string.IsNullOrEmpty(Model.Profile) ? "Default" : Model.Profile)</span>
+	        </div>
+	        <div class="info-item">
+	            <span class="info-label">Queued</span>
+	            <span class="info-value">@Model.QueuedAt.ToString("MMM d, yyyy HH:mm:ss")</span>
+	        </div>
         @if (Model.StartedAt.HasValue)
         {
             <div class="info-item">

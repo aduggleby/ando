@@ -216,6 +216,7 @@ public class ProjectsController : Controller
             RepoUrl = project.RepoUrl,
             DefaultBranch = project.DefaultBranch,
             BranchFilter = project.BranchFilter,
+            Profile = project.Profile,
             EnablePrBuilds = project.EnablePrBuilds,
             TimeoutMinutes = project.TimeoutMinutes,
             CreatedAt = project.CreatedAt,

@@ -14,6 +14,8 @@ let lastSequence = 0;
 let autoScroll = true;
 let reconnectAttempts = 0;
 const maxReconnectAttempts = 10;
+let pollTimer = null;
+const pollIntervalMs = 2000;
 
 // Step progress tracking
 let stepsTotal = 0;
@@ -149,6 +151,10 @@ function initializeBuildLogs(id, initialSequence, stepInfo = {}) {
 
     // Start connection
     startConnection();
+
+    // Also poll for log updates. This makes "live logs" work even when
+    // websockets are blocked by a proxy or SignalR cannot connect.
+    startPolling();
 }
 
 // Start the SignalR connection
@@ -187,7 +193,8 @@ function attemptReconnect() {
 // Fetch any logs we might have missed
 async function catchUpLogs() {
     try {
-        const response = await fetch(`/builds/${buildId}/logs?afterSequence=${lastSequence}`);
+        // Note: API endpoints are prefixed with /api (FastEndpoints RoutePrefix).
+        const response = await fetch(`/api/builds/${buildId}/logs?afterSequence=${lastSequence}`);
         if (!response.ok) return;
 
         const data = await response.json();
@@ -202,10 +209,25 @@ async function catchUpLogs() {
         if (data.isComplete) {
             updateBuildStatus(data.status);
             hideLiveIndicator();
+            stopPolling();
         }
     } catch (error) {
         console.error("Failed to catch up logs:", error);
     }
+}
+
+function startPolling() {
+    if (pollTimer) return;
+    pollTimer = setInterval(() => {
+        // Fire and forget; errors are handled inside catchUpLogs.
+        catchUpLogs();
+    }, pollIntervalMs);
+}
+
+function stopPolling() {
+    if (!pollTimer) return;
+    clearInterval(pollTimer);
+    pollTimer = null;
 }
 
 // Append a log entry to the log container
@@ -429,6 +451,7 @@ function formatTime(timestamp) {
 
 // Cleanup when leaving the page
 window.addEventListener("beforeunload", () => {
+    stopPolling();
     if (connection) {
         connection.stop();
     }

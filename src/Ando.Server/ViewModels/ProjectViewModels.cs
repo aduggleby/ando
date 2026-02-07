@@ -209,6 +209,11 @@ public class ProjectDetailsViewModel
     public string BranchFilter { get; init; } = "";
 
     /// <summary>
+    /// Selected build profile (null means default build).
+    /// </summary>
+    public string? Profile { get; init; }
+
+    /// <summary>
     /// Whether pull request builds are enabled.
     /// </summary>
     public bool EnablePrBuilds { get; init; }

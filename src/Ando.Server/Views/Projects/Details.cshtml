@@ -44,23 +44,27 @@
 }
 
 <div class="project-info">
-    <div class="info-grid">
-        <div class="info-item">
-            <span class="info-label">Default Branch</span>
-            <span class="info-value">@Model.DefaultBranch</span>
-        </div>
-        <div class="info-item">
-            <span class="info-label">Branch Filter</span>
-            <span class="info-value">@(string.IsNullOrEmpty(Model.BranchFilter) ? "All branches" : Model.BranchFilter)</span>
-        </div>
-        <div class="info-item">
-            <span class="info-label">PR Builds</span>
-            <span class="info-value">@(Model.EnablePrBuilds ? "Enabled" : "Disabled")</span>
-        </div>
-        <div class="info-item">
-            <span class="info-label">Timeout</span>
-            <span class="info-value">@Model.TimeoutMinutes minutes</span>
-        </div>
+        <div class="info-grid">
+            <div class="info-item">
+                <span class="info-label">Default Branch</span>
+                <span class="info-value">@Model.DefaultBranch</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Branch Filter</span>
+                <span class="info-value">@(string.IsNullOrEmpty(Model.BranchFilter) ? "All branches" : Model.BranchFilter)</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Build Profile</span>
+                <span class="info-value">@(string.IsNullOrEmpty(Model.Profile) ? "Default" : Model.Profile)</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">PR Builds</span>
+                <span class="info-value">@(Model.EnablePrBuilds ? "Enabled" : "Disabled")</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Timeout</span>
+                <span class="info-value">@Model.TimeoutMinutes minutes</span>
+            </div>
         <div class="info-item">
             <span class="info-label">Total Builds</span>
             <span class="info-value">@Model.TotalBuilds</span>

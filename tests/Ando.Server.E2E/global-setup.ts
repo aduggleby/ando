@@ -185,9 +185,13 @@ async function globalSetup(): Promise<void> {
   if (inContainer) {
     stopContainers();
     startContainers();
-  } else if (areContainersHealthy()) {
-    console.log('E2E containers are already running and healthy.');
   } else {
+    // Even if containers are already healthy, still run `up --build` so the
+    // server container reflects the current working tree (JS/CSS, migrations, etc.).
+    if (areContainersHealthy()) {
+      console.log('E2E containers are already running and healthy.');
+      console.log('Rebuilding/restarting as needed to pick up local changes...');
+    }
     startContainers();
   }
 

@@ -91,6 +91,7 @@ public class GetBuildEndpoint : EndpointWithoutRequest<GetBuildResponse>
                 build.CommitMessage,
                 build.CommitAuthor,
                 build.PullRequestNumber,
+                build.Profile,
                 build.Status.ToString(),
                 build.Trigger.ToString(),
                 build.QueuedAt,

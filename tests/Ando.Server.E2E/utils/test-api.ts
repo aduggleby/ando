@@ -95,6 +95,8 @@ export class TestApi {
     repoName?: string;
     defaultBranch?: string;
     branchFilter?: string;
+    profile?: string;
+    availableProfiles?: string[];
     enablePrBuilds?: boolean;
     timeoutMinutes?: number;
     notifyOnFailure?: boolean;

@@ -37,8 +37,27 @@ public static class GhcrHelper
         string owner)
     {
         logger.Info("Logging in to ghcr.io...");
-        var loginScript = $"echo '{token}' | docker login ghcr.io -u {owner} --password-stdin";
-        var loginResult = await executor.ExecuteAsync("bash", ["-c", loginScript]);
+        // Avoid embedding the token in the command line (visible in process lists).
+        // Use env vars so only the child process inherits the secret.
+        async Task<CommandResult> TryLoginAsync(string username)
+        {
+            var options = new CommandOptions();
+            options.Environment["GITHUB_TOKEN"] = token;
+            options.Environment["GHCR_USERNAME"] = username;
+            return await executor.ExecuteAsync(
+                "bash",
+                ["-c", "echo \"$GITHUB_TOKEN\" | docker login ghcr.io -u \"$GHCR_USERNAME\" --password-stdin"],
+                options);
+        }
+
+        // First try using the owner (works for PATs and typical docs).
+        // If that fails (e.g. when using installation tokens), fall back to x-access-token.
+        var loginResult = await TryLoginAsync(owner);
+        if (!loginResult.Success)
+        {
+            logger.Warning("Docker login to ghcr.io failed with owner username; retrying with x-access-token");
+            loginResult = await TryLoginAsync("x-access-token");
+        }
 
         if (!loginResult.Success)
         {

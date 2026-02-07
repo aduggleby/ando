@@ -88,6 +88,7 @@ public class BuildsController : Controller
             CommitMessage = build.CommitMessage,
             CommitAuthor = build.CommitAuthor,
             PullRequestNumber = build.PullRequestNumber,
+            Profile = build.Profile,
             Status = build.Status,
             Trigger = build.Trigger,
             QueuedAt = build.QueuedAt,
