@@ -140,6 +140,23 @@ public class GitHubOperations(
                 return false;
             }
 
+            // Idempotency: if the release already exists, do not fail the build.
+            // This is especially important on build servers where publish profiles may be retried.
+            try
+            {
+                var viewArgs = new[] { "release", "view", tag, "--repo", repo };
+                var viewResult = await _hostExecutor.ExecuteAsync("gh", viewArgs, commandOptions);
+                if (viewResult.Success)
+                {
+                    Logger.Warning($"Release '{tag}' already exists - skipped");
+                    return true;
+                }
+            }
+            catch
+            {
+                // Ignore and attempt create as usual.
+            }
+
             // Step 1: Create the release without files first.
             // This is more reliable than uploading files during creation.
             var createArgs = new ArgumentBuilder()
@@ -344,23 +361,14 @@ public class GitHubOperations(
 
             var url = result.Output.Trim();
 
-            // Parse owner from various URL formats:
-            // https://github.com/owner/repo.git
-            // git@github.com:owner/repo.git
-            if (url.Contains("github.com"))
+            var repo = TryParseGitHubRepo(url);
+            if (string.IsNullOrEmpty(repo))
             {
-                var parts = url
-                    .Replace("https://github.com/", "")
-                    .Replace("git@github.com:", "")
-                    .Split('/');
-
-                if (parts.Length >= 1)
-                {
-                    return parts[0];
-                }
+                return null;
             }
 
-            return null;
+            var parts = repo.Split('/');
+            return parts.Length >= 1 ? parts[0] : null;
         }
         catch
         {
@@ -384,31 +392,74 @@ public class GitHubOperations(
 
             var url = result.Output.Trim();
 
-            // Parse owner/repo from various URL formats:
-            // https://github.com/owner/repo.git
-            // git@github.com:owner/repo.git
-            if (url.Contains("github.com"))
-            {
-                var repoPath = url
-                    .Replace("https://github.com/", "")
-                    .Replace("git@github.com:", "")
-                    .TrimEnd('/');
-
-                // Remove .git suffix if present.
-                if (repoPath.EndsWith(".git"))
-                {
-                    repoPath = repoPath[..^4];
-                }
-
-                return repoPath;
-            }
-
-            return null;
+            return TryParseGitHubRepo(url);
         }
         catch
         {
             return null;
         }
+    }
+
+    private static string? TryParseGitHubRepo(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return null;
+        }
+
+        // Prefer robust URI parsing for https remotes, including credentialed URLs like:
+        // https://x-access-token:***@github.com/owner/repo.git
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+            uri.Host.EndsWith("github.com", StringComparison.OrdinalIgnoreCase))
+        {
+            var path = uri.AbsolutePath.Trim('/');
+            if (path.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+            {
+                path = path[..^4];
+            }
+
+            var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 2)
+            {
+                return $"{parts[0]}/{parts[1]}";
+            }
+        }
+
+        // SSH remote:
+        // git@github.com:owner/repo.git
+        if (url.StartsWith("git@github.com:", StringComparison.OrdinalIgnoreCase))
+        {
+            var path = url["git@github.com:".Length..].Trim().TrimEnd('/');
+            if (path.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+            {
+                path = path[..^4];
+            }
+
+            var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 2)
+            {
+                return $"{parts[0]}/{parts[1]}";
+            }
+        }
+
+        // Fallback: best-effort parse for anything that contains github.com/<owner>/<repo>
+        var idx = url.IndexOf("github.com/", StringComparison.OrdinalIgnoreCase);
+        if (idx >= 0)
+        {
+            var path = url[(idx + "github.com/".Length)..].Trim().TrimEnd('/');
+            if (path.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+            {
+                path = path[..^4];
+            }
+
+            var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 2)
+            {
+                return $"{parts[0]}/{parts[1]}";
+            }
+        }
+
+        return null;
     }
 }
 

@@ -602,6 +602,33 @@ public class BuildOrchestrator : IBuildOrchestrator
             return (false, 0, 0, 1, "Docker CLI is required in the build container (docker.sock alone is not enough)");
         }
 
+        logger.Info("Ensuring git is installed in build container...");
+        var gitOk = await EnsureGitInstalledAsync(containerId, logger, cancellationToken);
+        if (!gitOk)
+        {
+            return (false, 0, 0, 1, "git is required in the build container");
+        }
+
+        // Configure git credentials (without embedding tokens in remote URLs).
+        // Build scripts may call `git remote get-url origin`; never persist credentials in origin URL.
+        logger.Info("Configuring git credentials in build container (if GITHUB_TOKEN is set)...");
+        var credsOk = await ConfigureGitCredentialsAsync(containerId, logger, cancellationToken);
+        if (!credsOk)
+        {
+            return (false, 0, 0, 1, "Failed to configure git credentials in build container");
+        }
+
+        // Publish profiles commonly create GitHub releases via `gh` CLI (GitHubOperations).
+        if (string.Equals(profile, "publish", StringComparison.OrdinalIgnoreCase))
+        {
+            logger.Info("Ensuring GitHub CLI (gh) is installed in build container...");
+            var ghOk = await EnsureGitHubCliInstalledAsync(containerId, logger, cancellationToken);
+            if (!ghOk)
+            {
+                return (false, 0, 0, 1, "GitHub CLI (gh) is required for publish profile GitHub operations");
+            }
+        }
+
         // Log the installed version for debugging.
         await RunDockerExecAsync(
             containerId,
@@ -874,6 +901,114 @@ public class BuildOrchestrator : IBuildOrchestrator
             logger,
             cancellationToken);
         return versionExit == 0;
+    }
+
+    private async Task<bool> EnsureGitInstalledAsync(
+        string containerId,
+        ServerBuildLogger logger,
+        CancellationToken cancellationToken)
+    {
+        var checkExit = await RunDockerExecAsync(
+            containerId,
+            ["sh", "-c", "command -v git >/dev/null 2>&1"],
+            logger,
+            cancellationToken);
+        if (checkExit == 0)
+        {
+            return true;
+        }
+
+        var installCmd =
+            "set -euo pipefail; " +
+            "if command -v git >/dev/null 2>&1; then exit 0; fi; " +
+            "if command -v apk >/dev/null 2>&1; then apk add --no-cache git; exit 0; fi; " +
+            "if command -v apt-get >/dev/null 2>&1; then apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*; exit 0; fi; " +
+            "echo 'Unsupported base image: cannot install git automatically' >&2; exit 1;";
+
+        var installExit = await RunDockerExecAsync(
+            containerId,
+            ["sh", "-c", installCmd],
+            logger,
+            cancellationToken);
+        if (installExit != 0)
+        {
+            return false;
+        }
+
+        var versionExit = await RunDockerExecAsync(
+            containerId,
+            ["git", "--version"],
+            logger,
+            cancellationToken);
+        return versionExit == 0;
+    }
+
+    private async Task<bool> EnsureGitHubCliInstalledAsync(
+        string containerId,
+        ServerBuildLogger logger,
+        CancellationToken cancellationToken)
+    {
+        var checkExit = await RunDockerExecAsync(
+            containerId,
+            ["sh", "-c", "command -v gh >/dev/null 2>&1"],
+            logger,
+            cancellationToken);
+        if (checkExit == 0)
+        {
+            return true;
+        }
+
+        // Best-effort install across common base images.
+        // - Alpine: `apk add github-cli`
+        // - Debian/Ubuntu: `apt-get install gh` (available in Ubuntu repos)
+        var installCmd =
+            "set -euo pipefail; " +
+            "if command -v gh >/dev/null 2>&1; then exit 0; fi; " +
+            "if command -v apk >/dev/null 2>&1; then apk add --no-cache github-cli; exit 0; fi; " +
+            "if command -v apt-get >/dev/null 2>&1; then apt-get update && apt-get install -y --no-install-recommends gh && rm -rf /var/lib/apt/lists/*; exit 0; fi; " +
+            "echo 'Unsupported base image: cannot install gh automatically' >&2; exit 1;";
+
+        var installExit = await RunDockerExecAsync(
+            containerId,
+            ["sh", "-c", installCmd],
+            logger,
+            cancellationToken);
+        if (installExit != 0)
+        {
+            return false;
+        }
+
+        var versionExit = await RunDockerExecAsync(
+            containerId,
+            ["gh", "--version"],
+            logger,
+            cancellationToken);
+        return versionExit == 0;
+    }
+
+    private async Task<bool> ConfigureGitCredentialsAsync(
+        string containerId,
+        ServerBuildLogger logger,
+        CancellationToken cancellationToken)
+    {
+        // Do not echo the token; just write it to a credential store file with safe permissions.
+        var cmd =
+            "set -euo pipefail; " +
+            "if [ -z \"${GITHUB_TOKEN:-}\" ]; then exit 0; fi; " +
+            "if ! command -v git >/dev/null 2>&1; then exit 0; fi; " +
+            "umask 077; " +
+            "creds_file=\"${HOME:-/root}/.git-credentials\"; " +
+            "printf \"https://x-access-token:%s@github.com\\n\" \"$GITHUB_TOKEN\" > \"$creds_file\"; " +
+            "git config --global credential.helper store; " +
+            "git config --global credential.useHttpPath true; " +
+            "exit 0;";
+
+        var exit = await RunDockerExecAsync(
+            containerId,
+            ["sh", "-c", cmd],
+            logger,
+            cancellationToken);
+        return exit == 0;
     }
 
     private async Task<int> RunDockerExecAsync(

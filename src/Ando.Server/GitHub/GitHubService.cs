@@ -146,6 +146,11 @@ public class GitHubService : IGitHubService
                 return false;
             }
 
+            // Ensure the stored git remote URL does not embed credentials.
+            // Build scripts may call `git remote get-url origin` and log it; never leak tokens to logs.
+            var cleanRemoteUrl = $"https://github.com/{repoFullName}.git";
+            await RunGitCommandAsync(targetDirectory, "remote", "set-url", "origin", cleanRemoteUrl);
+
             // Checkout the specific commit *on the branch* so the working copy is not left in
             // detached-HEAD state. This matters for publish profiles that include Git.Push.
             return await RunGitCommandAsync(targetDirectory, "checkout", "-B", branch, commitSha);
@@ -186,6 +191,10 @@ public class GitHubService : IGitHubService
             {
                 return false;
             }
+
+            // Restore a clean remote URL (never persist credentials in the repo config).
+            var cleanRemoteUrl = $"https://github.com/{repoFullName}.git";
+            await RunGitCommandAsync(repoDirectory, "remote", "set-url", "origin", cleanRemoteUrl);
 
             // Checkout the specific commit *on the branch* so the working copy is not left in
             // detached-HEAD state. This matters for publish profiles that include Git.Push.
