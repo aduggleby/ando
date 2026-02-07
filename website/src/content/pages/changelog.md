@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.76
+
+**2026-02-07**
+
+- Add personal API token management for programmatic access to the server
+
 ## 0.9.75
 
 **2026-02-07**

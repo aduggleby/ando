@@ -800,7 +800,7 @@ All pages are available in markdown format for LLM consumption:
 - https://andobuild.com/cli.md - CLI reference
 - https://andobuild.com/hooks.md - Pre-build and post-build hooks
 - https://andobuild.com/llm-prompt.md - LLM prompt for adding ANDO to projects
-- https://andobuild.com/server.md - CI Server installation (Linux/Ubuntu)
+- https://andobuild.com/server.md - CI Server installation, configuration, and API tokens
 - https://andobuild.com/server-truenas.md - CI Server installation on TrueNAS SCALE
 - https://andobuild.com/changelog.md - Release history
 - https://andobuild.com/license.md - License information

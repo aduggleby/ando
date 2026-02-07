@@ -112,6 +112,60 @@ Email__Smtp__UseSsl=true
 
 Works with any SMTP provider (Gmail, SendGrid, Mailgun, your own mail server, etc.)
 
+## API Tokens
+
+Personal API tokens allow programmatic access to the ANDO CI Server REST API. Use tokens for CI scripts, automation, or any tool that needs to authenticate without a browser session.
+
+### Creating a Token
+
+Create tokens via the REST API (requires cookie-based authentication first):
+
+```bash
+# Login to get a session cookie
+curl -c cookies.txt -X POST https://ci.yourdomain.com/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"..."}'
+
+# Create a token
+curl -b cookies.txt -X POST https://ci.yourdomain.com/api/auth/tokens \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"CI automation"}'
+```
+
+The response includes the token value **once** — store it securely. Tokens have the format `ando_pat_<random>`.
+
+### Authenticating with a Token
+
+Pass the token via the `Authorization` header or the `X-Api-Token` header:
+
+```bash
+# Using Authorization header
+curl -H 'Authorization: Bearer ando_pat_...' https://ci.yourdomain.com/api/projects
+
+# Using X-Api-Token header
+curl -H 'X-Api-Token: ando_pat_...' https://ci.yourdomain.com/api/projects
+```
+
+### Token Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/auth/tokens` | Create a new token. Body: `{"name":"..."}` |
+| `GET` | `/api/auth/tokens` | List all your tokens (metadata only, not the raw value). |
+| `DELETE` | `/api/auth/tokens/{id}` | Revoke a token. |
+
+### Helper Script
+
+A helper script is included for creating tokens via Playwright's API context:
+
+```bash
+ANDO_BASE_URL=https://ci.yourdomain.com \
+ANDO_EMAIL=you@example.com \
+ANDO_PASSWORD=... \
+ANDO_TOKEN_NAME="CI automation" \
+node tests/Ando.Server.E2E/tools/create-api-token.js
+```
+
 ## Server Management
 
 Management scripts installed to `/opt/ando/scripts/`:
