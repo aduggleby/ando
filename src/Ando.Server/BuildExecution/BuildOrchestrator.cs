@@ -19,6 +19,7 @@
 
 using System.Diagnostics;
 using System.Reflection;
+using System.Text.Json;
 using Ando.Server.Configuration;
 using Ando.Server.Data;
 using Ando.Server.GitHub;
@@ -143,10 +144,24 @@ public class BuildOrchestrator : IBuildOrchestrator
         var shortSha = build.CommitSha.Length >= 8 ? build.CommitSha[..8] : build.CommitSha;
 
         // Two paths needed:
-        // - repoPathHost: HOST filesystem path for Docker volume mounts
+        // - repoPathHost: HOST filesystem path for Docker volume mounts (used by the Docker daemon)
         // - repoPathServer: Path as seen inside the server container for git operations
-        var repoPathHost = Path.Combine(_buildSettings.ReposPath, project.Id.ToString(), shortSha);
-        var repoPathServer = Path.Combine(_buildSettings.GetReposPathForServer(), project.Id.ToString(), shortSha);
+        //
+        // When the server runs in a container, the path inside the container (e.g. /data/repos)
+        // is not necessarily a valid host path. If ReposPathInContainer isn't configured,
+        // we resolve the host path by inspecting this server container's bind mounts.
+        string repoPathServer;
+        string repoPathHost;
+        if (!string.IsNullOrWhiteSpace(_buildSettings.ReposPathInContainer))
+        {
+            repoPathServer = Path.Combine(_buildSettings.ReposPathInContainer!, project.Id.ToString(), shortSha);
+            repoPathHost = Path.Combine(_buildSettings.ReposPath, project.Id.ToString(), shortSha);
+        }
+        else
+        {
+            repoPathServer = Path.Combine(_buildSettings.ReposPath, project.Id.ToString(), shortSha);
+            repoPathHost = await ResolveHostPathForServerPathAsync(repoPathServer, linkedCts.Token);
+        }
 
         try
         {
@@ -170,6 +185,8 @@ public class BuildOrchestrator : IBuildOrchestrator
             buildLogger.Info($"Server Ando version: {GetServerAndoVersion()}");
             buildLogger.Info($"Starting build for {project.RepoFullName}");
             buildLogger.Info($"Branch: {build.Branch}, Commit: {build.ShortCommitSha}");
+            buildLogger.Info($"Repo path (server): {repoPathServer}");
+            buildLogger.Info($"Repo path (host): {repoPathHost}");
 
             // Step 1: Clone or fetch repository (uses server-internal path)
             buildLogger.Info("Preparing repository...");
@@ -598,6 +615,126 @@ public class BuildOrchestrator : IBuildOrchestrator
         }
 
         return asm.GetName().Version?.ToString() ?? "unknown";
+    }
+
+    private static bool IsRunningInContainer()
+    {
+        if (Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true")
+        {
+            return true;
+        }
+
+        // Common docker indicator file.
+        return File.Exists("/.dockerenv");
+    }
+
+    private sealed class DockerMount
+    {
+        public string? Source { get; set; }
+        public string? Destination { get; set; }
+    }
+
+    private async Task<string> ResolveHostPathForServerPathAsync(string serverPath, CancellationToken cancellationToken)
+    {
+        // If the server isn't containerized, "serverPath" is already a host path.
+        if (!IsRunningInContainer())
+        {
+            return serverPath;
+        }
+
+        // In Docker, HOSTNAME is typically set to the container ID.
+        var selfContainerId = Environment.GetEnvironmentVariable("HOSTNAME");
+        if (string.IsNullOrWhiteSpace(selfContainerId))
+        {
+            return serverPath;
+        }
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "docker",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+
+        startInfo.ArgumentList.Add("inspect");
+        startInfo.ArgumentList.Add(selfContainerId);
+        startInfo.ArgumentList.Add("--format");
+        startInfo.ArgumentList.Add("{{json .Mounts}}");
+
+        using var process = Process.Start(startInfo);
+        if (process == null)
+        {
+            return serverPath;
+        }
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken);
+
+        if (process.ExitCode != 0)
+        {
+            var err = await stderrTask;
+            _logger.LogWarning("docker inspect failed while resolving host path for {ServerPath}: {Error}", serverPath, err);
+            return serverPath;
+        }
+
+        var mountsJson = (await stdoutTask).Trim();
+        if (string.IsNullOrWhiteSpace(mountsJson))
+        {
+            return serverPath;
+        }
+
+        List<DockerMount>? mounts;
+        try
+        {
+            mounts = JsonSerializer.Deserialize<List<DockerMount>>(mountsJson);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse docker mounts JSON while resolving host path for {ServerPath}", serverPath);
+            return serverPath;
+        }
+
+        if (mounts == null || mounts.Count == 0)
+        {
+            return serverPath;
+        }
+
+        DockerMount? best = null;
+        var bestLen = -1;
+        foreach (var m in mounts)
+        {
+            if (string.IsNullOrWhiteSpace(m.Destination) || string.IsNullOrWhiteSpace(m.Source))
+            {
+                continue;
+            }
+
+            var dest = m.Destination!.TrimEnd('/');
+            if (dest.Length == 0)
+            {
+                continue;
+            }
+
+            if (serverPath == dest || serverPath.StartsWith(dest + "/", StringComparison.Ordinal))
+            {
+                if (dest.Length > bestLen)
+                {
+                    best = m;
+                    bestLen = dest.Length;
+                }
+            }
+        }
+
+        if (best == null)
+        {
+            return serverPath;
+        }
+
+        var destination = best.Destination!.TrimEnd('/');
+        var source = best.Source!.TrimEnd('/');
+        var rel = serverPath.Length == destination.Length ? "" : serverPath.Substring(destination.Length);
+        return source + rel;
     }
 
     private async Task<bool> EnsureAndoCliInstalledAsync(
