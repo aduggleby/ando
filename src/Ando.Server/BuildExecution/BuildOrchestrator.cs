@@ -999,8 +999,10 @@ public class BuildOrchestrator : IBuildOrchestrator
             "umask 077; " +
             "creds_file=\"${HOME:-/root}/.git-credentials\"; " +
             "printf \"https://x-access-token:%s@github.com\\n\" \"$GITHUB_TOKEN\" > \"$creds_file\"; " +
-            "git config --global credential.helper store; " +
-            "git config --global credential.useHttpPath true; " +
+            // Ensure git uses this specific credentials file and matches by host (not full path),
+            // otherwise pushes from non-interactive build containers will fail.
+            "git config --global credential.helper \"store --file $creds_file\"; " +
+            "git config --global credential.useHttpPath false; " +
             "exit 0;";
 
         var exit = await RunDockerExecAsync(
