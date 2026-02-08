@@ -518,11 +518,15 @@ public class BuildOrchestrator : IBuildOrchestrator
             startInfo.ArgumentList.Add($"GITHUB_REPOSITORY={project.RepoFullName}");
         }
 
-        // Set ANDO_HOST_ROOT for Docker-in-Docker path mapping.
-        // When ando CLI runs with --dind inside this container, it needs to know
-        // the actual HOST path (not /workspace) for creating nested container volume mounts.
+        // ANDO_HOST_ROOT is used by the Ando CLI to translate "/workspace/..." paths for steps that
+        // run on the build container (like Ando.Build spawning nested builds).
+        //
+        // On Ando.Server we bind-mount the repo to /workspace, so using "/workspace" here ensures:
+        // - child builds can find and read build scripts (paths exist in this container)
+        // - nested builds copy from the container filesystem (docker cp/tar), so they do NOT need
+        //   access to the physical host path for volume mounts.
         startInfo.ArgumentList.Add("-e");
-        startInfo.ArgumentList.Add($"ANDO_HOST_ROOT={repoPath}");
+        startInfo.ArgumentList.Add("ANDO_HOST_ROOT=/workspace");
 
         startInfo.ArgumentList.Add("--entrypoint");
         startInfo.ArgumentList.Add("tail");

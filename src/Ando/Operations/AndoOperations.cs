@@ -144,6 +144,8 @@ public class AndoOperations
 
             // Translate container path to host path for spawning the child process.
             var hostPath = _containerToHostPath(dirPath);
+            _logger.Info($"Child build target (script path): {dirPath}");
+            _logger.Info($"Child build translated path: {hostPath}");
 
             // Determine working directory and build file argument.
             string workingDirectory;
@@ -204,6 +206,13 @@ public class AndoOperations
                 TimeoutMs = Execution.CommandOptions.NoTimeout
             };
 
+            if (!Directory.Exists(workingDirectory))
+            {
+                _logger.Error($"Child build working directory does not exist: {workingDirectory}");
+                _logger.Error("This usually indicates an ANDO_HOST_ROOT/container path mapping issue.");
+                _logger.Error($"ANDO_HOST_ROOT={Environment.GetEnvironmentVariable("ANDO_HOST_ROOT") ?? "<not set>"}");
+            }
+
             // Set indent level for child build output formatting.
             commandOptions.Environment[Logging.ConsoleLogger.IndentLevelEnvVar] = childIndent.ToString();
 
@@ -215,9 +224,26 @@ public class AndoOperations
                 commandOptions.Environment[DindChecker.DindEnvVar] = parentDind;
             }
 
-            var result = await runner.ExecuteAsync("ando", args, commandOptions);
+            _logger.Info($"Spawning child build: ando {string.Join(" ", args)}");
 
-            return result.Success;
+            try
+            {
+                var result = await runner.ExecuteAsync("ando", args, commandOptions);
+                if (!result.Success)
+                {
+                    _logger.Error($"Child build failed (exit code {result.ExitCode}).");
+                }
+                return result.Success;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Child build threw exception: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    _logger.Error($"Inner: {ex.InnerException.Message}");
+                }
+                return false;
+            }
         }, displayName);
     }
 }

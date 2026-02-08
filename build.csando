@@ -181,21 +181,10 @@ if (publish)
             "./dist/osx-arm64/ando"
         ));
 
-	// Build and deploy the documentation website
-	// API docs are generated via `ando docs` pre-hook
-	// Only deploy docs from a local release environment. On Ando.Server builds, we
-	// skip docs deploy even if a token is present (builds should be reproducible
-	// and not depend on external infra credentials).
-	// The explicit `docs` profile still deploys and will fail if auth is missing.
-	if (!isOnServer && !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("CLOUDFLARE_API_TOKEN")))
-	{
-	    Ando.Build(Directory("./website"));
+		// Build and deploy the documentation website
+		// API docs are generated via `ando docs` pre-hook
+		Ando.Build(Directory("./website"), o => o.WithProfile("publish"));
 	}
-	else
-	{
-	    Log.Info("Skipping documentation website deploy (disabled on server or CLOUDFLARE_API_TOKEN not set).");
-	}
-}
 
 // Copy the dist folder from container to host both individually and as a compressed archive
 Ando.CopyArtifactsToHost("dist", "./dist");
