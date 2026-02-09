@@ -191,6 +191,7 @@ sudo -u ando /opt/ando/scripts/backup.sh   # Run backup now
 | `/opt/ando/scripts/` | Management scripts |
 | `/opt/ando/backups/` | Automated backups |
 | `/opt/ando/data/sqldata/` | SQL Server database |
+| `/opt/ando/data/keys/` | ASP.NET Data Protection keys (auth sessions) |
 | `/opt/ando/data/artifacts/` | Build artifacts |
 
 ## Full Documentation

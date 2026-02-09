@@ -3,6 +3,15 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.90
+
+**2026-02-09**
+
+- Persist login sessions so users stay signed in across server restarts
+- Default to remember-me login for a smoother authentication experience
+- Add session status endpoint for improved client connectivity
+- Improve project and script handling in the server
+
 ## 0.9.80
 
 **2026-02-07**
