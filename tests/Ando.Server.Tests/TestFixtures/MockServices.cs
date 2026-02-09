@@ -58,7 +58,8 @@ public class MockGitHubService : IGitHubService
         string repoFullName,
         string branch,
         string commitSha,
-        string targetDirectory)
+        string targetDirectory,
+        string? gitTokenOverride = null)
     {
         if (ThrowOnCloneRepo != null)
         {
@@ -80,7 +81,8 @@ public class MockGitHubService : IGitHubService
         string repoFullName,
         string branch,
         string commitSha,
-        string repoDirectory)
+        string repoDirectory,
+        string? gitTokenOverride = null)
     {
         if (ThrowOnFetchCheckout != null)
         {
@@ -188,7 +190,8 @@ public class MockBuildService : IBuildService
         BuildTrigger trigger,
         string? commitMessage = null,
         string? commitAuthor = null,
-        int? pullRequestNumber = null)
+        int? pullRequestNumber = null,
+        string? profile = null)
     {
         if (ThrowOnQueueBuild != null)
         {
@@ -204,6 +207,7 @@ public class MockBuildService : IBuildService
             commitMessage,
             commitAuthor,
             pullRequestNumber,
+            profile,
             buildId));
 
         return Task.FromResult(buildId);
@@ -257,6 +261,7 @@ public record QueueBuildCall(
     string? CommitMessage,
     string? CommitAuthor,
     int? PullRequestNumber,
+    string? Profile,
     int ResultBuildId);
 
 /// <summary>

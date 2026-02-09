@@ -88,7 +88,10 @@ public class HookScriptHost
             // Execute with timeout.
             using var cts = new CancellationTokenSource(timeoutMs);
 
-            var task = CSharpScript.RunAsync(scriptContent, options, globals, typeof(HookGlobals));
+            // Use Create(...).RunAsync(...) rather than the static RunAsync(...)
+            // helper; this ensures the globals type is consistently applied.
+            var script = CSharpScript.Create(scriptContent, options, typeof(HookGlobals));
+            var task = script.RunAsync(globals, cts.Token);
 
             // Wait for completion or timeout.
             var completedTask = await Task.WhenAny(task, Task.Delay(timeoutMs, cts.Token));

@@ -107,7 +107,11 @@ public class ScriptHost(IBuildLogger logger)
             // Execute the script. This runs the C# code which registers steps
             // in the StepRegistry. Steps are not executed yet - that happens
             // in WorkflowRunner after script loading completes.
-            await CSharpScript.RunAsync(scriptContent, options, globals, typeof(ScriptGlobals));
+            //
+            // Use Create(...).RunAsync(...) rather than the static RunAsync(...)
+            // helper; this ensures the globals type is consistently applied.
+            var script = CSharpScript.Create(scriptContent, options, typeof(ScriptGlobals));
+            await script.RunAsync(globals);
         }
         catch (CompilationErrorException ex)
         {

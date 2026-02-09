@@ -171,7 +171,7 @@ public class BuildsControllerValidationTests : IDisposable
         var build = await CreateTestBuildAsync(_testProject, status);
         _buildService.Setup(s => s.QueueBuildAsync(
             It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(),
-            It.IsAny<BuildTrigger>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int?>()))
+            It.IsAny<BuildTrigger>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<string?>()))
             .ReturnsAsync(100);
 
         // Act
@@ -200,7 +200,7 @@ public class BuildsControllerValidationTests : IDisposable
         result.ShouldBeOfType<RedirectToActionResult>();
         _buildService.Verify(s => s.QueueBuildAsync(
             It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(),
-            It.IsAny<BuildTrigger>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int?>()),
+            It.IsAny<BuildTrigger>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<string?>()),
             Times.Never);
         GetTempData("Error").ShouldContain("cannot be retried");
     }
@@ -223,11 +223,12 @@ public class BuildsControllerValidationTests : IDisposable
         string? capturedMessage = null;
         string? capturedAuthor = null;
         int? capturedPrNumber = null;
+        string? capturedProfile = null;
 
         _buildService.Setup(s => s.QueueBuildAsync(
             It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(),
-            It.IsAny<BuildTrigger>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int?>()))
-            .Callback<int, string, string, BuildTrigger, string?, string?, int?>((p, c, b, t, m, a, pr) =>
+            It.IsAny<BuildTrigger>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<string?>()))
+            .Callback<int, string, string, BuildTrigger, string?, string?, int?, string?>((p, c, b, t, m, a, pr, profile) =>
             {
                 capturedProjectId = p;
                 capturedCommitSha = c;
@@ -235,6 +236,7 @@ public class BuildsControllerValidationTests : IDisposable
                 capturedMessage = m;
                 capturedAuthor = a;
                 capturedPrNumber = pr;
+                capturedProfile = profile;
             })
             .ReturnsAsync(100);
 
@@ -248,6 +250,7 @@ public class BuildsControllerValidationTests : IDisposable
         capturedMessage.ShouldBe("Test commit");
         capturedAuthor.ShouldBe("Test Author");
         capturedPrNumber.ShouldBe(42);
+        capturedProfile.ShouldBe(build.Profile);
     }
 
     // -------------------------------------------------------------------------
@@ -324,7 +327,7 @@ public class BuildsControllerValidationTests : IDisposable
         AssertNotFoundView(result);
         _buildService.Verify(s => s.QueueBuildAsync(
             It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(),
-            It.IsAny<BuildTrigger>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int?>()),
+            It.IsAny<BuildTrigger>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<string?>()),
             Times.Never);
     }
 

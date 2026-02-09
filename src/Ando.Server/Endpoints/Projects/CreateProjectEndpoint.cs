@@ -52,7 +52,21 @@ public class CreateProjectEndpoint : Endpoint<CreateProjectRequest, CreateProjec
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
 
         // Validate and normalize input
-        var repoFullName = req.RepoFullName?.Trim() ?? "";
+        // Accept both RepoFullName (preferred) and RepoUrl (legacy/alternate client field).
+        var repoFullName = (req.RepoFullName ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(repoFullName))
+        {
+            repoFullName = (req.RepoUrl ?? "").Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(repoFullName))
+        {
+            await SendAsync(new CreateProjectResponse(
+                false,
+                Error: "Repository is required. Provide 'owner/repo' or a GitHub URL."
+            ), cancellation: ct);
+            return;
+        }
 
         // Parse GitHub URL if provided (e.g., https://github.com/owner/repo)
         if (repoFullName.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase))

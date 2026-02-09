@@ -189,8 +189,13 @@ public class CreateProjectRequest
     /// <summary>
     /// Full repository name in owner/repo format.
     /// </summary>
-    [Required(ErrorMessage = "Repository name is required")]
     public string RepoFullName { get; set; } = "";
+
+    /// <summary>
+    /// Back-compat with older/alternate clients that send a URL field.
+    /// The server normalizes URLs into owner/repo format.
+    /// </summary>
+    public string? RepoUrl { get; set; }
 }
 
 /// <summary>
