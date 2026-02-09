@@ -14,7 +14,8 @@ import { Alert } from '@/components/ui/Alert';
 export function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
+  // Default to a persistent cookie session (30-day sliding expiration, server-side).
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -95,7 +96,7 @@ export function Login() {
                 onChange={(e) => setRememberMe(e.target.checked)}
               />
               <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
-                Remember me
+                Remember me (30 days)
               </label>
             </div>
 

@@ -194,7 +194,8 @@ public class AuthController : Controller
             await SendVerificationEmailAsync(user);
 
             // Sign in the user immediately
-            await _signInManager.SignInAsync(user, isPersistent: false);
+            // No "remember me" choice on registration; default to a persistent session.
+            await _signInManager.SignInAsync(user, isPersistent: true);
 
             // Redirect straight to dashboard — the email verification banner
             // on the layout already reminds users to verify their email

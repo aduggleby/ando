@@ -85,7 +85,8 @@ public class RegisterEndpoint : Endpoint<RegisterRequest, RegisterResponse>
             await SendVerificationEmailAsync(user);
 
             // Sign in the user immediately
-            await _signInManager.SignInAsync(user, isPersistent: false);
+            // No "remember me" choice on registration; default to a persistent session.
+            await _signInManager.SignInAsync(user, isPersistent: true);
 
             await SendAsync(new RegisterResponse(
                 true,

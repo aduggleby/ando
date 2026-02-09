@@ -109,6 +109,9 @@ public class CommitCommand
                 _logger.Error($"Error: Failed to generate commit message: {ex.Message}");
                 _logger.Error("");
                 _logger.Error("Make sure Claude CLI is installed: npm install -g @anthropic-ai/claude-code");
+                _logger.Error("Windows tip: run `where claude` to confirm it's on PATH.");
+                _logger.Error("If it's installed but not found, set `ANDO_CLAUDE` to the claude command/path");
+                _logger.Error("or add `claudePath` to your ando.config (project root).");
                 return 1;
             }
 

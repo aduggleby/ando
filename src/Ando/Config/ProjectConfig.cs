@@ -56,6 +56,14 @@ public record ProjectConfig
     public bool AllowClaude { get; init; } = false;
 
     /// <summary>
+    /// Optional explicit path/command for the Claude CLI.
+    /// Useful on Windows where npm installs a claude.cmd shim that may not be
+    /// discoverable from non-interactive PATH contexts.
+    /// </summary>
+    [JsonPropertyName("claudePath")]
+    public string? ClaudePath { get; init; }
+
+    /// <summary>
     /// Loads project configuration from the specified directory.
     /// Returns default configuration if file doesn't exist or is invalid.
     /// </summary>

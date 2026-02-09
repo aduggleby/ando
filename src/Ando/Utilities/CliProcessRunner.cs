@@ -15,6 +15,7 @@
 // =============================================================================
 
 using System.Diagnostics;
+using Ando.Config;
 
 namespace Ando.Utilities;
 
@@ -156,9 +157,35 @@ public class CliProcessRunner
     /// <exception cref="Exception">Thrown if Claude CLI fails.</exception>
     public virtual async Task<string> RunClaudeAsync(string prompt, int timeoutMs = 120000, bool streamOutput = false)
     {
+        // Allow override for environments where "claude" isn't on PATH (common on Windows).
+        // Priority: env var, then ando.config, then "claude".
+        var configuredClaude = Environment.GetEnvironmentVariable("ANDO_CLAUDE");
+        if (string.IsNullOrWhiteSpace(configuredClaude))
+        {
+            try
+            {
+                var config = ProjectConfig.Load(Directory.GetCurrentDirectory());
+                configuredClaude = config.ClaudePath;
+            }
+            catch
+            {
+                // Ignore config lookup issues and fall back to default.
+            }
+        }
+
+        var claudeCommand = string.IsNullOrWhiteSpace(configuredClaude) ? "claude" : configuredClaude.Trim();
+        const string claudeArgs = "-p --dangerously-skip-permissions";
+
+        // On Windows, npm typically installs a `claude.cmd` shim. When UseShellExecute=false,
+        // starting "claude" may fail (no .exe) and starting a .cmd/.bat requires cmd.exe.
+        // Using cmd.exe also preserves normal PATH resolution (where.exe / PATHEXT behavior).
+        var (fileName, arguments) = OperatingSystem.IsWindows()
+            ? ("cmd.exe", $"/d /s /c \"{BuildWindowsCommandLine(claudeCommand, claudeArgs)}\"")
+            : (claudeCommand, claudeArgs);
+
         var result = await RunAsync(
-            "claude",
-            "-p --dangerously-skip-permissions",
+            fileName,
+            arguments,
             stdin: prompt,
             timeoutMs: timeoutMs,
             streamOutput: streamOutput
@@ -173,5 +200,14 @@ public class CliProcessRunner
         }
 
         return result.Output.Trim();
+    }
+
+    private static string BuildWindowsCommandLine(string command, string args)
+    {
+        // If the command is a path with spaces, quote it. If it's a bare command (claude),
+        // leave it unquoted so cmd.exe can resolve it via PATH/PATHEXT.
+        var needsQuoting = command.Contains(' ') && (command.Contains('\\') || command.Contains('/'));
+        var cmd = needsQuoting ? $"\"{command}\"" : command;
+        return $"{cmd} {args}";
     }
 }

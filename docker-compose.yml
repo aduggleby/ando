@@ -41,6 +41,8 @@ services:
       - artifacts:/data/artifacts
       # Persistent storage for cloned repositories
       - repos:/data/repos
+      # Persistent storage for ASP.NET Core Data Protection keys (prevents logouts on container rebuild/recreate)
+      - keys:/data/keys
       # Mount GitHub App private key if using file-based key
       - ./github-app.pem:/app/github-app.pem:ro
     depends_on:
@@ -83,4 +85,8 @@ volumes:
 
   # Cloned repository storage
   repos:
+    driver: local
+
+  # Data Protection keys (auth cookies become invalid if these are lost)
+  keys:
     driver: local
