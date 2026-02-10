@@ -995,11 +995,22 @@ public class BuildOrchestrator : IBuildOrchestrator
         ServerBuildLogger logger,
         CancellationToken cancellationToken)
     {
-        // Do not echo the token; just write it to a credential store file with safe permissions.
+        // Configure:
+        // 1) Non-interactive auth for https://github.com (for git push/tag pushes)
+        // 2) A committer identity for annotated tags (git tag -a requires user.name/user.email)
+        //
+        // Note: the build container is ephemeral; it's safe to set global config here.
         var cmd =
             "set -euo pipefail; " +
-            "if [ -z \"${GITHUB_TOKEN:-}\" ]; then exit 0; fi; " +
             "if ! command -v git >/dev/null 2>&1; then exit 0; fi; " +
+            // Ensure tagger identity exists; allow overrides via env vars.
+            // Prefer standard git env vars, then custom ones, then a safe default.
+            "name=\"${GIT_COMMITTER_NAME:-${GIT_AUTHOR_NAME:-${GIT_USER_NAME:-Ando Server}}}\"; " +
+            "email=\"${GIT_COMMITTER_EMAIL:-${GIT_AUTHOR_EMAIL:-${GIT_USER_EMAIL:-ando-server@localhost}}}\"; " +
+            "git config --global user.name >/dev/null 2>&1 || git config --global user.name \"$name\"; " +
+            "git config --global user.email >/dev/null 2>&1 || git config --global user.email \"$email\"; " +
+            // Configure token-based credentials if available.
+            "if [ -z \"${GITHUB_TOKEN:-}\" ]; then exit 0; fi; " +
             "umask 077; " +
             "creds_file=\"${HOME:-/root}/.git-credentials\"; " +
             "printf \"https://x-access-token:%s@github.com\\n\" \"$GITHUB_TOKEN\" > \"$creds_file\"; " +
