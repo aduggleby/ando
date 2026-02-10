@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Ando.Server</RootNamespace>
-    <Version>0.9.96</Version>
+    <Version>0.9.97</Version>
   </PropertyGroup>
 
   <ItemGroup>
