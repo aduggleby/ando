@@ -34,6 +34,7 @@ public class GitHubService : IGitHubService
 
     // Cache installation tokens (they're valid for 1 hour, we cache for 50 min)
     private readonly ConcurrentDictionary<long, (string Token, DateTime ExpiresAt)> _tokenCache = new();
+    private string? _appSlugCache;
 
     public GitHubService(
         IHttpClientFactory httpClientFactory,
@@ -45,6 +46,65 @@ public class GitHubService : IGitHubService
         _authenticator = authenticator;
         _settings = settings.Value;
         _logger = logger;
+    }
+
+    /// <inheritdoc />
+    public async Task<string?> GetAppSlugAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(_appSlugCache))
+        {
+            return _appSlugCache;
+        }
+
+        try
+        {
+            var jwt = _authenticator.GenerateJwt();
+
+            // https://docs.github.com/en/rest/apps/apps#get-the-authenticated-app
+            var request = new HttpRequestMessage(HttpMethod.Get, "app");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+
+            var response = await _httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("Failed to get GitHub app info: {Status} - {Error}", response.StatusCode, error);
+                return null;
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(content);
+
+            // GitHub returns a "slug" field for apps; fall back to "name" if needed.
+            if (doc.RootElement.TryGetProperty("slug", out var slugProp))
+            {
+                var slug = slugProp.GetString();
+                if (!string.IsNullOrWhiteSpace(slug))
+                {
+                    _appSlugCache = slug;
+                    return slug;
+                }
+            }
+
+            if (doc.RootElement.TryGetProperty("name", out var nameProp))
+            {
+                var name = nameProp.GetString();
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    // Not ideal (name may contain spaces), but better than nothing.
+                    _appSlugCache = name;
+                    return name;
+                }
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting GitHub app slug");
+            return null;
+        }
     }
 
     /// <inheritdoc />

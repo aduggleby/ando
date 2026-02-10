@@ -111,6 +111,13 @@ public interface IGitHubService
     Task<(long InstallationId, GitHubRepository Repository)?> GetRepositoryInstallationAsync(string repoFullName);
 
     /// <summary>
+    /// Gets the GitHub App slug (used in URLs like https://github.com/apps/{slug}).
+    /// This is fetched from the GitHub API using the app JWT and is more reliable
+    /// than configuring the slug manually.
+    /// </summary>
+    Task<string?> GetAppSlugAsync();
+
+    /// <summary>
     /// Gets the latest commit SHA for a branch.
     /// </summary>
     /// <param name="installationId">GitHub App installation ID.</param>

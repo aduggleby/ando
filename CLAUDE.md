@@ -114,27 +114,20 @@ dotnet test tests/Ando.Tests/Ando.Tests.csproj
 dotnet publish src/Ando/Ando.csproj -c Release -r linux-x64 --self-contained -o dist
 ```
 
-## Ando.Server Deployment (Hetzner)
+## Ando.Server Deployment (Production)
 
-The Ando.Server is deployed to a Hetzner VPS at `138.199.223.171`. The server runs using rootless Docker under the `ando` user.
+Production server connection details (IP/host, SSH user, and key) are documented in `AGENTS.md` to avoid hard-coding environment-specific addresses here.
 
 ### Deployment Steps
 
 ```bash
-# 1. Build the Docker image locally
-docker build -t ando-server:latest -f src/Ando.Server/Dockerfile .
+# On your local machine: build and push the image to the registry (ghcr.io).
+# Then, on the server: pull and restart the ando-server service.
 
-# 2. Push the image to the server (loads into root docker)
-docker save ando-server:latest | gzip | ssh -i ~/.ssh/id_claude root@138.199.223.171 "gunzip | docker load"
-
-# 3. Load the image into ando user's rootless docker
-ssh -i ~/.ssh/id_claude root@138.199.223.171 "docker save ando-server:latest | sudo -u ando XDG_RUNTIME_DIR=/run/user/1000 DOCKER_HOST=unix:///run/user/1000/docker.sock docker load"
-
-# 4. Restart the services using docker-compose
-ssh -i ~/.ssh/id_claude root@138.199.223.171 "sudo -u ando XDG_RUNTIME_DIR=/run/user/1000 DOCKER_HOST=unix:///run/user/1000/docker.sock docker compose -f /opt/ando/docker-compose.yml up -d"
-
-# 5. Verify the deployment
-ssh -i ~/.ssh/id_claude root@138.199.223.171 "sudo -u ando XDG_RUNTIME_DIR=/run/user/1000 DOCKER_HOST=unix:///run/user/1000/docker.sock docker ps"
+cd /opt/ando
+docker compose -f /opt/ando/docker-compose.yml pull ando-server
+docker compose -f /opt/ando/docker-compose.yml up -d ando-server
+docker compose -f /opt/ando/docker-compose.yml ps
 ```
 
 ### Server Configuration
@@ -150,10 +143,9 @@ ssh -i ~/.ssh/id_claude root@138.199.223.171 "sudo -u ando XDG_RUNTIME_DIR=/run/
 
 ### Important Notes
 
-- The server uses **rootless Docker** under the `ando` user (UID 1000)
-- The docker socket is at `/run/user/1000/docker.sock`
-- SQL Server runs in a separate container (`ando-sqlserver`)
-- The web server listens on `127.0.0.1:8080` (proxied by Caddy)
+- The compose file lives at `/opt/ando/docker-compose.yml` and is the source of truth for ports, volumes, and image tags.
+- SQL Server runs in a separate container (`ando-sqlserver`).
+- The server port/proxy setup depends on the host configuration (see `/etc/caddy/Caddyfile` if using Caddy).
 
 ## Key Interfaces
 

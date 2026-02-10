@@ -303,14 +303,20 @@ public class ProjectsController : Controller
 
         if (result == null)
         {
-            // App not installed - redirect to GitHub to install it
-            if (!string.IsNullOrEmpty(_gitHubSettings.AppName))
+            // App not installed - redirect to GitHub to install it.
+            // Prefer discovering the real app slug via the API rather than relying on config.
+            var appSlug = await _gitHubService.GetAppSlugAsync();
+            if (string.IsNullOrWhiteSpace(appSlug))
+            {
+                appSlug = _gitHubSettings.AppName; // fallback
+            }
+
+            if (!string.IsNullOrWhiteSpace(appSlug))
             {
                 // Store the repo name in session for the callback
                 HttpContext.Session.SetString("PendingRepo", repoFullName);
 
-                // Redirect to GitHub App installation page
-                var installUrl = $"https://github.com/apps/{_gitHubSettings.AppName}/installations/new";
+                var installUrl = $"https://github.com/apps/{appSlug}/installations/new";
                 return Redirect(installUrl);
             }
 

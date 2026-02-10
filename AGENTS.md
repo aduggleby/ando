@@ -48,3 +48,29 @@ cd tests/Ando.Server.E2E && npm ci && npm test
 - **Never push by yourself.** Do not run `git push`, `docker push`, `docker buildx --push`, `dotnet nuget push`, or create/upload releases.
 - If publishing is needed: ask the user to push, then **wait**. After the user confirms, you may pull/restart the image on the Ando server.
 
+## Ando Server Access (Production)
+
+Current server (LAN): `192.168.1.150`
+
+SSH key: `~/.sshkeys/id_ad_dualconsult_com`
+
+The repo has a documented production deployment (rootless Docker under user `ando`) with a compose file at `/opt/ando/docker-compose.yml`. See `CLAUDE.md` for canonical deployment notes and paths (some older docs reference a previous public IP).
+
+Common management commands (run over SSH on the server):
+
+```bash
+# Example SSH (adjust user if needed)
+ssh -i ~/.sshkeys/id_ad_dualconsult_com -o IdentitiesOnly=yes <user>@192.168.1.150
+
+# Rootless Docker socket for the ando user (UID 1000 on the server)
+export XDG_RUNTIME_DIR=/run/user/1000
+export DOCKER_HOST=unix:///run/user/1000/docker.sock
+
+# Status / logs
+sudo -u ando docker compose -f /opt/ando/docker-compose.yml ps
+sudo -u ando docker compose -f /opt/ando/docker-compose.yml logs -f ando-server
+
+# Update to latest pushed image (registry-based)
+sudo -u ando docker compose -f /opt/ando/docker-compose.yml pull ando-server
+sudo -u ando docker compose -f /opt/ando/docker-compose.yml up -d ando-server
+```

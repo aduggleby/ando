@@ -97,9 +97,15 @@ public class CreateProjectEndpoint : Endpoint<CreateProjectRequest, CreateProjec
         if (result == null)
         {
             // App not installed - return redirect URL for GitHub App installation
-            if (!string.IsNullOrEmpty(_gitHubSettings.AppName))
+            var appSlug = await _gitHubService.GetAppSlugAsync();
+            if (string.IsNullOrWhiteSpace(appSlug))
             {
-                var installUrl = $"https://github.com/apps/{_gitHubSettings.AppName}/installations/new";
+                appSlug = _gitHubSettings.AppName; // fallback
+            }
+
+            if (!string.IsNullOrWhiteSpace(appSlug))
+            {
+                var installUrl = $"https://github.com/apps/{appSlug}/installations/new";
                 await SendAsync(new CreateProjectResponse(
                     false,
                     RedirectUrl: installUrl,
