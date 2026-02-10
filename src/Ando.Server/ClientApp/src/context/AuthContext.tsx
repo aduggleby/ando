@@ -50,7 +50,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     init();
   }, []);
 
-  const login = async (email: string, password: string, rememberMe = false) => {
+  // Default to a persistent cookie session unless explicitly disabled.
+  const login = async (email: string, password: string, rememberMe = true) => {
     const response = await authApi.login({ email, password, rememberMe });
     if (response.success && response.user) {
       setUser(response.user);

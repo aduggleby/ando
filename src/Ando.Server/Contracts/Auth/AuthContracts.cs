@@ -43,7 +43,7 @@ public class LoginRequest
     /// <summary>
     /// Whether to persist the session beyond the browser session.
     /// </summary>
-    public bool RememberMe { get; set; }
+    public bool RememberMe { get; set; } = true;
 }
 
 /// <summary>
