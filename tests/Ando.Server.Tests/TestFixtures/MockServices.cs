@@ -114,6 +114,13 @@ public class MockGitHubService : IGitHubService
         return Task.FromResult<IReadOnlyList<GitHubRepository>>(MockRepositories);
     }
 
+    public string? MockAppSlug { get; set; } = "ando-server";
+
+    public Task<string?> GetAppSlugAsync()
+    {
+        return Task.FromResult(MockAppSlug);
+    }
+
     public Task<(long InstallationId, GitHubRepository Repository)?> GetRepositoryInstallationAsync(string repoFullName)
     {
         var repo = MockRepositories.FirstOrDefault(r => r.FullName == repoFullName);

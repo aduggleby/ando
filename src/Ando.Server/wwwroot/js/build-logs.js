@@ -16,6 +16,8 @@ let reconnectAttempts = 0;
 const maxReconnectAttempts = 10;
 let pollTimer = null;
 const pollIntervalMs = 2000;
+let signalRDisabled = false;
+let signalRFailureLogged = false;
 
 // Step progress tracking
 let stepsTotal = 0;
@@ -105,7 +107,12 @@ function initializeBuildLogs(id, initialSequence, stepInfo = {}) {
     stepsFailed = stepInfo.stepsFailed || 0;
 
     connection = new signalR.HubConnectionBuilder()
-        .withUrl("/hubs/build-logs")
+        // Prefer WebSockets. Some proxies break SignalR fallback transports (SSE/long polling)
+        // by terminating long-lived requests, which causes "No Connection with that ID".
+        .withUrl("/hubs/build-logs", {
+            skipNegotiation: true,
+            transport: signalR.HttpTransportType.WebSockets
+        })
         .withAutomaticReconnect({
             nextRetryDelayInMilliseconds: (retryContext) => {
                 if (retryContext.previousRetryCount < 5) {
@@ -160,6 +167,8 @@ function initializeBuildLogs(id, initialSequence, stepInfo = {}) {
 // Start the SignalR connection
 async function startConnection() {
     try {
+        if (signalRDisabled) return;
+
         await connection.start();
         console.log("Connected to build logs hub");
         reconnectAttempts = 0;
@@ -170,13 +179,19 @@ async function startConnection() {
         // Catch up on any missed logs
         await catchUpLogs();
     } catch (error) {
-        console.error("Failed to connect:", error);
-        attemptReconnect();
+        // If WebSockets are blocked, don't spam retries; polling will keep logs moving.
+        if (!signalRFailureLogged) {
+            signalRFailureLogged = true;
+            console.warn("SignalR unavailable (using polling for logs).", error);
+        }
+        signalRDisabled = true;
     }
 }
 
 // Attempt to reconnect after connection failure
 function attemptReconnect() {
+    if (signalRDisabled) return;
+
     if (reconnectAttempts >= maxReconnectAttempts) {
         console.error("Max reconnection attempts reached");
         showConnectionError();
@@ -193,9 +208,28 @@ function attemptReconnect() {
 // Fetch any logs we might have missed
 async function catchUpLogs() {
     try {
-        // Note: API endpoints are prefixed with /api (FastEndpoints RoutePrefix).
-        const response = await fetch(`/api/builds/${buildId}/logs?afterSequence=${lastSequence}`);
-        if (!response.ok) return;
+        // Prefer MVC endpoint over /api to avoid proxies that strip cookies/headers on /api.
+        const response = await fetch(`/builds/${buildId}/logs?afterSequence=${lastSequence}`, {
+            cache: "no-store",
+            credentials: "same-origin"
+        });
+
+        if (!response.ok) {
+            // Not authorized (or redirected to login) - stop polling and prompt reload.
+            if (response.status === 401 || response.status === 403) {
+                stopPolling();
+                showConnectionError();
+            }
+            return;
+        }
+
+        const contentType = response.headers.get("content-type") || "";
+        if (!contentType.includes("application/json")) {
+            // Likely got HTML (e.g., login page after redirect). Treat as disconnected.
+            stopPolling();
+            showConnectionError();
+            return;
+        }
 
         const data = await response.json();
 
