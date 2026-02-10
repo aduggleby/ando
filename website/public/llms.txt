@@ -468,6 +468,29 @@ Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");    // Zip format
 Ando.UseImage("mcr.microsoft.com/dotnet/sdk:9.0");
 ```
 
+### GHCR Publish Template (Copy/Paste)
+
+```csharp
+// Publish a multi-arch Docker image to GitHub Container Registry (GHCR).
+// Requirements:
+// - run with DIND enabled (CI: `ando run --dind ...`)
+// - `GITHUB_TOKEN` available with `write:packages` scope for GHCR pushes
+
+var version = Dotnet.Project("./src/MyApp/MyApp.csproj").Version;
+
+// Prefer GitHub Actions vars when present; fall back to a fixed owner/name.
+var owner = Env("GITHUB_REPOSITORY_OWNER", required: false) ?? "my-org";
+var imageName = "my-app";
+
+Docker.Install();
+Docker.Build("./Dockerfile", o => o
+    .WithPlatforms("linux/amd64", "linux/arm64")
+    .WithTag($"ghcr.io/{owner}/{imageName}:{version}")
+    .WithTag($"ghcr.io/{owner}/{imageName}:latest")
+    .WithContext(".")
+    .WithPush());
+```
+
 ### Nested Builds
 ```csharp
 // Run a child build in a subdirectory (own container, own .env.ando or .env)
