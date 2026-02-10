@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.94
+
+**2026-02-10**
+
+- Fix login and registration forms resubmitting when refreshing the page
+
 ## 0.9.91
 
 **2026-02-10**

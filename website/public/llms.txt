@@ -97,6 +97,8 @@ ANDO automatically detects when your build script uses operations requiring DIND
 
 To skip the prompt, use `--dind` flag, add `dind: true` to `ando.config`, or set `ANDO_DIND=1` environment variable. Child builds automatically inherit DIND mode from parent builds (passed via both container and host process environment).
 
+**Non-interactive warning (CI):** If stdin is not interactive (CI, redirected output, some servers), the DIND prompt cannot be answered. In CI, always enable DIND explicitly via `ando run --dind ...`, `dind: true` in `ando.config`, or `ANDO_DIND=1`.
+
 **CI Server:** When running on the ANDO CI Server, the Docker CLI is automatically installed in DIND build containers. `Docker.Install()` is not required in build scripts on the server, but is recommended for portability. The server also configures a git committer identity (`user.name`/`user.email`) in build containers automatically, so `Git.Tag()` with annotated tags works without manual setup. Default: `Ando Server <ando-server@localhost>`. Override with `GIT_COMMITTER_NAME`/`GIT_COMMITTER_EMAIL` env vars.
 
 ### Claude Integration
@@ -225,9 +227,11 @@ ANDO supports pre-build and post-build hooks - `.csando` scripts that run automa
 |--------|-------------|
 | `Root` | Project root path (supports `/` operator) |
 | `Log` | Logging: `Log.Info()`, `Log.Warning()`, `Log.Error()` |
-| `Shell` | Execute commands: `await Shell.RunAsync("cmd", "args")` |
+| `Shell` | Execute commands (hooks only): `await Shell.RunAsync("cmd", "args")` |
 | `Env(name)` | Get environment variable |
 | `Directory(path)` | Create directory reference |
+
+**Important:** `Shell` is a hooks-only API. It is not a global in `build.csando` build scripts.
 
 **Environment Variables:**
 | Variable | Available In | Description |
@@ -630,6 +634,27 @@ BicepDeployment objects provide typed access to deployment outputs:
 - Docker.Install() - Install Docker CLI in container (required for Docker.Build with --dind). Automatically handled on the CI server; recommended in scripts for portability.
 - Docker.IsAvailable() - Check if Docker CLI and daemon are accessible (returns bool immediately, not a step)
 - Docker.Build(dockerfile, options?) - Build Docker image using buildx. Supports single or multi-platform builds with optional push to registry. **Recommended**: Use WithPush() for atomic build+push to ensure both version and latest tags point to the same manifest. Auto-handles ghcr.io auth when pushing.
+
+#### GHCR Publishing Rules (Read This First)
+
+**Pushes only happen when BOTH are true:**
+1. You call `WithPush()`
+2. At least one `WithTag(...)` includes a registry hostname (e.g., `ghcr.io/org/app:tag`)
+
+Truth table:
+| Build Script | Result |
+|------------|--------|
+| `WithPush()` + tag contains `ghcr.io/...` | Pushes to GHCR (and ANDO auto-auths) |
+| No `WithPush()` | Builds locally only (nothing is pushed anywhere) |
+| `WithPush()` + tags without registry hostname | Docker may attempt Docker Hub or fail; usually unintended |
+
+#### GHCR Auth (Do This, Not That)
+
+- Do not run `docker login` yourself in `build.csando`. Use `WithTag("ghcr.io/...")` + `WithPush()`. ANDO handles auth for GHCR pushes.
+- Token sources (in order):
+  - `GITHUB_TOKEN` environment variable (preferred)
+  - `gh auth token` (requires `gh` CLI to be installed and authenticated)
+  - Note: `gh` itself also supports `GH_TOKEN`, but ANDO's primary mechanism is `GITHUB_TOKEN`.
 
 ### Docfx
 - Docfx.Install() - Install DocFX as a dotnet global tool (skips if already installed)
