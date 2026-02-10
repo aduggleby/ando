@@ -70,6 +70,9 @@ ANDO requires Docker to run builds in isolated containers. If Docker is not avai
 - `ando release` - Interactive release workflow (commit, docs, bump, push, publish). Steps are contextually enabled: commit skipped if no uncommitted changes, bump skipped if no changes since last tag, push skipped if no remote tracking.
 - `ando release --all` - Run all applicable release steps non-interactively
 - `ando release --dry-run` - Preview what release would do
+- `ando ship` - Ship workflow (commit, bump, docs, push) without the publish step. Same as release but skips building/publishing artifacts.
+- `ando ship --all` - Run all applicable ship steps non-interactively
+- `ando ship --dry-run` - Preview what ship would do
 - `ando verify` - Check build script for errors without executing
 - `ando clean` - Remove artifacts, temp files, and containers (removing container clears caches)
 - `ando help` - Show available commands

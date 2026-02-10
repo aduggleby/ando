@@ -123,6 +123,7 @@ Use these command names in hook filenames:
 | `ando bump` | `ando-pre-bump.csando`, `ando-post-bump.csando` |
 | `ando docs` | `ando-pre-docs.csando`, `ando-post-docs.csando` |
 | `ando release` | `ando-pre-release.csando`, `ando-post-release.csando` |
+| `ando ship` | `ando-pre-ship.csando`, `ando-post-ship.csando` |
 | `ando clean` | `ando-pre-clean.csando`, `ando-post-clean.csando` |
 | `ando verify` | `ando-pre-verify.csando`, `ando-post-verify.csando` |
 

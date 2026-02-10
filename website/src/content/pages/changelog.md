@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.95
+
+**2026-02-10**
+
+- Add `ship` command for running the release workflow without publishing
+- Fix remember-me defaulting and extend session idle timeout
+
 ## 0.9.94
 
 **2026-02-10**

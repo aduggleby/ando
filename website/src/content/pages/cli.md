@@ -20,6 +20,7 @@ ANDO requires **Docker** to run builds in isolated containers. If Docker is not 
 | [`ando bump`](#bump-command) | Bump version across all projects. |
 | [`ando docs`](#docs-command) | Update documentation using Claude. |
 | [`ando release`](#release-command) | Interactive release workflow. |
+| [`ando ship`](#ship-command) | Ship workflow (release without publish). |
 | [`ando verify`](#run-options) | Check build script for errors without executing. |
 | [`ando clean`](#clean-options) | Remove artifacts, temp files, and containers. |
 
@@ -224,6 +225,26 @@ ando release --minor   # Specify bump type (default: patch)
 6. **Publish** - Run `ando run -p publish --dind --read-env`
 
 Steps are contextually enabled/disabled based on repository state.
+
+## Ship Command
+
+Ship workflow — same as release but without the publish step. Use when you want to commit, bump, update docs, and push without building/publishing artifacts.
+
+```bash
+ando ship              # Interactive checklist
+ando ship --all        # Skip checklist, run all steps
+ando ship --dry-run    # Preview without executing
+ando ship minor        # Specify bump type (default: patch)
+```
+
+**Steps:**
+1. **Build Verification** - Runs `ando run --read-env` first
+2. **Commit** - Commit uncommitted changes (uses `ando commit`) - *skipped if no uncommitted changes*
+3. **Bump** - Bump version across all projects (uses `ando bump`) - *skipped if no changes since last tag*
+4. **Docs** - Update documentation (uses `ando docs`)
+5. **Push** - Push to remote repository - *skipped if no remote tracking*
+
+Steps are contextually enabled/disabled based on repository state. Hooks use the command name `ship` (e.g., `ando-pre-ship.csando`).
 
 ## Hooks
 
