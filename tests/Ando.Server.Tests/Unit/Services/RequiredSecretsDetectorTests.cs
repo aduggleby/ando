@@ -215,6 +215,41 @@ public class RequiredSecretsDetectorTests
     }
 
     [Fact]
+    public void ParseRequiredSecrets_WithGitHubPushImage_DetectsGitHubToken()
+    {
+        // Arrange
+        var script = """
+            var version = "0.9.7";
+            GitHub.PushImage("hawk", o => o.WithTag(version));
+            """;
+
+        // Act
+        var secrets = _detector.ParseRequiredSecrets(script);
+
+        // Assert
+        secrets.ShouldContain("GITHUB_TOKEN");
+    }
+
+    [Fact]
+    public void ParseRequiredSecrets_WithDockerBuildGhcrPush_DetectsGitHubToken()
+    {
+        // Arrange
+        var script = """
+            var version = "0.9.7";
+            Docker.Build("Dockerfile", o => o
+                .WithTag($"ghcr.io/aduggleby/hawk:{version}")
+                .WithPlatforms("linux/amd64", "linux/arm64")
+                .WithPush());
+            """;
+
+        // Act
+        var secrets = _detector.ParseRequiredSecrets(script);
+
+        // Assert
+        secrets.ShouldContain("GITHUB_TOKEN");
+    }
+
+    [Fact]
     public void ParseRequiredSecrets_WithWhitespaceVariations_StillDetects()
     {
         // Arrange - test various whitespace between tokens

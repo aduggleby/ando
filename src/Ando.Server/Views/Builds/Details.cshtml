@@ -48,6 +48,10 @@
                 <span class="live-dot"></span>
                 Live
             </span>
+            <span class="log-conn-indicator log-conn-connecting" id="log-conn-indicator" title="Build log stream connection status">
+                Logs: connecting
+            </span>
+            <span class="log-last-update" id="log-last-update" title="Last time the build log UI received an update"></span>
         }
     </div>
 
@@ -183,6 +187,7 @@
     </div>
 
     <div class="log-container" id="log-container">
+        <div class="alert alert-warning" id="log-connection-banner" style="display:none"></div>
         <div class="log-entries" id="log-entries">
             @foreach (var entry in Model.LogEntries)
             {

@@ -18,6 +18,8 @@ let pollTimer = null;
 const pollIntervalMs = 2000;
 let signalRDisabled = false;
 let signalRFailureLogged = false;
+let signalRRetryTimer = null;
+const signalRRetryIntervalMs = 60000;
 
 // Step progress tracking
 let stepsTotal = 0;
@@ -26,6 +28,44 @@ let stepsFailed = 0;
 
 // Log filtering
 let searchFilter = "";
+
+function setConnIndicator(state, message, bannerMessage = null) {
+    const indicator = document.getElementById("log-conn-indicator");
+    const banner = document.getElementById("log-connection-banner");
+
+    if (indicator) {
+        indicator.classList.remove(
+            "log-conn-connecting",
+            "log-conn-connected",
+            "log-conn-polling",
+            "log-conn-reconnecting",
+            "log-conn-error"
+        );
+
+        indicator.classList.add(`log-conn-${state}`);
+        indicator.textContent = message;
+    }
+
+    if (banner) {
+        if (bannerMessage) {
+            banner.textContent = bannerMessage;
+            banner.style.display = "";
+        } else {
+            banner.style.display = "none";
+        }
+    }
+}
+
+function touchLastUpdate(source) {
+    const el = document.getElementById("log-last-update");
+    if (!el) return;
+
+    const now = new Date();
+    const hh = now.getHours().toString().padStart(2, "0");
+    const mm = now.getMinutes().toString().padStart(2, "0");
+    const ss = now.getSeconds().toString().padStart(2, "0");
+    el.textContent = `Last update: ${hh}:${mm}:${ss}${source ? ` (${source})` : ""}`;
+}
 
 // ANSI color code to CSS class mapping
 const ansiColors = {
@@ -106,9 +146,25 @@ function initializeBuildLogs(id, initialSequence, stepInfo = {}) {
     stepsCompleted = stepInfo.stepsCompleted || 0;
     stepsFailed = stepInfo.stepsFailed || 0;
 
+    setConnIndicator("connecting", "Logs: connecting");
+
+    // Also poll for log updates. This makes "live logs" work even when
+    // websockets are blocked by a proxy or SignalR cannot connect.
+    startPolling();
+
+    // Attempt SignalR over WebSockets for lowest latency.
+    // If it fails, we keep polling and retry SignalR occasionally.
+    buildSignalRConnection();
+
+    // Initial "last update" so it's obvious polling is running.
+    touchLastUpdate("init");
+}
+
+function buildSignalRConnection() {
+    if (signalRDisabled) return;
+    if (connection) return;
+
     connection = new signalR.HubConnectionBuilder()
-        // Prefer WebSockets. Some proxies break SignalR fallback transports (SSE/long polling)
-        // by terminating long-lived requests, which causes "No Connection with that ID".
         .withUrl("/hubs/build-logs", {
             skipNegotiation: true,
             transport: signalR.HttpTransportType.WebSockets
@@ -129,39 +185,43 @@ function initializeBuildLogs(id, initialSequence, stepInfo = {}) {
         if (entry.sequence > lastSequence) {
             appendLogEntry(entry);
             lastSequence = entry.sequence;
+            touchLastUpdate("signalr");
         }
     });
 
     // Handle build completion
-    connection.on("BuildCompleted", (status) => {
+    connection.on("BuildCompleted", async (status) => {
         updateBuildStatus(status);
         hideLiveIndicator();
+
+        // Ensure we always fetch any final buffered logs even if SignalR was flaky.
+        await catchUpLogs();
+        stopPolling();
     });
 
     // Handle reconnection
     connection.onreconnected(() => {
         console.log("Reconnected to build logs hub");
         reconnectAttempts = 0;
+        setConnIndicator("connected", "Logs: live (SignalR)");
         catchUpLogs();
     });
 
     connection.onreconnecting(() => {
         console.log("Reconnecting to build logs hub...");
+        setConnIndicator("reconnecting", "Logs: reconnecting (SignalR)");
     });
 
     connection.onclose((error) => {
         if (error) {
             console.error("Connection closed with error:", error);
+            setConnIndicator("polling", "Logs: polling (SignalR down)");
             attemptReconnect();
         }
     });
 
     // Start connection
     startConnection();
-
-    // Also poll for log updates. This makes "live logs" work even when
-    // websockets are blocked by a proxy or SignalR cannot connect.
-    startPolling();
 }
 
 // Start the SignalR connection
@@ -172,6 +232,7 @@ async function startConnection() {
         await connection.start();
         console.log("Connected to build logs hub");
         reconnectAttempts = 0;
+        setConnIndicator("connected", "Logs: live (SignalR)");
 
         // Join the build's group
         await connection.invoke("JoinBuildLog", buildId);
@@ -184,7 +245,27 @@ async function startConnection() {
             signalRFailureLogged = true;
             console.warn("SignalR unavailable (using polling for logs).", error);
         }
-        signalRDisabled = true;
+        setConnIndicator(
+            "polling",
+            "Logs: polling (SignalR blocked)",
+            "Live streaming is unavailable (WebSockets blocked). Logs will update via polling."
+        );
+
+        // Keep polling. We'll retry SignalR occasionally in case the proxy config changes.
+        if (!signalRRetryTimer) {
+            signalRRetryTimer = setInterval(() => {
+                // If we already have a working connection, stop retrying.
+                if (!connection || connection.state === signalR.HubConnectionState.Disconnected) {
+                    // Reset and try again.
+                    if (connection) {
+                        try { connection.stop(); } catch (_) { }
+                        connection = null;
+                    }
+                    signalRFailureLogged = false;
+                    buildSignalRConnection();
+                }
+            }, signalRRetryIntervalMs);
+        }
     }
 }
 
@@ -218,7 +299,11 @@ async function catchUpLogs() {
             // Not authorized (or redirected to login) - stop polling and prompt reload.
             if (response.status === 401 || response.status === 403) {
                 stopPolling();
-                showConnectionError();
+                setConnIndicator(
+                    "error",
+                    "Logs: auth required",
+                    "Not authorized to fetch logs (401/403). Your session may have expired or cookies are not being forwarded by the proxy. Reload to sign in again."
+                );
             }
             return;
         }
@@ -239,6 +324,7 @@ async function catchUpLogs() {
                 lastSequence = entry.sequence;
             }
         }
+        touchLastUpdate("poll");
 
         if (data.isComplete) {
             updateBuildStatus(data.status);
@@ -443,13 +529,11 @@ function hideLiveIndicator() {
 
 // Show connection error message
 function showConnectionError() {
-    const container = document.getElementById("log-container");
-    const errorDiv = document.createElement("div");
-    errorDiv.className = "connection-error";
-    errorDiv.innerHTML = `
-        <p>Connection lost. <a href="javascript:location.reload()">Reload page</a> to reconnect.</p>
-    `;
-    container.insertBefore(errorDiv, container.firstChild);
+    setConnIndicator(
+        "error",
+        "Logs: disconnected",
+        "Connection lost. Reload the page to reconnect."
+    );
 }
 
 // Toggle auto-scroll
@@ -486,6 +570,10 @@ function formatTime(timestamp) {
 // Cleanup when leaving the page
 window.addEventListener("beforeunload", () => {
     stopPolling();
+    if (signalRRetryTimer) {
+        clearInterval(signalRRetryTimer);
+        signalRRetryTimer = null;
+    }
     if (connection) {
         connection.stop();
     }

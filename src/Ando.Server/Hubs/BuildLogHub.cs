@@ -21,12 +21,60 @@ namespace Ando.Server.Hubs;
 /// </summary>
 public class BuildLogHub : Hub
 {
+    private readonly ILogger<BuildLogHub> _logger;
+
+    public BuildLogHub(ILogger<BuildLogHub> logger)
+    {
+        _logger = logger;
+    }
+
+    public override Task OnConnectedAsync()
+    {
+        _logger.LogInformation(
+            "SignalR connected: connectionId={ConnectionId} user={User} auth={IsAuthenticated}",
+            Context.ConnectionId,
+            Context.User?.Identity?.Name ?? "(anonymous)",
+            Context.User?.Identity?.IsAuthenticated == true);
+
+        return base.OnConnectedAsync();
+    }
+
+    public override Task OnDisconnectedAsync(Exception? exception)
+    {
+        if (exception != null)
+        {
+            _logger.LogWarning(
+                exception,
+                "SignalR disconnected with error: connectionId={ConnectionId} user={User} auth={IsAuthenticated}",
+                Context.ConnectionId,
+                Context.User?.Identity?.Name ?? "(anonymous)",
+                Context.User?.Identity?.IsAuthenticated == true);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "SignalR disconnected: connectionId={ConnectionId} user={User} auth={IsAuthenticated}",
+                Context.ConnectionId,
+                Context.User?.Identity?.Name ?? "(anonymous)",
+                Context.User?.Identity?.IsAuthenticated == true);
+        }
+
+        return base.OnDisconnectedAsync(exception);
+    }
+
     /// <summary>
     /// Join the log stream for a specific build.
     /// </summary>
     /// <param name="buildId">The build ID to subscribe to.</param>
     public async Task JoinBuildLog(int buildId)
     {
+        _logger.LogInformation(
+            "SignalR join build logs: connectionId={ConnectionId} buildId={BuildId} user={User} auth={IsAuthenticated}",
+            Context.ConnectionId,
+            buildId,
+            Context.User?.Identity?.Name ?? "(anonymous)",
+            Context.User?.Identity?.IsAuthenticated == true);
+
         await Groups.AddToGroupAsync(Context.ConnectionId, GetGroupName(buildId));
     }
 
@@ -36,6 +84,13 @@ public class BuildLogHub : Hub
     /// <param name="buildId">The build ID to unsubscribe from.</param>
     public async Task LeaveBuildLog(int buildId)
     {
+        _logger.LogInformation(
+            "SignalR leave build logs: connectionId={ConnectionId} buildId={BuildId} user={User} auth={IsAuthenticated}",
+            Context.ConnectionId,
+            buildId,
+            Context.User?.Identity?.Name ?? "(anonymous)",
+            Context.User?.Identity?.IsAuthenticated == true);
+
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, GetGroupName(buildId));
     }
 

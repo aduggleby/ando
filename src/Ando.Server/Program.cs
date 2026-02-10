@@ -219,26 +219,100 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.ExpireTimeSpan = TimeSpan.FromDays(30);
     options.SlidingExpiration = true;
 
-    // Return 401 for API requests instead of redirecting to login
-    options.Events.OnRedirectToLogin = context =>
+    // Extensive auth diagnostics to troubleshoot "random logouts" and proxy/cookie issues.
+    // We intentionally do NOT log raw cookie values.
+    options.Events = new Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationEvents
     {
-        if (context.Request.Path.StartsWithSegments("/api"))
+        OnValidatePrincipal = context =>
         {
-            context.Response.StatusCode = 401;
+            var logger = context.HttpContext.RequestServices
+                .GetRequiredService<ILoggerFactory>()
+                .CreateLogger("Auth.Cookie");
+
+            logger.LogDebug(
+                "Cookie validated: path={Path} user={User} auth={IsAuthenticated} issuedUtc={IssuedUtc} expiresUtc={ExpiresUtc} remoteIp={RemoteIp} xff={Xff} xfproto={XfProto} hasCookieHeader={HasCookieHeader} cookieHeaderLength={CookieHeaderLength}",
+                context.HttpContext.Request.Path,
+                context.Principal?.Identity?.Name ?? "(unknown)",
+                context.Principal?.Identity?.IsAuthenticated == true,
+                context.Properties.IssuedUtc,
+                context.Properties.ExpiresUtc,
+                context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "(unknown)",
+                context.HttpContext.Request.Headers["X-Forwarded-For"].ToString(),
+                context.HttpContext.Request.Headers["X-Forwarded-Proto"].ToString(),
+                context.HttpContext.Request.Headers.Cookie.Count > 0,
+                context.HttpContext.Request.Headers.Cookie.ToString().Length);
+
+            return Task.CompletedTask;
+        },
+        OnSigningIn = context =>
+        {
+            var logger = context.HttpContext.RequestServices
+                .GetRequiredService<ILoggerFactory>()
+                .CreateLogger("Auth.Cookie");
+
+            logger.LogInformation(
+                "Signing in: path={Path} user={User} remoteIp={RemoteIp} xff={Xff} xfproto={XfProto}",
+                context.HttpContext.Request.Path,
+                context.Principal?.Identity?.Name ?? "(unknown)",
+                context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "(unknown)",
+                context.HttpContext.Request.Headers["X-Forwarded-For"].ToString(),
+                context.HttpContext.Request.Headers["X-Forwarded-Proto"].ToString());
+
+            return Task.CompletedTask;
+        },
+        OnSignedIn = context =>
+        {
+            var logger = context.HttpContext.RequestServices
+                .GetRequiredService<ILoggerFactory>()
+                .CreateLogger("Auth.Cookie");
+
+            logger.LogInformation(
+                "Signed in: user={User} remoteIp={RemoteIp} xff={Xff} xfproto={XfProto}",
+                context.Principal?.Identity?.Name ?? "(unknown)",
+                context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "(unknown)",
+                context.HttpContext.Request.Headers["X-Forwarded-For"].ToString(),
+                context.HttpContext.Request.Headers["X-Forwarded-Proto"].ToString());
+
+            return Task.CompletedTask;
+        },
+        OnSigningOut = context =>
+        {
+            var logger = context.HttpContext.RequestServices
+                .GetRequiredService<ILoggerFactory>()
+                .CreateLogger("Auth.Cookie");
+
+            logger.LogInformation(
+                "Signing out: user={User} path={Path} remoteIp={RemoteIp} xff={Xff} xfproto={XfProto}",
+                context.HttpContext.User?.Identity?.Name ?? "(unknown)",
+                context.HttpContext.Request.Path,
+                context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "(unknown)",
+                context.HttpContext.Request.Headers["X-Forwarded-For"].ToString(),
+                context.HttpContext.Request.Headers["X-Forwarded-Proto"].ToString());
+
+            return Task.CompletedTask;
+        },
+
+        // Return 401/403 for API requests instead of redirecting to login.
+        OnRedirectToLogin = context =>
+        {
+            if (context.Request.Path.StartsWithSegments("/api"))
+            {
+                context.Response.StatusCode = 401;
+                return Task.CompletedTask;
+            }
+            context.Response.Redirect(context.RedirectUri);
+            return Task.CompletedTask;
+        },
+        OnRedirectToAccessDenied = context =>
+        {
+            if (context.Request.Path.StartsWithSegments("/api"))
+            {
+                context.Response.StatusCode = 403;
+                return Task.CompletedTask;
+            }
+            context.Response.Redirect(context.RedirectUri);
             return Task.CompletedTask;
         }
-        context.Response.Redirect(context.RedirectUri);
-        return Task.CompletedTask;
-    };
-    options.Events.OnRedirectToAccessDenied = context =>
-    {
-        if (context.Request.Path.StartsWithSegments("/api"))
-        {
-            context.Response.StatusCode = 403;
-            return Task.CompletedTask;
-        }
-        context.Response.Redirect(context.RedirectUri);
-        return Task.CompletedTask;
     };
 });
 
@@ -501,6 +575,34 @@ app.UseSession();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Log 401/403 for key endpoints with enough context to diagnose missing cookies, proxy header issues, etc.
+// Keep this after auth so we can tell whether a cookie was accepted.
+app.Use(async (context, next) =>
+{
+    await next();
+
+    if (context.Response.StatusCode is StatusCodes.Status401Unauthorized or StatusCodes.Status403Forbidden)
+    {
+        var path = context.Request.Path;
+        if (path.StartsWithSegments("/api") || path.StartsWithSegments("/hubs") || path.StartsWithSegments("/builds"))
+        {
+            app.Logger.LogWarning(
+                "Auth failure: status={Status} method={Method} path={Path} user={User} auth={IsAuthenticated} remoteIp={RemoteIp} xff={Xff} xfproto={XfProto} hasCookieHeader={HasCookieHeader} cookieHeaderLength={CookieHeaderLength} ua={UserAgent}",
+                context.Response.StatusCode,
+                context.Request.Method,
+                path,
+                context.User?.Identity?.Name ?? "(anonymous)",
+                context.User?.Identity?.IsAuthenticated == true,
+                context.Connection.RemoteIpAddress?.ToString() ?? "(unknown)",
+                context.Request.Headers["X-Forwarded-For"].ToString(),
+                context.Request.Headers["X-Forwarded-Proto"].ToString(),
+                context.Request.Headers.Cookie.Count > 0,
+                context.Request.Headers.Cookie.ToString().Length,
+                context.Request.Headers.UserAgent.ToString());
+        }
+    }
+});
+
 // Default-secure: require authentication for all /api endpoints unless explicitly AllowAnonymous.
 app.Use(async (context, next) =>
 {
@@ -510,6 +612,18 @@ app.Use(async (context, next) =>
         var allowsAnonymous = endpoint?.Metadata.GetMetadata<IAllowAnonymous>() != null;
         if (!allowsAnonymous && context.User.Identity?.IsAuthenticated != true)
         {
+            app.Logger.LogWarning(
+                "API unauthorized: method={Method} path={Path} remoteIp={RemoteIp} xff={Xff} xfproto={XfProto} hasCookieHeader={HasCookieHeader} cookieHeaderLength={CookieHeaderLength} hasAuthzHeader={HasAuthzHeader} hasApiTokenHeader={HasApiTokenHeader}",
+                context.Request.Method,
+                context.Request.Path,
+                context.Connection.RemoteIpAddress?.ToString() ?? "(unknown)",
+                context.Request.Headers["X-Forwarded-For"].ToString(),
+                context.Request.Headers["X-Forwarded-Proto"].ToString(),
+                context.Request.Headers.Cookie.Count > 0,
+                context.Request.Headers.Cookie.ToString().Length,
+                context.Request.Headers.Authorization.Count > 0,
+                context.Request.Headers.ContainsKey(ApiTokenAuthentication.ApiTokenHeaderName));
+
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             return;
         }

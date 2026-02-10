@@ -508,10 +508,20 @@ public class BuildOrchestrator : IBuildOrchestrator
             }
         }
 
+        if (hasGitHubTokenSecret)
+        {
+            _logger.LogInformation(
+                "CreateBuildContainer: Using project secret GITHUB_TOKEN for GitHub operations (git, releases, ghcr).");
+        }
+
         // If the project hasn't explicitly configured a GitHub token secret, provide the GitHub App
         // installation token. This enables ghcr pushes and GitHub release operations in build scripts.
         if (!hasGitHubTokenSecret && !string.IsNullOrWhiteSpace(githubToken))
         {
+            _logger.LogWarning(
+                "CreateBuildContainer: No GITHUB_TOKEN secret configured; injecting GitHub App installation token. " +
+                "If ghcr.io pushes fail with permission errors, configure a project secret named GITHUB_TOKEN using a PAT with write:packages.");
+
             startInfo.ArgumentList.Add("-e");
             startInfo.ArgumentList.Add($"GITHUB_TOKEN={githubToken}");
             startInfo.ArgumentList.Add("-e");

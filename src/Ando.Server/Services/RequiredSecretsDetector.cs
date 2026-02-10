@@ -13,6 +13,8 @@
 // - Env["VAR_NAME"] - indexer access is also required
 // - Nuget.EnsureAuthenticated() -> NUGET_API_KEY
 // - Cloudflare.EnsureAuthenticated() -> CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
+// - Docker.Build(...WithTag("ghcr.io/...")...WithPush()) -> GITHUB_TOKEN (PAT with write:packages)
+// - GitHub.PushImage(...) -> GITHUB_TOKEN (PAT with write:packages)
 // - Ando.Build(Directory("subdir")) - recursive detection from sub-builds
 //
 // Design Decisions:
@@ -61,6 +63,14 @@ public partial class RequiredSecretsDetector : IRequiredSecretsDetector
     // Matches: GitHub.EnsureAuthenticated()
     [GeneratedRegex(@"GitHub\s*\.\s*EnsureAuthenticated\s*\(\s*\)", RegexOptions.Compiled)]
     private static partial Regex GitHubEnsureAuthPattern();
+
+    // -------------------------------------------------------------------------
+    // Container registry (ghcr.io) patterns
+    // -------------------------------------------------------------------------
+
+    // Matches: GitHub.PushImage("name", ...)
+    [GeneratedRegex(@"GitHub\s*\.\s*PushImage\s*\(", RegexOptions.Compiled)]
+    private static partial Regex GitHubPushImagePattern();
 
     // -------------------------------------------------------------------------
     // Regex patterns for sub-build detection
@@ -213,6 +223,21 @@ public partial class RequiredSecretsDetector : IRequiredSecretsDetector
             {
                 secrets.Add(secret);
             }
+        }
+
+        // GitHub.PushImage always pushes to ghcr.io and requires a token that can write packages.
+        if (GitHubPushImagePattern().IsMatch(scriptContent))
+        {
+            secrets.Add("GITHUB_TOKEN");
+        }
+
+        // Docker.Build only requires GHCR auth when pushing to ghcr.io. Mirror the runtime behavior:
+        // DockerOperations triggers ghcr login when Push=true AND at least one tag contains "ghcr.io".
+        if (scriptContent.Contains("Docker.Build", StringComparison.OrdinalIgnoreCase) &&
+            scriptContent.Contains("WithPush", StringComparison.OrdinalIgnoreCase) &&
+            scriptContent.Contains("ghcr.io/", StringComparison.OrdinalIgnoreCase))
+        {
+            secrets.Add("GITHUB_TOKEN");
         }
 
         return secrets.Order().ToList();
