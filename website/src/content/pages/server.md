@@ -77,6 +77,19 @@ The URL must include the scheme (`https://`) and should not have a trailing slas
 
 When a build requires DIND mode (e.g., `Docker.Build`, `Docker.Push`), the server automatically installs the Docker CLI inside the build container if it is not already present. This supports Alpine and Debian/Ubuntu-based images. You do not need to call `Docker.Install()` in your build script when running on the CI server — though it is harmless to include.
 
+### Git Identity in Build Containers
+
+The CI server automatically configures a git committer identity (`user.name` and `user.email`) inside build containers so that operations like `Git.Tag()` (annotated tags) work without manual setup.
+
+**Defaults:** `Ando Server` / `ando-server@localhost`
+
+**Override via environment variables** (checked in order of priority):
+1. `GIT_COMMITTER_NAME` / `GIT_COMMITTER_EMAIL` (standard git env vars)
+2. `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL`
+3. `GIT_USER_NAME` / `GIT_USER_EMAIL`
+
+Set these in your `.env.ando` file or CI environment to customize the identity used for tags and commits in your builds. If `git config user.name` is already set in the container image, the server will not override it.
+
 ### Docker Security
 
 By default, ANDO CI Server validates that Docker is running in rootless mode for enhanced security. On platforms where Docker runs as root and cannot be configured for rootless mode (such as TrueNAS SCALE), you can bypass this check:

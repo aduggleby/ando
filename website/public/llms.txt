@@ -97,7 +97,7 @@ ANDO automatically detects when your build script uses operations requiring DIND
 
 To skip the prompt, use `--dind` flag, add `dind: true` to `ando.config`, or set `ANDO_DIND=1` environment variable. Child builds automatically inherit DIND mode from parent builds (passed via both container and host process environment).
 
-**CI Server:** When running on the ANDO CI Server, the Docker CLI is automatically installed in DIND build containers. `Docker.Install()` is not required in build scripts on the server, but is recommended for portability.
+**CI Server:** When running on the ANDO CI Server, the Docker CLI is automatically installed in DIND build containers. `Docker.Install()` is not required in build scripts on the server, but is recommended for portability. The server also configures a git committer identity (`user.name`/`user.email`) in build containers automatically, so `Git.Tag()` with annotated tags works without manual setup. Default: `Ando Server <ando-server@localhost>`. Override with `GIT_COMMITTER_NAME`/`GIT_COMMITTER_EMAIL` env vars.
 
 ### Claude Integration
 
@@ -741,6 +741,8 @@ Activate with CLI: `ando -p release` or `ando -p publish,release`
 - WithMessage(string) - Tag message for annotated tags
 - AsLightweight() - Create lightweight tag instead of annotated
 - WithSkipIfExists() - Skip if tag exists (warn instead of fail)
+
+Note: Annotated tags require a git identity (user.name/user.email). The ANDO CI Server configures this automatically. For CLI builds, the host git config is used.
 
 ### Git.Push Options
 - ToRemote(string) - Remote name (default: origin)
