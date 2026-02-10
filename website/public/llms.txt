@@ -10,7 +10,50 @@ echo 'Log.Info("Hello, World!");' > build.csando
 ando run
 ```
 
-**Runtime Compatibility:** ANDO is built for .NET 9 but runs on .NET 10+ thanks to major version roll-forward. You can use the latest .NET SDK without compatibility issues.
+**Runtime Compatibility:** ANDO targets .NET 9. For the most predictable results, use a .NET 9 SDK image in your build container (e.g., `mcr.microsoft.com/dotnet/sdk:9.0`) unless you have a specific reason to deviate.
+
+## LLM Guardrails (Read This Before Writing build.csando)
+
+ANDO build scripts are compiled as C# scripts with a fixed, typed API surface. If you generate scripts with an LLM, follow these rules to avoid the most common hallucinations:
+
+- Do NOT `using Ando.Core`, `using Ando.Dotnet`, `using Ando.Docker`, etc. Those namespaces are not part of the build-script surface. Use the globals documented below.
+- Do NOT call `UseImage(...)`, `CopyArtifactsToHost(...)`, or `CopyZippedArtifactsToHost(...)` as global functions. They are methods on the `Ando` global: `Ando.UseImage(...)`, etc.
+- `Env(name, required: bool)` has a second parameter named `required:` and it is a `bool`. There is no `Env(name, "default")` overload. Use `Env(..., required: false) ?? "default"` for defaults.
+- `Dotnet.Build(...)` and `Dotnet.Test(...)` use simple option properties (not fluent methods). Example: `o.Configuration = Configuration.Release; o.NoRestore = true;`
+- Docker tags use `WithTag(...)` (call it multiple times). There is no `WithTags(...)`.
+
+### Minimal Verified Example (Compiles)
+
+```csharp
+// ando-doc-snippet-test
+// build.csando
+
+var publish = DefineProfile("publish");
+
+Ando.UseImage("mcr.microsoft.com/dotnet/sdk:9.0");
+
+var app = Dotnet.Project("./src/App/App.csproj");
+var tests = Dotnet.Project("./tests/App.Tests/App.Tests.csproj");
+
+Dotnet.Restore(app);
+Dotnet.Build(app, o => { o.Configuration = Configuration.Release; o.NoRestore = true; });
+Dotnet.Test(tests, o => { o.Configuration = Configuration.Release; o.NoRestore = true; o.NoBuild = true; });
+
+if (publish)
+{
+    Dotnet.Publish(app, o => o
+        .WithConfiguration(Configuration.Release)
+        .SkipRestore()
+        .SkipBuild()
+        .Output(Root / "artifacts" / "publish"));
+
+    Docker.Build("Dockerfile", o => o
+        .WithContext(".")
+        .WithTag("myapp:local"));
+
+    Ando.CopyZippedArtifactsToHost("artifacts", "./artifacts");
+}
+```
 
 ## Prerequisites
 

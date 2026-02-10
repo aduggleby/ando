@@ -122,25 +122,26 @@ Log.Debug($"Processing file: {filePath}");
 Build configuration, artifact copying, and nested builds. Use these to set the Docker image, copy outputs to host, and run child build scripts.
 
 ```csharp
+// ando-doc-snippet-test
 // Set the Docker image for the build container
-UseImage("mcr.microsoft.com/dotnet/sdk:9.0");
+Ando.UseImage("mcr.microsoft.com/dotnet/sdk:9.0");
 
 // Copy artifacts from container to host after build
-CopyArtifactsToHost("dist", "./dist");
+Ando.CopyArtifactsToHost("dist", "./dist");
 
 // Copy as compressed archive (faster for many small files)
-CopyZippedArtifactsToHost("dist", "./output");  // Creates ./output/artifacts.tar.gz
-CopyZippedArtifactsToHost("dist", "./dist/binaries.tar.gz");  // Specific filename
-CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");     // Zip format
+Ando.CopyZippedArtifactsToHost("dist", "./output");  // Creates ./output/artifacts.tar.gz
+Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.tar.gz");  // Specific filename
+Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");     // Zip format
 
 // Run a child build in a subdirectory
-Build(Directory("./website"));
+Ando.Build(Directory("./website"));
 
 // Run a specific build file
-Build(Directory("./website") / "deploy.csando");
+Ando.Build(Directory("./website") / "deploy.csando");
 
 // Child build with Docker-in-Docker enabled
-Build(Directory("./integration-tests"), o => o.WithDind());
+Ando.Build(Directory("./integration-tests"), o => o.WithDind());
 ```
 
 ## Options Reference
