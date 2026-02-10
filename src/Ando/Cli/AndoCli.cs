@@ -132,7 +132,7 @@ public class AndoCli : IDisposable
     // Known commands that ANDO supports.
     private static readonly HashSet<string> KnownCommands = new(StringComparer.OrdinalIgnoreCase)
     {
-        "run", "verify", "commit", "bump", "docs", "release", "clean", "help"
+        "run", "verify", "commit", "bump", "docs", "release", "ship", "clean", "help"
     };
 
     /// <summary>
@@ -150,6 +150,7 @@ public class AndoCli : IDisposable
         // - "bump" -> Version bumping
         // - "docs" -> Documentation update
         // - "release" -> Full release workflow
+        // - "ship" -> Ship workflow (release without publish)
         // - Unknown commands -> show error and help
         // This allows "ando" and "ando run" to behave identically.
 
@@ -207,6 +208,12 @@ public class AndoCli : IDisposable
         {
             PrintHeader();
             return await ReleaseCommandAsync();
+        }
+
+        if (_args[0] == "ship")
+        {
+            PrintHeader();
+            return await ShipCommandAsync();
         }
 
         if (_args[0] == "clean")
@@ -595,6 +602,34 @@ public class AndoCli : IDisposable
         return await command.ExecuteAsync(all, dryRun, bumpType);
     }
 
+    // Handles the 'ship' command which runs the release workflow without publish.
+    // Ships code (commit, bump, docs, push) without building/publishing artifacts.
+    // Supports: ando ship [patch|minor|major] [--all] [--dry-run]
+    private async Task<int> ShipCommandAsync()
+    {
+        var all = HasFlag("--all");
+        var dryRun = HasFlag("--dry-run");
+
+        // Parse bump type from positional argument (e.g., "ando ship minor").
+        var bumpType = Versioning.BumpType.Patch;
+        foreach (var arg in _args.Skip(1)) // Skip "ship"
+        {
+            if (arg.StartsWith("-")) continue; // Skip flags
+            bumpType = arg.ToLower() switch
+            {
+                "minor" => Versioning.BumpType.Minor,
+                "major" => Versioning.BumpType.Major,
+                "patch" => Versioning.BumpType.Patch,
+                _ => bumpType // Ignore unknown positional args
+            };
+            break; // Only check first positional arg
+        }
+
+        var runner = new CliProcessRunner();
+        var command = new ReleaseCommand(runner, _logger);
+        return await command.ExecuteAsync(all, dryRun, bumpType, includePublish: false, commandName: "ship");
+    }
+
     // Handles the 'clean' command which removes build artifacts and caches.
     // Supports selective cleanup via flags, or cleans artifacts+temp by default.
     private async Task<int> CleanCommandAsync()
@@ -736,6 +771,7 @@ public class AndoCli : IDisposable
         Console.WriteLine("  bump [type]       Bump version in all projects (patch|minor|major)");
         Console.WriteLine("  docs              Update documentation using Claude");
         Console.WriteLine("  release [type]    Interactive release workflow (patch|minor|major)");
+        Console.WriteLine("  ship [type]       Ship without publish (commit, bump, docs, push)");
         Console.WriteLine("  clean             Remove artifacts, temp files, and containers");
         Console.WriteLine("  help, -h, --help  Show this help");
         Console.WriteLine("  -v, --version     Show version number");
@@ -768,6 +804,21 @@ public class AndoCli : IDisposable
         Console.WriteLine("    4. push     - Push commits to remote");
         Console.WriteLine("    5. publish  - Run build with publish profile (ando run -p publish --dind --read-env)");
         Console.WriteLine();
+        Console.WriteLine("Ship Options:");
+        Console.WriteLine("  patch               Bump patch version (default): 1.0.0 -> 1.0.1");
+        Console.WriteLine("  minor               Bump minor version: 1.0.0 -> 1.1.0");
+        Console.WriteLine("  major               Bump major version: 1.0.0 -> 2.0.0");
+        Console.WriteLine("  --all               Run all applicable ship steps non-interactively");
+        Console.WriteLine("  --dry-run           Preview ship steps without making changes");
+        Console.WriteLine();
+        Console.WriteLine("  Ship runs a mandatory build verification (ando run) before any steps.");
+        Console.WriteLine();
+        Console.WriteLine("  Ship workflow steps (selectable via interactive checklist):");
+        Console.WriteLine("    1. commit   - Commit uncommitted changes (AI-generated message)");
+        Console.WriteLine("    2. bump     - Bump version (uses type from command line)");
+        Console.WriteLine("    3. docs     - Update documentation using Claude (auto-commits)");
+        Console.WriteLine("    4. push     - Push commits to remote");
+        Console.WriteLine();
         Console.WriteLine("Bump Options:");
         Console.WriteLine("  patch               Increment patch version: 1.0.0 -> 1.0.1 (default)");
         Console.WriteLine("  minor               Increment minor version: 1.0.0 -> 1.1.0");
@@ -799,6 +850,8 @@ public class AndoCli : IDisposable
         Console.WriteLine("  ando release minor            Release with minor version bump");
         Console.WriteLine("  ando release major --all      Release major version, skip checklist");
         Console.WriteLine("  ando release --dry-run        Preview release without changes");
+        Console.WriteLine("  ando ship                     Ship workflow (no publish step)");
+        Console.WriteLine("  ando ship minor --all         Ship with minor bump, skip checklist");
         Console.WriteLine("  ando clean                    Remove artifacts and temp files");
         Console.WriteLine("  ando clean --all              Remove everything including container");
         Console.WriteLine();

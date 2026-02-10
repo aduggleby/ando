@@ -1,11 +1,12 @@
 // =============================================================================
 // ReleaseCommand.cs
 //
-// Summary: CLI command handler for 'ando release'.
+// Summary: CLI command handler for 'ando release' and 'ando ship'.
 //
-// Orchestrates the full release workflow: commit changes, update documentation,
-// bump version, push to remote, and run the publish build. Presents an
-// interactive checklist where users can select which steps to run.
+// Orchestrates the release/ship workflow: commit changes, update documentation,
+// bump version, push to remote, and optionally run the publish build. Presents
+// an interactive checklist where users can select which steps to run.
+// The 'ship' command reuses this handler with includePublish=false (4 steps).
 //
 // Design Decisions:
 // - Uses Spectre.Console for interactive checklist UI
@@ -13,6 +14,7 @@
 // - Documentation updates use Claude to analyze changes and update docs
 // - Failure in any step stops the workflow (except docs which is non-fatal)
 // - Supports --all flag to skip checklist and --dry-run to preview
+// - Parameterized to power both 'release' (5 steps) and 'ship' (4 steps)
 // =============================================================================
 
 using Ando.Hooks;
@@ -27,8 +29,9 @@ using System.Runtime.InteropServices;
 namespace Ando.Cli.Commands;
 
 /// <summary>
-/// CLI command handler for 'ando release'. Orchestrates the full release
-/// workflow with an interactive checklist for step selection.
+/// CLI command handler for 'ando release' and 'ando ship'. Orchestrates the
+/// release/ship workflow with an interactive checklist for step selection.
+/// The 'ship' command is a release without the publish step.
 /// </summary>
 public class ReleaseCommand
 {
@@ -44,13 +47,16 @@ public class ReleaseCommand
     }
 
     /// <summary>
-    /// Executes the release command.
+    /// Executes the release or ship command.
     /// </summary>
     /// <param name="all">Skip checklist and run all applicable steps.</param>
     /// <param name="dryRun">Show what would happen without executing.</param>
     /// <param name="bumpType">Version bump type (patch, minor, major). Defaults to patch.</param>
+    /// <param name="includePublish">Whether to include the publish step. False for 'ship' command.</param>
+    /// <param name="commandName">Command name for display and hooks ("release" or "ship").</param>
     /// <returns>Exit code: 0 for success, 1 for errors.</returns>
-    public async Task<int> ExecuteAsync(bool all = false, bool dryRun = false, BumpType bumpType = BumpType.Patch)
+    public async Task<int> ExecuteAsync(bool all = false, bool dryRun = false, BumpType bumpType = BumpType.Patch,
+        bool includePublish = true, string commandName = "release")
     {
         var startedAt = DateTimeOffset.Now;
         var sw = Stopwatch.StartNew();
@@ -74,12 +80,13 @@ public class ReleaseCommand
             var hasRemote = await _git.HasRemoteTrackingAsync();
             var remoteBranch = hasRemote ? await _git.GetRemoteTrackingBranchAsync() : null;
             var hasWebsite = Directory.Exists(Path.Combine(repoRoot, "website"));
-            var hasPublishProfile = HasPublishProfile(repoRoot);
+            var hasPublishProfile = includePublish && HasPublishProfile(repoRoot);
             var (hasChangesSinceTag, lastTag, commitCount) = await _git.GetChangesSinceLastTagAsync();
 
             // 3. Display current state.
-            AnsiConsole.MarkupLine("[bold]ANDO Release Workflow[/]");
-            AnsiConsole.MarkupLine("─────────────────────");
+            var title = char.ToUpper(commandName[0]) + commandName[1..];
+            AnsiConsole.MarkupLine($"[bold]ANDO {title} Workflow[/]");
+            AnsiConsole.MarkupLine(new string('─', $"ANDO {title} Workflow".Length));
             AnsiConsole.WriteLine();
             AnsiConsole.MarkupLine("[bold]Current state:[/]");
             AnsiConsole.MarkupLine($"  Branch: [cyan]{branch}[/]");
@@ -94,17 +101,17 @@ public class ReleaseCommand
 
             // Initialize hook runner.
             var hookRunner = new HookRunner(repoRoot, _logger);
-            var hookContext = new HookContext { Command = "release" };
+            var hookContext = new HookContext { Command = commandName };
 
             // Run pre-hooks.
-            if (!await hookRunner.RunHooksAsync(HookRunner.HookType.Pre, "release", hookContext))
+            if (!await hookRunner.RunHooksAsync(HookRunner.HookType.Pre, commandName, hookContext))
             {
-                _logger.Error("Release aborted by pre-hook.");
+                _logger.Error($"{title} aborted by pre-hook.");
                 return 1;
             }
 
             // 4. Build steps.
-            var steps = BuildSteps(hasChanges, hasWebsite, hasPublishProfile, hasRemote, remoteBranch, version, hasChangesSinceTag, lastTag);
+            var steps = BuildSteps(hasChanges, hasWebsite, hasPublishProfile, hasRemote, remoteBranch, version, hasChangesSinceTag, lastTag, includePublish);
 
             // 5. Show checklist or run all.
             List<ReleaseStep> selectedSteps;
@@ -118,7 +125,7 @@ public class ReleaseCommand
                 var result = ShowChecklist(steps, version, bumpType);
                 if (result == null)
                 {
-                    AnsiConsole.MarkupLine("[yellow]Release cancelled.[/]");
+                    AnsiConsole.MarkupLine($"[yellow]{title} cancelled.[/]");
                     return 0;
                 }
                 selectedSteps = result;
@@ -126,14 +133,14 @@ public class ReleaseCommand
 
             if (selectedSteps.Count == 0)
             {
-                AnsiConsole.MarkupLine("[yellow]No steps selected. Release cancelled.[/]");
+                AnsiConsole.MarkupLine($"[yellow]No steps selected. {title} cancelled.[/]");
                 return 0;
             }
 
             // 6. Dry run or execute.
             if (dryRun)
             {
-                ShowDryRun(selectedSteps, version, bumpType);
+                ShowDryRun(selectedSteps, version, bumpType, commandName);
                 return 0;
             }
 
@@ -145,11 +152,11 @@ public class ReleaseCommand
                 return buildResult;
             }
 
-            var exitCode = await ExecuteStepsAsync(selectedSteps, bumpType, repoRoot, version, bumpType, startedAt, sw);
+            var exitCode = await ExecuteStepsAsync(selectedSteps, bumpType, repoRoot, version, bumpType, startedAt, sw, commandName);
 
             // Run post-hooks with exit code so they can check success/failure.
             var postHookContext = hookContext with { ExitCode = exitCode };
-            await hookRunner.RunHooksAsync(HookRunner.HookType.Post, "release", postHookContext);
+            await hookRunner.RunHooksAsync(HookRunner.HookType.Post, commandName, postHookContext);
 
             return exitCode;
         }
@@ -167,7 +174,7 @@ public class ReleaseCommand
     private List<ReleaseStep> BuildSteps(
         bool hasChanges, bool hasWebsite, bool hasPublishProfile,
         bool hasRemote, string? remoteBranch, string version,
-        bool hasChangesSinceTag, string? lastTag)
+        bool hasChangesSinceTag, string? lastTag, bool includePublish = true)
     {
         var mdFiles = Directory.GetFiles(".", "*.md", SearchOption.AllDirectories)
             .Where(f => !f.Contains("node_modules") && !f.Contains("bin") && !f.Contains("obj"))
@@ -179,8 +186,8 @@ public class ReleaseCommand
         var canBump = hasChangesSinceTag || hasChanges;
         var bumpDisabledReason = canBump ? null : $"no changes since {lastTag}";
 
-        return
-        [
+        var steps = new List<ReleaseStep>
+        {
             new("commit", "Commit uncommitted changes", hasChanges, hasChanges ? null : "no changes"),
             new("bump", $"Bump version ({version}) if any changes", canBump, bumpDisabledReason),
             new("docs", hasWebsite
@@ -188,8 +195,15 @@ public class ReleaseCommand
                 : "Update documentation (Claude - markdown only)",
                 hasDocsToUpdate, hasDocsToUpdate ? null : "no documentation files"),
             new("push", $"Push to remote ({remoteBranch ?? "no remote"})", hasRemote, hasRemote ? null : "no remote tracking"),
-            new("publish", "Run publish build (ando run -p publish --dind --read-env)", hasPublishProfile, hasPublishProfile ? null : "no publish profile")
-        ];
+        };
+
+        // Only include the publish step for the 'release' command.
+        if (includePublish)
+        {
+            steps.Add(new("publish", "Run publish build (ando run -p publish --dind --read-env)", hasPublishProfile, hasPublishProfile ? null : "no publish profile"));
+        }
+
+        return steps;
     }
 
     private List<ReleaseStep>? ShowChecklist(List<ReleaseStep> steps, string currentVersion, BumpType bumpType)
@@ -360,12 +374,14 @@ public class ReleaseCommand
         string originalVersion,
         BumpType requestedBumpType,
         DateTimeOffset startedAt,
-        Stopwatch sw)
+        Stopwatch sw,
+        string commandName = "release")
     {
+        var title = char.ToUpper(commandName[0]) + commandName[1..];
         var stepNumber = 0;
         var totalSteps = steps.Count;
 
-        AnsiConsole.MarkupLine("[bold]Starting release...[/]");
+        AnsiConsole.MarkupLine($"[bold]Starting {commandName}...[/]");
         AnsiConsole.WriteLine();
 
         foreach (var step in steps)
@@ -419,7 +435,7 @@ public class ReleaseCommand
         var publishRan = steps.Any(s => s.Id == "publish");
         var profilesUsed = publishRan ? "publish" : "none";
 
-        AnsiConsole.MarkupLine("[green bold]Release completed.[/]");
+        AnsiConsole.MarkupLine($"[green bold]{title} completed.[/]");
         AnsiConsole.MarkupLine($"  Repo: [cyan]{Esc(repoRoot)}[/]");
         AnsiConsole.MarkupLine($"  Steps: [cyan]{Esc(stepList)}[/]");
         AnsiConsole.MarkupLine($"  Bump: [cyan]{Esc(bumpText)}[/]");
@@ -534,10 +550,11 @@ public class ReleaseCommand
         return semver.Bump(type).ToString();
     }
 
-    private void ShowDryRun(List<ReleaseStep> steps, string version, BumpType bumpType)
+    private void ShowDryRun(List<ReleaseStep> steps, string version, BumpType bumpType, string commandName = "release")
     {
-        AnsiConsole.MarkupLine("[bold]ANDO Release Workflow (dry run)[/]");
-        AnsiConsole.MarkupLine("───────────────────────────────");
+        var title = char.ToUpper(commandName[0]) + commandName[1..];
+        AnsiConsole.MarkupLine($"[bold]ANDO {title} Workflow (dry run)[/]");
+        AnsiConsole.MarkupLine(new string('─', $"ANDO {title} Workflow (dry run)".Length));
         AnsiConsole.WriteLine();
         AnsiConsole.MarkupLine("[bold]Would execute:[/]");
 
