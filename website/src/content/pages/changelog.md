@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.96
+
+**2026-02-10**
+
+- Internal improvements
+
 ## 0.9.95
 
 **2026-02-10**
