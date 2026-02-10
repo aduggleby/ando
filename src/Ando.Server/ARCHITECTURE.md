@@ -407,6 +407,8 @@ Detects required environment variables from build scripts.
 | `Cloudflare.EnsureAuthenticated()` | CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID |
 | `Azure.EnsureAuthenticated()` | AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID |
 | `GitHub.EnsureAuthenticated()` | GITHUB_TOKEN |
+| `GitHub.PushImage(...)` | GITHUB_TOKEN |
+| `Docker.Build(...WithPush()...ghcr.io/...)` | GITHUB_TOKEN |
 | `Ando.Build(Directory("subdir"))` | Recursive sub-build detection |
 
 #### ProfileDetector (IProfileDetector)

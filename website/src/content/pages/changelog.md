@@ -3,6 +3,15 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.97
+
+**2026-02-10**
+
+- Add build log connection status indicator showing SignalR/polling state
+- Add SignalR retry with automatic reconnection when WebSockets are blocked
+- Detect `GITHUB_TOKEN` requirement for `GitHub.PushImage()` and `Docker.Build()` with `WithPush()` targeting ghcr.io
+- Add auth and SignalR diagnostics logging for troubleshooting session issues
+
 ## 0.9.96
 
 **2026-02-10**
