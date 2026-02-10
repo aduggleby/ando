@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.91
+
+**2026-02-10**
+
+- Automatically resolve GitHub App identity via API instead of manual configuration
+
 ## 0.9.90
 
 **2026-02-09**
