@@ -69,6 +69,10 @@ public class AuthController : Controller
             return SafeRedirect(returnUrl);
         }
 
+        // If a previous POST redirected back here, keep the entered email to reduce re-typing.
+        // TempData survives one redirect.
+        var savedEmail = TempData["LoginEmail"] as string;
+
         var errorMessage = error switch
         {
             "invalid_credentials" => "Invalid email or password.",
@@ -80,7 +84,8 @@ public class AuthController : Controller
         var model = new LoginViewModel
         {
             ReturnUrl = returnUrl,
-            ErrorMessage = errorMessage
+            ErrorMessage = errorMessage,
+            Email = savedEmail ?? ""
         };
 
         return View(model);
@@ -102,8 +107,8 @@ public class AuthController : Controller
         var user = await _userManager.FindByEmailAsync(model.Email);
         if (user == null)
         {
-            model.ErrorMessage = "Invalid email or password.";
-            return View(model);
+            TempData["LoginEmail"] = model.Email;
+            return RedirectToAction(nameof(Login), new { returnUrl = model.ReturnUrl, error = "invalid_credentials" });
         }
 
         var result = await _signInManager.PasswordSignInAsync(
@@ -125,12 +130,12 @@ public class AuthController : Controller
         if (result.IsLockedOut)
         {
             _logger.LogWarning("User {Email} account locked out", model.Email);
-            model.ErrorMessage = "Your account has been locked due to too many failed attempts. Please try again later.";
-            return View(model);
+            TempData["LoginEmail"] = model.Email;
+            return RedirectToAction(nameof(Login), new { returnUrl = model.ReturnUrl, error = "account_locked" });
         }
 
-        model.ErrorMessage = "Invalid email or password.";
-        return View(model);
+        TempData["LoginEmail"] = model.Email;
+        return RedirectToAction(nameof(Login), new { returnUrl = model.ReturnUrl, error = "invalid_credentials" });
     }
 
     // -------------------------------------------------------------------------
@@ -255,9 +260,12 @@ public class AuthController : Controller
     /// </summary>
     [AllowAnonymous]
     [HttpGet("auth/forgot-password")]
-    public IActionResult ForgotPassword()
+    public IActionResult ForgotPassword(bool sent = false)
     {
-        return View(new ForgotPasswordViewModel());
+        return View(new ForgotPasswordViewModel
+        {
+            EmailSent = sent
+        });
     }
 
     /// <summary>
@@ -308,9 +316,9 @@ public class AuthController : Controller
             }
         }
 
-        // Always show success to prevent email enumeration
-        model.EmailSent = true;
-        return View(model);
+        // Always show success to prevent email enumeration.
+        // PRG: redirect to GET so refresh doesn't re-submit the POST.
+        return RedirectToAction(nameof(ForgotPassword), new { sent = true });
     }
 
     // -------------------------------------------------------------------------
@@ -329,11 +337,14 @@ public class AuthController : Controller
             return RedirectToAction("Login", new { error = "invalid_reset_link" });
         }
 
-        return View(new ResetPasswordViewModel
+        var model = new ResetPasswordViewModel
         {
             Email = email,
-            Token = token
-        });
+            Token = token,
+            ErrorMessage = TempData["ResetPasswordError"] as string
+        };
+
+        return View(model);
     }
 
     /// <summary>
@@ -364,12 +375,9 @@ public class AuthController : Controller
             return RedirectToAction("Login");
         }
 
-        foreach (var error in result.Errors)
-        {
-            model.ErrorMessage = error.Description;
-        }
-
-        return View(model);
+        // PRG: redirect back to GET so refresh doesn't re-submit the POST.
+        TempData["ResetPasswordError"] = result.Errors.FirstOrDefault()?.Description ?? "Failed to reset password.";
+        return RedirectToAction(nameof(ResetPassword), new { email = model.Email, token = model.Token });
     }
 
     // -------------------------------------------------------------------------
