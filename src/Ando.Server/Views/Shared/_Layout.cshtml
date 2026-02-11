@@ -14,7 +14,9 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - Ando CI</title>
+    <title>@ViewData["Title"] - Ando Server</title>
+    <link rel="icon" type="image/png" href="~/images/ando_logo.png" />
+    <link rel="shortcut icon" type="image/png" href="~/images/ando_logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -322,7 +324,7 @@
     <header>
         <nav>
             <div class="nav-brand">
-                <a href="/">Ando CI</a>
+                <a href="/">Ando Server</a>
             </div>
             @if (User.Identity?.IsAuthenticated == true)
             {
@@ -408,7 +410,7 @@
         <div class="footer-inner">
             <p>
                 <a class="footer-link" href="https://github.com/aduggleby/ando" target="_blank" rel="noopener noreferrer">Ando Server</a>
-                <span class="ml-2 text-slate-500">v@appVersion</span>
+                <span class="ml-2 text-slate-500">v@(appVersion)</span>
             </p>
             <p>
                 Made by <a class="footer-link" href="https://github.com/aduggleby" target="_blank" rel="noopener noreferrer">Alex Duggleby</a>
