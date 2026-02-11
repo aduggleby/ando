@@ -124,6 +124,7 @@ public class AuthController : Controller
             await _userManager.UpdateAsync(user);
 
             _logger.LogInformation("User {Email} logged in", model.Email);
+            TempData["GlobalSuccess"] = "Login successful.";
             return SafeRedirect(model.ReturnUrl);
         }
 
@@ -487,13 +488,17 @@ public class AuthController : Controller
     /// </summary>
     private IActionResult SafeRedirect(string? returnUrl)
     {
+        var destination = "/";
+
         // Only allow local (relative) URLs to prevent open redirect attacks
         if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
         {
-            return Redirect(returnUrl);
+            destination = returnUrl;
         }
 
-        return Redirect("/");
+        // Use 303 See Other so form POSTs always complete as a GET on the destination.
+        Response.Headers.Location = destination;
+        return StatusCode(StatusCodes.Status303SeeOther);
     }
 
     /// <summary>

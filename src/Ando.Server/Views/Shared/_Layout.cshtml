@@ -365,6 +365,18 @@
     }
 
     <main>
+        @if (TempData["GlobalSuccess"] != null)
+        {
+            <div class="alert alert-success">
+                @TempData["GlobalSuccess"]
+            </div>
+        }
+        @if (TempData["GlobalError"] != null)
+        {
+            <div class="alert alert-error">
+                @TempData["GlobalError"]
+            </div>
+        }
         @RenderBody()
     </main>
 
