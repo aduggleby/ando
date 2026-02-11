@@ -24,6 +24,19 @@
     </div>
 </div>
 
+<div
+    id="project-live-status"
+    class="alert alert-success"
+    style="display: none;"
+    data-project-id="@Model.Id"
+    data-live-status-url-template="/builds/__BUILD_ID__">
+    <strong>Build running</strong>
+    <p>
+        A build is currently in progress.
+        <a id="project-live-status-link" href="#">View live log</a>
+    </p>
+</div>
+
 @if (!Model.IsConfigured)
 {
     <div class="alert alert-warning">
@@ -67,7 +80,7 @@
             </div>
         <div class="info-item">
             <span class="info-label">Total Builds</span>
-            <span class="info-value">@Model.TotalBuilds</span>
+            <span class="info-value" id="project-total-builds">@Model.TotalBuilds</span>
         </div>
         <div class="info-item">
             <span class="info-label">Created</span>
@@ -78,60 +91,67 @@
 
 <div class="section">
     <h2>Recent Builds</h2>
-
-    @if (Model.RecentBuilds.Count == 0)
-    {
-        <div class="empty-state">
+    <div
+        id="project-builds-container"
+        data-empty="@(Model.RecentBuilds.Count == 0 ? "true" : "false")">
+        @if (Model.RecentBuilds.Count == 0)
+        {
+            <div class="empty-state" id="project-builds-empty-state">
             <p>No builds yet. Trigger a manual build or push to the repository.</p>
-        </div>
-    }
-    else
-    {
-        <table class="builds-table">
-            <thead>
-                <tr>
-                    <th>Status</th>
-                    <th>Commit</th>
-                    <th>Branch</th>
-                    <th>Message</th>
-                    <th>Trigger</th>
-                    <th>Duration</th>
-                    <th>Queued</th>
-                    <th><span class="sr-only">Actions</span></th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var build in Model.RecentBuilds)
-                {
-                    <tr class="build-row" onclick="window.location='/builds/@build.Id'">
-                        <td>
-                            <span class="status-badge status-@build.Status.ToString().ToLower()">
-                                @build.Status
-                            </span>
-                        </td>
-                        <td>
-                            <code class="commit-sha">@build.ShortCommitSha</code>
-                        </td>
-                        <td>
-                            <span class="branch-name">@build.Branch</span>
-                            @if (build.PullRequestNumber.HasValue)
-                            {
-                                <span class="pr-badge">#@build.PullRequestNumber</span>
-                            }
-                        </td>
-                        <td class="commit-message">
-                            @(build.CommitMessage?.Length > 60 ? build.CommitMessage[..57] + "..." : build.CommitMessage)
-                        </td>
-                        <td>@build.Trigger</td>
-                        <td>@FormatDuration(build.Duration)</td>
-                        <td>@FormatRelativeTime(build.QueuedAt)</td>
-                        <td><a href="/builds/@build.Id" class="build-view-link" onclick="event.stopPropagation()">View</a></td>
+            </div>
+        }
+        else
+        {
+            <table class="builds-table" id="project-builds-table">
+                <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Commit</th>
+                        <th>Branch</th>
+                        <th>Message</th>
+                        <th>Trigger</th>
+                        <th>Duration</th>
+                        <th>Queued</th>
+                        <th><span class="sr-only">Actions</span></th>
                     </tr>
-                }
-            </tbody>
-        </table>
-    }
+                </thead>
+                <tbody id="project-builds-tbody">
+                    @foreach (var build in Model.RecentBuilds)
+                    {
+                        <tr class="build-row" onclick="window.location='/builds/@build.Id'">
+                            <td>
+                                <span class="status-badge status-@build.Status.ToString().ToLower()">
+                                    @build.Status
+                                </span>
+                            </td>
+                            <td>
+                                <code class="commit-sha">@build.ShortCommitSha</code>
+                            </td>
+                            <td>
+                                <span class="branch-name">@build.Branch</span>
+                                @if (build.PullRequestNumber.HasValue)
+                                {
+                                    <span class="pr-badge">#@build.PullRequestNumber</span>
+                                }
+                            </td>
+                            <td class="commit-message">
+                                @(build.CommitMessage?.Length > 60 ? build.CommitMessage[..57] + "..." : build.CommitMessage)
+                            </td>
+                            <td>@build.Trigger</td>
+                            <td>@FormatDuration(build.Duration)</td>
+                            <td>@FormatRelativeTime(build.QueuedAt)</td>
+                            <td><a href="/builds/@build.Id" class="build-view-link" onclick="event.stopPropagation()">View</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
 </div>
+
+@section Scripts {
+    <script src="~/js/project-details.js"></script>
+}
 
 @functions {
     string FormatDuration(TimeSpan? duration)

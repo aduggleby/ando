@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.98
+
+**2026-02-11**
+
+- Fix login redirect to use HTTP 303 See Other, preventing form resubmission on page refresh
+- Add global flash messages for login success feedback
+
 ## 0.9.97
 
 **2026-02-10**

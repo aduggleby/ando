@@ -222,12 +222,14 @@ Program.cs bootstraps the application in 8 distinct phases:
 6. Session
 7. Authentication
 8. Authorization
-9. FastEndpoints
-10. Swagger (dev/test)
-11. SignalR hub mapping
-12. Hangfire dashboard (dev)
-13. MVC routes
-14. SPA fallback
+9. Auth failure logging (logs 401/403 for `/api`, `/hubs`, `/builds` with proxy diagnostics)
+10. API default-auth enforcement (returns 401 for unauthenticated `/api` requests)
+11. FastEndpoints
+12. Swagger (dev/test)
+13. SignalR hub mapping
+14. Hangfire dashboard (dev)
+15. MVC routes
+16. SPA fallback
 
 ---
 
@@ -546,12 +548,16 @@ Implements IBuildLogger for database and SignalR logging.
 ### 7. Real-time Communication (Hubs/)
 
 #### BuildLogHub
-SignalR hub for build log streaming.
+SignalR hub for build log streaming with connection diagnostics.
+
+**Lifecycle Logging:**
+- `OnConnectedAsync` - Logs connection ID, user, and auth status
+- `OnDisconnectedAsync` - Logs disconnection (with error if present)
 
 **Methods:**
 ```csharp
-JoinBuildLog(int buildId)   // Subscribe to build-{buildId} group
-LeaveBuildLog(int buildId)  // Unsubscribe from group
+JoinBuildLog(int buildId)   // Subscribe to build-{buildId} group (logged)
+LeaveBuildLog(int buildId)  // Unsubscribe from group (logged)
 ```
 
 **Broadcasting:**
@@ -842,6 +848,8 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 - Sliding renewal on activity
 - HttpOnly + Secure flags
 - SameSite protection
+- Extensive diagnostics logging (OnValidatePrincipal, OnSigningIn, OnSignedIn, OnSigningOut) with proxy header context (X-Forwarded-For, X-Forwarded-Proto) for troubleshooting session issues
+- Login redirects use HTTP 303 See Other to prevent form POST resubmission
 
 #### Authorization
 
