@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.102
+
+**2026-02-11**
+
+- Fix authentication redirects and cookie handling when running behind a reverse proxy
+
 ## 0.9.101
 
 **2026-02-11**

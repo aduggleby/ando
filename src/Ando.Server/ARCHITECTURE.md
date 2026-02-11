@@ -205,6 +205,8 @@ Program.cs bootstraps the application in 8 distinct phases:
 ```csharp
 - Cookie authentication with 30-day expiration
 - Sliding renewal on activity
+- Explicit cookie settings (HttpOnly, SameSite=Lax, SecurePolicy=SameAsRequest)
+- Forwarded headers for reverse proxy support (X-Forwarded-For, X-Forwarded-Proto)
 - API requests return 401 instead of redirect
 - "RequireAdmin" authorization policy
 ```
@@ -217,8 +219,9 @@ Program.cs bootstraps the application in 8 distinct phases:
 #### Middleware Pipeline Order
 1. Configuration validation
 2. Exception handling
-3. HTTPS redirection
-4. Static file serving
+3. Forwarded headers (X-Forwarded-For, X-Forwarded-Proto from reverse proxy)
+4. HTTPS redirection
+5. Static file serving
 5. Routing
 6. Session
 7. Authentication
@@ -847,10 +850,15 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 **Cookie Authentication:**
 - 30-day expiration
 - Sliding renewal on activity
-- HttpOnly + Secure flags
-- SameSite protection
-- Extensive diagnostics logging (OnValidatePrincipal, OnSigningIn, OnSignedIn, OnSigningOut) with proxy header context (X-Forwarded-For, X-Forwarded-Proto) for troubleshooting session issues
+- HttpOnly flag, SameSite=Lax, SecurePolicy=SameAsRequest (adapts to proxy scheme)
+- Forwarded headers middleware (X-Forwarded-For, X-Forwarded-Proto) ensures correct scheme detection behind Caddy
+- Extensive diagnostics logging (OnValidatePrincipal, OnSigningIn, OnSignedIn, OnSigningOut) with proxy header context for troubleshooting session issues
 - Login redirects use HTTP 303 See Other to prevent form POST resubmission
+
+**Client-Side Auth Handling:**
+- Protected routes preserve returnUrl so login redirects back to the original page
+- 401 responses are handled via React Router navigation (not hard page reloads) to preserve client state
+- API requests return 401 instead of redirect; the SPA handles the redirect flow
 
 #### Authorization
 
