@@ -2,11 +2,18 @@
 // ReleaseCommandHookTests.cs
 //
 // Regression tests for release/ship hook behavior.
+//
+// These tests redirect Console.Out and reset Spectre.Console's cached writer
+// because ReleaseCommand writes to AnsiConsole/Console directly. Without this,
+// parallel xUnit test execution can close the shared Console.Out writer, causing
+// intermittent "Cannot write to a closed TextWriter" failures.
 // =============================================================================
 
+using System.Reflection;
 using Ando.Cli.Commands;
 using Ando.Tests.TestFixtures;
 using Shouldly;
+using Spectre.Console;
 
 namespace Ando.Tests.Unit.Cli.Commands;
 
@@ -18,6 +25,8 @@ public class ReleaseCommandHookTests : IDisposable
 
     private readonly string _testDir;
     private readonly string _originalDir;
+    private readonly TextWriter _originalOut;
+    private readonly TextWriter _originalError;
     private readonly TestLogger _logger;
     private readonly MockCliProcessRunner _runner;
 
@@ -28,12 +37,29 @@ public class ReleaseCommandHookTests : IDisposable
         _originalDir = Directory.GetCurrentDirectory();
         Directory.SetCurrentDirectory(_testDir);
 
+        // Redirect Console.Out/Error to avoid "Cannot write to a closed TextWriter"
+        // when xUnit's parallel test runner closes the shared console writer.
+        _originalOut = Console.Out;
+        _originalError = Console.Error;
+        Console.SetOut(new StringWriter());
+        Console.SetError(new StringWriter());
+
+        // Reset Spectre.Console's cached console so it picks up the redirected writer.
+        // AnsiConsole caches a Lazy<IAnsiConsole> that holds a reference to Console.Out
+        // at the time it was first used. Without this reset, it would use the old (potentially
+        // closed) writer even after Console.SetOut.
+        ResetAnsiConsole();
+
         _logger = new TestLogger();
         _runner = new MockCliProcessRunner();
     }
 
     public void Dispose()
     {
+        Console.SetOut(_originalOut);
+        Console.SetError(_originalError);
+        ResetAnsiConsole();
+
         try
         {
             Directory.SetCurrentDirectory(_originalDir);
@@ -77,8 +103,25 @@ public class ReleaseCommandHookTests : IDisposable
         var command = new ReleaseCommand(_runner, _logger);
         var result = await command.ExecuteAsync(all: true, commandName: "release");
 
-        result.ShouldBe(0);
+        var errors = string.Join("; ", _logger.ErrorMessages);
+        result.ShouldBe(0, $"Errors: [{errors}]");
         _logger.InfoMessages.ShouldContain(m => m.Contains(HookMarker));
+    }
+
+    /// <summary>
+    /// Resets Spectre.Console's cached IAnsiConsole so it uses the current Console.Out.
+    /// The IAnsiConsole is created eagerly to avoid a circular Lazy reference:
+    /// AnsiConsole.Create() can access AnsiConsole properties backed by the same Lazy,
+    /// causing "ValueFactory attempted to access the Value property of this instance".
+    /// </summary>
+    private static void ResetAnsiConsole()
+    {
+        var field = typeof(AnsiConsole).GetField("_console", BindingFlags.Static | BindingFlags.NonPublic);
+        if (field != null)
+        {
+            var console = AnsiConsole.Create(new AnsiConsoleSettings());
+            field.SetValue(null, new Lazy<IAnsiConsole>(() => console));
+        }
     }
 
     private void SetupReleaseProject()

@@ -15,15 +15,26 @@ const api = axios.create({
   },
 });
 
-// Response interceptor for handling errors
+// Callback for handling auth loss. Set by AuthContext to avoid hard redirects
+// (window.location.href) that lose React state and cause full page reloads.
+let onAuthLost: (() => void) | null = null;
+
+export function setOnAuthLost(callback: (() => void) | null) {
+  onAuthLost = callback;
+}
+
+// Response interceptor for handling 401 errors.
+// Instead of hard-redirecting (which caused full page reloads and lost state),
+// we delegate to AuthContext which handles the redirect via React Router.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Handle 401 by redirecting to login
     if (error.response?.status === 401) {
-      // Don't redirect if already on auth pages
-      if (!window.location.pathname.startsWith('/auth')) {
-        window.location.href = '/auth/login';
+      // Don't trigger auth loss for auth endpoints (login, register, etc.)
+      // or for the /auth/me check (which returns 200 with isAuthenticated: false).
+      const url = error.config?.url || '';
+      if (!url.startsWith('/auth/') && !url.startsWith('auth/')) {
+        onAuthLost?.();
       }
     }
     return Promise.reject(error);

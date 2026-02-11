@@ -35,6 +35,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -218,6 +219,11 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.AccessDeniedPath = "/auth/access-denied";
     options.ExpireTimeSpan = TimeSpan.FromDays(30);
     options.SlidingExpiration = true;
+
+    // Explicit cookie settings for proper behavior behind reverse proxy (Caddy).
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
 
     // Extensive auth diagnostics to troubleshoot "random logouts" and proxy/cookie issues.
     // We intentionally do NOT log raw cookie values.
@@ -561,6 +567,14 @@ else
     app.UseExceptionHandler("/Home/Error");
     app.UseHsts();
 }
+
+// Handle forwarded headers from reverse proxy (Caddy).
+// Without this, the app sees all requests as plain HTTP from localhost,
+// which breaks cookie Secure flags and scheme detection.
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();

@@ -4,7 +4,7 @@
 // Main application component with routing configuration.
 // =============================================================================
 
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryProvider } from '@/context/QueryProvider';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { Layout } from '@/components/layout/Layout';
@@ -28,13 +28,19 @@ import { NotFound } from '@/pages/NotFound';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return <Loading size="lg" className="py-12" text="Loading..." />;
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/auth/login" replace />;
+    // Preserve the current URL so login can redirect back after success.
+    const returnUrl = location.pathname + location.search;
+    const loginPath = returnUrl && returnUrl !== '/'
+      ? `/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`
+      : '/auth/login';
+    return <Navigate to={loginPath} replace />;
   }
 
   return <>{children}</>;
@@ -42,13 +48,18 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return <Loading size="lg" className="py-12" text="Loading..." />;
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/auth/login" replace />;
+    const returnUrl = location.pathname + location.search;
+    const loginPath = returnUrl && returnUrl !== '/'
+      ? `/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`
+      : '/auth/login';
+    return <Navigate to={loginPath} replace />;
   }
 
   if (!user?.isAdmin) {

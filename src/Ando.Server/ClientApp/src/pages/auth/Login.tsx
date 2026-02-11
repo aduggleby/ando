@@ -32,7 +32,7 @@ export function Login() {
     try {
       const result = await login(email, password, rememberMe);
       if (result.success) {
-        navigate(returnUrl);
+        navigate(returnUrl, { replace: true });
       } else {
         setError(result.error || 'Login failed');
       }

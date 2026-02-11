@@ -2,11 +2,15 @@
 // context/AuthContext.tsx
 //
 // React context for managing authentication state across the application.
+//
+// Handles login/logout state, session restoration via getMe(), and coordinates
+// with the axios interceptor to handle 401 responses without hard page reloads.
 // =============================================================================
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import type { UserDto } from '@/types';
 import * as authApi from '@/api/auth';
+import { setOnAuthLost } from '@/api/client';
 
 interface ExtendedUser extends UserDto {
   impersonating?: boolean;
@@ -41,6 +45,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
     }
   };
+
+  // Handle 401 responses from the axios interceptor by clearing user state.
+  // This lets ProtectedRoute redirect to login via React Router instead of
+  // a hard window.location.href redirect that causes full page reloads.
+  const handleAuthLost = useCallback(() => {
+    setUser(null);
+  }, []);
+
+  useEffect(() => {
+    setOnAuthLost(handleAuthLost);
+    return () => setOnAuthLost(null);
+  }, [handleAuthLost]);
 
   useEffect(() => {
     const init = async () => {
