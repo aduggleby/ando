@@ -266,6 +266,13 @@ if (result.ExitCode != 0) throw new Exception("Tests failed");
 
 👉 **[See full Hooks documentation](/hooks)** for file locations, available APIs, environment variables, and more examples.
 
+## Cancellation (Ctrl+C)
+
+ANDO handles Ctrl+C gracefully:
+
+- **First Ctrl+C** - Requests cancellation. The current step finishes, then the build stops.
+- **Second Ctrl+C** - Forces immediate exit (exit code 130).
+
 ## Clean Options
 
 | Flag | Description |

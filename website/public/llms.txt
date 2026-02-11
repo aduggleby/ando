@@ -80,6 +80,11 @@ ANDO requires Docker to run builds in isolated containers. If Docker is not avai
 
 Unknown commands show an error with the help text (e.g., `ando foo` displays "Unknown command: foo" and lists available commands).
 
+### Cancellation (Ctrl+C)
+
+- First Ctrl+C requests graceful cancellation (current step finishes, then build stops)
+- Second Ctrl+C forces immediate exit (exit code 130)
+
 ### Run Options
 
 - `-f, --file <file>` - Use a specific build file instead of build.csando
@@ -248,6 +253,7 @@ ANDO supports pre-build and post-build hooks - `.csando` scripts that run automa
 **Behavior:**
 - Pre-hook failure aborts the command
 - Post-hook failure only warns (command already completed)
+- For `release` and `ship` commands, post-hooks only run when the command succeeds (exit code 0)
 
 **Example pre-hook (validate before bump):**
 ```csharp

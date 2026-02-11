@@ -96,6 +96,8 @@ if (result.ExitCode != 0)
 
 **Post-hooks cannot abort** - they only warn on failure since the command has already completed.
 
+**Note:** For `release` and `ship` commands, post-hooks only run when the command succeeds (exit code 0). This prevents post-release actions (like auto-updating tools or sending notifications) from running after a failed release.
+
 ```csharp
 // scripts/ando-post-release.csando
 // Update tool after release (failures don't block)

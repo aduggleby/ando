@@ -3,6 +3,14 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.100
+
+**2026-02-11**
+
+- Enhance build failure emails with build logs and metadata
+- Only run post-hooks for `release` and `ship` commands when the command succeeds (exit code 0)
+- Improve Ctrl+C handling: first press requests graceful cancellation, second press forces immediate exit
+
 ## 0.9.99
 
 **2026-02-11**
