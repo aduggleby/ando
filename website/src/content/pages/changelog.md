@@ -3,6 +3,15 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.105
+
+**2026-02-11**
+
+- Add dark mode with Light/Dark/System theme toggle to the server UI
+- Default notification email to account email when left blank and notifications are enabled
+- Improve container path resolution reliability during builds (uses cgroup in addition to HOSTNAME)
+- Add validation for project settings updates
+
 ## 0.9.104
 
 **2026-02-11**
