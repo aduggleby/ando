@@ -380,6 +380,40 @@ public class ProjectsControllerValidationTests : IDisposable
         AssertNotFoundView(result);
     }
 
+    [Fact]
+    public async Task Settings_Post_WithManualProfileOverride_UsesManualProfile()
+    {
+        // Arrange
+        _projectService.Setup(s => s.GetProjectForUserAsync(1, 1))
+            .ReturnsAsync(_testProject);
+
+        var form = new ProjectSettingsFormModel
+        {
+            BranchFilter = "main",
+            EnablePrBuilds = false,
+            TimeoutMinutes = 15,
+            Profile = "push",
+            ManualProfileOverride = true,
+            ManualProfile = "publish",
+            NotifyOnFailure = true
+        };
+
+        // Act
+        var result = await _controller.Settings(1, form);
+
+        // Assert
+        result.ShouldBeOfType<RedirectToActionResult>();
+        _projectService.Verify(s => s.UpdateProjectSettingsAsync(
+            1,
+            "main",
+            false,
+            15,
+            null,
+            "publish",
+            true,
+            null), Times.Once);
+    }
+
     // -------------------------------------------------------------------------
     // Create Project Validation Tests
     // TODO: These tests are disabled because the Create method signature changed

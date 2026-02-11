@@ -13,6 +13,7 @@
 // =============================================================================
 
 using Microsoft.AspNetCore.SignalR;
+using System.Security.Claims;
 
 namespace Ando.Server.Hubs;
 
@@ -30,6 +31,12 @@ public class BuildLogHub : Hub
 
     public override Task OnConnectedAsync()
     {
+        var userIdClaim = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(userIdClaim, out var userId))
+        {
+            _ = Groups.AddToGroupAsync(Context.ConnectionId, GetUserGroupName(userId));
+        }
+
         _logger.LogInformation(
             "SignalR connected: connectionId={ConnectionId} user={User} auth={IsAuthenticated}",
             Context.ConnectionId,
@@ -98,4 +105,9 @@ public class BuildLogHub : Hub
     /// Gets the SignalR group name for a build.
     /// </summary>
     public static string GetGroupName(int buildId) => $"build-{buildId}";
+
+    /// <summary>
+    /// Gets the SignalR group name for a user.
+    /// </summary>
+    public static string GetUserGroupName(int userId) => $"user-{userId}";
 }

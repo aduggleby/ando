@@ -119,12 +119,26 @@ else
         @foreach (var project in Model.Projects)
         {
             var deploymentClass = project.DeploymentStatus.ToString().ToLower();
-            var buildStatusClass = project.LastBuildStatus?.ToString().ToLower() ?? "none";
-            var currentBuildLabel = project.LastBuildStatus?.ToString() ?? "No builds";
+            var statusLabel = "Success";
+            var statusClass = "success";
+
+            if (!project.IsConfigured)
+            {
+                statusLabel = "Secrets missing";
+                statusClass = "pending";
+            }
+            else if (project.LastBuildStatus is BuildStatus.Failed or BuildStatus.TimedOut or BuildStatus.Cancelled)
+            {
+                statusLabel = "Failed";
+                statusClass = "failed";
+            }
 
             <article class="project-row-card project-row-@deploymentClass" data-filter-group="@deploymentClass">
                 <div class="project-row-main">
-                    <a href="/projects/@project.Id" class="project-row-name">@project.RepoFullName</a>
+                    <div class="flex items-center gap-2">
+                        <a href="/projects/@project.Id" class="project-row-name">@project.RepoFullName</a>
+                        <span class="status-badge status-@statusClass">@statusLabel</span>
+                    </div>
 
                     <div class="project-row-metrics">
                         <span><strong>@project.TotalBuilds</strong> build(s)</span>
@@ -151,22 +165,6 @@ else
                 </div>
 
                 <div class="project-row-side">
-                    <div class="project-row-badges">
-                        <span class="deployment-badge deployment-@deploymentClass">
-                            @(project.DeploymentStatus switch
-                            {
-                                DeploymentStatus.Deployed => "Deployed",
-                                DeploymentStatus.Failed => "Failed",
-                                _ => "Not Deployed"
-                            })
-                        </span>
-                        <span class="status-badge status-@buildStatusClass">@currentBuildLabel</span>
-                        @if (!project.IsConfigured)
-                        {
-                            <span class="status-badge status-cancelled">@project.MissingSecretsCount secret(s) missing</span>
-                        }
-                    </div>
-
                     <div class="project-row-actions">
                         <a href="/projects/@project.Id" class="btn btn-primary btn-sm">Open</a>
                         <a href="/projects/@project.Id/settings" class="btn btn-secondary btn-sm">Settings</a>
@@ -200,6 +198,34 @@ function filterProjects(filter) {
     });
 }
 </script>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <script>
+        (function () {
+            if (!window.signalR) return;
+
+            const connection = new signalR.HubConnectionBuilder()
+                .withUrl('/hubs/build-logs')
+                .withAutomaticReconnect()
+                .configureLogging(signalR.LogLevel.Warning)
+                .build();
+
+            let refreshTimer = null;
+            connection.on('BuildQueued', () => {
+                if (refreshTimer) return;
+                refreshTimer = setTimeout(() => {
+                    refreshTimer = null;
+                    window.location.reload();
+                }, 300);
+            });
+
+            connection.start().catch(() => {
+                // Ignore real-time connection failures; manual refresh still works.
+            });
+        })();
+    </script>
+}
 
 @functions {
     string FormatRelativeTime(DateTime dateTime)

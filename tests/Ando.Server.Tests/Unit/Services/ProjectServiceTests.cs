@@ -20,20 +20,22 @@ public class ProjectServiceTests : IDisposable
 {
     private readonly AndoDbContext _db;
     private readonly MockEncryptionService _encryptionService;
+    private readonly Mock<IRequiredSecretsDetector> _mockSecretsDetector;
+    private readonly Mock<IProfileDetector> _mockProfileDetector;
     private readonly ProjectService _service;
 
     public ProjectServiceTests()
     {
         _db = TestDbContextFactory.Create();
         _encryptionService = new MockEncryptionService();
-        var mockSecretsDetector = new Mock<IRequiredSecretsDetector>();
-        var mockProfileDetector = new Mock<IProfileDetector>();
+        _mockSecretsDetector = new Mock<IRequiredSecretsDetector>();
+        _mockProfileDetector = new Mock<IProfileDetector>();
 
         _service = new ProjectService(
             _db,
             _encryptionService,
-            mockSecretsDetector.Object,
-            mockProfileDetector.Object,
+            _mockSecretsDetector.Object,
+            _mockProfileDetector.Object,
             NullLogger<ProjectService>.Instance);
     }
 
@@ -719,6 +721,72 @@ public class ProjectServiceTests : IDisposable
         // Assert - only names returned, not values
         names.ShouldContain("API_KEY");
         names.ShouldNotContain("super-secret-value");
+    }
+
+    // -------------------------------------------------------------------------
+    // DetectAndUpdateProfilesAsync Tests
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task DetectAndUpdateProfilesAsync_ScansDefaultAndFilteredBranches()
+    {
+        // Arrange
+        var user = await CreateTestUserAsync();
+        var project = await CreateTestProjectAsync(user);
+        project.DefaultBranch = "main";
+        project.BranchFilter = "main,feature/new-profile";
+        await _db.SaveChangesAsync();
+
+        _mockProfileDetector
+            .Setup(d => d.DetectProfilesAsync(111, project.RepoFullName, "main"))
+            .ReturnsAsync(["push"]);
+        _mockProfileDetector
+            .Setup(d => d.DetectProfilesAsync(111, project.RepoFullName, "feature/new-profile"))
+            .ReturnsAsync(["publish"]);
+
+        // Act
+        var detected = await _service.DetectAndUpdateProfilesAsync(project.Id);
+
+        // Assert
+        detected.Count.ShouldBe(2);
+        detected.ShouldContain("publish");
+        detected.ShouldContain("push");
+        var updated = await _db.Projects.FindAsync(project.Id);
+        updated.ShouldNotBeNull();
+        updated!.GetAvailableProfileNames().ShouldBe(["publish", "push"]);
+        _mockProfileDetector.Verify(
+            d => d.DetectProfilesAsync(111, project.RepoFullName, "main"),
+            Times.Once);
+        _mockProfileDetector.Verify(
+            d => d.DetectProfilesAsync(111, project.RepoFullName, "feature/new-profile"),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task DetectAndUpdateProfilesAsync_SkipsWildcardBranchPatterns()
+    {
+        // Arrange
+        var user = await CreateTestUserAsync();
+        var project = await CreateTestProjectAsync(user);
+        project.DefaultBranch = "main";
+        project.BranchFilter = "main,feature/*";
+        await _db.SaveChangesAsync();
+
+        _mockProfileDetector
+            .Setup(d => d.DetectProfilesAsync(111, project.RepoFullName, "main"))
+            .ReturnsAsync(["publish"]);
+
+        // Act
+        var detected = await _service.DetectAndUpdateProfilesAsync(project.Id);
+
+        // Assert
+        detected.ShouldBe(["publish"]);
+        _mockProfileDetector.Verify(
+            d => d.DetectProfilesAsync(111, project.RepoFullName, "main"),
+            Times.Once);
+        _mockProfileDetector.Verify(
+            d => d.DetectProfilesAsync(111, project.RepoFullName, "feature/*"),
+            Times.Never);
     }
 
     // -------------------------------------------------------------------------

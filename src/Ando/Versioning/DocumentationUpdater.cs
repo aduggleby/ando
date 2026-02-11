@@ -60,6 +60,24 @@ public partial class DocumentationUpdater
     }
 
     /// <summary>
+    /// Syncs version badges in all candidate files to the current version,
+    /// regardless of what version they currently show.
+    /// </summary>
+    /// <param name="currentVersion">The current project version to sync to.</param>
+    /// <returns>List of update results for each file processed.</returns>
+    public List<UpdateResult> SyncVersionBadges(string currentVersion)
+    {
+        var results = new List<UpdateResult>();
+
+        foreach (var path in FindAllVersionBadgeFiles())
+        {
+            results.Add(SyncVersionBadge(path, currentVersion));
+        }
+
+        return results;
+    }
+
+    /// <summary>
     /// Finds a file containing version badge in standard locations.
     /// </summary>
     private string? FindVersionBadge()
@@ -73,6 +91,62 @@ public partial class DocumentationUpdater
         return candidates
             .Select(c => Path.Combine(_repoRoot, c))
             .FirstOrDefault(File.Exists);
+    }
+
+    /// <summary>
+    /// Finds all files that may contain version badges.
+    /// Unlike FindVersionBadge which returns the first match, this returns all.
+    /// </summary>
+    private List<string> FindAllVersionBadgeFiles()
+    {
+        var candidates = new[]
+        {
+            "website/src/pages/index.astro",
+            "README.md"
+        };
+
+        return candidates
+            .Select(c => Path.Combine(_repoRoot, c))
+            .Where(File.Exists)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Replaces all version badge patterns in a single file with the current version.
+    /// Skips files where the version already matches.
+    /// </summary>
+    private UpdateResult SyncVersionBadge(string path, string currentVersion)
+    {
+        try
+        {
+            var content = File.ReadAllText(path);
+            var updated = content;
+
+            // Replace any quoted version with the current version.
+            updated = QuotedVersionRegex().Replace(updated, match =>
+            {
+                var quote = match.Groups[1].Value;
+                return $"{quote}{currentVersion}{quote}";
+            });
+
+            // Replace any v-prefixed version badge with the current version.
+            updated = VersionBadgeRegex().Replace(updated, $"v{currentVersion}");
+
+            var relativePath = Path.GetRelativePath(_repoRoot, path);
+
+            if (updated == content)
+            {
+                return new UpdateResult(relativePath, true, "Already up to date");
+            }
+
+            File.WriteAllText(path, updated);
+            return new UpdateResult(relativePath, true);
+        }
+        catch (Exception ex)
+        {
+            var relativePath = Path.GetRelativePath(_repoRoot, path);
+            return new UpdateResult(relativePath, false, ex.Message);
+        }
     }
 
     // Regex for version in quotes.

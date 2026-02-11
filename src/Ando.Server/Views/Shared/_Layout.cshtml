@@ -1,8 +1,14 @@
 @using Ando.Server.Models
 @using Ando.Server.Services
 @using Microsoft.AspNetCore.Identity
+@using System.Reflection
 @inject UserManager<ApplicationUser> UserManager
 @inject IImpersonationService ImpersonationService
+@{
+    var assembly = typeof(ApplicationUser).Assembly;
+    var informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+    var appVersion = (informationalVersion?.Split('+')[0] ?? assembly.GetName().Version?.ToString() ?? "unknown").Trim();
+}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -60,7 +66,9 @@
             .nav-divider { @@apply h-6 w-px bg-slate-200 mx-2; }
             .nav-create { @@apply ml-2; }
             main { @@apply mx-auto w-full max-w-6xl flex-1 px-6 py-8; }
-            footer { @@apply border-t border-slate-200 py-8 text-center text-xs text-slate-500; }
+            footer { @@apply border-t border-slate-200 py-6 text-xs text-slate-500; }
+            .footer-inner { @@apply mx-auto flex w-full max-w-6xl flex-col gap-2 px-6 sm:flex-row sm:items-center sm:justify-between; }
+            .footer-link { @@apply text-slate-600 no-underline hover:text-slate-900; }
 
             .page-header { @@apply mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between; }
             .breadcrumb { @@apply text-sm text-slate-500; }
@@ -397,7 +405,15 @@
     </main>
 
     <footer>
-        <p>&copy; @DateTime.Now.Year Ando CI</p>
+        <div class="footer-inner">
+            <p>
+                <a class="footer-link" href="https://github.com/aduggleby/ando" target="_blank" rel="noopener noreferrer">Ando Server</a>
+                <span class="ml-2 text-slate-500">v@appVersion</span>
+            </p>
+            <p>
+                Made by <a class="footer-link" href="https://github.com/aduggleby" target="_blank" rel="noopener noreferrer">Alex Duggleby</a>
+            </p>
+        </div>
     </footer>
 
     <script src="~/js/site.js"></script>

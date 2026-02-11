@@ -408,6 +408,8 @@ public class ProjectsController : Controller
             TimeoutMinutes = project.TimeoutMinutes,
             DockerImage = project.DockerImage,
             Profile = project.Profile,
+            ManualProfileOverride = !project.IsProfileValid() && !string.IsNullOrWhiteSpace(project.Profile),
+            ManualProfile = project.Profile,
             AvailableProfiles = project.GetAvailableProfileNames(),
             IsProfileValid = project.IsProfileValid(),
             RequiredSecrets = project.RequiredSecrets,
@@ -435,13 +437,17 @@ public class ProjectsController : Controller
             return View("NotFound");
         }
 
+        var effectiveProfile = form.ManualProfileOverride
+            ? string.IsNullOrWhiteSpace(form.ManualProfile) ? null : form.ManualProfile.Trim()
+            : string.IsNullOrWhiteSpace(form.Profile) ? null : form.Profile.Trim();
+
         await _projectService.UpdateProjectSettingsAsync(
             id,
             form.BranchFilter,
             form.EnablePrBuilds,
             form.TimeoutMinutes,
             form.DockerImage,
-            form.Profile,
+            effectiveProfile,
             form.NotifyOnFailure,
             form.NotificationEmail);
 

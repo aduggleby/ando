@@ -403,6 +403,16 @@ public class ProjectSettingsViewModel
     public string? Profile { get; init; }
 
     /// <summary>
+    /// Whether manual profile override is enabled in the settings form.
+    /// </summary>
+    public bool ManualProfileOverride { get; init; }
+
+    /// <summary>
+    /// Manual profile value used when override is enabled.
+    /// </summary>
+    public string? ManualProfile { get; init; }
+
+    /// <summary>
     /// List of available build profiles defined in the repository.
     /// </summary>
     public IReadOnlyList<string> AvailableProfiles { get; init; } = [];
@@ -474,6 +484,16 @@ public class ProjectSettingsFormModel
     /// Selected build profile name.
     /// </summary>
     public string? Profile { get; set; }
+
+    /// <summary>
+    /// Whether to manually override profile validation and set a profile value directly.
+    /// </summary>
+    public bool ManualProfileOverride { get; set; }
+
+    /// <summary>
+    /// Manual profile value used when override is enabled.
+    /// </summary>
+    public string? ManualProfile { get; set; }
 
     /// <summary>
     /// Whether to send email notifications on build failure.

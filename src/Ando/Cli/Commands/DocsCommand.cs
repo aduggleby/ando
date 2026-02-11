@@ -19,6 +19,7 @@
 using Ando.Hooks;
 using Ando.Logging;
 using Ando.Utilities;
+using Ando.Versioning;
 using Spectre.Console;
 
 namespace Ando.Cli.Commands;
@@ -58,6 +59,9 @@ public class DocsCommand
             }
 
             var repoRoot = workingDirectory ?? Directory.GetCurrentDirectory();
+
+            // Sync version badges before running Claude.
+            SyncVersionBadges(repoRoot);
 
             // Check for Claude permission (this command uses Claude for documentation updates).
             var claudeChecker = new ClaudePermissionChecker(_logger);
@@ -193,6 +197,46 @@ public class DocsCommand
         {
             _logger.Error($"Error: {ex.Message}");
             return 1;
+        }
+    }
+
+    /// <summary>
+    /// Detects the current project version and syncs version badges in documentation files.
+    /// All failures are non-fatal — logged as warnings and do not block the docs command.
+    /// </summary>
+    private void SyncVersionBadges(string repoRoot)
+    {
+        try
+        {
+            var buildScript = Path.Combine(repoRoot, "build.csando");
+            if (!File.Exists(buildScript))
+                return;
+
+            var detector = new ProjectDetector();
+            var projects = detector.DetectProjects(buildScript);
+            if (projects.Count == 0)
+                return;
+
+            var reader = new VersionReader();
+            var fullPath = Path.Combine(repoRoot, projects[0].Path);
+            var currentVersion = reader.ReadVersion(fullPath, projects[0].Type);
+            if (currentVersion == null)
+                return;
+
+            var updater = new DocumentationUpdater(repoRoot);
+            var results = updater.SyncVersionBadges(currentVersion);
+
+            foreach (var result in results)
+            {
+                if (result.Success && result.Error == null)
+                {
+                    _logger.Info($"Updated version badge in {result.FilePath} to {currentVersion}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning($"Version badge sync skipped: {ex.Message}");
         }
     }
 

@@ -6,6 +6,10 @@
 
 import { Page, Locator, expect } from '@playwright/test';
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * Projects list page.
  */
@@ -296,12 +300,17 @@ export class ProjectSettingsPage {
   }
 
   async deleteSecret(name: string) {
-    // Find the div containing this secret (has a code element with the name)
-    const secretDiv = this.secretsTable.locator('> div').filter({ hasText: name });
+    const escapedName = escapeRegExp(name);
+    const secretDiv = this.secretsTable
+      .locator('> div')
+      .filter({ hasText: new RegExp(`\\b${escapedName}\\b`) });
     // Handle confirmation dialog
     this.page.once('dialog', dialog => dialog.accept());
-    // Click the delete button (form submit button with trash icon)
-    await secretDiv.locator('form button[type="submit"]').click();
+    // Prefer explicit delete controls to avoid matching "Save Value" submit buttons.
+    const deleteButton = secretDiv.locator(
+      'button[title="Delete secret"], button:has-text("Delete"), form button[title="Delete secret"]'
+    );
+    await deleteButton.first().click();
   }
 
   async getSecretNames(): Promise<string[]> {

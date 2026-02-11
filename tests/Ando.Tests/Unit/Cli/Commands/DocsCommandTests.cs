@@ -156,7 +156,91 @@ public class DocsCommandTests : IDisposable
 
     #endregion
 
+    #region Version Badge Sync Tests
+
+    [Fact]
+    public async Task ExecuteAsync_WithStaleBadge_UpdatesBadgeAndLogs()
+    {
+        SetupGitRepo();
+        SetupNoCommits();
+        SetupProjectWithVersion("1.2.3");
+        CreateStaleBadgeFile("v0.9.66");
+
+        var command = new DocsCommand(_runner, _logger);
+        await command.ExecuteAsync(autoCommit: false, workingDirectory: _testDir);
+
+        // Badge should be updated.
+        var badgeContent = File.ReadAllText(Path.Combine(_testDir, "README.md"));
+        badgeContent.ShouldContain("v1.2.3");
+        badgeContent.ShouldNotContain("v0.9.66");
+
+        // Should log the update.
+        _logger.InfoMessages.ShouldContain(m => m.Contains("Updated version badge") && m.Contains("1.2.3"));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_NoBuildScript_SkipsSilently()
+    {
+        SetupGitRepo();
+        SetupNoCommits();
+        // No build.csando — badge sync should be skipped without warnings.
+
+        var command = new DocsCommand(_runner, _logger);
+        await command.ExecuteAsync(autoCommit: false, workingDirectory: _testDir);
+
+        _logger.WarningMessages.ShouldNotContain(m => m.Contains("badge"));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_BadgeAlreadyCurrent_NoUpdateLog()
+    {
+        SetupGitRepo();
+        SetupNoCommits();
+        SetupProjectWithVersion("1.2.3");
+        CreateStaleBadgeFile("v1.2.3"); // Already matches.
+
+        var command = new DocsCommand(_runner, _logger);
+        await command.ExecuteAsync(autoCommit: false, workingDirectory: _testDir);
+
+        // Should NOT log "Updated version badge" when already current.
+        _logger.InfoMessages.ShouldNotContain(m => m.Contains("Updated version badge"));
+    }
+
+    #endregion
+
     #region Helper Methods
+
+    /// <summary>
+    /// Creates a build.csando and .csproj file with the given version for version detection.
+    /// </summary>
+    private void SetupProjectWithVersion(string version)
+    {
+        // Create a minimal .csproj with a version.
+        var csprojPath = Path.Combine(_testDir, "src", "MyProject", "MyProject.csproj");
+        Directory.CreateDirectory(Path.GetDirectoryName(csprojPath)!);
+        File.WriteAllText(csprojPath, $"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <Version>{version}</Version>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        // Create a build.csando that references the project.
+        var buildScriptPath = Path.Combine(_testDir, "build.csando");
+        File.WriteAllText(buildScriptPath, """
+            var project = Dotnet.Project("src/MyProject/MyProject.csproj");
+            """);
+    }
+
+    /// <summary>
+    /// Creates a README.md with a version badge.
+    /// </summary>
+    private void CreateStaleBadgeFile(string versionBadge)
+    {
+        var readmePath = Path.Combine(_testDir, "README.md");
+        File.WriteAllText(readmePath, $"# My Project\n\nCurrent: {versionBadge}\n");
+    }
 
     private void SetupGitRepo()
     {

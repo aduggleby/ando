@@ -37,6 +37,8 @@ cd tests/Ando.Server.E2E && npm ci && npm test
 
 - Prefer adding/adjusting unit tests alongside behavior changes.
 - Name tests descriptively; keep E2E flows stable and deterministic (no time-dependent assertions).
+- After any substantial or cross-cutting change, always run the Playwright E2E suite before handing off:
+  `cd tests/Ando.Server.E2E && npm test`
 
 ## Commit & Pull Request Guidelines
 

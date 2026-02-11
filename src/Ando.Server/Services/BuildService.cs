@@ -14,9 +14,11 @@
 
 using Ando.Server.BuildExecution;
 using Ando.Server.Data;
+using Ando.Server.Hubs;
 using Ando.Server.Jobs;
 using Ando.Server.Models;
 using Hangfire;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace Ando.Server.Services;
@@ -29,17 +31,20 @@ public class BuildService : IBuildService
     private readonly AndoDbContext _db;
     private readonly IBackgroundJobClient _jobClient;
     private readonly CancellationTokenRegistry _cancellationRegistry;
+    private readonly IHubContext<BuildLogHub> _hubContext;
     private readonly ILogger<BuildService> _logger;
 
     public BuildService(
         AndoDbContext db,
         IBackgroundJobClient jobClient,
         CancellationTokenRegistry cancellationRegistry,
+        IHubContext<BuildLogHub> hubContext,
         ILogger<BuildService> logger)
     {
         _db = db;
         _jobClient = jobClient;
         _cancellationRegistry = cancellationRegistry;
+        _hubContext = hubContext;
         _logger = logger;
     }
 
@@ -93,6 +98,30 @@ public class BuildService : IBuildService
         _logger.LogInformation(
             "Queued build {BuildId} for project {ProjectId} (job: {JobId})",
             build.Id, projectId, jobId);
+
+        // Notify UI clients to refresh project lists when a new build is queued.
+        if (project != null)
+        {
+            _ = _hubContext.Clients
+                .Group(BuildLogHub.GetUserGroupName(project.OwnerId))
+                .SendAsync("BuildQueued", new
+                {
+                    BuildId = build.Id,
+                    ProjectId = projectId,
+                    QueuedAt = build.QueuedAt
+                });
+        }
+        else
+        {
+            _ = _hubContext.Clients
+                .All
+                .SendAsync("BuildQueued", new
+                {
+                    BuildId = build.Id,
+                    ProjectId = projectId,
+                    QueuedAt = build.QueuedAt
+                });
+        }
 
         return build.Id;
     }

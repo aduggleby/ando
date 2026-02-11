@@ -279,10 +279,50 @@ public class ProjectService : IProjectService
 
         try
         {
-            var detectedProfiles = await _profileDetector.DetectProfilesAsync(
-                project.InstallationId.Value,
-                project.RepoFullName,
-                project.DefaultBranch);
+            var branchesToScan = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (!string.IsNullOrWhiteSpace(project.DefaultBranch))
+            {
+                branchesToScan.Add(project.DefaultBranch);
+            }
+
+            if (!string.IsNullOrWhiteSpace(project.BranchFilter))
+            {
+                var filteredBranches = project.BranchFilter
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    // Branch filters may include wildcard patterns (e.g. feature/*). Those are
+                    // not valid Git refs to fetch directly, so only scan exact branch names here.
+                    .Where(b => !b.Contains('*') && !b.Contains('?'));
+
+                foreach (var branch in filteredBranches)
+                {
+                    branchesToScan.Add(branch);
+                }
+            }
+
+            if (branchesToScan.Count == 0)
+            {
+                _logger.LogWarning(
+                    "Cannot detect profiles for project {ProjectId}: no branches available to scan",
+                    projectId);
+                return [];
+            }
+
+            var detectedProfilesSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var branch in branchesToScan)
+            {
+                var branchProfiles = await _profileDetector.DetectProfilesAsync(
+                    project.InstallationId.Value,
+                    project.RepoFullName,
+                    branch);
+
+                foreach (var profile in branchProfiles)
+                {
+                    detectedProfilesSet.Add(profile);
+                }
+            }
+
+            var detectedProfiles = detectedProfilesSet.Order().ToList();
 
             // Update the project's available profiles
             project.SetAvailableProfiles(detectedProfiles);
