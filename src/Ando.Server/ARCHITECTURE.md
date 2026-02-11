@@ -367,7 +367,8 @@ RetryBuildAsync()           // Create new build with same parameters
 3. Update project.LastBuildAt
 4. Enqueue ExecuteBuildJob in Hangfire
 5. Store HangfireJobId in build record
-6. Return build ID
+6. Notify UI via SignalR `BuildQueued` event (to project owner's user group)
+7. Return build ID
 
 #### ProjectService (IProjectService)
 Manages projects and secrets.
@@ -423,6 +424,9 @@ Detects available profiles from build scripts.
 **Pattern Detection:**
 - `DefineProfile("profile-name")` → Extract profile names
 - Case-insensitive, sorted alphabetically
+
+**Branch Scanning:**
+Profile detection scans all branch filter branches (not just the default branch). Exact branch names from the filter are scanned; wildcard patterns (e.g., `feature/*`) are skipped. Results are deduplicated across branches.
 
 #### EmailService (IEmailService)
 Pluggable email providers.
@@ -558,17 +562,27 @@ SignalR hub for build log streaming with connection diagnostics.
 - `OnConnectedAsync` - Logs connection ID, user, and auth status
 - `OnDisconnectedAsync` - Logs disconnection (with error if present)
 
+**Groups:**
+- `build-{buildId}` — Per-build log streaming (clients join/leave explicitly)
+- `user-{userId}` — Per-user notifications (auto-joined on connect via NameIdentifier claim)
+
 **Methods:**
 ```csharp
 JoinBuildLog(int buildId)   // Subscribe to build-{buildId} group (logged)
 LeaveBuildLog(int buildId)  // Unsubscribe from group (logged)
 ```
 
-**Broadcasting:**
+**Server-Sent Events:**
 ```csharp
+// Build log streaming (per-build group)
 await _hubContext.Clients
     .Group($"build-{buildId}")
     .SendAsync("ReceiveLogEntry", logEntry);
+
+// Build queued notification (per-user group)
+await _hubContext.Clients
+    .Group($"user-{userId}")
+    .SendAsync("BuildQueued", new { BuildId, ProjectId, QueuedAt });
 ```
 
 ---
@@ -651,6 +665,8 @@ public class Project
     public int TimeoutMinutes { get; set; } = 15;
     public string? DockerImage { get; set; }
     public string? Profile { get; set; }
+    public bool ManualProfileOverride { get; set; }  // Bypass auto-detection
+    public string? ManualProfile { get; set; }       // Manual profile value
     public string? AvailableProfiles { get; set; }  // CSV
 
     // Auto-Detected

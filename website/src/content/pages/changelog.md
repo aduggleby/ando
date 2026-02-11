@@ -3,6 +3,17 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.103
+
+**2026-02-11**
+
+- Add real-time project list refresh via SignalR when builds are queued
+- Add manual profile override option in project settings for cases where auto-detection is stale
+- Scan branch filter branches (not just default branch) for profile detection
+- Add inline secret value update in project settings with password manager suppression
+- Add version badge sync to `ando docs` command (automatically updates version badges before running Claude)
+- Show app version and attribution in the layout footer
+
 ## 0.9.102
 
 **2026-02-11**

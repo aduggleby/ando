@@ -66,7 +66,7 @@ ANDO requires Docker to run builds in isolated containers. If Docker is not avai
 - `ando` or `ando run` - Run the build script in a Docker container
 - `ando commit` - Commit all changes with AI-generated message using Claude
 - `ando bump [patch|minor|major]` - Bump version across all projects in build.csando (default: patch)
-- `ando docs` - Update documentation using Claude (analyzes changes and updates relevant docs)
+- `ando docs` - Update documentation using Claude (syncs version badges in docs files, then analyzes changes and updates relevant docs)
 - `ando release` - Interactive release workflow (commit, docs, bump, push, publish). Steps are contextually enabled: commit skipped if no uncommitted changes, bump skipped if no changes since last tag, push skipped if no remote tracking.
 - `ando release --all` - Run all applicable release steps non-interactively
 - `ando release --dry-run` - Preview what release would do
@@ -119,6 +119,8 @@ Several ANDO commands use Claude CLI for AI-powered features:
 Requirements: Claude CLI must be installed (`npm install -g @anthropic-ai/claude-code`)
 
 ### Docs Command Details
+
+Before running Claude, `ando docs` automatically syncs version badges in `website/src/pages/index.astro` and `README.md` to the current project version. This is non-fatal — failures are logged as warnings.
 
 The `ando docs` command searches for and updates these files:
 

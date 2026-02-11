@@ -155,10 +155,11 @@ ando docs
 ```
 
 **What it does:**
-1. Gets commits since last git tag (or recent commits if no tag)
-2. Analyzes each commit to understand what changed
-3. Finds and updates relevant documentation files
-4. Changes are left uncommitted for you to review
+1. Syncs version badges in documentation files (`index.astro`, `README.md`) to the current project version
+2. Gets commits since last git tag (or recent commits if no tag)
+3. Analyzes each commit to understand what changed
+4. Finds and updates relevant documentation files
+5. Changes are left uncommitted for you to review
 
 ### Files Searched and Updated
 
