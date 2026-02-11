@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.106
+
+**2026-02-11**
+
+- Add dark mode styling to all remaining UI components and pages
+
 ## 0.9.105
 
 **2026-02-11**
