@@ -48,6 +48,10 @@ public class UpdateProjectSettingsEndpoint : Endpoint<UpdateProjectSettingsReque
             return;
         }
 
+        var effectiveNotificationEmail = string.IsNullOrWhiteSpace(req.NotificationEmail)
+            ? (req.NotifyOnFailure ? project.Owner.Email : null)
+            : req.NotificationEmail.Trim();
+
         await _projectService.UpdateProjectSettingsAsync(
             projectId,
             req.BranchFilter,
@@ -56,7 +60,7 @@ public class UpdateProjectSettingsEndpoint : Endpoint<UpdateProjectSettingsReque
             req.DockerImage,
             req.Profile,
             req.NotifyOnFailure,
-            req.NotificationEmail);
+            effectiveNotificationEmail);
 
         await SendAsync(new UpdateProjectSettingsResponse(true), cancellation: ct);
     }

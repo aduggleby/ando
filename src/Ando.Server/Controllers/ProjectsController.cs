@@ -415,6 +415,7 @@ public class ProjectsController : Controller
             RequiredSecrets = project.RequiredSecrets,
             NotifyOnFailure = project.NotifyOnFailure,
             NotificationEmail = project.NotificationEmail,
+            AccountEmail = project.Owner.Email,
             SecretNames = secretNames,
             MissingSecrets = missingSecrets
         };
@@ -440,6 +441,9 @@ public class ProjectsController : Controller
         var effectiveProfile = form.ManualProfileOverride
             ? string.IsNullOrWhiteSpace(form.ManualProfile) ? null : form.ManualProfile.Trim()
             : string.IsNullOrWhiteSpace(form.Profile) ? null : form.Profile.Trim();
+        var effectiveNotificationEmail = string.IsNullOrWhiteSpace(form.NotificationEmail)
+            ? (form.NotifyOnFailure ? project.Owner.Email : null)
+            : form.NotificationEmail.Trim();
 
         await _projectService.UpdateProjectSettingsAsync(
             id,
@@ -449,7 +453,7 @@ public class ProjectsController : Controller
             form.DockerImage,
             effectiveProfile,
             form.NotifyOnFailure,
-            form.NotificationEmail);
+            effectiveNotificationEmail);
 
         TempData["Success"] = "Settings updated successfully.";
         return RedirectToAction("Settings", new { id });

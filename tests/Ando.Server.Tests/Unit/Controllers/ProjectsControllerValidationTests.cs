@@ -411,6 +411,70 @@ public class ProjectsControllerValidationTests : IDisposable
             null,
             "publish",
             true,
+            "test@example.com"), Times.Once);
+    }
+
+    [Fact]
+    public async Task Settings_Post_WithNotifyOnFailureEnabledAndEmptyEmail_UsesAccountEmail()
+    {
+        // Arrange
+        _projectService.Setup(s => s.GetProjectForUserAsync(1, 1))
+            .ReturnsAsync(_testProject);
+
+        var form = new ProjectSettingsFormModel
+        {
+            BranchFilter = "main",
+            EnablePrBuilds = false,
+            TimeoutMinutes = 15,
+            NotifyOnFailure = true,
+            NotificationEmail = "   "
+        };
+
+        // Act
+        var result = await _controller.Settings(1, form);
+
+        // Assert
+        result.ShouldBeOfType<RedirectToActionResult>();
+        _projectService.Verify(s => s.UpdateProjectSettingsAsync(
+            1,
+            "main",
+            false,
+            15,
+            null,
+            null,
+            true,
+            "test@example.com"), Times.Once);
+    }
+
+    [Fact]
+    public async Task Settings_Post_WithNotifyOnFailureDisabledAndEmptyEmail_KeepsEmailNull()
+    {
+        // Arrange
+        _projectService.Setup(s => s.GetProjectForUserAsync(1, 1))
+            .ReturnsAsync(_testProject);
+
+        var form = new ProjectSettingsFormModel
+        {
+            BranchFilter = "main",
+            EnablePrBuilds = false,
+            TimeoutMinutes = 15,
+            NotifyOnFailure = false,
+            NotificationEmail = "   "
+        };
+
+        // Act
+        var result = await _controller.Settings(1, form);
+
+        // Assert
+        result.ShouldBeOfType<RedirectToActionResult>();
+        _projectService.Verify(s => s.UpdateProjectSettingsAsync(
+            1,
+            "main",
+            false,
+            15,
+            null,
+            null,
+            false,
             null), Times.Once);
     }
 

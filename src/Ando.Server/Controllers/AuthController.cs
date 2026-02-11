@@ -69,23 +69,21 @@ public class AuthController : Controller
             return SafeRedirect(returnUrl);
         }
 
-        // If a previous POST redirected back here, keep the entered email to reduce re-typing.
-        // TempData survives one redirect.
-        var savedEmail = TempData["LoginEmail"] as string;
-
-        var errorMessage = error switch
-        {
-            "invalid_credentials" => "Invalid email or password.",
-            "account_locked" => "Your account has been locked. Please try again later.",
-            "email_not_confirmed" => "Please verify your email before logging in.",
-            _ => null
-        };
-
         var model = new LoginViewModel
         {
-            ReturnUrl = returnUrl,
-            ErrorMessage = errorMessage,
-            Email = savedEmail ?? ""
+            ReturnUrl = returnUrl
+        };
+
+        if (TempData["LoginEmail"] is string email)
+        {
+            model.Email = email;
+        }
+
+        model.ErrorMessage = error switch
+        {
+            "invalid_credentials" => "Invalid email or password.",
+            "account_locked" => "Your account has been locked due to too many failed login attempts.",
+            _ => null
         };
 
         return View(model);
@@ -119,7 +117,6 @@ public class AuthController : Controller
 
         if (result.Succeeded)
         {
-            // Update last login time
             user.LastLoginAt = DateTime.UtcNow;
             await _userManager.UpdateAsync(user);
 
@@ -249,7 +246,7 @@ public class AuthController : Controller
     {
         await _signInManager.SignOutAsync();
         _logger.LogInformation("User logged out");
-        return RedirectToAction("Login");
+        return Redirect("/auth/login");
     }
 
     // -------------------------------------------------------------------------
@@ -335,7 +332,7 @@ public class AuthController : Controller
     {
         if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(token))
         {
-            return RedirectToAction("Login", new { error = "invalid_reset_link" });
+            return Redirect("/auth/login");
         }
 
         var model = new ResetPasswordViewModel
@@ -365,7 +362,7 @@ public class AuthController : Controller
         if (user == null)
         {
             // Don't reveal that the user doesn't exist
-            return RedirectToAction("Login");
+            return Redirect("/auth/login");
         }
 
         var result = await _userManager.ResetPasswordAsync(user, model.Token, model.Password);
@@ -373,7 +370,7 @@ public class AuthController : Controller
         {
             _logger.LogInformation("Password reset successful for {Email}", model.Email);
             TempData["Success"] = "Your password has been reset. You can now log in with your new password.";
-            return RedirectToAction("Login");
+            return Redirect("/auth/login");
         }
 
         // PRG: redirect back to GET so refresh doesn't re-submit the POST.
@@ -441,7 +438,7 @@ public class AuthController : Controller
         var user = await _userManager.GetUserAsync(User);
         if (user == null)
         {
-            return RedirectToAction("Login");
+            return Redirect("/auth/login");
         }
 
         if (user.EmailVerified)
@@ -482,23 +479,14 @@ public class AuthController : Controller
     // Helper Methods
     // -------------------------------------------------------------------------
 
-    /// <summary>
-    /// Safely redirects to a URL, preventing open redirect attacks (OWASP A01:2021).
-    /// Only allows relative URLs within the application.
-    /// </summary>
     private IActionResult SafeRedirect(string? returnUrl)
     {
-        var destination = "/";
-
-        // Only allow local (relative) URLs to prevent open redirect attacks
-        if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+        if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
         {
-            destination = returnUrl;
+            return Redirect(returnUrl);
         }
 
-        // Use 303 See Other so form POSTs always complete as a GET on the destination.
-        Response.Headers.Location = destination;
-        return StatusCode(StatusCodes.Status303SeeOther);
+        return Redirect("/");
     }
 
     /// <summary>

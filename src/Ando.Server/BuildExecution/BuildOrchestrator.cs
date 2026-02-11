@@ -753,73 +753,56 @@ public class BuildOrchestrator : IBuildOrchestrator
         public string? Destination { get; set; }
     }
 
-    private async Task<string> ResolveHostPathForServerPathAsync(string serverPath, CancellationToken cancellationToken)
+    private static bool IsLikelyContainerReference(string value)
     {
-        // If the server isn't containerized, "serverPath" is already a host path.
-        if (!IsRunningInContainer())
+        if (string.IsNullOrWhiteSpace(value))
         {
-            return serverPath;
+            return false;
         }
 
-        // In Docker, HOSTNAME is typically set to the container ID.
-        var selfContainerId = Environment.GetEnvironmentVariable("HOSTNAME");
-        if (string.IsNullOrWhiteSpace(selfContainerId))
-        {
-            return serverPath;
-        }
+        // Docker IDs are hex; names can include dashes/underscores.
+        return value.All(char.IsLetterOrDigit) || value.All(c => char.IsLetterOrDigit(c) || c is '-' or '_' or '.');
+    }
 
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "docker",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
-
-        startInfo.ArgumentList.Add("inspect");
-        startInfo.ArgumentList.Add(selfContainerId);
-        startInfo.ArgumentList.Add("--format");
-        startInfo.ArgumentList.Add("{{json .Mounts}}");
-
-        using var process = Process.Start(startInfo);
-        if (process == null)
-        {
-            return serverPath;
-        }
-
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
-
-        if (process.ExitCode != 0)
-        {
-            var err = await stderrTask;
-            _logger.LogWarning("docker inspect failed while resolving host path for {ServerPath}: {Error}", serverPath, err);
-            return serverPath;
-        }
-
-        var mountsJson = (await stdoutTask).Trim();
-        if (string.IsNullOrWhiteSpace(mountsJson))
-        {
-            return serverPath;
-        }
-
-        List<DockerMount>? mounts;
+    private static string? TryGetContainerIdFromCGroup()
+    {
         try
         {
-            mounts = JsonSerializer.Deserialize<List<DockerMount>>(mountsJson);
+            foreach (var line in File.ReadLines("/proc/self/cgroup"))
+            {
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                // cgroup v1/v2 lines often end with a docker container id segment.
+                var path = line.Split(':').LastOrDefault()?.Trim();
+                if (string.IsNullOrWhiteSpace(path))
+                {
+                    continue;
+                }
+
+                var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                for (var i = segments.Length - 1; i >= 0; i--)
+                {
+                    var segment = segments[i].Trim();
+                    if (segment.Length >= 12 && segment.All(Uri.IsHexDigit))
+                    {
+                        return segment;
+                    }
+                }
+            }
         }
-        catch (Exception ex)
+        catch
         {
-            _logger.LogWarning(ex, "Failed to parse docker mounts JSON while resolving host path for {ServerPath}", serverPath);
-            return serverPath;
+            // Best-effort lookup only.
         }
 
-        if (mounts == null || mounts.Count == 0)
-        {
-            return serverPath;
-        }
+        return null;
+    }
 
+    private static DockerMount? FindBestMountMapping(string serverPath, IEnumerable<DockerMount> mounts)
+    {
         DockerMount? best = null;
         var bestLen = -1;
         foreach (var m in mounts)
@@ -845,15 +828,121 @@ public class BuildOrchestrator : IBuildOrchestrator
             }
         }
 
-        if (best == null)
+        return best;
+    }
+
+    private async Task<List<DockerMount>?> TryInspectContainerMountsAsync(
+        string containerRef,
+        CancellationToken cancellationToken)
+    {
+        if (!IsLikelyContainerReference(containerRef))
+        {
+            return null;
+        }
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "docker",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+
+        startInfo.ArgumentList.Add("inspect");
+        startInfo.ArgumentList.Add(containerRef);
+        startInfo.ArgumentList.Add("--format");
+        startInfo.ArgumentList.Add("{{json .Mounts}}");
+
+        using var process = Process.Start(startInfo);
+        if (process == null)
+        {
+            return null;
+        }
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken);
+
+        if (process.ExitCode != 0)
+        {
+            var err = await stderrTask;
+            _logger.LogDebug(
+                "docker inspect failed for container ref {ContainerRef} while resolving host path: {Error}",
+                containerRef,
+                err);
+            return null;
+        }
+
+        var mountsJson = (await stdoutTask).Trim();
+        if (string.IsNullOrWhiteSpace(mountsJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<DockerMount>>(mountsJson);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(
+                ex,
+                "Failed to parse mount json for container ref {ContainerRef} while resolving host path",
+                containerRef);
+            return null;
+        }
+    }
+
+    private async Task<string> ResolveHostPathForServerPathAsync(string serverPath, CancellationToken cancellationToken)
+    {
+        // If the server isn't containerized, "serverPath" is already a host path.
+        if (!IsRunningInContainer())
         {
             return serverPath;
         }
 
-        var destination = best.Destination!.TrimEnd('/');
-        var source = best.Source!.TrimEnd('/');
-        var rel = serverPath.Length == destination.Length ? "" : serverPath.Substring(destination.Length);
-        return source + rel;
+        // Resolve self container via multiple references because HOSTNAME can be stale after container recreation.
+        var candidates = new List<string>();
+        var cgroupId = TryGetContainerIdFromCGroup();
+        if (!string.IsNullOrWhiteSpace(cgroupId))
+        {
+            candidates.Add(cgroupId);
+        }
+
+        var hostName = Environment.GetEnvironmentVariable("HOSTNAME");
+        if (!string.IsNullOrWhiteSpace(hostName))
+        {
+            candidates.Add(hostName);
+        }
+
+        // Common compose service/container name fallback.
+        candidates.Add("ando-server");
+
+        foreach (var candidate in candidates.Distinct(StringComparer.Ordinal))
+        {
+            var mounts = await TryInspectContainerMountsAsync(candidate, cancellationToken);
+            if (mounts == null || mounts.Count == 0)
+            {
+                continue;
+            }
+
+            var best = FindBestMountMapping(serverPath, mounts);
+            if (best == null)
+            {
+                continue;
+            }
+
+            var destination = best.Destination!.TrimEnd('/');
+            var source = best.Source!.TrimEnd('/');
+            var rel = serverPath.Length == destination.Length ? "" : serverPath.Substring(destination.Length);
+            return source + rel;
+        }
+
+        _logger.LogWarning(
+            "Unable to resolve host path mapping for {ServerPath}; falling back to server path. " +
+            "Configure Build.ReposPath (host) and Build.ReposPathInContainer (container) to avoid ambiguity.",
+            serverPath);
+        return serverPath;
     }
 
     private async Task<bool> EnsureAndoCliInstalledAsync(

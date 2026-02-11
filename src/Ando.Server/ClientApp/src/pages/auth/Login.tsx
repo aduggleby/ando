@@ -22,7 +22,8 @@ export function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const returnUrl = searchParams.get('returnUrl') || '/';
+  // ASP.NET cookie middleware uses PascalCase "ReturnUrl", SPA uses camelCase "returnUrl".
+  const returnUrl = searchParams.get('returnUrl') || searchParams.get('ReturnUrl') || '/';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

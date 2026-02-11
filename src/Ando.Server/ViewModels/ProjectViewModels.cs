@@ -438,6 +438,11 @@ public class ProjectSettingsViewModel
     public string? NotificationEmail { get; init; }
 
     /// <summary>
+    /// Account email for the project owner, used as fallback for notifications.
+    /// </summary>
+    public string? AccountEmail { get; init; }
+
+    /// <summary>
     /// Names of secrets configured for this project.
     /// </summary>
     public IReadOnlyList<string> SecretNames { get; init; } = [];
