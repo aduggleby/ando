@@ -10,8 +10,10 @@
 using Ando.Server.Jobs;
 using Ando.Server.Models;
 using Ando.Server.Tests.TestFixtures;
+using Ando.Server.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace Ando.Server.Tests.Unit.Jobs;
 
@@ -27,9 +29,12 @@ public class CleanupArtifactsJobTests : IDisposable
     public CleanupArtifactsJobTests()
     {
         _db = TestDbContextFactory.Create();
-        _job = new CleanupArtifactsJob(_db, NullLogger<CleanupArtifactsJob>.Instance);
         _tempDir = Path.Combine(Path.GetTempPath(), $"ando-test-{Guid.NewGuid():N}");
         Directory.CreateDirectory(_tempDir);
+        _job = new CleanupArtifactsJob(
+            _db,
+            NullLogger<CleanupArtifactsJob>.Instance,
+            Options.Create(new StorageSettings { ArtifactsPath = _tempDir }));
 
         // Create test data
         _testUser = new ApplicationUser

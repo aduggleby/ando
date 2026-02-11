@@ -18,7 +18,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
+using Ando.Server.Configuration;
 
 namespace Ando.Server.Tests.Unit.Controllers;
 
@@ -43,7 +45,8 @@ public class BuildsControllerValidationTests : IDisposable
             _db,
             _buildService.Object,
             _projectService.Object,
-            NullLogger<BuildsController>.Instance);
+            NullLogger<BuildsController>.Instance,
+            Options.Create(new StorageSettings()));
 
         // Create test user
         _testUser = new ApplicationUser

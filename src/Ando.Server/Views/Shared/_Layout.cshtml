@@ -129,6 +129,18 @@
             .filter-btn-failed .filter-count { @@apply bg-red-100; }
 
             .projects-grid, .repos-grid { @@apply grid gap-6 sm:grid-cols-2 xl:grid-cols-3; }
+            .projects-unified-header { @@apply items-end; }
+            .projects-unified-list { @@apply flex flex-col gap-4; }
+            .project-row-card { @@apply w-full rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md hover:border-slate-300 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between; }
+            .project-row-main { @@apply flex-1 min-w-0 space-y-3; }
+            .project-row-top { @@apply flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between; }
+            .project-row-name { @@apply text-base font-semibold text-slate-900 no-underline hover:text-blue-700 truncate; }
+            .project-row-badges { @@apply flex flex-wrap items-center gap-2; }
+            .project-row-metrics { @@apply flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-600; }
+            .project-row-actions { @@apply flex flex-wrap items-center gap-2; }
+            .project-row-deployed { @@apply border-l-4 border-l-emerald-500; }
+            .project-row-failed { @@apply border-l-4 border-l-red-500; }
+            .project-row-notdeployed { @@apply border-l-4 border-l-slate-300; }
             .project-card, .repo-card { @@apply rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition; }
             .project-card-failed, .project-card-timedout { @@apply border-l-4 border-l-red-500; }
             .project-card-running, .project-card-queued { @@apply border-l-4 border-l-blue-500; }
@@ -304,8 +316,7 @@
                 var currentPath = Context.Request.Path.Value?.ToLower() ?? "";
                 var isAdmin = User.IsInRole(UserRoles.Admin);
                 <div class="nav-links">
-                    <a href="/projects" class="nav-link @(currentPath.StartsWith("/projects") && !currentPath.Contains("/status") ? "nav-link-active" : "")">Projects</a>
-                    <a href="/projects/status" class="nav-link @(currentPath.Contains("/status") ? "nav-link-active" : "")">Status</a>
+                    <a href="/projects" class="nav-link @(currentPath.StartsWith("/projects") ? "nav-link-active" : "")">Projects</a>
                     @if (isAdmin)
                     {
                         <a href="/admin" class="nav-link @(currentPath.StartsWith("/admin") ? "nav-link-active" : "")">Admin</a>

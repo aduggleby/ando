@@ -21,6 +21,8 @@ using Ando.Server.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Ando.Server.Configuration;
 
 namespace Ando.Server.Controllers;
 
@@ -35,17 +37,20 @@ public class BuildsController : Controller
     private readonly IBuildService _buildService;
     private readonly IProjectService _projectService;
     private readonly ILogger<BuildsController> _logger;
+    private readonly StorageSettings _storageSettings;
 
     public BuildsController(
         AndoDbContext db,
         IBuildService buildService,
         IProjectService projectService,
-        ILogger<BuildsController> logger)
+        ILogger<BuildsController> logger,
+        IOptions<StorageSettings> storageSettings)
     {
         _db = db;
         _buildService = buildService;
         _projectService = projectService;
         _logger = logger;
+        _storageSettings = storageSettings.Value;
     }
 
     // -------------------------------------------------------------------------
@@ -251,15 +256,31 @@ public class BuildsController : Controller
             return View("NotFound");
         }
 
-        if (!System.IO.File.Exists(artifact.StoragePath))
+        var artifactPath = ArtifactPathResolver.ResolveAbsolutePath(
+            _storageSettings.ArtifactsPath,
+            artifact.StoragePath);
+
+        if (string.IsNullOrWhiteSpace(artifactPath) ||
+            !ArtifactPathResolver.IsWithinRoot(_storageSettings.ArtifactsPath, artifactPath))
         {
-            _logger.LogWarning("Artifact file not found: {Path}", artifact.StoragePath);
+            _logger.LogWarning(
+                "Artifact path outside storage root: {StoragePath} (build {BuildId}, artifact {ArtifactId})",
+                artifact.StoragePath,
+                buildId,
+                artifactId);
+            TempData["Error"] = "Artifact file not found.";
+            return RedirectToAction("Details", new { id = buildId });
+        }
+
+        if (!System.IO.File.Exists(artifactPath))
+        {
+            _logger.LogWarning("Artifact file not found: {Path}", artifactPath);
             TempData["Error"] = "Artifact file not found.";
             return RedirectToAction("Details", new { id = buildId });
         }
 
         var contentType = "application/octet-stream";
-        return PhysicalFile(artifact.StoragePath, contentType, artifact.Name);
+        return PhysicalFile(artifactPath, contentType, artifact.Name);
     }
 
     // -------------------------------------------------------------------------

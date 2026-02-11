@@ -167,19 +167,70 @@ if (publish)
     Git.PushTags();
 
     // Create GitHub release with binaries
-    // Files are renamed during upload using path#newname syntax for display labels
-    // The actual filename comes from the path - unique directory names ensure unique uploads
+    // Resolve release assets dynamically because output filenames can vary by runtime
+    // (for example, apphost/no-apphost or platform-specific extensions).
+    var releaseAssets = new List<string>();
+    var hostRoot = Env("ANDO_HOST_ROOT", required: false);
+
+    string? ResolveAssetPath(params string[] candidates)
+    {
+        foreach (var candidate in candidates)
+        {
+            // Check candidate in current workspace.
+            var workspacePath = Path.GetFullPath(candidate);
+            if (File.Exists(workspacePath))
+            {
+                return workspacePath;
+            }
+
+            // Also check host-mapped path when running with dind on Ando.Server.
+            if (!string.IsNullOrWhiteSpace(hostRoot))
+            {
+                var trimmed = candidate.TrimStart('.', '/', '\\');
+                var hostPath = Path.GetFullPath(Path.Combine(hostRoot, trimmed));
+                if (File.Exists(hostPath))
+                {
+                    return hostPath;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    void AddReleaseAsset(string runtime, bool windows)
+    {
+        var resolved = ResolveAssetPath(
+            $"./dist/{runtime}/ando.exe",
+            $"./dist/{runtime}/ando");
+
+        if (resolved != null)
+        {
+            releaseAssets.Add(resolved);
+        }
+        else
+        {
+            Log.Warning($"Release asset missing for {runtime} (expected ando{(windows ? ".exe" : "")})");
+        }
+    }
+
+    AddReleaseAsset("win-x64", windows: true);
+    AddReleaseAsset("win-arm64", windows: true);
+    AddReleaseAsset("linux-x64", windows: false);
+    AddReleaseAsset("linux-arm64", windows: false);
+    AddReleaseAsset("osx-x64", windows: false);
+    AddReleaseAsset("osx-arm64", windows: false);
+
+    if (releaseAssets.Count == 0)
+    {
+        Log.Warning("No release binaries were found. Creating GitHub release without assets.");
+    }
+
+    // Files are renamed during upload to include runtime for uniqueness.
     GitHub.CreateRelease(o => o
         .WithTag(version)
         .WithGeneratedNotes()
-        .WithFiles(
-            "./dist/win-x64/ando.exe",
-            "./dist/win-arm64/ando.exe",
-            "./dist/linux-x64/ando",
-            "./dist/linux-arm64/ando",
-            "./dist/osx-x64/ando",
-            "./dist/osx-arm64/ando"
-        ));
+        .WithFiles(releaseAssets.ToArray()));
 
 		// Build and deploy the documentation website
 		// API docs are generated via `ando docs` pre-hook

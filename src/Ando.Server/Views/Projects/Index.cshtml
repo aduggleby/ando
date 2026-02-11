@@ -1,14 +1,19 @@
 @model Ando.Server.ViewModels.ProjectListViewModel
 @using Ando.Server.Models
+@using Ando.Server.ViewModels
 @{
     ViewData["Title"] = "Projects";
-    var failedCount = Model.Projects.Count(p => p.LastBuildStatus == BuildStatus.Failed || p.LastBuildStatus == BuildStatus.TimedOut);
-    var runningCount = Model.Projects.Count(p => p.LastBuildStatus == BuildStatus.Running || p.LastBuildStatus == BuildStatus.Queued);
-    var successCount = Model.Projects.Count(p => p.LastBuildStatus == BuildStatus.Success);
+
+    var deployedCount = Model.Projects.Count(p => p.DeploymentStatus == DeploymentStatus.Deployed);
+    var failedCount = Model.Projects.Count(p => p.DeploymentStatus == DeploymentStatus.Failed);
+    var notDeployedCount = Model.Projects.Count(p => p.DeploymentStatus == DeploymentStatus.NotDeployed);
 }
 
-<div class="page-header">
-    <h1>Projects</h1>
+<div class="page-header projects-unified-header">
+    <div>
+        <h1>Projects</h1>
+        <p class="section-description mt-1">Unified project and deployment overview in one workspace.</p>
+    </div>
     <a href="/projects/create" class="btn btn-primary">New Project</a>
 </div>
 
@@ -50,75 +55,127 @@
 else
 {
     <div class="section">
-        <div class="quick-filters">
-            <span class="filter-label">Filter:</span>
-            <button type="button" class="filter-btn filter-btn-active" data-filter="all" onclick="filterProjects('all')">
-                All <span class="filter-count">@Model.Projects.Count</span>
-            </button>
-            @if (failedCount > 0)
-            {
-                <button type="button" class="filter-btn filter-btn-failed" data-filter="failed" onclick="filterProjects('failed')">
-                    Failed <span class="filter-count">@failedCount</span>
+        <div class="status-controls">
+            <div class="quick-filters">
+                <span class="filter-label">Filter:</span>
+                <button type="button" class="filter-btn filter-btn-active" data-filter="all" onclick="filterProjects('all')">
+                    All <span class="filter-count">@Model.Projects.Count</span>
                 </button>
-            }
-            @if (runningCount > 0)
-            {
-                <button type="button" class="filter-btn filter-btn-running" data-filter="running" onclick="filterProjects('running')">
-                    Running <span class="filter-count">@runningCount</span>
-                </button>
-            }
-            @if (successCount > 0)
-            {
-                <button type="button" class="filter-btn" data-filter="success" onclick="filterProjects('success')">
-                    Passing <span class="filter-count">@successCount</span>
-                </button>
-            }
+                @if (deployedCount > 0)
+                {
+                    <button type="button" class="filter-btn filter-btn-success" data-filter="deployed" onclick="filterProjects('deployed')">
+                        Deployed <span class="filter-count">@deployedCount</span>
+                    </button>
+                }
+                @if (failedCount > 0)
+                {
+                    <button type="button" class="filter-btn filter-btn-failed" data-filter="failed" onclick="filterProjects('failed')">
+                        Failed <span class="filter-count">@failedCount</span>
+                    </button>
+                }
+                @if (notDeployedCount > 0)
+                {
+                    <button type="button" class="filter-btn" data-filter="notdeployed" onclick="filterProjects('notdeployed')">
+                        Not Deployed <span class="filter-count">@notDeployedCount</span>
+                    </button>
+                }
+            </div>
+
+            <div class="sort-controls">
+                <span class="sort-label">Sort:</span>
+                <div class="sort-buttons">
+                    @foreach (var field in Enum.GetValues<StatusSortField>())
+                    {
+                        var isActive = Model.SortField == field;
+                        var newDirection = isActive && Model.SortDirection == SortDirection.Ascending
+                            ? SortDirection.Descending
+                            : SortDirection.Ascending;
+                        var directionIcon = isActive
+                            ? (Model.SortDirection == SortDirection.Ascending ? "↑" : "↓")
+                            : "";
+                        var label = field switch
+                        {
+                            StatusSortField.Alphabetical => "Name",
+                            StatusSortField.LastDeployment => "Last Deployment",
+                            StatusSortField.CreatedDate => "Created",
+                            _ => field.ToString()
+                        };
+
+                        <a href="/projects?sortBy=@field&direction=@newDirection"
+                           class="sort-btn @(isActive ? "sort-btn-active" : "")">
+                            @label @directionIcon
+                        </a>
+                    }
+                </div>
+            </div>
         </div>
     </div>
 
-    <div class="projects-grid mt-6" id="projects-grid">
+    <div class="projects-unified-list mt-6" id="projects-unified-list">
         @foreach (var project in Model.Projects)
         {
-            var statusClass = project.LastBuildStatus?.ToString().ToLower() ?? "none";
-            var filterGroup = project.LastBuildStatus switch
-            {
-                BuildStatus.Failed or BuildStatus.TimedOut => "failed",
-                BuildStatus.Running or BuildStatus.Queued => "running",
-                BuildStatus.Success => "success",
-                _ => "none"
-            };
-            <div class="project-card project-card-@statusClass" data-filter-group="@filterGroup">
-                <div class="project-header">
-                    <a href="/projects/@project.Id" class="project-name">@project.RepoFullName</a>
-                </div>
-                @if (project.LastBuildStatus.HasValue)
-                {
-                    <div class="project-status-banner status-banner-@statusClass">
-                        <span class="status-badge-lg status-@statusClass">
-                            @project.LastBuildStatus.Value
+            var deploymentClass = project.DeploymentStatus.ToString().ToLower();
+            var buildStatusClass = project.LastBuildStatus?.ToString().ToLower() ?? "none";
+            var currentBuildLabel = project.LastBuildStatus?.ToString() ?? "No builds";
+
+            <article class="project-row-card project-row-@deploymentClass" data-filter-group="@deploymentClass">
+                <div class="project-row-main">
+                    <div class="project-row-top">
+                        <a href="/projects/@project.Id" class="project-row-name">@project.RepoFullName</a>
+                        <div class="project-row-badges">
+                            <span class="deployment-badge deployment-@deploymentClass">
+                                @(project.DeploymentStatus switch
+                                {
+                                    DeploymentStatus.Deployed => "Deployed",
+                                    DeploymentStatus.Failed => "Failed",
+                                    _ => "Not Deployed"
+                                })
+                            </span>
+                            <span class="status-badge status-@buildStatusClass">@currentBuildLabel</span>
+                            @if (!project.IsConfigured)
+                            {
+                                <span class="status-badge status-cancelled">@project.MissingSecretsCount secret(s) missing</span>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="project-row-metrics">
+                        <span><strong>@project.TotalBuilds</strong> build(s)</span>
+                        @if (project.LastDeploymentAt.HasValue)
+                        {
+                            <span title="@project.LastDeploymentAt.Value.ToString("MMM d, yyyy 'at' h:mm tt")">
+                                Last deployment: @FormatRelativeTime(project.LastDeploymentAt.Value)
+                            </span>
+                        }
+                        else
+                        {
+                            <span>Last deployment: never</span>
+                        }
+                        @if (project.LastBuildAt.HasValue)
+                        {
+                            <span title="@project.LastBuildAt.Value.ToString("MMM d, yyyy 'at' h:mm tt")">
+                                Last build: @FormatRelativeTime(project.LastBuildAt.Value)
+                            </span>
+                        }
+                        <span title="@project.CreatedAt.ToString("MMM d, yyyy 'at' h:mm tt")">
+                            Created: @FormatRelativeTime(project.CreatedAt)
                         </span>
                     </div>
-                }
-                <div class="project-meta">
-                    <span title="Total builds">@project.TotalBuilds builds</span>
-                    @if (project.LastBuildAt.HasValue)
-                    {
-                        <span title="Last build">Last build @FormatRelativeTime(project.LastBuildAt.Value)</span>
-                    }
                 </div>
-                <div class="project-actions">
-                    <a href="/projects/@project.Id" class="btn btn-sm btn-primary">View</a>
-                    <a href="/projects/@project.Id/settings" class="btn btn-sm btn-secondary">Settings</a>
-                    <a href="@project.RepoUrl" target="_blank" class="btn btn-sm btn-secondary">GitHub</a>
+
+                <div class="project-row-actions">
+                    <a href="/projects/@project.Id" class="btn btn-primary btn-sm">Open</a>
+                    <a href="/projects/@project.Id/settings" class="btn btn-secondary btn-sm">Settings</a>
+                    <a href="@project.RepoUrl" target="_blank" class="btn btn-secondary btn-sm">GitHub</a>
                 </div>
-            </div>
+            </article>
         }
     </div>
 }
 
 <script>
 function filterProjects(filter) {
-    const cards = document.querySelectorAll('.project-card');
+    const cards = document.querySelectorAll('.project-row-card');
     const buttons = document.querySelectorAll('.filter-btn');
 
     buttons.forEach(btn => {

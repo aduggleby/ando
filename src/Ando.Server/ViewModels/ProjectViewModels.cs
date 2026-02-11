@@ -125,6 +125,16 @@ public class ProjectListViewModel
     /// List of projects owned by the current user.
     /// </summary>
     public IReadOnlyList<ProjectListItem> Projects { get; init; } = [];
+
+    /// <summary>
+    /// Field used for sorting the project list.
+    /// </summary>
+    public StatusSortField SortField { get; init; } = StatusSortField.LastDeployment;
+
+    /// <summary>
+    /// Direction of sorting (ascending or descending).
+    /// </summary>
+    public SortDirection SortDirection { get; init; } = SortDirection.Descending;
 }
 
 /// <summary>
@@ -176,6 +186,16 @@ public class ProjectListItem
     /// Number of required secrets that are not yet configured.
     /// </summary>
     public int MissingSecretsCount { get; init; }
+
+    /// <summary>
+    /// Current deployment status inferred from build history.
+    /// </summary>
+    public DeploymentStatus DeploymentStatus { get; init; } = DeploymentStatus.NotDeployed;
+
+    /// <summary>
+    /// Last deployment/build completion time used for status display.
+    /// </summary>
+    public DateTime? LastDeploymentAt { get; init; }
 }
 
 /// <summary>

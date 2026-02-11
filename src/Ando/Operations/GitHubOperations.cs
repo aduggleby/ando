@@ -223,13 +223,12 @@ public class GitHubOperations(
                     {
                         // Parse the file path - may include #label suffix
                         var filePath = file.Contains('#') ? file.Split('#')[0] : file;
-                        var fullPath = Path.IsPathRooted(filePath)
-                            ? filePath
-                            : Path.Combine(commandOptions.WorkingDirectory ?? Environment.CurrentDirectory, filePath);
+                        var workingDirectory = commandOptions.WorkingDirectory ?? Environment.CurrentDirectory;
+                        var fullPath = ResolveExistingReleaseAssetPath(filePath, workingDirectory);
 
-                        if (!File.Exists(fullPath))
+                        if (fullPath == null)
                         {
-                            Logger.Error($"File not found: {fullPath}");
+                            Logger.Error($"File not found: {Path.GetFullPath(Path.Combine(workingDirectory, filePath))}");
                             return false;
                         }
 
@@ -269,6 +268,44 @@ public class GitHubOperations(
 
             return true;
         }, options.Tag ?? "release");
+    }
+
+    private string? ResolveExistingReleaseAssetPath(string filePath, string workingDirectory)
+    {
+        var candidates = new List<string>();
+
+        // Primary candidate: current working directory for the script.
+        candidates.Add(Path.IsPathRooted(filePath)
+            ? Path.GetFullPath(filePath)
+            : Path.GetFullPath(Path.Combine(workingDirectory, filePath)));
+
+        // When running with Docker-in-Docker on Ando.Server, some host-run commands
+        // may resolve files via ANDO_HOST_ROOT rather than /workspace.
+        var hostRoot = Environment.GetEnvironmentVariable("ANDO_HOST_ROOT");
+        if (!string.IsNullOrWhiteSpace(hostRoot))
+        {
+            var normalizedHostRoot = Path.GetFullPath(hostRoot);
+            var normalizedFilePath = filePath.Replace('\\', '/');
+
+            if (normalizedFilePath.StartsWith("/workspace/", StringComparison.Ordinal))
+            {
+                var relative = normalizedFilePath["/workspace/".Length..].Replace('/', Path.DirectorySeparatorChar);
+                candidates.Add(Path.GetFullPath(Path.Combine(normalizedHostRoot, relative)));
+            }
+
+            candidates.Add(Path.GetFullPath(Path.Combine(normalizedHostRoot, filePath.TrimStart('.', '/', '\\'))));
+        }
+
+        foreach (var candidate in candidates.Distinct(StringComparer.Ordinal))
+        {
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        Logger.Debug($"Release asset not found in candidates: {string.Join(", ", candidates)}");
+        return null;
     }
 
     /// <summary>

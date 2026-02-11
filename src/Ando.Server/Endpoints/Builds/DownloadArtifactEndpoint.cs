@@ -15,6 +15,7 @@
 using System.Security.Claims;
 using Ando.Server.Configuration;
 using Ando.Server.Data;
+using Ando.Server.Services;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -71,14 +72,17 @@ public class DownloadArtifactEndpoint : EndpointWithoutRequest
 
         // SECURITY: Validate artifact path is within the expected storage directory
         // to prevent path traversal attacks (OWASP A01:2021 - Broken Access Control)
-        var expectedStorageDir = Path.GetFullPath(_storageSettings.ArtifactsPath);
-        var actualPath = Path.GetFullPath(artifact.StoragePath);
+        var actualPath = ArtifactPathResolver.ResolveAbsolutePath(
+            _storageSettings.ArtifactsPath,
+            artifact.StoragePath);
 
-        if (!actualPath.StartsWith(expectedStorageDir, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(actualPath) ||
+            !ArtifactPathResolver.IsWithinRoot(_storageSettings.ArtifactsPath, actualPath))
         {
             _logger.LogWarning(
                 "Path traversal attempt detected: artifact path {ActualPath} is outside storage directory {ExpectedDir}",
-                actualPath, expectedStorageDir);
+                actualPath,
+                Path.GetFullPath(_storageSettings.ArtifactsPath));
             await SendNotFoundAsync(ct);
             return;
         }

@@ -13,7 +13,10 @@
 // =============================================================================
 
 using Ando.Server.Data;
+using Ando.Server.Configuration;
+using Ando.Server.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Ando.Server.Jobs;
 
@@ -24,14 +27,17 @@ public class CleanupArtifactsJob
 {
     private readonly AndoDbContext _db;
     private readonly ILogger<CleanupArtifactsJob> _logger;
+    private readonly StorageSettings _storageSettings;
     private const int BatchSize = 100;
 
     public CleanupArtifactsJob(
         AndoDbContext db,
-        ILogger<CleanupArtifactsJob> logger)
+        ILogger<CleanupArtifactsJob> logger,
+        IOptions<StorageSettings> storageSettings)
     {
         _db = db;
         _logger = logger;
+        _storageSettings = storageSettings.Value;
     }
 
     /// <summary>
@@ -61,12 +67,18 @@ public class CleanupArtifactsJob
 
             foreach (var artifact in expiredArtifacts)
             {
+                var artifactPath = ArtifactPathResolver.ResolveAbsolutePath(
+                    _storageSettings.ArtifactsPath,
+                    artifact.StoragePath);
+
                 // Delete the physical file
-                if (File.Exists(artifact.StoragePath))
+                if (!string.IsNullOrWhiteSpace(artifactPath) &&
+                    ArtifactPathResolver.IsWithinRoot(_storageSettings.ArtifactsPath, artifactPath) &&
+                    File.Exists(artifactPath))
                 {
                     try
                     {
-                        File.Delete(artifact.StoragePath);
+                        File.Delete(artifactPath);
                         totalFilesDeleted++;
                         totalBytesFreed += artifact.SizeBytes;
                     }
@@ -75,7 +87,7 @@ public class CleanupArtifactsJob
                         _logger.LogWarning(
                             ex,
                             "Failed to delete artifact file {Path} for artifact {ArtifactId}",
-                            artifact.StoragePath,
+                            artifactPath,
                             artifact.Id);
                     }
                 }
@@ -83,7 +95,7 @@ public class CleanupArtifactsJob
                 {
                     _logger.LogWarning(
                         "Artifact file not found: {Path} for artifact {ArtifactId}",
-                        artifact.StoragePath,
+                        artifactPath,
                         artifact.Id);
                 }
 

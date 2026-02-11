@@ -65,7 +65,9 @@ public class ProjectsController : Controller
     /// Lists all projects for the current user.
     /// </summary>
     [HttpGet]
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(
+        StatusSortField sortBy = StatusSortField.LastDeployment,
+        SortDirection direction = SortDirection.Descending)
     {
         var userId = GetCurrentUserId();
         var projects = await _projectService.GetProjectsForUserAsync(userId);
@@ -100,11 +102,37 @@ public class ProjectsController : Controller
                 LastBuildStatus = lastBuild?.Status,
                 TotalBuilds = buildCount,
                 IsConfigured = missingSecrets.Count == 0,
-                MissingSecretsCount = missingSecrets.Count
+                MissingSecretsCount = missingSecrets.Count,
+                DeploymentStatus = lastBuild?.Status switch
+                {
+                    BuildStatus.Success => DeploymentStatus.Deployed,
+                    BuildStatus.Failed or BuildStatus.TimedOut => DeploymentStatus.Failed,
+                    _ => DeploymentStatus.NotDeployed
+                },
+                LastDeploymentAt = lastBuild?.FinishedAt ?? lastBuild?.QueuedAt
             });
         }
 
-        return View(new ProjectListViewModel { Projects = projectItems });
+        IEnumerable<ProjectListItem> sorted = sortBy switch
+        {
+            StatusSortField.Alphabetical => direction == SortDirection.Ascending
+                ? projectItems.OrderBy(p => p.RepoFullName)
+                : projectItems.OrderByDescending(p => p.RepoFullName),
+            StatusSortField.LastDeployment => direction == SortDirection.Ascending
+                ? projectItems.OrderBy(p => p.LastDeploymentAt ?? DateTime.MinValue)
+                : projectItems.OrderByDescending(p => p.LastDeploymentAt ?? DateTime.MinValue),
+            StatusSortField.CreatedDate => direction == SortDirection.Ascending
+                ? projectItems.OrderBy(p => p.CreatedAt)
+                : projectItems.OrderByDescending(p => p.CreatedAt),
+            _ => projectItems.OrderByDescending(p => p.LastDeploymentAt ?? DateTime.MinValue)
+        };
+
+        return View(new ProjectListViewModel
+        {
+            Projects = sorted.ToList(),
+            SortField = sortBy,
+            SortDirection = direction
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -115,73 +143,11 @@ public class ProjectsController : Controller
     /// Shows deployment status for all projects as sortable cards.
     /// </summary>
     [HttpGet("status")]
-    public async Task<IActionResult> Status(
+    public IActionResult Status(
         StatusSortField sortBy = StatusSortField.Alphabetical,
         SortDirection direction = SortDirection.Ascending)
     {
-        var userId = GetCurrentUserId();
-        var projects = await _projectService.GetProjectsForUserAsync(userId);
-
-        // Build status items with deployment status
-        var statusItems = new List<ProjectStatusItem>();
-        foreach (var project in projects)
-        {
-            var lastBuild = await _db.Builds
-                .Where(b => b.ProjectId == project.Id)
-                .OrderByDescending(b => b.QueuedAt)
-                .FirstOrDefaultAsync();
-
-            var buildCount = await _db.Builds
-                .Where(b => b.ProjectId == project.Id)
-                .CountAsync();
-
-            // Determine deployment status from last build
-            var deploymentStatus = DeploymentStatus.NotDeployed;
-            if (lastBuild != null)
-            {
-                deploymentStatus = lastBuild.Status switch
-                {
-                    BuildStatus.Success => DeploymentStatus.Deployed,
-                    BuildStatus.Failed or BuildStatus.TimedOut => DeploymentStatus.Failed,
-                    _ => DeploymentStatus.NotDeployed
-                };
-            }
-
-            statusItems.Add(new ProjectStatusItem
-            {
-                Id = project.Id,
-                RepoFullName = project.RepoFullName,
-                RepoUrl = project.RepoUrl,
-                CreatedAt = project.CreatedAt,
-                LastDeploymentAt = lastBuild?.FinishedAt ?? lastBuild?.QueuedAt,
-                DeploymentStatus = deploymentStatus,
-                TotalBuilds = buildCount
-            });
-        }
-
-        // Apply sorting
-        IEnumerable<ProjectStatusItem> sorted = sortBy switch
-        {
-            StatusSortField.Alphabetical => direction == SortDirection.Ascending
-                ? statusItems.OrderBy(p => p.RepoFullName)
-                : statusItems.OrderByDescending(p => p.RepoFullName),
-            StatusSortField.LastDeployment => direction == SortDirection.Ascending
-                ? statusItems.OrderBy(p => p.LastDeploymentAt ?? DateTime.MinValue)
-                : statusItems.OrderByDescending(p => p.LastDeploymentAt ?? DateTime.MinValue),
-            StatusSortField.CreatedDate => direction == SortDirection.Ascending
-                ? statusItems.OrderBy(p => p.CreatedAt)
-                : statusItems.OrderByDescending(p => p.CreatedAt),
-            _ => statusItems.OrderBy(p => p.RepoFullName)
-        };
-
-        var viewModel = new ProjectStatusViewModel
-        {
-            Projects = sorted.ToList(),
-            SortField = sortBy,
-            SortDirection = direction
-        };
-
-        return View(viewModel);
+        return RedirectToAction(nameof(Index), new { sortBy, direction });
     }
 
     // -------------------------------------------------------------------------
