@@ -116,10 +116,62 @@ public class GitOperations : OperationsBase
     /// <param name="remote">The remote to push to (default: origin).</param>
     public void PushTags(string remote = "origin")
     {
-        RegisterHostCommand("Git.PushTags",
-            () => new ArgumentBuilder()
-                .Add("push", remote, "--tags"),
-            remote);
+        Registry.Register("Git.PushTags", async () =>
+        {
+            // Resolve local tags first.
+            var localTagsResult = await _hostExecutor.ExecuteAsync("git", ["tag", "-l"]);
+            if (!localTagsResult.Success)
+            {
+                return false;
+            }
+
+            var localTags = (localTagsResult.Output ?? string.Empty)
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .ToList();
+
+            if (localTags.Count == 0)
+            {
+                Logger.Info("No local tags found to push");
+                return true;
+            }
+
+            // Query remote tags and push only tags that don't already exist remotely.
+            var remoteTagsResult = await _hostExecutor.ExecuteAsync("git", ["ls-remote", "--tags", "--refs", remote]);
+            if (!remoteTagsResult.Success)
+            {
+                return false;
+            }
+
+            var remoteTags = (remoteTagsResult.Output ?? string.Empty)
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(line => line.Split('\t', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Where(parts => parts.Length == 2 && parts[1].StartsWith("refs/tags/", StringComparison.Ordinal))
+                .Select(parts => parts[1]["refs/tags/".Length..])
+                .ToHashSet(StringComparer.Ordinal);
+
+            var tagsToPush = localTags
+                .Where(tag => !remoteTags.Contains(tag))
+                .ToList();
+
+            if (tagsToPush.Count == 0)
+            {
+                Logger.Info($"All {localTags.Count} tag(s) already exist on {remote} - skipping tag push");
+                return true;
+            }
+
+            foreach (var tag in tagsToPush)
+            {
+                var pushResult = await _hostExecutor.ExecuteAsync("git", ["push", remote, $"refs/tags/{tag}"]);
+                if (!pushResult.Success)
+                {
+                    return false;
+                }
+            }
+
+            Logger.Info($"Pushed {tagsToPush.Count} new tag(s) to {remote}");
+            return true;
+        }, remote);
     }
 
 }
@@ -194,4 +246,3 @@ public class GitPushOptions
         return this;
     }
 }
-

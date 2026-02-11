@@ -56,56 +56,60 @@ else
 {
     <div class="section">
         <div class="status-controls">
-            <div class="quick-filters">
-                <span class="filter-label">Filter:</span>
-                <button type="button" class="filter-btn filter-btn-active" data-filter="all" onclick="filterProjects('all')">
-                    All <span class="filter-count">@Model.Projects.Count</span>
-                </button>
-                @if (deployedCount > 0)
-                {
-                    <button type="button" class="filter-btn filter-btn-success" data-filter="deployed" onclick="filterProjects('deployed')">
-                        Deployed <span class="filter-count">@deployedCount</span>
+            <div class="controls-group controls-group-filters">
+                <div class="quick-filters">
+                    <span class="filter-label">Filter:</span>
+                    <button type="button" class="filter-btn filter-btn-active" data-filter="all" onclick="filterProjects('all')">
+                        All <span class="filter-count">@Model.Projects.Count</span>
                     </button>
-                }
-                @if (failedCount > 0)
-                {
-                    <button type="button" class="filter-btn filter-btn-failed" data-filter="failed" onclick="filterProjects('failed')">
-                        Failed <span class="filter-count">@failedCount</span>
-                    </button>
-                }
-                @if (notDeployedCount > 0)
-                {
-                    <button type="button" class="filter-btn" data-filter="notdeployed" onclick="filterProjects('notdeployed')">
-                        Not Deployed <span class="filter-count">@notDeployedCount</span>
-                    </button>
-                }
+                    @if (deployedCount > 0)
+                    {
+                        <button type="button" class="filter-btn filter-btn-success" data-filter="deployed" onclick="filterProjects('deployed')">
+                            Deployed <span class="filter-count">@deployedCount</span>
+                        </button>
+                    }
+                    @if (failedCount > 0)
+                    {
+                        <button type="button" class="filter-btn filter-btn-failed" data-filter="failed" onclick="filterProjects('failed')">
+                            Failed <span class="filter-count">@failedCount</span>
+                        </button>
+                    }
+                    @if (notDeployedCount > 0)
+                    {
+                        <button type="button" class="filter-btn" data-filter="notdeployed" onclick="filterProjects('notdeployed')">
+                            Not Deployed <span class="filter-count">@notDeployedCount</span>
+                        </button>
+                    }
+                </div>
             </div>
 
-            <div class="sort-controls">
-                <span class="sort-label">Sort:</span>
-                <div class="sort-buttons">
-                    @foreach (var field in Enum.GetValues<StatusSortField>())
-                    {
-                        var isActive = Model.SortField == field;
-                        var newDirection = isActive && Model.SortDirection == SortDirection.Ascending
-                            ? SortDirection.Descending
-                            : SortDirection.Ascending;
-                        var directionIcon = isActive
-                            ? (Model.SortDirection == SortDirection.Ascending ? "↑" : "↓")
-                            : "";
-                        var label = field switch
+            <div class="controls-group controls-group-sort">
+                <div class="sort-controls">
+                    <span class="sort-label">Sort:</span>
+                    <div class="sort-buttons">
+                        @foreach (var field in Enum.GetValues<StatusSortField>())
                         {
-                            StatusSortField.Alphabetical => "Name",
-                            StatusSortField.LastDeployment => "Last Deployment",
-                            StatusSortField.CreatedDate => "Created",
-                            _ => field.ToString()
-                        };
+                            var isActive = Model.SortField == field;
+                            var newDirection = isActive && Model.SortDirection == SortDirection.Ascending
+                                ? SortDirection.Descending
+                                : SortDirection.Ascending;
+                            var directionIcon = isActive
+                                ? (Model.SortDirection == SortDirection.Ascending ? "↑" : "↓")
+                                : "";
+                            var label = field switch
+                            {
+                                StatusSortField.Alphabetical => "Name",
+                                StatusSortField.LastDeployment => "Last Deployment",
+                                StatusSortField.CreatedDate => "Created",
+                                _ => field.ToString()
+                            };
 
-                        <a href="/projects?sortBy=@field&direction=@newDirection"
-                           class="sort-btn @(isActive ? "sort-btn-active" : "")">
-                            @label @directionIcon
-                        </a>
-                    }
+                            <a href="/projects?sortBy=@field&direction=@newDirection"
+                               class="sort-btn @(isActive ? "sort-btn-active" : "")">
+                                @label @directionIcon
+                            </a>
+                        }
+                    </div>
                 </div>
             </div>
         </div>
@@ -120,24 +124,7 @@ else
 
             <article class="project-row-card project-row-@deploymentClass" data-filter-group="@deploymentClass">
                 <div class="project-row-main">
-                    <div class="project-row-top">
-                        <a href="/projects/@project.Id" class="project-row-name">@project.RepoFullName</a>
-                        <div class="project-row-badges">
-                            <span class="deployment-badge deployment-@deploymentClass">
-                                @(project.DeploymentStatus switch
-                                {
-                                    DeploymentStatus.Deployed => "Deployed",
-                                    DeploymentStatus.Failed => "Failed",
-                                    _ => "Not Deployed"
-                                })
-                            </span>
-                            <span class="status-badge status-@buildStatusClass">@currentBuildLabel</span>
-                            @if (!project.IsConfigured)
-                            {
-                                <span class="status-badge status-cancelled">@project.MissingSecretsCount secret(s) missing</span>
-                            }
-                        </div>
-                    </div>
+                    <a href="/projects/@project.Id" class="project-row-name">@project.RepoFullName</a>
 
                     <div class="project-row-metrics">
                         <span><strong>@project.TotalBuilds</strong> build(s)</span>
@@ -163,10 +150,28 @@ else
                     </div>
                 </div>
 
-                <div class="project-row-actions">
-                    <a href="/projects/@project.Id" class="btn btn-primary btn-sm">Open</a>
-                    <a href="/projects/@project.Id/settings" class="btn btn-secondary btn-sm">Settings</a>
-                    <a href="@project.RepoUrl" target="_blank" class="btn btn-secondary btn-sm">GitHub</a>
+                <div class="project-row-side">
+                    <div class="project-row-badges">
+                        <span class="deployment-badge deployment-@deploymentClass">
+                            @(project.DeploymentStatus switch
+                            {
+                                DeploymentStatus.Deployed => "Deployed",
+                                DeploymentStatus.Failed => "Failed",
+                                _ => "Not Deployed"
+                            })
+                        </span>
+                        <span class="status-badge status-@buildStatusClass">@currentBuildLabel</span>
+                        @if (!project.IsConfigured)
+                        {
+                            <span class="status-badge status-cancelled">@project.MissingSecretsCount secret(s) missing</span>
+                        }
+                    </div>
+
+                    <div class="project-row-actions">
+                        <a href="/projects/@project.Id" class="btn btn-primary btn-sm">Open</a>
+                        <a href="/projects/@project.Id/settings" class="btn btn-secondary btn-sm">Settings</a>
+                        <a href="@project.RepoUrl" target="_blank" class="btn btn-secondary btn-sm">GitHub</a>
+                    </div>
                 </div>
             </article>
         }

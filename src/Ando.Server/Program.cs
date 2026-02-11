@@ -708,6 +708,7 @@ if (!app.Environment.IsEnvironment("Testing") && !app.Environment.IsEnvironment(
 }
 
 // MVC routes (kept for parallel operation during migration)
+// Auth routes are handled by AuthController (GET/POST) to avoid endpoint ambiguity.
 app.MapControllerRoute(
     name: "projects",
     pattern: "projects/{action=Index}/{id?}",
