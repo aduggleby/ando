@@ -714,7 +714,7 @@ PlaywrightTestOptions:
 ### Git
 - Git.Tag(tagName, options?) - Create a git tag (annotated by default)
 - Git.Push(options?) - Push current branch to remote
-- Git.PushTags(remote?) - Push all tags to remote (default: origin)
+- Git.PushTags(remote?) - Push tags to remote, skipping tags that already exist remotely (default: origin). Tags are pushed individually.
 
 ### GitHub
 - GitHub.CreatePr(options) - Create a pull request (requires gh CLI)

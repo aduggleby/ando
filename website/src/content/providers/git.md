@@ -64,4 +64,5 @@ if (release) {
 
 - Git operations run on the **host machine**, not inside the container, since git credentials are typically configured on the host.
 - By default, `Git.Tag()` creates annotated tags. Use `.AsLightweight()` for lightweight tags.
+- `Git.PushTags()` only pushes tags that don't already exist on the remote. Tags are pushed individually rather than with `--tags`, so existing remote tags are never overwritten. If all tags already exist, the step succeeds with a skip message.
 - **CI Server**: The ANDO CI Server automatically configures a git committer identity (`user.name` / `user.email`) in build containers, so annotated tags work out of the box. The default identity is `Ando Server <ando-server@localhost>`. Override it with `GIT_COMMITTER_NAME` / `GIT_COMMITTER_EMAIL` environment variables in your `.env.ando` file.

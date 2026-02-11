@@ -606,7 +606,7 @@ export const operations = [
   {
     group: "Git",
     name: "Git.PushTags",
-    desc: "Pushes all tags to the remote repository. <strong>Runs on host</strong> (not in container).",
+    desc: "Pushes tags to the remote repository, skipping tags that already exist on the remote. Tags are pushed individually for safety. <strong>Runs on host</strong> (not in container).",
     examples: ["Git.PushTags();", 'Git.PushTags("upstream");'],
     sourceFile: "Operations/GitOperations.cs",
   },

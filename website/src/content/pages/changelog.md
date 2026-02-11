@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.101
+
+**2026-02-11**
+
+- Simplify the project list layout
+- Improve `Git.PushTags()` to push only new tags that don't already exist on the remote, avoiding unnecessary pushes and potential conflicts
+
 ## 0.9.100
 
 **2026-02-11**
