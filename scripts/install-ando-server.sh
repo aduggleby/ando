@@ -246,21 +246,21 @@ gather_configuration() {
             RESEND_BASE_URL=""
             prompt_required "Resend API Key" RESEND_API_KEY true
             prompt_required "From email address" EMAIL_FROM_ADDRESS
-            prompt_with_default "From name" "Ando CI" EMAIL_FROM_NAME
+            prompt_with_default "From name" "Ando Server" EMAIL_FROM_NAME
             ;;
         2)
             EMAIL_PROVIDER="Resend"
             prompt_required "Resend-compatible API Base URL (e.g., https://resendalternative.com/api)" RESEND_BASE_URL
             prompt_required "API Key" RESEND_API_KEY true
             prompt_required "From email address" EMAIL_FROM_ADDRESS
-            prompt_with_default "From name" "Ando CI" EMAIL_FROM_NAME
+            prompt_with_default "From name" "Ando Server" EMAIL_FROM_NAME
             ;;
         3)
             EMAIL_PROVIDER="Azure"
             RESEND_BASE_URL=""
             prompt_required "Azure Communication Services connection string" AZURE_EMAIL_CONNECTION_STRING true
             prompt_required "From email address" EMAIL_FROM_ADDRESS
-            prompt_with_default "From name" "Ando CI" EMAIL_FROM_NAME
+            prompt_with_default "From name" "Ando Server" EMAIL_FROM_NAME
             ;;
         4)
             EMAIL_PROVIDER="Smtp"
@@ -271,7 +271,7 @@ gather_configuration() {
             prompt_required "SMTP Password" SMTP_PASSWORD true
             prompt_with_default "Use SSL" "true" SMTP_USE_SSL
             prompt_required "From email address" EMAIL_FROM_ADDRESS
-            prompt_with_default "From name" "Ando CI" EMAIL_FROM_NAME
+            prompt_with_default "From name" "Ando Server" EMAIL_FROM_NAME
             ;;
         5|*)
             EMAIL_PROVIDER="None"
@@ -736,7 +736,7 @@ services:
     restart: unless-stopped$sql_network
 
   # ---------------------------------------------------------------------------
-  # Ando CI Server
+  # Ando Server
   # ---------------------------------------------------------------------------
   ando-server:
     image: $DOCKER_IMAGE_NAME:$DOCKER_IMAGE_TAG
@@ -906,7 +906,7 @@ print_summary() {
     echo "  Docker Mode:      Rootless (user: $ANDO_USER)"
     echo ""
     echo "Docker Containers (rootless):"
-    echo "  - ando-server     (Ando CI Server)"
+    echo "  - ando-server     (Ando Server)"
     echo "  - ando-sqlserver  (SQL Server 2022)"
     echo ""
     echo "System Services:"

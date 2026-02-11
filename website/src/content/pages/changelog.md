@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.104
+
+**2026-02-11**
+
+- Add logo branding to the server login page and layout
+- Rename "Ando CI" to "Ando Server" throughout the interface
+
 ## 0.9.103
 
 **2026-02-11**
