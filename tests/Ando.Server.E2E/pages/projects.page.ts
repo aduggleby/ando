@@ -23,8 +23,8 @@ export class ProjectsListPage {
     this.page = page;
     this.heading = page.locator('h1');
     this.newProjectButton = page.locator('a.btn-primary').filter({ hasText: /new project/i });
-    this.projectsGrid = page.locator('.projects-grid');
-    this.projectCards = page.locator('.project-card');
+    this.projectsGrid = page.locator('.projects-unified-list');
+    this.projectCards = page.locator('.project-row-card');
     this.emptyState = page.locator('.empty-state');
     this.successAlert = page.locator('.alert-success');
     this.errorAlert = page.locator('.alert-error');
@@ -54,7 +54,7 @@ export class ProjectsListPage {
 
   async clickProject(repoFullName: string) {
     const card = this.projectCards.filter({ hasText: repoFullName });
-    await card.locator('a.btn').filter({ hasText: /view/i }).click();
+    await card.locator('a.btn').filter({ hasText: /open|view/i }).click();
   }
 
   async clickProjectSettings(repoFullName: string) {

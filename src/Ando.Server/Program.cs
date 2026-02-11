@@ -478,6 +478,8 @@ builder.Services.AddSingleton<ITempDataProvider, SessionStateTempDataProvider>()
 builder.Services.AddScoped<IEmailService>(sp =>
 {
     var settings = sp.GetRequiredService<IOptions<EmailSettings>>();
+    var urlService = sp.GetRequiredService<IUrlService>();
+    var db = sp.GetRequiredService<AndoDbContext>();
     var viewEngine = sp.GetRequiredService<IRazorViewEngine>();
     var tempDataProvider = sp.GetRequiredService<ITempDataProvider>();
     var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
@@ -486,13 +488,13 @@ builder.Services.AddScoped<IEmailService>(sp =>
     return settings.Value.Provider switch
     {
         EmailProvider.Smtp => new SmtpEmailService(
-            settings, viewEngine, tempDataProvider, sp,
+            settings, urlService, db, viewEngine, tempDataProvider, sp,
             loggerFactory.CreateLogger<SmtpEmailService>()),
 
         // Default to Resend
         _ => new ResendEmailService(
             httpClientFactory,
-            settings, viewEngine, tempDataProvider, sp,
+            settings, urlService, db, viewEngine, tempDataProvider, sp,
             loggerFactory.CreateLogger<ResendEmailService>())
     };
 });

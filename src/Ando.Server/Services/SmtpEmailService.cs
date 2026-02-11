@@ -13,6 +13,7 @@
 // =============================================================================
 
 using Ando.Server.Configuration;
+using Ando.Server.Data;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.AspNetCore.Mvc.Razor;
@@ -29,11 +30,13 @@ public class SmtpEmailService : BaseEmailService
 {
     public SmtpEmailService(
         IOptions<EmailSettings> settings,
+        IUrlService urlService,
+        AndoDbContext db,
         IRazorViewEngine viewEngine,
         ITempDataProvider tempDataProvider,
         IServiceProvider serviceProvider,
         ILogger<SmtpEmailService> logger)
-        : base(settings, viewEngine, tempDataProvider, serviceProvider, logger)
+        : base(settings, urlService, db, viewEngine, tempDataProvider, serviceProvider, logger)
     {
     }
 

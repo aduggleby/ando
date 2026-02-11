@@ -14,6 +14,7 @@
 // =============================================================================
 
 using Ando.Server.Configuration;
+using Ando.Server.Data;
 using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Text;
@@ -34,11 +35,13 @@ public class ResendEmailService : BaseEmailService
     public ResendEmailService(
         IHttpClientFactory httpClientFactory,
         IOptions<EmailSettings> settings,
+        IUrlService urlService,
+        AndoDbContext db,
         IRazorViewEngine viewEngine,
         ITempDataProvider tempDataProvider,
         IServiceProvider serviceProvider,
         ILogger<ResendEmailService> logger)
-        : base(settings, viewEngine, tempDataProvider, serviceProvider, logger)
+        : base(settings, urlService, db, viewEngine, tempDataProvider, serviceProvider, logger)
     {
         _httpClientFactory = httpClientFactory;
     }

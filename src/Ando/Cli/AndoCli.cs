@@ -53,6 +53,8 @@ public class AndoCli : IDisposable
     private readonly string[] _args;
     private readonly ConsoleLogger _logger;
     private readonly CancellationTokenSource _cts = new();
+    private readonly ConsoleCancelEventHandler _cancelKeyPressHandler;
+    private int _cancelPressCount;
 
     // Extracts version from assembly metadata for display in header.
     // Falls back to "0.0.0" if version is not embedded (e.g., during development).
@@ -77,12 +79,15 @@ public class AndoCli : IDisposable
 
         // Set up Ctrl+C handler for graceful cancellation.
         // e.Cancel = true prevents immediate termination, allowing cleanup.
-        Console.CancelKeyPress += (_, e) =>
+        _cancelKeyPressHandler = (_, e) =>
         {
-            e.Cancel = true;  // Prevent immediate termination
-            _cts.Cancel();
-            _logger.Warning("Cancellation requested. Stopping after current step...");
+            e.Cancel = true;
+            if (HandleCancelKeyPress())
+            {
+                Environment.Exit(130);
+            }
         };
+        Console.CancelKeyPress += _cancelKeyPressHandler;
     }
 
     /// <summary>
@@ -90,9 +95,32 @@ public class AndoCli : IDisposable
     /// </summary>
     public void Dispose()
     {
+        Console.CancelKeyPress -= _cancelKeyPressHandler;
         _cts.Dispose();
         _logger.Dispose();
     }
+
+    // Returns true when the process should be forcefully terminated.
+    internal bool HandleCancelKeyPress()
+    {
+        var pressCount = Interlocked.Increment(ref _cancelPressCount);
+
+        if (pressCount == 1)
+        {
+            if (!_cts.IsCancellationRequested)
+            {
+                _cts.Cancel();
+            }
+
+            _logger.Warning("Cancellation requested. Stopping after current step...");
+            return false;
+        }
+
+        _logger.Error("Second Ctrl+C detected. Forcing immediate exit.");
+        return true;
+    }
+
+    internal bool IsCancellationRequested => _cts.IsCancellationRequested;
 
     // Displays the ANDO ASCII art logo and version.
     // Uses ANSI escape codes for color when supported.

@@ -15,6 +15,7 @@
 // =============================================================================
 
 using Ando.Server.Configuration;
+using Ando.Server.Data;
 using Ando.Server.Email;
 using Ando.Server.Models;
 using Microsoft.AspNetCore.Mvc;
@@ -23,6 +24,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace Ando.Server.Services;
@@ -34,6 +36,8 @@ public abstract class BaseEmailService : IEmailService
 {
     protected readonly EmailSettings Settings;
     protected readonly ILogger Logger;
+    private readonly IUrlService _urlService;
+    private readonly AndoDbContext _db;
 
     private readonly IRazorViewEngine _viewEngine;
     private readonly ITempDataProvider _tempDataProvider;
@@ -41,12 +45,16 @@ public abstract class BaseEmailService : IEmailService
 
     protected BaseEmailService(
         IOptions<EmailSettings> settings,
+        IUrlService urlService,
+        AndoDbContext db,
         IRazorViewEngine viewEngine,
         ITempDataProvider tempDataProvider,
         IServiceProvider serviceProvider,
         ILogger logger)
     {
         Settings = settings.Value;
+        _urlService = urlService;
+        _db = db;
         _viewEngine = viewEngine;
         _tempDataProvider = tempDataProvider;
         _serviceProvider = serviceProvider;
@@ -59,16 +67,26 @@ public abstract class BaseEmailService : IEmailService
     /// <inheritdoc />
     public async Task SendBuildFailedEmailAsync(Build build, string recipientEmail)
     {
+        var recentLogLines = await GetRecentLogLinesAsync(build.Id, 50);
+
         var viewModel = new BuildFailedEmailViewModel
         {
+            BuildId = build.Id,
             ProjectName = build.Project.RepoFullName,
             Branch = build.Branch,
             CommitSha = build.ShortCommitSha,
             CommitMessage = build.CommitMessage ?? "No message",
             CommitAuthor = build.CommitAuthor ?? "Unknown",
+            Trigger = build.Trigger.ToString(),
+            Status = build.Status.ToString(),
+            DurationText = build.Duration.HasValue
+                ? $"{build.Duration.Value.TotalSeconds:F0}s"
+                : null,
+            StepsSummary = $"{build.StepsCompleted}/{build.StepsTotal} passed, {build.StepsFailed} failed",
             ErrorMessage = build.ErrorMessage,
-            BuildUrl = $"/builds/{build.Id}", // TODO: Full URL from config
-            FailedAt = build.FinishedAt ?? DateTime.UtcNow
+            BuildUrl = _urlService.BuildUrl($"/builds/{build.Id}"),
+            FailedAt = build.FinishedAt ?? DateTime.UtcNow,
+            RecentLogLines = recentLogLines
         };
 
         var htmlBody = await RenderViewAsync("Email/BuildFailed", viewModel);
@@ -77,6 +95,47 @@ public abstract class BaseEmailService : IEmailService
             recipientEmail,
             $"Build Failed: {build.Project.RepoFullName} ({build.Branch})",
             htmlBody);
+    }
+
+    private async Task<List<string>> GetRecentLogLinesAsync(int buildId, int maxLines)
+    {
+        // Pull a recent window of log entries, then slice to the last N physical lines.
+        var recentEntries = await _db.BuildLogEntries
+            .AsNoTracking()
+            .Where(l => l.BuildId == buildId)
+            .OrderByDescending(l => l.Sequence)
+            .Take(200)
+            .Select(l => l.Message)
+            .ToListAsync();
+
+        if (recentEntries.Count == 0)
+        {
+            return [];
+        }
+
+        recentEntries.Reverse();
+
+        var allLines = new List<string>();
+        foreach (var message in recentEntries)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                continue;
+            }
+
+            foreach (var line in message.Split('\n'))
+            {
+                var normalized = line.TrimEnd('\r');
+                allLines.Add(string.IsNullOrWhiteSpace(normalized) ? " " : normalized);
+            }
+        }
+
+        if (allLines.Count <= maxLines)
+        {
+            return allLines;
+        }
+
+        return allLines.TakeLast(maxLines).ToList();
     }
 
     /// <summary>

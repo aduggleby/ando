@@ -12,6 +12,11 @@ namespace Ando.Server.Email;
 public class BuildFailedEmailViewModel
 {
     /// <summary>
+    /// Build ID.
+    /// </summary>
+    public int BuildId { get; set; }
+
+    /// <summary>
     /// Name of the project that failed.
     /// </summary>
     public string ProjectName { get; set; } = "";
@@ -37,6 +42,26 @@ public class BuildFailedEmailViewModel
     public string CommitAuthor { get; set; } = "";
 
     /// <summary>
+    /// Build trigger type.
+    /// </summary>
+    public string Trigger { get; set; } = "";
+
+    /// <summary>
+    /// Build status at completion.
+    /// </summary>
+    public string Status { get; set; } = "";
+
+    /// <summary>
+    /// Build duration text when available.
+    /// </summary>
+    public string? DurationText { get; set; }
+
+    /// <summary>
+    /// Step completion summary text.
+    /// </summary>
+    public string StepsSummary { get; set; } = "";
+
+    /// <summary>
     /// Error message describing why the build failed.
     /// </summary>
     public string? ErrorMessage { get; set; }
@@ -50,4 +75,9 @@ public class BuildFailedEmailViewModel
     /// When the build failed.
     /// </summary>
     public DateTime FailedAt { get; set; }
+
+    /// <summary>
+    /// Last 50 lines of build logs for quick triage.
+    /// </summary>
+    public List<string> RecentLogLines { get; set; } = [];
 }

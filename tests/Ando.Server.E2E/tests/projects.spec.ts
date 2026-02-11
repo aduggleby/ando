@@ -34,7 +34,7 @@ test.describe('Projects List', () => {
     await projectsList.goto();
 
     // Check project card contains repo name
-    const projectCard = authedPage.locator('.project-card').first();
+    const projectCard = authedPage.locator('.project-row-card').first();
     await expect(projectCard).toContainText(testProject.repoFullName);
 
     // Check build status badge is shown
@@ -354,7 +354,7 @@ test.describe('Project Deletion', () => {
     expect(count).toBe(1);
 
     // Verify the right one remains
-    await expect(authedPage.locator('.project-card')).toContainText('keep-me');
+    await expect(authedPage.locator('.project-row-card')).toContainText('keep-me');
   });
 
   test('deleting project also deletes builds', async ({ authedPage, testApi, authenticatedUser }) => {

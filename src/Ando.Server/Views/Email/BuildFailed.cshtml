@@ -4,6 +4,9 @@
 }
 
 <h2 class="status-failed">Build Failed</h2>
+<p class="lede">
+    Build #@Model.BuildId for <strong>@Model.ProjectName</strong> failed and needs attention.
+</p>
 
 <table class="info-table">
     <tr>
@@ -13,6 +16,18 @@
     <tr>
         <td>Branch</td>
         <td>@Model.Branch</td>
+    </tr>
+    <tr>
+        <td>Build</td>
+        <td>#@Model.BuildId</td>
+    </tr>
+    <tr>
+        <td>Trigger</td>
+        <td>@Model.Trigger</td>
+    </tr>
+    <tr>
+        <td>Status</td>
+        <td>@Model.Status</td>
     </tr>
     <tr>
         <td>Commit</td>
@@ -26,17 +41,50 @@
         <td>Message</td>
         <td>@Model.CommitMessage</td>
     </tr>
+    @if (!string.IsNullOrEmpty(Model.DurationText))
+    {
+        <tr>
+            <td>Duration</td>
+            <td>@Model.DurationText</td>
+        </tr>
+    }
+    <tr>
+        <td>Steps</td>
+        <td>@Model.StepsSummary</td>
+    </tr>
     <tr>
         <td>Failed at</td>
         <td>@Model.FailedAt.ToString("yyyy-MM-dd HH:mm:ss") UTC</td>
     </tr>
 </table>
 
+<div style="margin-top: 14px;">
+    <span class="meta-chip">Build #@Model.BuildId</span>
+    <span class="meta-chip">@Model.Branch</span>
+    <span class="meta-chip">@Model.Status</span>
+    <span class="meta-chip">@Model.Trigger</span>
+</div>
+
 @if (!string.IsNullOrEmpty(Model.ErrorMessage))
 {
     <div class="error-box">
-        <strong>Error:</strong> @Model.ErrorMessage
+        <strong>Error:</strong><br />
+        @Model.ErrorMessage
     </div>
+}
+
+@if (Model.RecentLogLines.Count > 0)
+{
+    <div class="panel">
+        <div class="panel-title">Last 50 Log Lines</div>
+        <div class="logs-box">
+@foreach (var line in Model.RecentLogLines)
+{
+<span>@line</span><br />
+}
+        </div>
+    </div>
+    <p class="small-muted">These lines are included for quick triage; open full logs for complete output.</p>
 }
 
 <a href="@Model.BuildUrl" class="btn btn-primary">View Build Details</a>
