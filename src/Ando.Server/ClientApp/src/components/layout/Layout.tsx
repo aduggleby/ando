@@ -18,15 +18,15 @@ export function Layout() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950">
       {/* Navigation */}
-      <nav className="bg-white shadow-sm border-b border-gray-200">
+      <nav className="bg-white shadow-sm border-b border-gray-200 dark:bg-slate-900 dark:border-slate-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex">
               {/* Logo */}
               <Link to="/" className="flex items-center">
-                <span className="text-xl font-bold text-primary-600">Ando CI</span>
+                <span className="text-xl font-bold text-primary-600 dark:text-primary-400">Ando CI</span>
               </Link>
 
               {/* Navigation Links */}
@@ -45,11 +45,11 @@ export function Layout() {
               {isAuthenticated ? (
                 <div className="flex items-center space-x-4">
                   {!user?.emailVerified && (
-                    <span className="text-sm text-warning-600">
+                    <span className="text-sm text-warning-600 dark:text-warning-400">
                       Email not verified
                     </span>
                   )}
-                  <span className="text-sm text-gray-700">
+                  <span className="text-sm text-gray-700 dark:text-slate-300">
                     {user?.displayName || user?.email}
                   </span>
                   <Button variant="ghost" size="sm" onClick={handleLogout}>
@@ -83,7 +83,7 @@ function NavLink({ to, children }: { to: string; children: React.ReactNode }) {
   return (
     <Link
       to={to}
-      className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-700 hover:text-primary-600 border-b-2 border-transparent hover:border-primary-300"
+      className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-700 hover:text-primary-600 border-b-2 border-transparent hover:border-primary-300 dark:text-slate-300 dark:hover:text-primary-400 dark:hover:border-primary-500"
     >
       {children}
     </Link>

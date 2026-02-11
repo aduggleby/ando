@@ -40,8 +40,8 @@ export function AdminDashboard() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-gray-500">System overview and management</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-50">Admin Dashboard</h1>
+          <p className="text-gray-500 dark:text-slate-400">System overview and management</p>
         </div>
         {user?.impersonating && (
           <Alert variant="warning" className="text-sm">
@@ -66,19 +66,19 @@ export function AdminDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Link
           to="/admin/users"
-          className="bg-white shadow rounded-lg p-6 hover:shadow-md transition-shadow"
+          className="bg-white shadow rounded-lg p-6 hover:shadow-md transition-shadow dark:bg-slate-900 dark:hover:shadow-slate-800/50"
         >
-          <h2 className="text-lg font-medium text-gray-900">User Management</h2>
-          <p className="text-gray-500 mt-1">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-slate-50">User Management</h2>
+          <p className="text-gray-500 mt-1 dark:text-slate-400">
             Manage users, roles, and account status
           </p>
-          <div className="mt-4 text-primary-600 font-medium">
+          <div className="mt-4 text-primary-600 font-medium dark:text-primary-400">
             View all users &rarr;
           </div>
         </Link>
 
-        <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-lg font-medium text-gray-900">System Health</h2>
+        <div className="bg-white shadow rounded-lg p-6 dark:bg-slate-900">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-slate-50">System Health</h2>
           <div className="mt-4 space-y-2">
             <HealthItem label="Database" status="healthy" />
             <HealthItem label="Background Jobs" status="healthy" />
@@ -88,53 +88,53 @@ export function AdminDashboard() {
       </div>
 
       {/* All Projects */}
-      <div className="bg-white shadow rounded-lg">
-        <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
-          <h2 className="text-lg font-medium text-gray-900">All Projects</h2>
+      <div className="bg-white shadow rounded-lg dark:bg-slate-900">
+        <div className="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-slate-700">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-slate-50">All Projects</h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
+            <thead className="bg-gray-50 dark:bg-slate-800">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-slate-400">
                   Project
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-slate-400">
                   Owner
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-slate-400">
                   Builds
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-slate-400">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-slate-400">
                   Last Build
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white divide-y divide-gray-200 dark:bg-slate-900 dark:divide-slate-700">
               {projects.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500 dark:text-slate-400">
                     No projects yet
                   </td>
                 </tr>
               ) : (
                 projects.map((project) => (
-                  <tr key={project.id} className="hover:bg-gray-50">
+                  <tr key={project.id} className="hover:bg-gray-50 dark:hover:bg-slate-800">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <Link
                         to={`/projects/${project.id}`}
-                        className="text-primary-600 hover:underline font-medium"
+                        className="text-primary-600 hover:underline font-medium dark:text-primary-400"
                       >
                         {project.repoFullName}
                       </Link>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-slate-400">
                       {project.ownerEmail}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-slate-400">
                       {project.totalBuilds}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -143,10 +143,10 @@ export function AdminDashboard() {
                           {project.lastBuildStatus}
                         </Badge>
                       ) : (
-                        <span className="text-gray-400">-</span>
+                        <span className="text-gray-400 dark:text-slate-500">-</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-slate-400">
                       {project.lastBuildAt
                         ? formatRelativeTime(project.lastBuildAt)
                         : 'Never'}
@@ -164,9 +164,9 @@ export function AdminDashboard() {
 
 function StatCard({ title, value, className = '' }: { title: string; value: number; className?: string }) {
   return (
-    <div className="bg-white shadow rounded-lg px-4 py-5 sm:p-6">
-      <dt className="text-sm font-medium text-gray-500 truncate">{title}</dt>
-      <dd className={`mt-1 text-3xl font-semibold text-gray-900 ${className}`}>{value}</dd>
+    <div className="bg-white shadow rounded-lg px-4 py-5 sm:p-6 dark:bg-slate-900">
+      <dt className="text-sm font-medium text-gray-500 truncate dark:text-slate-400">{title}</dt>
+      <dd className={`mt-1 text-3xl font-semibold text-gray-900 dark:text-slate-50 ${className}`}>{value}</dd>
     </div>
   );
 }
@@ -180,10 +180,10 @@ function HealthItem({ label, status }: { label: string; status: 'healthy' | 'war
 
   return (
     <div className="flex items-center justify-between text-sm">
-      <span className="text-gray-600">{label}</span>
+      <span className="text-gray-600 dark:text-slate-400">{label}</span>
       <div className="flex items-center">
         <span className={`w-2 h-2 rounded-full ${colors[status]} mr-2`}></span>
-        <span className="text-gray-900 capitalize">{status}</span>
+        <span className="text-gray-900 capitalize dark:text-slate-100">{status}</span>
       </div>
     </div>
   );

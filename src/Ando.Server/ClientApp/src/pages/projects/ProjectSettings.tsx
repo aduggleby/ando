@@ -121,8 +121,8 @@ export function ProjectSettings() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Project Settings</h1>
-          <p className="text-gray-500">{settings.repoFullName}</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-50">Project Settings</h1>
+          <p className="text-gray-500 dark:text-slate-400">{settings.repoFullName}</p>
         </div>
         <Link to={`/projects/${id}`}>
           <Button variant="secondary">Back to Project</Button>
@@ -133,9 +133,9 @@ export function ProjectSettings() {
       {success && <Alert variant="success">{success}</Alert>}
 
       {/* Required Secrets */}
-      <div className="bg-white shadow rounded-lg">
-        <div className="px-4 py-5 sm:px-6 border-b border-gray-200 flex justify-between items-center">
-          <h2 className="text-lg font-medium text-gray-900">Required Secrets</h2>
+      <div className="bg-white shadow rounded-lg dark:bg-slate-900">
+        <div className="px-4 py-5 sm:px-6 border-b border-gray-200 flex justify-between items-center dark:border-slate-700">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-slate-50">Required Secrets</h2>
           <Button
             variant="ghost"
             size="sm"
@@ -145,17 +145,17 @@ export function ProjectSettings() {
             Refresh
           </Button>
         </div>
-        <div className="divide-y divide-gray-200">
+        <div className="divide-y divide-gray-200 dark:divide-slate-700">
           {settings.requiredSecrets.length === 0 ? (
-            <div className="px-4 py-8 text-center text-gray-500">
+            <div className="px-4 py-8 text-center text-gray-500 dark:text-slate-400">
               No secrets required. The build script doesn't use any secret variables.
             </div>
           ) : (
             settings.requiredSecrets.map((secret) => (
               <div key={secret.name} className="px-4 py-4 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{secret.name}</p>
-                  <p className={`text-sm ${secret.isSet ? 'text-success-600' : 'text-error-600'}`}>
+                  <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{secret.name}</p>
+                  <p className={`text-sm ${secret.isSet ? 'text-success-600 dark:text-success-400' : 'text-error-600 dark:text-error-400'}`}>
                     {secret.isSet ? 'Configured' : 'Not configured'}
                   </p>
                 </div>
@@ -179,8 +179,8 @@ export function ProjectSettings() {
       </div>
 
       {/* Add Secret */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Add Secret</h2>
+      <div className="bg-white shadow rounded-lg p-6 dark:bg-slate-900">
+        <h2 className="text-lg font-medium text-gray-900 mb-4 dark:text-slate-50">Add Secret</h2>
         <form onSubmit={handleAddSecret} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
@@ -213,13 +213,13 @@ export function ProjectSettings() {
 
         {/* Bulk Import */}
         {showBulkImport && (
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <h3 className="text-sm font-medium text-gray-900 mb-2">Bulk Import</h3>
-            <p className="text-sm text-gray-500 mb-4">
+          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-slate-700">
+            <h3 className="text-sm font-medium text-gray-900 mb-2 dark:text-slate-100">Bulk Import</h3>
+            <p className="text-sm text-gray-500 mb-4 dark:text-slate-400">
               Paste environment variables in KEY=value format, one per line.
             </p>
             <textarea
-              className="w-full h-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+              className="w-full h-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:placeholder-slate-400"
               placeholder="SECRET_KEY=value&#10;ANOTHER_SECRET=another_value"
               value={bulkSecrets}
               onChange={(e) => setBulkSecrets(e.target.value)}
@@ -237,21 +237,21 @@ export function ProjectSettings() {
       </div>
 
       {/* All Secrets */}
-      <div className="bg-white shadow rounded-lg">
-        <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
-          <h2 className="text-lg font-medium text-gray-900">All Secrets</h2>
+      <div className="bg-white shadow rounded-lg dark:bg-slate-900">
+        <div className="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-slate-700">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-slate-50">All Secrets</h2>
         </div>
-        <div className="divide-y divide-gray-200">
+        <div className="divide-y divide-gray-200 dark:divide-slate-700">
           {settings.allSecrets.length === 0 ? (
-            <div className="px-4 py-8 text-center text-gray-500">
+            <div className="px-4 py-8 text-center text-gray-500 dark:text-slate-400">
               No secrets configured yet.
             </div>
           ) : (
             settings.allSecrets.map((secret) => (
               <div key={secret.name} className="px-4 py-4 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{secret.name}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{secret.name}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">
                     Last updated: {new Date(secret.updatedAt).toLocaleDateString()}
                   </p>
                 </div>
@@ -273,14 +273,14 @@ export function ProjectSettings() {
       </div>
 
       {/* Danger Zone */}
-      <div className="bg-white shadow rounded-lg border border-error-200">
-        <div className="px-4 py-5 sm:px-6 border-b border-error-200">
-          <h2 className="text-lg font-medium text-error-600">Danger Zone</h2>
+      <div className="bg-white shadow rounded-lg border border-error-200 dark:bg-slate-900 dark:border-error-500/30">
+        <div className="px-4 py-5 sm:px-6 border-b border-error-200 dark:border-error-500/30">
+          <h2 className="text-lg font-medium text-error-600 dark:text-error-400">Danger Zone</h2>
         </div>
         <div className="p-6">
           {showDeleteConfirm ? (
             <div className="space-y-4">
-              <p className="text-sm text-gray-700">
+              <p className="text-sm text-gray-700 dark:text-slate-300">
                 Are you sure you want to delete this project? This action cannot be undone.
                 All build history and secrets will be permanently deleted.
               </p>
@@ -300,8 +300,8 @@ export function ProjectSettings() {
           ) : (
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-900">Delete this project</p>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm font-medium text-gray-900 dark:text-slate-100">Delete this project</p>
+                <p className="text-sm text-gray-500 dark:text-slate-400">
                   Permanently delete this project and all associated data.
                 </p>
               </div>

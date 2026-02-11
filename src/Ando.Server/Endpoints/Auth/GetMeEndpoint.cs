@@ -25,10 +25,14 @@ namespace Ando.Server.Endpoints.Auth;
 public class GetMeEndpoint : EndpointWithoutRequest<GetMeResponse>
 {
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly ILogger<GetMeEndpoint> _logger;
 
-    public GetMeEndpoint(UserManager<ApplicationUser> userManager)
+    public GetMeEndpoint(
+        UserManager<ApplicationUser> userManager,
+        ILogger<GetMeEndpoint> logger)
     {
         _userManager = userManager;
+        _logger = logger;
     }
 
     public override void Configure()
@@ -41,6 +45,17 @@ public class GetMeEndpoint : EndpointWithoutRequest<GetMeResponse>
     {
         if (User.Identity?.IsAuthenticated != true)
         {
+            var hasCookie = HttpContext.Request.Headers.Cookie.Count > 0;
+            var cookieLength = HttpContext.Request.Headers.Cookie.ToString().Length;
+            _logger.LogDebug(
+                "GetMe: not authenticated. hasCookieHeader={HasCookie} cookieHeaderLength={CookieLength} "
+                + "remoteIp={RemoteIp} xff={Xff} xfproto={XfProto}",
+                hasCookie,
+                cookieLength,
+                HttpContext.Connection.RemoteIpAddress?.ToString() ?? "(unknown)",
+                HttpContext.Request.Headers["X-Forwarded-For"].ToString(),
+                HttpContext.Request.Headers["X-Forwarded-Proto"].ToString());
+
             await SendAsync(new GetMeResponse(false), cancellation: ct);
             return;
         }
@@ -48,6 +63,8 @@ public class GetMeEndpoint : EndpointWithoutRequest<GetMeResponse>
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userId))
         {
+            _logger.LogWarning("GetMe: authenticated but no NameIdentifier claim. User={User}",
+                User.Identity?.Name ?? "(unknown)");
             await SendAsync(new GetMeResponse(false), cancellation: ct);
             return;
         }
@@ -55,6 +72,8 @@ public class GetMeEndpoint : EndpointWithoutRequest<GetMeResponse>
         var user = await _userManager.FindByIdAsync(userId);
         if (user == null)
         {
+            _logger.LogWarning("GetMe: authenticated but user not found in DB. UserId={UserId} User={User}",
+                userId, User.Identity?.Name ?? "(unknown)");
             await SendAsync(new GetMeResponse(false), cancellation: ct);
             return;
         }

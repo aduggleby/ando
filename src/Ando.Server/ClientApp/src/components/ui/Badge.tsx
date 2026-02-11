@@ -14,12 +14,12 @@ interface BadgeProps {
 }
 
 const variantStyles = {
-  success: 'bg-success-100 text-success-800',
-  warning: 'bg-warning-100 text-warning-800',
-  error: 'bg-error-100 text-error-800',
-  info: 'bg-primary-100 text-primary-800',
-  primary: 'bg-primary-100 text-primary-800',
-  default: 'bg-gray-100 text-gray-800',
+  success: 'bg-success-100 text-success-800 dark:bg-success-500/15 dark:text-success-400',
+  warning: 'bg-warning-100 text-warning-800 dark:bg-warning-500/15 dark:text-warning-400',
+  error: 'bg-error-100 text-error-800 dark:bg-error-500/15 dark:text-error-400',
+  info: 'bg-primary-100 text-primary-800 dark:bg-primary-500/15 dark:text-primary-400',
+  primary: 'bg-primary-100 text-primary-800 dark:bg-primary-500/15 dark:text-primary-400',
+  default: 'bg-gray-100 text-gray-800 dark:bg-slate-700 dark:text-slate-300',
 };
 
 const sizeStyles = {

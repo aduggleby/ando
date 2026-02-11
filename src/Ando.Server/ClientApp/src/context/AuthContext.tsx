@@ -37,12 +37,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await authApi.getMe();
       if (response.isAuthenticated && response.user) {
-        setUser(response.user);
+        setUser(prev => {
+          if (!prev) {
+            console.info('[Auth] Session restored for', response.user!.email);
+          }
+          return response.user!;
+        });
       } else {
-        setUser(null);
+        setUser(prev => {
+          if (prev) {
+            console.warn('[Auth] Session lost — /api/auth/me returned isAuthenticated=false', {
+              previousUser: prev.email,
+              response,
+            });
+          }
+          return null;
+        });
       }
-    } catch {
-      setUser(null);
+    } catch (error) {
+      setUser(prev => {
+        if (prev) {
+          console.error('[Auth] Session check failed — /api/auth/me threw', {
+            previousUser: prev.email,
+            error,
+          });
+        }
+        return null;
+      });
     }
   };
 
@@ -50,7 +71,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // This lets ProtectedRoute redirect to login via React Router instead of
   // a hard window.location.href redirect that causes full page reloads.
   const handleAuthLost = useCallback(() => {
-    setUser(null);
+    setUser(prev => {
+      if (prev) {
+        console.warn('[Auth] Auth lost callback triggered (401 from API). Clearing user:', prev.email);
+      }
+      return null;
+    });
   }, []);
 
   useEffect(() => {
@@ -68,15 +94,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Default to a persistent cookie session unless explicitly disabled.
   const login = async (email: string, password: string, rememberMe = true) => {
+    console.info('[Auth] Login attempt', { email, rememberMe });
     const response = await authApi.login({ email, password, rememberMe });
     if (response.success && response.user) {
+      console.info('[Auth] Login succeeded for', response.user.email);
       setUser(response.user);
       return { success: true };
     }
+    console.warn('[Auth] Login failed', { email, error: response.error });
     return { success: false, error: response.error || 'Login failed' };
   };
 
   const logout = async () => {
+    console.info('[Auth] Logout requested');
     await authApi.logout();
     setUser(null);
   };

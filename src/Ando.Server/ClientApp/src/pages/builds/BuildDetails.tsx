@@ -133,19 +133,19 @@ export function BuildDetails() {
       <div className="flex justify-between items-start">
         <div>
           <div className="flex items-center space-x-3">
-            <h1 className="text-2xl font-bold text-gray-900">Build #{build.id}</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-50">Build #{build.id}</h1>
             <Badge variant={getBuildStatusVariant(build.status)} size="lg">
               {build.status}
             </Badge>
           </div>
-          <p className="text-gray-500">
-            <Link to={`/projects/${build.projectId}`} className="text-primary-600 hover:underline">
+          <p className="text-gray-500 dark:text-slate-400">
+            <Link to={`/projects/${build.projectId}`} className="text-primary-600 hover:underline dark:text-primary-400">
               {build.projectName}
             </Link>
             {' · '}{build.branch} · {build.shortCommitSha}
           </p>
           {build.commitMessage && (
-            <p className="text-sm text-gray-600 mt-1">{build.commitMessage}</p>
+            <p className="text-sm text-gray-600 mt-1 dark:text-slate-300">{build.commitMessage}</p>
           )}
         </div>
         <div className="flex space-x-3">
@@ -179,20 +179,20 @@ export function BuildDetails() {
 
       {/* Artifacts */}
       {build.artifacts && build.artifacts.length > 0 && (
-        <div className="bg-white shadow rounded-lg">
-          <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
-            <h2 className="text-lg font-medium text-gray-900">Artifacts</h2>
+        <div className="bg-white shadow rounded-lg dark:bg-slate-900">
+          <div className="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-slate-700">
+            <h2 className="text-lg font-medium text-gray-900 dark:text-slate-50">Artifacts</h2>
           </div>
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-gray-200 dark:divide-slate-700">
             {build.artifacts.map((artifact) => (
               <div key={artifact.id} className="px-4 py-3 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{artifact.fileName}</p>
-                  <p className="text-xs text-gray-500">{formatFileSize(artifact.fileSize)}</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{artifact.fileName}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">{formatFileSize(artifact.fileSize)}</p>
                 </div>
                 <a
                   href={`/api/builds/${build.id}/artifacts/${artifact.id}`}
-                  className="text-primary-600 hover:text-primary-500 text-sm font-medium"
+                  className="text-primary-600 hover:text-primary-500 text-sm font-medium dark:text-primary-400 dark:hover:text-primary-300"
                   download
                 >
                   Download
@@ -204,18 +204,18 @@ export function BuildDetails() {
       )}
 
       {/* Build Logs */}
-      <div className="bg-white shadow rounded-lg">
-        <div className="px-4 py-5 sm:px-6 border-b border-gray-200 flex justify-between items-center">
+      <div className="bg-white shadow rounded-lg dark:bg-slate-900">
+        <div className="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-slate-700 flex justify-between items-center">
           <div className="flex items-center space-x-3">
-            <h2 className="text-lg font-medium text-gray-900">Build Logs</h2>
+            <h2 className="text-lg font-medium text-gray-900 dark:text-slate-50">Build Logs</h2>
             {isStreaming && (
-              <span className="flex items-center text-sm text-success-600">
+              <span className="flex items-center text-sm text-success-600 dark:text-success-400">
                 <span className="w-2 h-2 bg-success-500 rounded-full mr-2 animate-pulse"></span>
                 Live
               </span>
             )}
           </div>
-          <label className="flex items-center text-sm text-gray-600">
+          <label className="flex items-center text-sm text-gray-600 dark:text-slate-300">
             <input
               type="checkbox"
               checked={autoScroll}
@@ -227,11 +227,11 @@ export function BuildDetails() {
         </div>
         <div
           ref={logsContainerRef}
-          className="bg-gray-900 text-gray-100 font-mono text-sm p-4 overflow-auto"
+          className="bg-gray-900 text-gray-100 font-mono text-sm p-4 overflow-auto dark:bg-slate-950"
           style={{ maxHeight: '600px' }}
         >
           {logs.length === 0 ? (
-            <div className="text-gray-500 italic">
+            <div className="text-gray-500 italic dark:text-slate-500">
               {isInProgress ? 'Waiting for logs...' : 'No logs available'}
             </div>
           ) : (
@@ -255,9 +255,9 @@ export function BuildDetails() {
 
 function InfoCard({ title, value }: { title: string; value: string }) {
   return (
-    <div className="bg-white shadow rounded-lg px-4 py-4">
-      <dt className="text-sm font-medium text-gray-500">{title}</dt>
-      <dd className="mt-1 text-sm text-gray-900">{value}</dd>
+    <div className="bg-white shadow rounded-lg px-4 py-4 dark:bg-slate-900">
+      <dt className="text-sm font-medium text-gray-500 dark:text-slate-400">{title}</dt>
+      <dd className="mt-1 text-sm text-gray-900 dark:text-slate-100">{value}</dd>
     </div>
   );
 }

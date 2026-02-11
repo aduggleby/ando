@@ -16,19 +16,19 @@ interface AlertProps {
 
 const variantStyles = {
   success: {
-    container: 'bg-success-50 border-success-500 text-success-800',
+    container: 'bg-success-50 border-success-500 text-success-800 dark:bg-success-500/10 dark:text-success-400',
     icon: 'text-success-500',
   },
   warning: {
-    container: 'bg-warning-50 border-warning-500 text-warning-800',
+    container: 'bg-warning-50 border-warning-500 text-warning-800 dark:bg-warning-500/10 dark:text-warning-400',
     icon: 'text-warning-500',
   },
   error: {
-    container: 'bg-error-50 border-error-500 text-error-800',
+    container: 'bg-error-50 border-error-500 text-error-800 dark:bg-error-500/10 dark:text-error-400',
     icon: 'text-error-500',
   },
   info: {
-    container: 'bg-primary-50 border-primary-500 text-primary-800',
+    container: 'bg-primary-50 border-primary-500 text-primary-800 dark:bg-primary-500/10 dark:text-primary-400',
     icon: 'text-primary-500',
   },
 };
@@ -48,7 +48,7 @@ export function Alert({ variant = 'info', title, children, onClose, className = 
         {onClose && (
           <button
             onClick={onClose}
-            className="ml-4 text-gray-400 hover:text-gray-500"
+            className="ml-4 text-gray-400 hover:text-gray-500 dark:text-slate-500 dark:hover:text-slate-400"
           >
             <span className="sr-only">Close</span>
             <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">

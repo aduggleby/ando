@@ -56,40 +56,40 @@ export function ProjectList() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-50">Projects</h1>
         <Link to="/projects/create">
           <Button>Add Project</Button>
         </Link>
       </div>
 
       {projects.length === 0 ? (
-        <div className="bg-white shadow rounded-lg px-4 py-12 text-center">
-          <p className="text-gray-500 mb-4">No projects yet.</p>
+        <div className="bg-white shadow rounded-lg px-4 py-12 text-center dark:bg-slate-900">
+          <p className="text-gray-500 mb-4 dark:text-slate-400">No projects yet.</p>
           <Link to="/projects/create">
             <Button>Create your first project</Button>
           </Link>
         </div>
       ) : (
-        <div className="bg-white shadow overflow-hidden rounded-lg">
-          <ul className="divide-y divide-gray-200">
+        <div className="bg-white shadow overflow-hidden rounded-lg dark:bg-slate-900">
+          <ul className="divide-y divide-gray-200 dark:divide-slate-700">
             {projects.map((project) => {
               const status = getProjectStatusBadge(project);
               return (
                 <li key={project.id}>
                   <Link
                     to={`/projects/${project.id}`}
-                    className="block hover:bg-gray-50"
+                    className="block hover:bg-gray-50 dark:hover:bg-slate-800"
                   >
                     <div className="px-4 py-4 sm:px-6">
                       <div className="flex items-center justify-between">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium text-primary-600 truncate">
+                            <p className="text-sm font-medium text-primary-600 truncate dark:text-primary-400">
                               {project.repoFullName}
                             </p>
                             <Badge variant={status.variant}>{status.label}</Badge>
                           </div>
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-gray-500 dark:text-slate-400">
                             {project.totalBuilds} builds
                             {project.lastBuildAt && (
                               <> · Last build {formatDate(project.lastBuildAt)}</>

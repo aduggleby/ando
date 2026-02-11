@@ -29,7 +29,7 @@ export function Home() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-50">Dashboard</h1>
 
       {/* Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -38,20 +38,20 @@ export function Home() {
         <StatCard
           title="Failed Today"
           value={dashboard?.failedToday || 0}
-          className={dashboard?.failedToday ? 'text-error-600' : ''}
+          className={dashboard?.failedToday ? 'text-error-600 dark:text-error-400' : ''}
         />
       </div>
 
       {/* Recent Builds */}
-      <div className="bg-white shadow rounded-lg">
-        <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
-          <h2 className="text-lg font-medium text-gray-900">Recent Builds</h2>
+      <div className="bg-white shadow rounded-lg dark:bg-slate-900 dark:shadow-slate-900/50">
+        <div className="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-slate-700">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-slate-50">Recent Builds</h2>
         </div>
-        <div className="divide-y divide-gray-200">
+        <div className="divide-y divide-gray-200 dark:divide-slate-700">
           {dashboard?.recentBuilds.length === 0 ? (
-            <div className="px-4 py-8 text-center text-gray-500">
+            <div className="px-4 py-8 text-center text-gray-500 dark:text-slate-400">
               No builds yet.{' '}
-              <Link to="/projects/create" className="text-primary-600 hover:text-primary-500">
+              <Link to="/projects/create" className="text-primary-600 hover:text-primary-500 dark:text-primary-400">
                 Create a project
               </Link>{' '}
               to get started.
@@ -61,14 +61,14 @@ export function Home() {
               <Link
                 key={build.id}
                 to={`/builds/${build.id}`}
-                className="block px-4 py-4 hover:bg-gray-50"
+                className="block px-4 py-4 hover:bg-gray-50 dark:hover:bg-slate-800"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
+                    <p className="text-sm font-medium text-gray-900 truncate dark:text-slate-100">
                       {build.projectName}
                     </p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-gray-500 dark:text-slate-400">
                       {build.branch} · {build.shortCommitSha}
                     </p>
                   </div>
@@ -77,7 +77,7 @@ export function Home() {
                       {build.status}
                     </Badge>
                     {build.duration && (
-                      <span className="text-sm text-gray-500">{formatDuration(build.duration)}</span>
+                      <span className="text-sm text-gray-500 dark:text-slate-400">{formatDuration(build.duration)}</span>
                     )}
                   </div>
                 </div>
@@ -92,9 +92,9 @@ export function Home() {
 
 function StatCard({ title, value, className = '' }: { title: string; value: number; className?: string }) {
   return (
-    <div className="bg-white shadow rounded-lg px-4 py-5 sm:p-6">
-      <dt className="text-sm font-medium text-gray-500 truncate">{title}</dt>
-      <dd className={`mt-1 text-3xl font-semibold text-gray-900 ${className}`}>{value}</dd>
+    <div className="bg-white shadow rounded-lg px-4 py-5 sm:p-6 dark:bg-slate-900 dark:shadow-slate-900/50">
+      <dt className="text-sm font-medium text-gray-500 truncate dark:text-slate-400">{title}</dt>
+      <dd className={`mt-1 text-3xl font-semibold text-gray-900 dark:text-slate-50 ${className}`}>{value}</dd>
     </div>
   );
 }

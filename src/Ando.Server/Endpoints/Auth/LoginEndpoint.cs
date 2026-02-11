@@ -65,7 +65,13 @@ public class LoginEndpoint : Endpoint<LoginRequest, LoginResponse>
             user.LastLoginAt = DateTime.UtcNow;
             await _userManager.UpdateAsync(user);
 
-            _logger.LogInformation("User {Email} logged in via API", req.Email);
+            _logger.LogInformation(
+                "User {Email} logged in via API. RememberMe={RememberMe} remoteIp={RemoteIp} xff={Xff} xfproto={XfProto}",
+                req.Email,
+                req.RememberMe,
+                HttpContext.Connection.RemoteIpAddress?.ToString() ?? "(unknown)",
+                HttpContext.Request.Headers["X-Forwarded-For"].ToString(),
+                HttpContext.Request.Headers["X-Forwarded-Proto"].ToString());
 
             var isAdmin = await _userManager.IsInRoleAsync(user, UserRoles.Admin);
 

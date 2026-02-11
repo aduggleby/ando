@@ -2,7 +2,7 @@
 // api/client.ts
 //
 // Axios client instance configured for the FastEndpoints API.
-// Handles base URL, credentials, and error responses.
+// Handles base URL, credentials, error responses, and auth diagnostics.
 // =============================================================================
 
 import axios from 'axios';
@@ -29,11 +29,31 @@ export function setOnAuthLost(callback: (() => void) | null) {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+    const url = error.config?.url || '';
+    const method = error.config?.method?.toUpperCase() || '?';
+
+    // Log all non-2xx responses for auth diagnostics.
+    if (status === 401 || status === 403) {
+      console.warn(
+        `[Auth] ${method} ${url} → ${status}`,
+        {
+          status,
+          url,
+          responseData: error.response?.data,
+          withCredentials: error.config?.withCredentials,
+          hasHeaders: !!error.config?.headers,
+        }
+      );
+    }
+
+    if (status === 401) {
       // Don't trigger auth loss for auth endpoints (login, register, etc.)
       // or for the /auth/me check (which returns 200 with isAuthenticated: false).
-      const url = error.config?.url || '';
       if (!url.startsWith('/auth/') && !url.startsWith('auth/')) {
+        console.warn(
+          `[Auth] Session lost — received 401 for ${method} ${url}. Clearing auth state.`
+        );
         onAuthLost?.();
       }
     }

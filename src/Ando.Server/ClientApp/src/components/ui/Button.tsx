@@ -14,10 +14,10 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantStyles = {
-  primary: 'bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500',
-  secondary: 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-primary-500',
-  danger: 'bg-error-600 text-white hover:bg-error-700 focus:ring-error-500',
-  ghost: 'text-gray-700 hover:bg-gray-100 focus:ring-primary-500',
+  primary: 'bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500 dark:bg-primary-500 dark:hover:bg-primary-600',
+  secondary: 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-primary-500 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-700',
+  danger: 'bg-error-600 text-white hover:bg-error-700 focus:ring-error-500 dark:bg-error-500 dark:hover:bg-error-600',
+  ghost: 'text-gray-700 hover:bg-gray-100 focus:ring-primary-500 dark:text-slate-300 dark:hover:bg-slate-800',
 };
 
 const sizeStyles = {
@@ -40,7 +40,7 @@ export function Button({
       className={`
         inline-flex items-center justify-center font-medium rounded-md
         transition-colors duration-150 ease-in-out
-        focus:outline-none focus:ring-2 focus:ring-offset-2
+        focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-900
         disabled:opacity-50 disabled:cursor-not-allowed
         ${variantStyles[variant]}
         ${sizeStyles[size]}

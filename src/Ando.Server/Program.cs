@@ -96,7 +96,8 @@ else
     var keysPath = builder.Configuration["DataProtection:KeysPath"] ?? "/data/keys";
     builder.Services.AddDataProtection()
         .PersistKeysToFileSystem(new DirectoryInfo(keysPath))
-        .SetApplicationName("AndoServer");
+        .SetApplicationName("AndoServer")
+        .SetDefaultKeyLifetime(TimeSpan.FromDays(180));
 }
 
 // =============================================================================
@@ -126,6 +127,15 @@ builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
 })
 .AddEntityFrameworkStores<AndoDbContext>()
 .AddDefaultTokenProviders();
+
+// Reduce how often Identity re-validates the security stamp against the DB.
+// The default (30 minutes) is too aggressive and causes unnecessary sign-outs
+// when combined with sliding expiration. 24 hours is sufficient for security
+// while keeping sessions alive for long-lived browser tabs.
+builder.Services.Configure<SecurityStampValidatorOptions>(options =>
+{
+    options.ValidationInterval = TimeSpan.FromHours(24);
+});
 
 // =============================================================================
 // Authentication (API tokens + cookies)
@@ -229,17 +239,25 @@ builder.Services.ConfigureApplicationCookie(options =>
     // We intentionally do NOT log raw cookie values.
     options.Events = new Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationEvents
     {
-        OnValidatePrincipal = context =>
+        // Log cookie details and then delegate to Identity's SecurityStampValidator.
+        // Previously this handler ONLY logged and returned Task.CompletedTask, which
+        // completely disabled security stamp validation. Now we call the validator
+        // so that password changes etc. properly invalidate old sessions, while the
+        // ValidationInterval (24h) prevents overly aggressive re-checks.
+        OnValidatePrincipal = async context =>
         {
             var logger = context.HttpContext.RequestServices
                 .GetRequiredService<ILoggerFactory>()
                 .CreateLogger("Auth.Cookie");
 
+            var userName = context.Principal?.Identity?.Name ?? "(unknown)";
+            var isAuthenticated = context.Principal?.Identity?.IsAuthenticated == true;
+
             logger.LogDebug(
-                "Cookie validated: path={Path} user={User} auth={IsAuthenticated} issuedUtc={IssuedUtc} expiresUtc={ExpiresUtc} remoteIp={RemoteIp} xff={Xff} xfproto={XfProto} hasCookieHeader={HasCookieHeader} cookieHeaderLength={CookieHeaderLength}",
+                "Cookie validating: path={Path} user={User} auth={IsAuthenticated} issuedUtc={IssuedUtc} expiresUtc={ExpiresUtc} remoteIp={RemoteIp} xff={Xff} xfproto={XfProto} hasCookieHeader={HasCookieHeader} cookieHeaderLength={CookieHeaderLength}",
                 context.HttpContext.Request.Path,
-                context.Principal?.Identity?.Name ?? "(unknown)",
-                context.Principal?.Identity?.IsAuthenticated == true,
+                userName,
+                isAuthenticated,
                 context.Properties.IssuedUtc,
                 context.Properties.ExpiresUtc,
                 context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "(unknown)",
@@ -248,7 +266,18 @@ builder.Services.ConfigureApplicationCookie(options =>
                 context.HttpContext.Request.Headers.Cookie.Count > 0,
                 context.HttpContext.Request.Headers.Cookie.ToString().Length);
 
-            return Task.CompletedTask;
+            // Run Identity's security stamp validation (respects ValidationInterval).
+            await SecurityStampValidator.ValidatePrincipalAsync(context);
+
+            // If the validator rejected the principal, log it prominently.
+            if (context.Principal == null)
+            {
+                logger.LogWarning(
+                    "Security stamp validation rejected cookie for user={User}. "
+                    + "This means the user's security stamp changed (password change, "
+                    + "security update, etc.) since the cookie was issued.",
+                    userName);
+            }
         },
         OnSigningIn = context =>
         {
@@ -571,10 +600,16 @@ else
 // Handle forwarded headers from reverse proxy (Caddy).
 // Without this, the app sees all requests as plain HTTP from localhost,
 // which breaks cookie Secure flags and scheme detection.
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+// We clear KnownProxies/KnownNetworks so Docker bridge IPs (172.x) are trusted,
+// not just 127.0.0.1 (the default). Without this, the forwarded headers are
+// silently ignored when Caddy runs on a Docker network.
+var forwardedHeadersOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-});
+};
+forwardedHeadersOptions.KnownProxies.Clear();
+forwardedHeadersOptions.KnownNetworks.Clear();
+app.UseForwardedHeaders(forwardedHeadersOptions);
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();

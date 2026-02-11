@@ -45,15 +45,15 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-950 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-slate-50">
             Sign in to Ando CI
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          <p className="mt-2 text-center text-sm text-gray-600 dark:text-slate-400">
             Or{' '}
-            <Link to="/auth/register" className="font-medium text-primary-600 hover:text-primary-500">
+            <Link to="/auth/register" className="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400">
               create a new account
             </Link>
           </p>
@@ -92,17 +92,17 @@ export function Login() {
                 id="remember-me"
                 name="remember-me"
                 type="checkbox"
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded dark:bg-slate-800 dark:border-slate-600"
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
               />
-              <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
+              <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900 dark:text-slate-300">
                 Remember me (30 days)
               </label>
             </div>
 
             <div className="text-sm">
-              <Link to="/auth/forgot-password" className="font-medium text-primary-600 hover:text-primary-500">
+              <Link to="/auth/forgot-password" className="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400">
                 Forgot your password?
               </Link>
             </div>
