@@ -116,6 +116,7 @@ src/Ando.Server/
 │   ├── RequiredSecretsDetector.cs
 │   ├── IProfileDetector.cs     # Profile detection
 │   ├── ProfileDetector.cs
+│   ├── ArtifactPathResolver.cs # Artifact path normalization and safety
 │   └── IEmailService.cs        # Email notifications
 ├── Jobs/                   # Hangfire background jobs
 │   ├── ExecuteBuildJob.cs      # Build execution

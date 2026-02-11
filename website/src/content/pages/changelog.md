@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.99
+
+**2026-02-11**
+
+- Add deployment status indicators and sorting to the project list page
+- Improve release asset resolution for Docker-in-Docker build environments
+
 ## 0.9.98
 
 **2026-02-11**
