@@ -3,6 +3,16 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.107
+
+**2026-02-11**
+
+- Fix reverse proxy forwarded headers not being applied when Caddy runs on a Docker bridge network
+- Fix security stamp validation being completely bypassed during cookie authentication
+- Reduce security stamp revalidation frequency to 24 hours to prevent unnecessary sign-outs
+- Set data protection key lifetime to 180 days for more predictable key rotation
+- Improve authentication and cookie diagnostics logging
+
 ## 0.9.106
 
 **2026-02-11**
