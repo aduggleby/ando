@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.108
+
+**2026-02-12**
+
+- Fix dark mode contrast for alerts, badges, and admin pages
+- Persist data protection keys in E2E/testing environments when possible, falling back to ephemeral keys only if the keys directory is not writable
+
 ## 0.9.107
 
 **2026-02-11**
