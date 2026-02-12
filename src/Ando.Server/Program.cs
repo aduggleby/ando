@@ -85,19 +85,46 @@ if (!string.IsNullOrEmpty(connectionString))
 // Data Protection (persist keys across container restarts)
 // =============================================================================
 
-// In Testing/E2E environment, use ephemeral keys to avoid file system access issues
-if (builder.Environment.IsEnvironment("Testing") || builder.Environment.IsEnvironment("E2E"))
+// We prefer persisting Data Protection keys whenever possible. If keys are lost
+// (or unreadable) then Identity auth cookies become invalid and users appear to
+// be "randomly logged out" even if their cookie is still present.
+//
+// Historically we used ephemeral keys in Testing/E2E to avoid file system access
+// issues, but this prevents reproducing/validating restart-safe authentication.
+// We now attempt persistence first and only fall back to ephemeral keys if the
+// configured key path is not writable.
+var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"] ?? "/data/keys";
+
+var dataProtection = builder.Services.AddDataProtection()
+    .SetApplicationName("AndoServer");
+
+bool CanWriteToDirectory(string path)
 {
-    builder.Services.AddDataProtection()
-        .SetApplicationName("AndoServer");
+    Directory.CreateDirectory(path);
+    var probePath = Path.Combine(path, ".dp_write_probe");
+    File.WriteAllText(probePath, DateTime.UtcNow.ToString("O"));
+    File.Delete(probePath);
+    return true;
 }
-else
+
+try
 {
-    var keysPath = builder.Configuration["DataProtection:KeysPath"] ?? "/data/keys";
-    builder.Services.AddDataProtection()
-        .PersistKeysToFileSystem(new DirectoryInfo(keysPath))
-        .SetApplicationName("AndoServer")
-        .SetDefaultKeyLifetime(TimeSpan.FromDays(180));
+    // Production (and any environment with a writable mount) should persist keys.
+    // Testing/E2E should also persist when possible, to keep auth stable across restarts.
+    if (CanWriteToDirectory(dataProtectionKeysPath))
+    {
+        dataProtection
+            .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath))
+            .SetDefaultKeyLifetime(TimeSpan.FromDays(180));
+    }
+}
+catch (Exception ex) when (builder.Environment.IsEnvironment("Testing") || builder.Environment.IsEnvironment("E2E"))
+{
+    // Testing/E2E: don't fail startup if persistence isn't available.
+    // Without persistence, auth cookies will not survive container restarts.
+    builder.Logging.AddFilter("Microsoft.AspNetCore.DataProtection", LogLevel.Warning);
+    builder.Logging.AddFilter("Auth.Cookie", LogLevel.Debug);
+    builder.Services.AddSingleton(new DataProtectionFallbackWarning(dataProtectionKeysPath, ex));
 }
 
 // =============================================================================
@@ -557,6 +584,16 @@ builder.Services.AddScoped<IAuditLogger, AuditLogger>();
 
 var app = builder.Build();
 
+// Emit a single warning if we couldn't enable persistent Data Protection keys in E2E/Testing.
+if (app.Services.GetService<DataProtectionFallbackWarning>() is { } dpWarning)
+{
+    app.Logger.LogWarning(
+        dpWarning.Exception,
+        "Data Protection key persistence is unavailable (path={KeysPath}). Falling back to ephemeral keys. " +
+        "Auth cookies will not survive container restarts.",
+        dpWarning.KeysPath);
+}
+
 // =============================================================================
 // Startup Banner
 // =============================================================================
@@ -859,3 +896,7 @@ internal class NoOpRecurringJobManager : IRecurringJobManager
         // No-op
     }
 }
+
+// Used to surface a single warning in E2E/Testing when Data Protection key persistence
+// cannot be enabled (e.g., missing/unwritable /data/keys mount).
+file sealed record DataProtectionFallbackWarning(string KeysPath, Exception Exception);

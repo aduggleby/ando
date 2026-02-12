@@ -17,19 +17,19 @@ interface AlertProps {
 const variantStyles = {
   success: {
     container: 'bg-success-50 border-success-500 text-success-800 dark:bg-success-500/10 dark:text-success-400',
-    icon: 'text-success-500',
+    icon: 'text-success-500 dark:text-success-400',
   },
   warning: {
     container: 'bg-warning-50 border-warning-500 text-warning-800 dark:bg-warning-500/10 dark:text-warning-400',
-    icon: 'text-warning-500',
+    icon: 'text-warning-500 dark:text-warning-400',
   },
   error: {
     container: 'bg-error-50 border-error-500 text-error-800 dark:bg-error-500/10 dark:text-error-400',
-    icon: 'text-error-500',
+    icon: 'text-error-500 dark:text-error-400',
   },
   info: {
     container: 'bg-primary-50 border-primary-500 text-primary-800 dark:bg-primary-500/10 dark:text-primary-400',
-    icon: 'text-primary-500',
+    icon: 'text-primary-500 dark:text-primary-400',
   },
 };
 

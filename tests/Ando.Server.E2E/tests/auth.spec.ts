@@ -171,12 +171,15 @@ test.describe('Authentication', () => {
       expect(isHealthy).toBeTruthy();
     });
 
-    test('can create and delete test users', async ({ testApi }) => {
-      const user = await testApi.createUser({ login: 'temp-test-user' });
+    test('can create and delete test users', async ({ testApi }, testInfo) => {
+      // The docker-compose E2E SQL volume is often left running locally for debugging,
+      // so avoid fixed usernames/emails that can collide across runs.
+      const login = `temp-test-user-${testInfo.workerIndex}-${Date.now()}`;
+      const user = await testApi.createUser({ login });
 
       expect(user.userId).toBeGreaterThan(0);
-      expect(user.login).toBe('temp-test-user');
-      expect(user.email).toContain('temp-test-user');
+      expect(user.login).toBe(login);
+      expect(user.email).toContain(login);
 
       // Clean up
       await testApi.deleteUser(user.userId);

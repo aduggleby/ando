@@ -222,7 +222,7 @@ export function UserManagement() {
                             }
                           }}
                           disabled={deleteMutation.isPending}
-                          className="text-error-600 hover:text-error-700"
+                          className="text-error-600 hover:text-error-700 dark:text-error-400 dark:hover:text-error-300"
                         >
                           Delete
                         </Button>

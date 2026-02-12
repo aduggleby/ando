@@ -58,7 +58,7 @@ export function AdminDashboard() {
         <StatCard
           title="Active Builds"
           value={dashboard?.activeBuilds || 0}
-          className={dashboard?.activeBuilds ? 'text-success-600' : ''}
+          className={dashboard?.activeBuilds ? 'text-success-600 dark:text-success-400' : ''}
         />
       </div>
 

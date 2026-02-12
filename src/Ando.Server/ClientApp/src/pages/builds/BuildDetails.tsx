@@ -240,7 +240,7 @@ export function BuildDetails() {
                 key={log.id}
                 className={`whitespace-pre-wrap ${getLogColor(log.level)}`}
               >
-                <span className="text-gray-500 select-none">
+                <span className="text-gray-500 select-none dark:text-slate-500">
                   [{formatTime(log.timestamp)}]
                 </span>{' '}
                 {log.message}

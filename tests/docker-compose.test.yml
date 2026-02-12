@@ -63,8 +63,13 @@ services:
     volumes:
       # Mount Docker socket for build container execution
       - /var/run/docker.sock:/var/run/docker.sock
+      # Persist ASP.NET Core Data Protection keys so auth cookies survive container recreate/restart
+      - ando-e2e-keys:/data/keys
 
 networks:
   ando-e2e-network:
     driver: bridge
     # Isolated network - no external connectivity except through exposed ports
+
+volumes:
+  ando-e2e-keys:
