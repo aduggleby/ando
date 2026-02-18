@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.110
+
+**2026-02-18**
+
+- Respect .gitignore rules when copying project files to Docker build containers
+
 ## 0.9.109
 
 **2026-02-18**

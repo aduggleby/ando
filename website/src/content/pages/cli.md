@@ -51,6 +51,12 @@ To skip the prompt, use the `--dind` flag, add `dind: true` to your `ando.config
 
 **CI Server:** When running on the ANDO CI Server, the Docker CLI is automatically installed in the build container for DIND builds. You do not need to call `Docker.Install()` in your build script — though it is harmless to include.
 
+## Project File Copying
+
+When ANDO starts a build, it copies your project files into the Docker container. If your project is a **git repository** and `git` is available, ANDO uses `git ls-files` to determine which files to copy. This respects your `.gitignore` rules, so ignored files (build outputs, `node_modules`, etc.) are automatically excluded.
+
+If the project is **not a git repository** (or `git` is unavailable), ANDO falls back to excluding a fixed set of directories: `.git`, `node_modules`, `bin`, `obj`, and `.ando/cache`.
+
 ## Configuration File
 
 ANDO supports an optional `ando.config` file in the project root for persisting settings.
