@@ -43,6 +43,7 @@ The build script should be placed in the project root as `build.csando`.
 ## Tips
 
 - **Keep llms.txt URL handy** - If the LLM doesn't support fetching URLs, you can manually paste the contents from [llms.txt](/llms.txt)
+- **Use quick-start context first** - For a short intro file, use [skills.md](/skills.md), then fetch [llms.txt](/llms.txt) for full details
 - **Be specific about deployment** - After pasting the prompt, tell the LLM where you want to deploy (e.g., "Deploy to Cloudflare Pages" or "Publish to NuGet")
 - **Mention special requirements** - If you need Docker-in-Docker, Entity Framework migrations, or multi-platform builds, mention it explicitly
 
@@ -67,6 +68,10 @@ You can also share this direct link to the LLM-friendly documentation:
 **[https://andobuild.com/llms.txt](/llms.txt)**
 
 This file follows the [llms.txt standard](https://llmstxt.org/) and contains everything an LLM needs to understand and use ANDO.
+
+Quick-start intro file:
+
+**[https://andobuild.com/skills.md](/skills.md)**
 
 ## See Also
 
