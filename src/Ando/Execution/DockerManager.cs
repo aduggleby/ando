@@ -432,23 +432,11 @@ public class DockerManager
         // Create a temporary tar archive excluding unwanted directories.
         // Using tar is much faster than individual docker cp calls.
         var tarPath = Path.Combine(Path.GetTempPath(), $"ando-project-{Guid.NewGuid():N}.tar");
+        var gitFileListPath = Path.Combine(Path.GetTempPath(), $"ando-project-files-{Guid.NewGuid():N}.lst");
 
         try
         {
-            // Build tar exclude arguments.
-            var excludeArgs = new List<string> { "-cf", tarPath };
-            foreach (var dir in ExcludedDirectories)
-            {
-                excludeArgs.Add("--exclude");
-                excludeArgs.Add(dir);
-            }
-            // Exclude .ando directory except we want it for structure, just not cache contents
-            excludeArgs.Add("--exclude");
-            excludeArgs.Add(".ando/cache");
-
-            excludeArgs.Add("-C");
-            excludeArgs.Add(projectRoot);
-            excludeArgs.Add(".");
+            var tarArgs = await BuildTarArgumentsAsync(projectRoot, tarPath, gitFileListPath);
 
             // Create the tar archive on the host.
             var tarStartInfo = new ProcessStartInfo
@@ -460,12 +448,10 @@ public class DockerManager
                 CreateNoWindow = true,
             };
 
-            foreach (var arg in excludeArgs)
+            foreach (var arg in tarArgs)
             {
                 tarStartInfo.ArgumentList.Add(arg);
             }
-
-            _logger.Debug($"Creating tar archive of project (excluding: {string.Join(", ", ExcludedDirectories)})");
 
             using (var tarProcess = Process.Start(tarStartInfo))
             {
@@ -523,9 +509,128 @@ public class DockerManager
             {
                 File.Delete(tarPath);
             }
+
+            if (File.Exists(gitFileListPath))
+            {
+                File.Delete(gitFileListPath);
+            }
         }
     }
 
+    // Uses git to honor .gitignore when possible, with a directory exclusion fallback.
+    internal async Task<List<string>> BuildTarArgumentsAsync(string projectRoot, string tarPath, string gitFileListPath)
+    {
+        var gitPaths = await TryGetGitIncludedPathsAsync(projectRoot);
+        if (gitPaths is { Length: > 0 })
+        {
+            await File.WriteAllTextAsync(gitFileListPath, string.Join('\0', gitPaths) + '\0');
+
+            _logger.Debug("Creating tar archive of project using git ls-files (respects .gitignore)");
+            return
+            [
+                "-cf",
+                tarPath,
+                "-C",
+                projectRoot,
+                "--null",
+                "-T",
+                gitFileListPath
+            ];
+        }
+
+        // Fall back to static directory exclusions when git metadata is unavailable.
+        var tarArgs = new List<string> { "-cf", tarPath };
+        foreach (var dir in ExcludedDirectories)
+        {
+            tarArgs.Add("--exclude");
+            tarArgs.Add(dir);
+        }
+
+        // Exclude .ando cache contents from copied project files.
+        tarArgs.Add("--exclude");
+        tarArgs.Add(".ando/cache");
+        tarArgs.Add("-C");
+        tarArgs.Add(projectRoot);
+        tarArgs.Add(".");
+
+        _logger.Debug($"Creating tar archive of project (excluding: {string.Join(", ", ExcludedDirectories)})");
+        return tarArgs;
+    }
+
+    // Returns tracked + untracked-but-not-ignored paths from git, or null when unavailable.
+    internal async Task<string[]?> TryGetGitIncludedPathsAsync(string projectRoot)
+    {
+        if (!_processRunner.IsAvailable("git"))
+        {
+            return null;
+        }
+
+        // Ensure this directory is in a git work tree.
+        var isRepoStartInfo = new ProcessStartInfo
+        {
+            FileName = "git",
+            ArgumentList = { "-C", projectRoot, "rev-parse", "--is-inside-work-tree" },
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+
+        using (var isRepoProcess = Process.Start(isRepoStartInfo))
+        {
+            if (isRepoProcess == null)
+            {
+                return null;
+            }
+
+            var isRepoOutput = await isRepoProcess.StandardOutput.ReadToEndAsync();
+            await isRepoProcess.WaitForExitAsync();
+
+            if (isRepoProcess.ExitCode != 0 ||
+                !string.Equals(isRepoOutput.Trim(), "true", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+        }
+
+        var listFilesStartInfo = new ProcessStartInfo
+        {
+            FileName = "git",
+            ArgumentList =
+            {
+                "-C", projectRoot,
+                "ls-files",
+                "-z",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+                "--deduplicate"
+            },
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+
+        using var listFilesProcess = Process.Start(listFilesStartInfo);
+        if (listFilesProcess == null)
+        {
+            return null;
+        }
+
+        var output = await listFilesProcess.StandardOutput.ReadToEndAsync();
+        await listFilesProcess.WaitForExitAsync();
+
+        if (listFilesProcess.ExitCode != 0 || string.IsNullOrEmpty(output))
+        {
+            return null;
+        }
+
+        return output
+            .Split('\0', StringSplitOptions.RemoveEmptyEntries)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .ToArray();
+    }
     // Helper method to execute a command in the container.
     private async Task ExecuteInContainerAsync(string containerId, string command, string[] args)
     {
