@@ -47,6 +47,8 @@ export function ProjectDetails() {
     return <Alert variant="error">Project not found</Alert>;
   }
 
+  const latestBuild = project.recentBuilds[0];
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -54,6 +56,12 @@ export function ProjectDetails() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-50">{project.repoFullName}</h1>
           <p className="text-gray-500 dark:text-slate-400">{project.defaultBranch}</p>
+          {latestBuild && (
+            <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
+              Last Built Git Version:{' '}
+              <code className="font-mono">{latestBuild.branch}@{latestBuild.shortCommitSha}</code>
+            </p>
+          )}
         </div>
         <div className="flex space-x-3">
           <Link to={`/projects/${id}/settings`}>
@@ -115,7 +123,8 @@ export function ProjectDetails() {
                       Build #{build.id}
                     </p>
                     <p className="text-sm text-gray-500 dark:text-slate-400">
-                      {build.branch} · {build.shortCommitSha}
+                      Git Version:{' '}
+                      <code className="font-mono">{build.branch}@{build.shortCommitSha}</code>
                       {build.commitMessage && ` · ${build.commitMessage}`}
                     </p>
                   </div>

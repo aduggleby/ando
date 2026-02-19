@@ -69,7 +69,8 @@ export function Home() {
                       {build.projectName}
                     </p>
                     <p className="text-sm text-gray-500 dark:text-slate-400">
-                      {build.branch} · {build.shortCommitSha}
+                      Git Version:{' '}
+                      <code className="font-mono">{build.branch}@{build.shortCommitSha}</code>
                     </p>
                   </div>
                   <div className="flex items-center space-x-4">
