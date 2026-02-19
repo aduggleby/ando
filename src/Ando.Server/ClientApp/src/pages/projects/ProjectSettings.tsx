@@ -106,6 +106,9 @@ export function ProjectSettings() {
     return <Alert variant="error">Project not found</Alert>;
   }
 
+  const requiredSecrets = settings.requiredSecrets ?? [];
+  const allSecrets = settings.allSecrets ?? [];
+
   const handleAddSecret = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -146,12 +149,12 @@ export function ProjectSettings() {
           </Button>
         </div>
         <div className="divide-y divide-gray-200 dark:divide-slate-700">
-          {settings.requiredSecrets.length === 0 ? (
+          {requiredSecrets.length === 0 ? (
             <div className="px-4 py-8 text-center text-gray-500 dark:text-slate-400">
               No secrets required. The build script doesn't use any secret variables.
             </div>
           ) : (
-            settings.requiredSecrets.map((secret) => (
+            requiredSecrets.map((secret) => (
               <div key={secret.name} className="px-4 py-4 flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{secret.name}</p>
@@ -242,12 +245,12 @@ export function ProjectSettings() {
           <h2 className="text-lg font-medium text-gray-900 dark:text-slate-50">All Secrets</h2>
         </div>
         <div className="divide-y divide-gray-200 dark:divide-slate-700">
-          {settings.allSecrets.length === 0 ? (
+          {allSecrets.length === 0 ? (
             <div className="px-4 py-8 text-center text-gray-500 dark:text-slate-400">
               No secrets configured yet.
             </div>
           ) : (
-            settings.allSecrets.map((secret) => (
+            allSecrets.map((secret) => (
               <div key={secret.name} className="px-4 py-4 flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{secret.name}</p>

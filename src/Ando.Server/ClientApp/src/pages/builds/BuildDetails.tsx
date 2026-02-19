@@ -186,10 +186,24 @@ export function BuildDetails() {
           <div className="divide-y divide-gray-200 dark:divide-slate-700">
             {build.artifacts.map((artifact) => (
               <div key={artifact.id} className="px-4 py-3 flex items-center justify-between">
+                {/*
+                  Test fixtures may provide legacy artifact field names (name/sizeBytes).
+                  Normalize to avoid blank names and NaN sizes in the UI.
+                */}
+                {(() => {
+                  const artifactLike = artifact as typeof artifact & { name?: string; sizeBytes?: number };
+                  const displayName = artifact.fileName || artifactLike.name || `Artifact ${artifact.id}`;
+                  const displaySize = typeof artifact.fileSize === 'number'
+                    ? artifact.fileSize
+                    : (typeof artifactLike.sizeBytes === 'number' ? artifactLike.sizeBytes : 0);
+
+                  return (
                 <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{artifact.fileName}</p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400">{formatFileSize(artifact.fileSize)}</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{displayName}</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">{formatFileSize(displaySize)}</p>
                 </div>
+                  );
+                })()}
                 <a
                   href={`/api/builds/${build.id}/artifacts/${artifact.id}`}
                   className="text-primary-600 hover:text-primary-500 text-sm font-medium dark:text-primary-400 dark:hover:text-primary-300"
