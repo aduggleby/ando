@@ -294,40 +294,56 @@ public class BumpCommand
     /// <summary>
     /// Updates changelog files using Claude based on commit messages and changed files.
     /// Tries to find a git tag matching the version (vX.Y.Z or X.Y.Z format).
-    /// If no tag is found, skips changelog update (no changes to document).
+    /// If no exact tag is found, falls back to the most recent tag.
     /// </summary>
     private async Task UpdateChangelogsAsync(string currentVersion, string newVersion, bool autoConfirm)
     {
+        async Task<bool> TryUpdateFromTagAsync(string tag, bool isFallback = false)
+        {
+            if (!await _git.TagExistsAsync(tag))
+                return false;
+
+            var messages = await _git.GetCommitMessagesSinceTagAsync(tag);
+            var changedFiles = await _git.GetChangedFilesSinceTagAsync(tag);
+
+            if (messages.Count > 0 || changedFiles.Count > 0)
+            {
+                if (isFallback)
+                {
+                    _logger.Info($"No exact tag found for {currentVersion}. Using most recent tag {tag}.");
+                }
+
+                _logger.Info($"Changes since tag {tag}:");
+                Console.WriteLine($"  Commits: {messages.Count}");
+                Console.WriteLine($"  Files changed: {changedFiles.Count}");
+                Console.WriteLine();
+
+                await UpdateChangelogsWithClaudeAsync(messages, changedFiles, newVersion);
+                return true;
+            }
+
+            _logger.Info($"No changes since tag {tag}, skipping changelog update.");
+            return true;
+        }
+
         // Try both "vX.Y.Z" and "X.Y.Z" tag formats.
         var tagFormats = new[] { $"v{currentVersion}", currentVersion };
 
         foreach (var tag in tagFormats)
         {
-            if (await _git.TagExistsAsync(tag))
-            {
-                var messages = await _git.GetCommitMessagesSinceTagAsync(tag);
-                var changedFiles = await _git.GetChangedFilesSinceTagAsync(tag);
+            if (await TryUpdateFromTagAsync(tag))
+                return;
+        }
 
-                if (messages.Count > 0 || changedFiles.Count > 0)
-                {
-                    _logger.Info($"Changes since tag {tag}:");
-                    Console.WriteLine($"  Commits: {messages.Count}");
-                    Console.WriteLine($"  Files changed: {changedFiles.Count}");
-                    Console.WriteLine();
-
-                    await UpdateChangelogsWithClaudeAsync(messages, changedFiles, newVersion);
-                    return;
-                }
-                else
-                {
-                    _logger.Info($"No changes since tag {tag}, skipping changelog update.");
-                    return;
-                }
-            }
+        var lastTag = await _git.GetLastTagAsync();
+        if (!string.IsNullOrWhiteSpace(lastTag) && !tagFormats.Contains(lastTag, StringComparer.Ordinal))
+        {
+            if (await TryUpdateFromTagAsync(lastTag, isFallback: true))
+                return;
         }
 
         // No tag found.
-        _logger.Warning($"No git tag found for version {currentVersion}, skipping changelog update.");
+        _logger.Warning($"No git tag found for version {currentVersion} and no fallback tag found, skipping changelog update.");
     }
 
     /// <summary>

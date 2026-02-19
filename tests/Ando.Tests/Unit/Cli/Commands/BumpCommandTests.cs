@@ -160,6 +160,36 @@ public class BumpCommandTests : IDisposable
 
     #endregion
 
+    #region Changelog Tag Fallback Tests
+
+    [Fact]
+    public async Task ExecuteAsync_UsesLastTagWhenExactVersionTagMissing()
+    {
+        CreateBuildScript(@"var app = Dotnet.Project(""./src/App/App.csproj"");");
+        CreateCsproj("src/App/App.csproj", "0.9.2");
+        SetupCleanGitRepo();
+
+        // Exact previous-version tags do not exist.
+        _runner.SetResult("git", "rev-parse v0.9.2", new CliProcessRunner.ProcessResult(128, "", "fatal: bad revision"));
+        _runner.SetResult("git", "rev-parse 0.9.2", new CliProcessRunner.ProcessResult(128, "", "fatal: bad revision"));
+
+        // Fallback to most recent reachable tag.
+        _runner.SetResult("git", "describe --tags --abbrev=0", new CliProcessRunner.ProcessResult(0, "v0.9.1\n", ""));
+        _runner.SetResult("git", "rev-parse v0.9.1", new CliProcessRunner.ProcessResult(0, "abc123\n", ""));
+        _runner.SetResult("git", "log v0.9.1..HEAD --pretty=format:%s", new CliProcessRunner.ProcessResult(0, "fix: include fallback tag lookup\n", ""));
+        _runner.SetResult("git", "diff --name-only v0.9.1..HEAD", new CliProcessRunner.ProcessResult(0, "src/App/App.csproj\n", ""));
+
+        var command = new BumpCommand(_runner, _logger);
+        var result = await command.ExecuteAsync(BumpType.Patch, autoConfirm: true);
+
+        result.ShouldBe(0);
+        _runner.WasExecuted("git", "describe --tags --abbrev=0").ShouldBeTrue();
+        _runner.WasExecuted("git", "log v0.9.1..HEAD --pretty=format:%s").ShouldBeTrue();
+        _logger.WarningMessages.ShouldNotContain(m => m.Contains("No git tag found for version 0.9.2", StringComparison.Ordinal));
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private void CreateBuildScript(string content)
