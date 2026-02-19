@@ -100,6 +100,35 @@ Build__AcknowledgeRootDockerRisk=true
 
 **Warning**: Running Docker as root allows container escapes to gain root access to the host system. Only use this option on platforms that require it.
 
+### User Registration
+
+By default, anyone can register an account on the server. The first user to register automatically becomes an admin. Admins can disable new user self-registration from the Admin panel, which toggles the setting in the database (`SystemSettings.AllowUserRegistration`). When registration is disabled, the `/api/auth/register` endpoint returns an error for all users except the first (initial setup is always allowed).
+
+### Rate Limiting
+
+The server applies per-IP sliding-window rate limits to protect against abuse. Rate limiting is enabled by default. Configure limits in your `.env` file:
+
+| Policy | Env Prefix | Default | Purpose |
+|--------|-----------|---------|---------|
+| `webhook` | `RateLimiting__Webhook__` | 30 req/60s | GitHub webhook endpoint |
+| `api` | `RateLimiting__Api__` | 100 req/60s | Authenticated API endpoints (partitioned by user when logged in) |
+| `auth` | `RateLimiting__Auth__` | 10 req/60s | Legacy auth fallback |
+| `auth-sensitive` | `RateLimiting__AuthSensitive__` | 6 req/60s | Login, register, password reset |
+| `auth-verification` | `RateLimiting__AuthVerification__` | 20 req/60s | Email verification, resend |
+
+Each policy supports three settings: `PermitLimit`, `WindowSeconds`, and `QueueLimit`. Example override:
+
+```bash
+RateLimiting__AuthSensitive__PermitLimit=10
+RateLimiting__AuthSensitive__WindowSeconds=120
+```
+
+To disable rate limiting entirely:
+
+```bash
+RateLimiting__Enabled=false
+```
+
 ## Email Configuration
 
 ANDO requires an email service for user registration, password reset, and build failure notifications. Configure one of the following providers in your `.env` file:

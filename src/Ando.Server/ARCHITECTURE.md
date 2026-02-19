@@ -171,6 +171,7 @@ Program.cs bootstraps the application in 8 distinct phases:
 - StorageSettings (artifacts path, retention policies)
 - BuildSettings (timeouts, Docker image, worker count)
 - EncryptionSettings (AES-256 key for secrets)
+- RateLimitSettings (per-endpoint sliding window limits for webhook, API, and auth flows)
 ```
 
 #### Phase 2: Database & EF Core
@@ -247,7 +248,7 @@ Program.cs bootstraps the application in 8 distinct phases:
 | `BuildsController` | Build detail views | Required |
 | `ProjectsController` | Project management views | Required |
 | `AuthController` | Registration, login, logout | Mixed |
-| `AdminController` | User management, impersonation | Admin role |
+| `AdminController` | User management, impersonation, registration toggle | Admin role |
 | `HomeController` | Dashboard, health check | Mixed |
 
 #### FastEndpoints (REST API)
@@ -614,6 +615,9 @@ BuildArtifact (N:1) Build
 
 ProjectSecret (N:1) Project
   └─ Unique: (ProjectId, Name)
+
+SystemSettings (singleton row)
+  └─ AllowUserRegistration, UpdatedAt
 ```
 
 #### ApplicationUser
@@ -799,6 +803,18 @@ public class ProjectSecret
 }
 ```
 
+#### SystemSettings
+Global feature toggles controlled by administrators. Stored as a single row.
+
+```csharp
+public class SystemSettings
+{
+    public int Id { get; set; } = 1;
+    public bool AllowUserRegistration { get; set; } = true;
+    public DateTime UpdatedAt { get; set; }
+}
+```
+
 ---
 
 ### 9. Docker Integration
@@ -887,6 +903,23 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 **First User as Admin:**
 - On registration, if no admins exist, user becomes admin
 
+**Registration Toggle:**
+- Admins can disable new user self-registration via `SystemSettings.AllowUserRegistration`
+- Controlled from Admin panel (`POST /admin/settings/registration`)
+- When disabled, `POST /api/auth/register` returns an error (first-user registration is always allowed)
+
+**Rate Limit Policies:**
+
+All rate limiters are per-IP using sliding windows. Authenticated API requests partition by user ID.
+
+| Policy | Applies To | Default Limits |
+|--------|-----------|----------------|
+| `webhook` | GitHub webhook endpoint | 30 req/60s, queue 5 |
+| `api` | Authenticated API endpoints | 100 req/60s, queue 10 |
+| `auth` | Legacy/default auth fallback | 10 req/60s, queue 2 |
+| `auth-sensitive` | Login, register, password reset | 6 req/60s, queue 0 |
+| `auth-verification` | Email verification, resend | 20 req/60s, queue 5 |
+
 ---
 
 ### 11. Configuration Management
@@ -940,6 +973,19 @@ public class EncryptionSettings
 {
     public const string SectionName = "Encryption";
     public string Key { get; set; }  // Base64-encoded 32-byte AES key
+}
+```
+
+**RateLimitSettings:**
+```csharp
+public class RateLimitSettings
+{
+    public bool Enabled { get; set; } = true;
+    public EndpointRateLimit Webhook { get; set; }       // 30/60s, queue 5
+    public EndpointRateLimit Api { get; set; }            // 100/60s, queue 10
+    public EndpointRateLimit Auth { get; set; }           // 10/60s, queue 2 (legacy fallback)
+    public EndpointRateLimit AuthSensitive { get; set; }  // 6/60s, queue 0
+    public EndpointRateLimit AuthVerification { get; set; } // 20/60s, queue 5
 }
 ```
 

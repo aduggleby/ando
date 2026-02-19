@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.114
+
+**2026-02-19**
+
+- Add admin toggle to enable or disable new user registration
+- Add granular rate limits for authentication endpoints
+
 ## 0.9.113
 
 **2026-02-19**
