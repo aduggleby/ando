@@ -21,6 +21,7 @@ using Ando.Server.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace Ando.Server.Controllers;
@@ -94,6 +95,7 @@ public class AuthController : Controller
     /// </summary>
     [AllowAnonymous]
     [HttpPost("auth/login")]
+    [EnableRateLimiting("auth-sensitive")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Login(LoginViewModel model)
     {
@@ -145,11 +147,25 @@ public class AuthController : Controller
     /// </summary>
     [AllowAnonymous]
     [HttpGet("auth/register")]
-    public IActionResult Register()
+    public async Task<IActionResult> Register()
     {
         if (User.Identity?.IsAuthenticated == true)
         {
             return RedirectToAction("Index", "Home");
+        }
+
+        var isFirstUser = !await _userManager.Users.AnyAsync();
+        var allowUserRegistration = (await _db.SystemSettings
+            .AsNoTracking()
+            .Select(s => (bool?)s.AllowUserRegistration)
+            .FirstOrDefaultAsync()) ?? true;
+
+        if (!isFirstUser && !allowUserRegistration)
+        {
+            return View(new RegisterViewModel
+            {
+                ErrorMessage = "User registration is currently disabled."
+            });
         }
 
         return View(new RegisterViewModel());
@@ -160,6 +176,7 @@ public class AuthController : Controller
     /// </summary>
     [AllowAnonymous]
     [HttpPost("auth/register")]
+    [EnableRateLimiting("auth-sensitive")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Register(RegisterViewModel model)
     {
@@ -170,6 +187,16 @@ public class AuthController : Controller
 
         // Check if this is the first user (will become admin)
         var isFirstUser = !await _userManager.Users.AnyAsync();
+        var allowUserRegistration = (await _db.SystemSettings
+            .AsNoTracking()
+            .Select(s => (bool?)s.AllowUserRegistration)
+            .FirstOrDefaultAsync()) ?? true;
+
+        if (!isFirstUser && !allowUserRegistration)
+        {
+            model.ErrorMessage = "User registration is currently disabled.";
+            return View(model);
+        }
 
         var user = new ApplicationUser
         {
@@ -271,6 +298,7 @@ public class AuthController : Controller
     /// </summary>
     [AllowAnonymous]
     [HttpPost("auth/forgot-password")]
+    [EnableRateLimiting("auth-sensitive")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ForgotPassword(ForgotPasswordViewModel model)
     {
@@ -350,6 +378,7 @@ public class AuthController : Controller
     /// </summary>
     [AllowAnonymous]
     [HttpPost("auth/reset-password")]
+    [EnableRateLimiting("auth-sensitive")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ResetPassword(ResetPasswordViewModel model)
     {
@@ -432,6 +461,7 @@ public class AuthController : Controller
     /// </summary>
     [Authorize]
     [HttpPost("auth/resend-verification")]
+    [EnableRateLimiting("auth-verification")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ResendVerification()
     {

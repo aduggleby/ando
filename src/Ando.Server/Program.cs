@@ -15,6 +15,7 @@
 // =============================================================================
 
 using System.Threading.RateLimiting;
+using System.Security.Claims;
 using Ando.Server.Auth;
 using Ando.Server.BuildExecution;
 using Ando.Server.Configuration;
@@ -401,37 +402,85 @@ var rateLimitSettings = builder.Configuration
 
 if (rateLimitSettings.Enabled)
 {
+    static string GetClientIp(HttpContext context)
+    {
+        var ip = context.Connection.RemoteIpAddress?.ToString();
+        return string.IsNullOrWhiteSpace(ip) ? "unknown" : ip;
+    }
+
     builder.Services.AddRateLimiter(options =>
     {
         // Webhook rate limiter (public endpoint, stricter limits)
-        options.AddSlidingWindowLimiter("webhook", limiterOptions =>
+        options.AddPolicy("webhook", context =>
+            RateLimitPartition.GetSlidingWindowLimiter(
+                partitionKey: $"webhook:ip:{GetClientIp(context)}",
+                factory: _ => new SlidingWindowRateLimiterOptions
+                {
+                    PermitLimit = rateLimitSettings.Webhook.PermitLimit,
+                    Window = TimeSpan.FromSeconds(rateLimitSettings.Webhook.WindowSeconds),
+                    SegmentsPerWindow = 4,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = rateLimitSettings.Webhook.QueueLimit
+                }));
+
+        // API rate limiter (partition by user when authenticated, otherwise by IP).
+        options.AddPolicy("api", context =>
         {
-            limiterOptions.PermitLimit = rateLimitSettings.Webhook.PermitLimit;
-            limiterOptions.Window = TimeSpan.FromSeconds(rateLimitSettings.Webhook.WindowSeconds);
-            limiterOptions.SegmentsPerWindow = 4;
-            limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            limiterOptions.QueueLimit = rateLimitSettings.Webhook.QueueLimit;
+            var userId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var partitionKey = string.IsNullOrWhiteSpace(userId)
+                ? $"api:ip:{GetClientIp(context)}"
+                : $"api:user:{userId}";
+
+            return RateLimitPartition.GetSlidingWindowLimiter(
+                partitionKey: partitionKey,
+                factory: _ => new SlidingWindowRateLimiterOptions
+                {
+                    PermitLimit = rateLimitSettings.Api.PermitLimit,
+                    Window = TimeSpan.FromSeconds(rateLimitSettings.Api.WindowSeconds),
+                    SegmentsPerWindow = 4,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = rateLimitSettings.Api.QueueLimit
+                });
         });
 
-        // API rate limiter (authenticated endpoints)
-        options.AddSlidingWindowLimiter("api", limiterOptions =>
-        {
-            limiterOptions.PermitLimit = rateLimitSettings.Api.PermitLimit;
-            limiterOptions.Window = TimeSpan.FromSeconds(rateLimitSettings.Api.WindowSeconds);
-            limiterOptions.SegmentsPerWindow = 4;
-            limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            limiterOptions.QueueLimit = rateLimitSettings.Api.QueueLimit;
-        });
+        // Sensitive auth flows (login/register/password operations), strict and low-queue.
+        options.AddPolicy("auth-sensitive", context =>
+            RateLimitPartition.GetSlidingWindowLimiter(
+                partitionKey: $"auth-sensitive:ip:{GetClientIp(context)}",
+                factory: _ => new SlidingWindowRateLimiterOptions
+                {
+                    PermitLimit = rateLimitSettings.AuthSensitive.PermitLimit,
+                    Window = TimeSpan.FromSeconds(rateLimitSettings.AuthSensitive.WindowSeconds),
+                    SegmentsPerWindow = 4,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = rateLimitSettings.AuthSensitive.QueueLimit
+                }));
 
-        // Auth rate limiter (login attempts, strict)
-        options.AddSlidingWindowLimiter("auth", limiterOptions =>
-        {
-            limiterOptions.PermitLimit = rateLimitSettings.Auth.PermitLimit;
-            limiterOptions.Window = TimeSpan.FromSeconds(rateLimitSettings.Auth.WindowSeconds);
-            limiterOptions.SegmentsPerWindow = 4;
-            limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-            limiterOptions.QueueLimit = rateLimitSettings.Auth.QueueLimit;
-        });
+        // Verification-related auth flows, less strict to reduce UX friction.
+        options.AddPolicy("auth-verification", context =>
+            RateLimitPartition.GetSlidingWindowLimiter(
+                partitionKey: $"auth-verification:ip:{GetClientIp(context)}",
+                factory: _ => new SlidingWindowRateLimiterOptions
+                {
+                    PermitLimit = rateLimitSettings.AuthVerification.PermitLimit,
+                    Window = TimeSpan.FromSeconds(rateLimitSettings.AuthVerification.WindowSeconds),
+                    SegmentsPerWindow = 4,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = rateLimitSettings.AuthVerification.QueueLimit
+                }));
+
+        // Backwards-compatible alias.
+        options.AddPolicy("auth", context =>
+            RateLimitPartition.GetSlidingWindowLimiter(
+                partitionKey: $"auth:ip:{GetClientIp(context)}",
+                factory: _ => new SlidingWindowRateLimiterOptions
+                {
+                    PermitLimit = rateLimitSettings.Auth.PermitLimit,
+                    Window = TimeSpan.FromSeconds(rateLimitSettings.Auth.WindowSeconds),
+                    SegmentsPerWindow = 4,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = rateLimitSettings.Auth.QueueLimit
+                }));
 
         // Custom rejection response
         options.OnRejected = async (context, cancellationToken) =>

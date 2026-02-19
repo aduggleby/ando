@@ -19,6 +19,7 @@ using Ando.Server.Models;
 using Ando.Server.Services;
 using FastEndpoints;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace Ando.Server.Endpoints.Auth;
@@ -26,8 +27,10 @@ namespace Ando.Server.Endpoints.Auth;
 /// <summary>
 /// POST /api/auth/register - Register a new user account.
 /// </summary>
+[EnableRateLimiting("auth-sensitive")]
 public class RegisterEndpoint : Endpoint<RegisterRequest, RegisterResponse>
 {
+    private readonly AndoDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly IEmailService _emailService;
@@ -35,12 +38,14 @@ public class RegisterEndpoint : Endpoint<RegisterRequest, RegisterResponse>
     private readonly ILogger<RegisterEndpoint> _logger;
 
     public RegisterEndpoint(
+        AndoDbContext db,
         UserManager<ApplicationUser> userManager,
         SignInManager<ApplicationUser> signInManager,
         IEmailService emailService,
         IUrlService urlService,
         ILogger<RegisterEndpoint> logger)
     {
+        _db = db;
         _userManager = userManager;
         _signInManager = signInManager;
         _emailService = emailService;
@@ -58,6 +63,16 @@ public class RegisterEndpoint : Endpoint<RegisterRequest, RegisterResponse>
     {
         // Check if this is the first user (will become admin)
         var isFirstUser = !await _userManager.Users.AnyAsync(ct);
+        var allowUserRegistration = (await _db.SystemSettings
+            .AsNoTracking()
+            .Select(s => (bool?)s.AllowUserRegistration)
+            .FirstOrDefaultAsync(ct)) ?? true;
+
+        if (!isFirstUser && !allowUserRegistration)
+        {
+            await SendAsync(new RegisterResponse(false, "User registration is currently disabled."), cancellation: ct);
+            return;
+        }
 
         var user = new ApplicationUser
         {

@@ -62,6 +62,11 @@ public class AdminDashboardViewModel
     /// List of builds created in the last 24 hours.
     /// </summary>
     public List<RecentBuildViewModel> RecentBuilds24h { get; set; } = [];
+
+    /// <summary>
+    /// Whether self-service user registration is enabled.
+    /// </summary>
+    public bool AllowUserRegistration { get; set; } = true;
 }
 
 /// <summary>

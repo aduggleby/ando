@@ -37,6 +37,7 @@ public class AndoDbContext : IdentityDbContext<ApplicationUser, ApplicationRole,
     public DbSet<BuildLogEntry> BuildLogEntries => Set<BuildLogEntry>();
     public DbSet<BuildArtifact> BuildArtifacts => Set<BuildArtifact>();
     public DbSet<ApiToken> ApiTokens => Set<ApiToken>();
+    public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -49,6 +50,7 @@ public class AndoDbContext : IdentityDbContext<ApplicationUser, ApplicationRole,
         ConfigureBuild(modelBuilder);
         ConfigureBuildLogEntry(modelBuilder);
         ConfigureBuildArtifact(modelBuilder);
+        ConfigureSystemSettings(modelBuilder);
     }
 
     // -------------------------------------------------------------------------
@@ -309,6 +311,23 @@ public class AndoDbContext : IdentityDbContext<ApplicationUser, ApplicationRole,
 
             // Index for listing artifacts by build
             entity.HasIndex(e => e.BuildId);
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // SystemSettings Configuration
+    // -------------------------------------------------------------------------
+    private static void ConfigureSystemSettings(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<SystemSettings>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Id)
+                .ValueGeneratedNever();
+
+            entity.Property(e => e.AllowUserRegistration)
+                .HasDefaultValue(true);
         });
     }
 }

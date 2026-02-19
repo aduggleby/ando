@@ -72,6 +72,10 @@ public class AdminController : Controller
         var totalProjects = await _db.Projects.CountAsync();
         var totalBuilds = await _db.Builds.CountAsync();
         var recentBuilds = await _db.Builds.CountAsync(b => b.QueuedAt >= yesterday);
+        var allowUserRegistration = (await _db.SystemSettings
+            .AsNoTracking()
+            .Select(s => (bool?)s.AllowUserRegistration)
+            .FirstOrDefaultAsync()) ?? true;
 
         var recentUsersList = await _userManager.Users
             .OrderByDescending(u => u.CreatedAt)
@@ -110,11 +114,46 @@ public class AdminController : Controller
             TotalProjects = totalProjects,
             TotalBuilds = totalBuilds,
             RecentBuilds = recentBuilds,
+            AllowUserRegistration = allowUserRegistration,
             RecentUsers = recentUsersList,
             RecentBuilds24h = recentBuildsList
         };
 
         return View(model);
+    }
+
+    /// <summary>
+    /// Updates global registration setting.
+    /// </summary>
+    [HttpPost("settings/registration")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateRegistrationSettings(bool allowUserRegistration)
+    {
+        var settings = await _db.SystemSettings.FirstOrDefaultAsync();
+        if (settings == null)
+        {
+            settings = new SystemSettings
+            {
+                Id = 1,
+                AllowUserRegistration = allowUserRegistration,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            _db.SystemSettings.Add(settings);
+        }
+        else
+        {
+            settings.AllowUserRegistration = allowUserRegistration;
+            settings.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync();
+
+        TempData["Success"] = allowUserRegistration
+            ? "User registration is now enabled."
+            : "User registration has been disabled.";
+
+        return RedirectToAction(nameof(Index));
     }
 
     // =========================================================================

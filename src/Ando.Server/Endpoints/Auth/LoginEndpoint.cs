@@ -16,12 +16,14 @@ using Ando.Server.Contracts.Auth;
 using Ando.Server.Models;
 using FastEndpoints;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Ando.Server.Endpoints.Auth;
 
 /// <summary>
 /// POST /api/auth/login - Authenticate user with email and password.
 /// </summary>
+[EnableRateLimiting("auth-sensitive")]
 public class LoginEndpoint : Endpoint<LoginRequest, LoginResponse>
 {
     private readonly UserManager<ApplicationUser> _userManager;

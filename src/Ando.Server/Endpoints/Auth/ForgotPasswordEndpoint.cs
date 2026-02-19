@@ -16,12 +16,14 @@ using Ando.Server.Models;
 using Ando.Server.Services;
 using FastEndpoints;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Ando.Server.Endpoints.Auth;
 
 /// <summary>
 /// POST /api/auth/forgot-password - Request password reset email.
 /// </summary>
+[EnableRateLimiting("auth-sensitive")]
 public class ForgotPasswordEndpoint : Endpoint<ForgotPasswordRequest, ForgotPasswordResponse>
 {
     private readonly UserManager<ApplicationUser> _userManager;

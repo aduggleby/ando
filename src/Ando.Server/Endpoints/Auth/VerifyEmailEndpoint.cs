@@ -14,12 +14,14 @@ using Ando.Server.Contracts.Auth;
 using Ando.Server.Models;
 using FastEndpoints;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Ando.Server.Endpoints.Auth;
 
 /// <summary>
 /// POST /api/auth/verify-email - Verify email address with token.
 /// </summary>
+[EnableRateLimiting("auth-verification")]
 public class VerifyEmailEndpoint : Endpoint<VerifyEmailRequest, VerifyEmailResponse>
 {
     private readonly UserManager<ApplicationUser> _userManager;

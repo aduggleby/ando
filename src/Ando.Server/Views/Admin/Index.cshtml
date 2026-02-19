@@ -24,6 +24,31 @@
         </div>
     }
 
+    <section class="settings-section mb-6">
+        <div class="flex items-center justify-between gap-4">
+            <div>
+                <h2 class="text-base font-semibold text-slate-900">User Registration</h2>
+                <p class="text-sm text-slate-500">Allow new users to create accounts.</p>
+            </div>
+
+            <form method="post" action="/admin/settings/registration" class="flex items-center gap-3">
+                @Html.AntiForgeryToken()
+                <label for="allow-user-registration" class="inline-flex cursor-pointer items-center gap-3">
+                    <span class="text-sm font-medium text-slate-700">@(Model.AllowUserRegistration ? "On" : "Off")</span>
+                    <input id="allow-user-registration"
+                           type="checkbox"
+                           name="allowUserRegistration"
+                           value="true"
+                           class="h-5 w-10 rounded-full border-slate-300 text-blue-600 focus:ring-blue-500"
+                           role="switch"
+                           @(Model.AllowUserRegistration ? "checked" : "") />
+                    <input type="hidden" name="allowUserRegistration" value="false" />
+                </label>
+                <button type="submit" class="btn btn-secondary btn-sm">Save</button>
+            </form>
+        </div>
+    </section>
+
     <div class="dashboard-stats">
         <div class="stat-card">
             <h3>Total Users</h3>

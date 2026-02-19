@@ -18,12 +18,14 @@ using Ando.Server.Models;
 using Ando.Server.Services;
 using FastEndpoints;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Ando.Server.Endpoints.Auth;
 
 /// <summary>
 /// POST /api/auth/resend-verification - Resend email verification.
 /// </summary>
+[EnableRateLimiting("auth-verification")]
 public class ResendVerificationEndpoint : EndpointWithoutRequest<ResendVerificationResponse>
 {
     private readonly UserManager<ApplicationUser> _userManager;

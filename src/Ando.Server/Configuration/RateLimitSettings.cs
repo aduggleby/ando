@@ -51,13 +51,34 @@ public class RateLimitSettings
     };
 
     /// <summary>
-    /// Rate limit settings for login/authentication attempts.
+    /// Legacy/default auth rate limit settings.
+    /// Used as fallback for newer auth-specific policies.
     /// </summary>
     public EndpointRateLimit Auth { get; set; } = new()
     {
         PermitLimit = 10,
         WindowSeconds = 60,
         QueueLimit = 2
+    };
+
+    /// <summary>
+    /// Stricter limits for sensitive auth operations (login/register/password reset).
+    /// </summary>
+    public EndpointRateLimit AuthSensitive { get; set; } = new()
+    {
+        PermitLimit = 6,
+        WindowSeconds = 60,
+        QueueLimit = 0
+    };
+
+    /// <summary>
+    /// Moderate limits for email verification-related auth operations.
+    /// </summary>
+    public EndpointRateLimit AuthVerification { get; set; } = new()
+    {
+        PermitLimit = 20,
+        WindowSeconds = 60,
+        QueueLimit = 5
     };
 }
 
