@@ -3,6 +3,14 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.118
+
+**2026-02-19**
+
+- Fix project settings and build artifact display issues
+- Improve frontend reliability for container builds
+- Improve E2E test stability
+
 ## 0.9.117
 
 **2026-02-19**
