@@ -722,7 +722,65 @@ public class DockerManager
             return null;
         }
 
-        return output
+        var includedPaths = output
+            .Split('\0', StringSplitOptions.RemoveEmptyEntries)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .ToArray();
+
+        if (includedPaths.Length == 0)
+        {
+            return null;
+        }
+
+        // Ignore tracked files that were deleted from the working tree.
+        // Keeping them in the tar list causes tar "Cannot stat" failures.
+        var deletedPaths = await TryGetDeletedGitPathsAsync(projectRoot);
+        if (deletedPaths.Length == 0)
+        {
+            return includedPaths;
+        }
+
+        var deletedSet = new HashSet<string>(deletedPaths, StringComparer.Ordinal);
+        var filteredPaths = includedPaths
+            .Where(path => !deletedSet.Contains(path))
+            .ToArray();
+
+        return filteredPaths.Length > 0 ? filteredPaths : null;
+    }
+
+    private async Task<string[]> TryGetDeletedGitPathsAsync(string projectRoot)
+    {
+        var deletedStartInfo = new ProcessStartInfo
+        {
+            FileName = "git",
+            ArgumentList =
+            {
+                "-C", projectRoot,
+                "ls-files",
+                "-z",
+                "--deleted"
+            },
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+
+        using var deletedProcess = Process.Start(deletedStartInfo);
+        if (deletedProcess == null)
+        {
+            return [];
+        }
+
+        var deletedOutput = await deletedProcess.StandardOutput.ReadToEndAsync();
+        await deletedProcess.WaitForExitAsync();
+
+        if (deletedProcess.ExitCode != 0 || string.IsNullOrEmpty(deletedOutput))
+        {
+            return [];
+        }
+
+        return deletedOutput
             .Split('\0', StringSplitOptions.RemoveEmptyEntries)
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .ToArray();

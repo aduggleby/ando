@@ -122,6 +122,24 @@ public class DockerManagerGitIgnoreTests : IDisposable
         Assert.DoesNotContain("logs/nested.log", paths);
     }
 
+    [SkippableFact]
+    public async Task TryGetGitIncludedPathsAsync_ExcludesDeletedTrackedFiles()
+    {
+        Skip.IfNot(IsGitAvailable(), "Git is not available in this environment");
+
+        RunGit("init");
+        File.WriteAllText(Path.Combine(_testDir, "tracked.txt"), "tracked");
+        File.WriteAllText(Path.Combine(_testDir, "untracked.txt"), "untracked");
+        RunGit("add", "tracked.txt");
+        File.Delete(Path.Combine(_testDir, "tracked.txt"));
+
+        var paths = await _dockerManager.TryGetGitIncludedPathsAsync(_testDir);
+
+        Assert.NotNull(paths);
+        Assert.Contains("untracked.txt", paths);
+        Assert.DoesNotContain("tracked.txt", paths);
+    }
+
     [Fact]
     public void TarHelpIndicatesNullSupport_WithBusyBoxOutput_ReturnsFalse()
     {
