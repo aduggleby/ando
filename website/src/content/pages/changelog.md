@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.116
+
+**2026-02-19**
+
+- Improve server deployment documentation to avoid hard-coded credentials
+
 ## 0.9.115
 
 **2026-02-19**
