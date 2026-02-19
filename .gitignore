@@ -78,3 +78,7 @@ api/
 _apidocs/
 docfx/
 website/public/apidocs/
+
+# Keep frontend API client code tracked
+!src/Ando.Server/ClientApp/src/api/
+!src/Ando.Server/ClientApp/src/api/system.ts
