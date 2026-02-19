@@ -173,6 +173,11 @@ public class ProjectListItem
     public BuildStatus? LastBuildStatus { get; init; }
 
     /// <summary>
+    /// Identifier of the most recent build, if any.
+    /// </summary>
+    public int? LastBuildId { get; init; }
+
+    /// <summary>
     /// Total number of builds for this project.
     /// </summary>
     public int TotalBuilds { get; init; }

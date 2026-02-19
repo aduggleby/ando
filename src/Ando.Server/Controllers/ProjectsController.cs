@@ -100,6 +100,7 @@ public class ProjectsController : Controller
                 CreatedAt = project.CreatedAt,
                 LastBuildAt = project.LastBuildAt,
                 LastBuildStatus = lastBuild?.Status,
+                LastBuildId = lastBuild?.Id,
                 TotalBuilds = buildCount,
                 IsConfigured = missingSecrets.Count == 0,
                 MissingSecretsCount = missingSecrets.Count,

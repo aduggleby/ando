@@ -121,11 +121,17 @@ else
             var deploymentClass = project.DeploymentStatus.ToString().ToLower();
             var statusLabel = "Success";
             var statusClass = "success";
+            var hasActiveBuild = project.LastBuildStatus is BuildStatus.Running or BuildStatus.Queued;
 
             if (!project.IsConfigured)
             {
                 statusLabel = "Secrets missing";
                 statusClass = "pending";
+            }
+            else if (hasActiveBuild)
+            {
+                statusLabel = "RUNNING";
+                statusClass = "running";
             }
             else if (project.LastBuildStatus is BuildStatus.Failed or BuildStatus.TimedOut or BuildStatus.Cancelled)
             {
@@ -137,7 +143,18 @@ else
                 <div class="project-row-main">
                     <div class="flex items-center gap-2">
                         <a href="/projects/@project.Id" class="project-row-name">@project.RepoFullName</a>
-                        <span class="status-badge status-@statusClass">@statusLabel</span>
+                        @if (hasActiveBuild && project.LastBuildId.HasValue)
+                        {
+                            <a href="/builds/@project.LastBuildId.Value"
+                               class="status-badge status-@statusClass no-underline"
+                               title="Open current build">
+                                @statusLabel
+                            </a>
+                        }
+                        else
+                        {
+                            <span class="status-badge status-@statusClass">@statusLabel</span>
+                        }
                     </div>
 
                     <div class="project-row-metrics">
@@ -166,6 +183,10 @@ else
 
                 <div class="project-row-side">
                     <div class="project-row-actions">
+                        @if (project.LastBuildId.HasValue)
+                        {
+                            <a href="/builds/@project.LastBuildId.Value" class="btn btn-secondary btn-sm">Build logs</a>
+                        }
                         <a href="/projects/@project.Id" class="btn btn-primary btn-sm">Open</a>
                         <a href="/projects/@project.Id/settings" class="btn btn-secondary btn-sm">Settings</a>
                         <a href="@project.RepoUrl" target="_blank" class="btn btn-secondary btn-sm">GitHub</a>
