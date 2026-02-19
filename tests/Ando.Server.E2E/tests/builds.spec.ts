@@ -107,8 +107,15 @@ test.describe('Build Actions', () => {
     await buildDetails.goto(build.buildId);
 
     await buildDetails.cancel();
-    await authedPage.reload();
-    await buildDetails.expectStatus('Cancelled');
+    await expect
+      .poll(
+        async () => {
+          await authedPage.reload();
+          return buildDetails.getStatus();
+        },
+        { timeout: 30000 }
+      )
+      .toBe('CANCELLED');
   });
 
   test('can retry a failed build', async ({ authedPage, testApi, testProject }) => {
