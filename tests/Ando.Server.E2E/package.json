@@ -1,6 +1,6 @@
 {
   "name": "ando-server-e2e",
-  "version": "0.9.117",
+  "version": "0.9.118",
   "description": "End-to-end tests for Ando.Server using Playwright",
   "scripts": {
     "test": "playwright test",
