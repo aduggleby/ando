@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.112
+
+**2026-02-19**
+
+- Fix Docker file copying on systems where `tar` does not support null-delimited file lists
+
 ## 0.9.111
 
 **2026-02-19**
