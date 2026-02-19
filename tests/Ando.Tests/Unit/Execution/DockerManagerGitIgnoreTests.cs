@@ -121,4 +121,30 @@ public class DockerManagerGitIgnoreTests : IDisposable
         Assert.DoesNotContain("ignored.log", paths);
         Assert.DoesNotContain("logs/nested.log", paths);
     }
+
+    [Fact]
+    public void TarHelpIndicatesNullSupport_WithBusyBoxOutput_ReturnsFalse()
+    {
+        var help = """
+            BusyBox v1.37.0 (2025-12-16 14:19:28 UTC) multi-call binary.
+            Usage: tar c|x|t [-ZzJjahmvokO] [-f TARFILE] [LONGOPT]... [FILE]...
+            """;
+
+        var supportsNull = DockerManager.TarHelpIndicatesNullSupport(help);
+
+        Assert.False(supportsNull);
+    }
+
+    [Fact]
+    public void TarHelpIndicatesNullSupport_WithGnuTarOutput_ReturnsTrue()
+    {
+        var help = """
+            Usage: tar [OPTION...] [FILE]...
+              --null                 -T reads null-terminated names
+            """;
+
+        var supportsNull = DockerManager.TarHelpIndicatesNullSupport(help);
+
+        Assert.True(supportsNull);
+    }
 }

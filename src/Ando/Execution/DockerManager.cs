@@ -109,6 +109,7 @@ public class DockerManager
 {
     private readonly IBuildLogger _logger;
     private readonly ProcessRunner _processRunner;
+    private bool? _tarSupportsNullFileList;
 
     // Directories to exclude when copying project to container.
     // These are typically large, generated, or version-controlled directories.
@@ -460,12 +461,27 @@ public class DockerManager
                     throw new InvalidOperationException("Failed to start tar process");
                 }
 
+                // Read both streams before/while waiting to preserve diagnostics.
+                var tarStdoutTask = tarProcess.StandardOutput.ReadToEndAsync();
+                var tarStderrTask = tarProcess.StandardError.ReadToEndAsync();
                 await tarProcess.WaitForExitAsync();
+                var tarOutput = (await tarStdoutTask).Trim();
+                var tarError = (await tarStderrTask).Trim();
+
                 if (tarProcess.ExitCode != 0)
                 {
-                    var tarError = await tarProcess.StandardError.ReadToEndAsync();
-                    _logger.Warning($"Tar had warnings (may be normal): {tarError}");
+                    var details = string.IsNullOrWhiteSpace(tarError)
+                        ? (string.IsNullOrWhiteSpace(tarOutput) ? "No additional tar output." : tarOutput)
+                        : tarError;
+                    throw new InvalidOperationException(
+                        $"Failed to create project tar archive (exit code {tarProcess.ExitCode}): {details}");
                 }
+            }
+
+            if (!File.Exists(tarPath))
+            {
+                throw new InvalidOperationException(
+                    $"Tar command succeeded but archive was not created at: {tarPath}");
             }
 
             // Copy the tar archive to the container.
@@ -523,16 +539,39 @@ public class DockerManager
         var gitPaths = await TryGetGitIncludedPathsAsync(projectRoot);
         if (gitPaths is { Length: > 0 })
         {
-            await File.WriteAllTextAsync(gitFileListPath, string.Join('\0', gitPaths) + '\0');
+            var supportsNull = await TarSupportsNullFileListAsync();
+            if (supportsNull)
+            {
+                await File.WriteAllTextAsync(gitFileListPath, string.Join('\0', gitPaths) + '\0');
 
-            _logger.Debug("Creating tar archive of project using git ls-files (respects .gitignore)");
+                _logger.Debug("Creating tar archive of project using git ls-files with null-delimited list");
+                return
+                [
+                    "-cf",
+                    tarPath,
+                    "-C",
+                    projectRoot,
+                    "--null",
+                    "-T",
+                    gitFileListPath
+                ];
+            }
+
+            if (gitPaths.Any(path => path.Contains('\n')))
+            {
+                throw new InvalidOperationException(
+                    "The available tar implementation does not support '--null', and the repository contains newline characters in file paths.");
+            }
+
+            await File.WriteAllTextAsync(gitFileListPath, string.Join('\n', gitPaths) + '\n');
+
+            _logger.Debug("Creating tar archive of project using git ls-files with newline-delimited list (tar --null unavailable)");
             return
             [
                 "-cf",
                 tarPath,
                 "-C",
                 projectRoot,
-                "--null",
                 "-T",
                 gitFileListPath
             ];
@@ -555,6 +594,63 @@ public class DockerManager
 
         _logger.Debug($"Creating tar archive of project (excluding: {string.Join(", ", ExcludedDirectories)})");
         return tarArgs;
+    }
+
+    internal static bool TarHelpIndicatesNullSupport(string tarHelpOutput)
+    {
+        if (string.IsNullOrWhiteSpace(tarHelpOutput))
+        {
+            return false;
+        }
+
+        if (tarHelpOutput.Contains("BusyBox", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return tarHelpOutput.Contains("--null", StringComparison.Ordinal);
+    }
+
+    internal async Task<bool> TarSupportsNullFileListAsync()
+    {
+        if (_tarSupportsNullFileList.HasValue)
+        {
+            return _tarSupportsNullFileList.Value;
+        }
+
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "tar",
+                ArgumentList = { "--help" },
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+
+            using var process = Process.Start(startInfo);
+            if (process == null)
+            {
+                _tarSupportsNullFileList = false;
+                return false;
+            }
+
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            var combined = $"{await stdoutTask}\n{await stderrTask}";
+
+            _tarSupportsNullFileList = TarHelpIndicatesNullSupport(combined);
+            return _tarSupportsNullFileList.Value;
+        }
+        catch
+        {
+            // Be conservative for compatibility: if detection fails, avoid --null.
+            _tarSupportsNullFileList = false;
+            return false;
+        }
     }
 
     // Returns tracked + untracked-but-not-ignored paths from git, or null when unavailable.
