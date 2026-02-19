@@ -104,6 +104,11 @@ public class Build
     public int? PullRequestNumber { get; set; }
 
     /// <summary>
+    /// Git version tag that points at this build's commit, if available.
+    /// </summary>
+    public string? GitVersionTag { get; set; }
+
+    /// <summary>
     /// Build profile used for this build (copied from the project's selected profile when queued).
     /// Null means default build (no profile).
     /// </summary>

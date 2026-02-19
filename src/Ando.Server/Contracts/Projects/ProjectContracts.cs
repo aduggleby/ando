@@ -41,6 +41,7 @@ public record ProjectListItemDto(
     DateTime CreatedAt,
     DateTime? LastBuildAt,
     string? LastBuildStatus,
+    string? LastBuildGitVersionTag,
     int TotalBuilds,
     bool IsConfigured,
     int MissingSecretsCount
@@ -406,6 +407,7 @@ public record BuildListItemDto(
     int Id,
     string CommitSha,
     string ShortCommitSha,
+    string? GitVersionTag,
     string Branch,
     string? CommitMessage,
     string? CommitAuthor,

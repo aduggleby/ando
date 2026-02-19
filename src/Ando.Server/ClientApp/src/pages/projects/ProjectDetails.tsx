@@ -58,8 +58,13 @@ export function ProjectDetails() {
           <p className="text-gray-500 dark:text-slate-400">{project.defaultBranch}</p>
           {latestBuild && (
             <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
-              Last Built Git Version:{' '}
-              <code className="font-mono">{latestBuild.branch}@{latestBuild.shortCommitSha}</code>
+              Last Built Git Version Tag:{' '}
+              <code className="font-mono">{latestBuild.gitVersionTag || '-'}</code>
+            </p>
+          )}
+          {!latestBuild && (
+            <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
+              Last Built Git Version Tag: <code className="font-mono">-</code>
             </p>
           )}
         </div>

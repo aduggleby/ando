@@ -46,6 +46,7 @@ public record RecentBuildItemDto(
     string ProjectName,
     string Branch,
     string ShortCommitSha,
+    string? GitVersionTag,
     string Status,
     DateTime? StartedAt,
     TimeSpan? Duration
@@ -71,6 +72,14 @@ public record GetDashboardResponse(
 public record HealthResponse(
     string Status,
     DateTime Timestamp
+);
+
+/// <summary>
+/// App version response.
+/// </summary>
+/// <param name="Version">Running server version string.</param>
+public record AppVersionResponse(
+    string Version
 );
 
 /// <summary>

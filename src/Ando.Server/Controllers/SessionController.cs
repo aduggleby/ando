@@ -4,11 +4,11 @@
 // Summary: Compatibility endpoint for GitHub App "setup URL" /session.
 //
 // Some GitHub App configurations redirect users to /session after installation.
-// Historically, Ando's actual callback handler is /projects/github-callback.
+// The SPA handles project connection from /projects/create.
 //
 // To avoid hard failures (e.g., 405 Method Not Allowed) and to support existing
 // GitHub App configurations, we accept GET/POST on /session and redirect to the
-// canonical callback endpoint, preserving query parameters when present.
+// SPA project creation flow, preserving query parameters when present.
 // =============================================================================
 
 using Microsoft.AspNetCore.Mvc;
@@ -26,15 +26,15 @@ public class SessionController : Controller
     {
         // Preserve any GitHub parameters such as ?installation_id=...&setup_action=...
         var qs = HttpContext.Request.QueryString.Value ?? "";
-        return Redirect("/projects/github-callback" + qs);
+        return Redirect("/projects/create" + qs);
     }
 
     [HttpPost("/session")]
     public IActionResult Post()
     {
         // Some clients may POST here; keep behavior consistent by redirecting to
-        // the canonical callback endpoint.
+        // the SPA project creation flow.
         var qs = HttpContext.Request.QueryString.Value ?? "";
-        return Redirect("/projects/github-callback" + qs);
+        return Redirect("/projects/create" + qs);
     }
 }

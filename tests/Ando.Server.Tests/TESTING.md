@@ -21,9 +21,6 @@ tests/
 │   │   │   ├── ProjectTests.cs
 │   │   │   ├── BuildTests.cs
 │   │   │   └── BuildArtifactTests.cs
-│   │   ├── Controllers/
-│   │   │   ├── ProjectsControllerValidationTests.cs
-│   │   │   └── BuildsControllerValidationTests.cs
 │   │   └── Jobs/
 │   │       ├── CleanupArtifactsJobTests.cs
 │   │       └── CleanupOldBuildsJobTests.cs
@@ -319,51 +316,6 @@ Verify mock implementations work correctly for test setup.
 | `FormattedSize_RemovesTrailingZeros` | Precision | Clean formatting |
 | `BuildArtifact_HasCorrectDefaults` | Default | Default values |
 
-#### ProjectsControllerValidationTests (28 tests)
-| Test | Type | Description |
-|------|------|-------------|
-| `AddSecret_WithValidName_Succeeds` | Theory | Valid env var names (7 cases) |
-| `AddSecret_WithInvalidName_ReturnsError` | Theory | Invalid names (8 cases) |
-| `AddSecret_WithEmptyName_ReturnsError` | Validation | Empty name rejected |
-| `AddSecret_WithEmptyValue_ReturnsError` | Validation | Empty value rejected |
-| `AddSecret_WithWhitespaceOnlyName_ReturnsError` | Validation | Whitespace rejected |
-| `AddSecret_TrimsSecretName` | Edge case | Whitespace handling |
-| `AddSecret_WithNonExistentProject_ReturnsNotFound` | Ownership | Project must exist |
-| `AddSecret_WithOtherUsersProject_ReturnsNotFound` | Ownership | Must own project |
-| `Details_WithNonExistentProject_ReturnsNotFound` | Ownership | Project must exist |
-| `Settings_WithNonExistentProject_ReturnsNotFound` | Ownership | Project must exist |
-| `Delete_WithNonExistentProject_ReturnsNotFound` | Ownership | Project must exist |
-| `TriggerBuild_WithNonExistentProject_ReturnsNotFound` | Ownership | Project must exist |
-| `DeleteSecret_WithNonExistentProject_ReturnsNotFound` | Ownership | Project must exist |
-| `Settings_Post_WithValidInput_UpdatesProject` | Happy path | Settings update |
-| `Settings_Post_WithNonExistentProject_ReturnsNotFound` | Ownership | Project must exist |
-| `Create_Post_WithNonExistentRepo_ReturnsErrorAndRedirects` | Validation | Repo not found |
-| `Create_Post_WithDuplicateRepo_ReturnsErrorAndRedirects` | Validation | Duplicate rejected |
-| `Create_Get_WithNoAccessToken_RedirectsToLogin` | Auth | Token required |
-| `Create_Post_WithNoAccessToken_RedirectsToLogin` | Auth | Token required |
-
-#### BuildsControllerValidationTests (31 tests)
-| Test | Type | Description |
-|------|------|-------------|
-| `Cancel_WithCancellableStatus_Succeeds` | Theory | Queued/Running (2 cases) |
-| `Cancel_WithNonCancellableStatus_ReturnsError` | Theory | Terminal states (4 cases) |
-| `Cancel_WhenServiceReturnsFalse_ReturnsError` | Error | Service failure |
-| `Retry_WithRetryableStatus_Succeeds` | Theory | Failed/Cancelled/TimedOut (3 cases) |
-| `Retry_WithNonRetryableStatus_ReturnsError` | Theory | Queued/Running/Success (3 cases) |
-| `Retry_PreservesBuildParameters` | Happy path | Parameters preserved |
-| `Details_WithNonExistentBuild_ReturnsNotFound` | Ownership | Build must exist |
-| `Details_WithOtherUsersBuild_ReturnsNotFound` | Ownership | Must own build |
-| `Cancel_WithNonExistentBuild_ReturnsNotFound` | Ownership | Build must exist |
-| `Cancel_WithOtherUsersBuild_ReturnsNotFound` | Ownership | Must own build |
-| `Retry_WithNonExistentBuild_ReturnsNotFound` | Ownership | Build must exist |
-| `Retry_WithOtherUsersBuild_ReturnsNotFound` | Ownership | Must own build |
-| `GetLogs_WithNonExistentBuild_ReturnsNotFound` | Ownership | Build must exist |
-| `GetLogs_WithOtherUsersBuild_ReturnsNotFound` | Ownership | Must own build |
-| `DownloadArtifact_WithNonExistentArtifact_ReturnsNotFound` | Validation | Artifact must exist |
-| `DownloadArtifact_WithMismatchedBuildId_ReturnsNotFound` | Validation | Build ID match |
-| `DownloadArtifact_WithOtherUsersArtifact_ReturnsNotFound` | Ownership | Must own artifact |
-| `GetLogs_WithValidBuild_ReturnsJson` | Happy path | Returns logs |
-| `GetLogs_WithAfterSequence_FiltersLogs` | Filtering | Sequence filtering |
 
 #### WebhookIntegrationTests (19 tests)
 Full HTTP pipeline tests using `WebApplicationFactory` with in-memory database.
@@ -494,17 +446,8 @@ public void MatchesBranchFilter_IsCaseInsensitive()
 public void GetNotificationEmail_FallsBackToOwnerEmail()
 ```
 
-#### 6. Controller Input Validation ✅ IMPLEMENTED
-Controller input validation tests have been added in `Unit/Controllers/`:
-- `ProjectsControllerValidationTests.cs` - Secret name validation (regex), required fields, ownership
-- `BuildsControllerValidationTests.cs` - Cancel/retry state validation, ownership verification
-
-Tests cover:
-- Secret name format validation (must be `^[A-Z_][A-Z0-9_]*$`)
-- Required field validation (name, value)
-- Build state transition validation (cancel only Queued/Running, retry only terminal)
-- Ownership verification for all CRUD operations
-- Authentication requirements
+#### 6. Endpoint Input Validation
+Input validation is now covered primarily at the API/contract level in FastEndpoints and related service tests.
 
 #### 7. Cleanup Job Tests ✅ IMPLEMENTED
 Cleanup job tests have been added in `Unit/Jobs/`:

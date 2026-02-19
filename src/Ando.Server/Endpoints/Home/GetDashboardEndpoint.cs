@@ -60,6 +60,7 @@ public class GetDashboardEndpoint : EndpointWithoutRequest<GetDashboardResponse>
                 b.Project.RepoFullName,
                 b.Branch,
                 b.CommitSha.Length >= 8 ? b.CommitSha.Substring(0, 8) : b.CommitSha,
+                b.GitVersionTag,
                 b.Status.ToString(),
                 b.StartedAt,
                 b.Duration))

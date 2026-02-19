@@ -679,7 +679,7 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing") 
 }
 else
 {
-    app.UseExceptionHandler("/Home/Error");
+    app.UseExceptionHandler("/error");
     app.UseHsts();
 }
 
@@ -842,28 +842,15 @@ if (!app.Environment.IsEnvironment("Testing") && !app.Environment.IsEnvironment(
         "*/15 * * * *");
 }
 
-// MVC routes (kept for parallel operation during migration)
-// Auth routes are handled by AuthController (GET/POST) to avoid endpoint ambiguity.
-app.MapControllerRoute(
-    name: "projects",
-    pattern: "projects/{action=Index}/{id?}",
-    defaults: new { controller = "Projects" });
-
-app.MapControllerRoute(
-    name: "builds",
-    pattern: "builds/{action=Details}/{id?}",
-    defaults: new { controller = "Builds" });
-
-app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}");
+// Attribute-routed controllers (webhooks/session/health/test endpoints).
+app.MapControllers();
 
 // =============================================================================
 // SPA Fallback (React App)
 // Serves the React SPA for client-side routing
 // =============================================================================
 
-// Fallback to SPA for routes that don't match API or MVC
+// Fallback to SPA for routes that don't match API/controller endpoints
 app.MapFallbackToFile("app/index.html");
 
 app.Run();

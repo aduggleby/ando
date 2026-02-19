@@ -271,6 +271,7 @@ public class BuildOrchestrator : IBuildOrchestrator
         finally
         {
             // Finalize build
+            build.GitVersionTag = await TryResolveGitVersionTagAsync(repoPathServer, build.CommitSha);
             build.FinishedAt = DateTime.UtcNow;
             if (build.StartedAt.HasValue)
             {
@@ -318,8 +319,73 @@ public class BuildOrchestrator : IBuildOrchestrator
             }
 
             _logger.LogInformation(
-                "Build {BuildId} completed with status {Status} in {Duration:F1}s",
-                buildId, build.Status, build.Duration?.TotalSeconds ?? 0);
+                "Build {BuildId} completed with status {Status} in {Duration:F1}s (gitTag: {GitTag})",
+                buildId, build.Status, build.Duration?.TotalSeconds ?? 0, build.GitVersionTag ?? "-");
+        }
+    }
+
+    private async Task<string?> TryResolveGitVersionTagAsync(string repoPath, string commitSha)
+    {
+        if (string.IsNullOrWhiteSpace(repoPath) || !Directory.Exists(repoPath))
+        {
+            return null;
+        }
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "git",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+
+        startInfo.ArgumentList.Add("-C");
+        startInfo.ArgumentList.Add(repoPath);
+        startInfo.ArgumentList.Add("tag");
+        startInfo.ArgumentList.Add("--points-at");
+        startInfo.ArgumentList.Add(string.IsNullOrWhiteSpace(commitSha) ? "HEAD" : commitSha);
+        startInfo.ArgumentList.Add("--sort=-version:refname");
+
+        try
+        {
+            using var process = Process.Start(startInfo);
+            if (process == null)
+            {
+                return null;
+            }
+
+            await process.WaitForExitAsync();
+            if (process.ExitCode != 0)
+            {
+                var error = await process.StandardError.ReadToEndAsync();
+                _logger.LogDebug(
+                    "Failed resolving git version tag for repoPath={RepoPath} commit={CommitSha}: {Error}",
+                    repoPath,
+                    commitSha,
+                    error);
+                return null;
+            }
+
+            var output = await process.StandardOutput.ReadToEndAsync();
+            var tag = output
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .FirstOrDefault();
+
+            if (string.IsNullOrWhiteSpace(tag))
+            {
+                return null;
+            }
+
+            return tag.Length > 100 ? tag[..100] : tag;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(
+                ex,
+                "Error while resolving git version tag for repoPath={RepoPath} commit={CommitSha}",
+                repoPath,
+                commitSha);
+            return null;
         }
     }
 

@@ -12,12 +12,14 @@ using Ando.Server.BuildExecution;
 using Ando.Server.Configuration;
 using Ando.Server.Controllers;
 using Ando.Server.Data;
+using Ando.Server.Hubs;
 using Ando.Server.Models;
 using Ando.Server.Services;
 using Ando.Server.Tests.TestFixtures;
 using Hangfire;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -164,6 +166,7 @@ public class ErrorHandlingTests : IDisposable
             _db,
             jobClient.Object,
             cancellationRegistry,
+            CreateNoOpHubContext(),
             NullLogger<BuildService>.Instance);
 
         // Act - in-memory DB allows this, production DB would fail with FK violation
@@ -191,6 +194,7 @@ public class ErrorHandlingTests : IDisposable
             _db,
             jobClient.Object,
             cancellationRegistry,
+            CreateNoOpHubContext(),
             NullLogger<BuildService>.Instance);
 
         // Act & Assert
@@ -209,6 +213,7 @@ public class ErrorHandlingTests : IDisposable
             _db,
             jobClient.Object,
             cancellationRegistry,
+            CreateNoOpHubContext(),
             NullLogger<BuildService>.Instance);
 
         // Act - should not throw
@@ -228,6 +233,7 @@ public class ErrorHandlingTests : IDisposable
             _db,
             jobClient.Object,
             cancellationRegistry,
+            CreateNoOpHubContext(),
             NullLogger<BuildService>.Instance);
 
         // Act
@@ -252,6 +258,7 @@ public class ErrorHandlingTests : IDisposable
             _db,
             jobClient.Object,
             cancellationRegistry,
+            CreateNoOpHubContext(),
             NullLogger<BuildService>.Instance);
 
         // Act
@@ -571,5 +578,24 @@ public class ErrorHandlingTests : IDisposable
         {
             HttpContext = context
         };
+    }
+
+    private static IHubContext<BuildLogHub> CreateNoOpHubContext()
+    {
+        var clientProxy = new Mock<IClientProxy>();
+        clientProxy
+            .Setup(x => x.SendCoreAsync(
+                It.IsAny<string>(),
+                It.IsAny<object?[]>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var hubClients = new Mock<IHubClients>();
+        hubClients.Setup(x => x.Group(It.IsAny<string>())).Returns(clientProxy.Object);
+        hubClients.Setup(x => x.All).Returns(clientProxy.Object);
+
+        var hubContext = new Mock<IHubContext<BuildLogHub>>();
+        hubContext.Setup(x => x.Clients).Returns(hubClients.Object);
+        return hubContext.Object;
     }
 }

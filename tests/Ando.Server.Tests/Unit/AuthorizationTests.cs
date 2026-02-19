@@ -8,11 +8,13 @@
 // =============================================================================
 
 using Ando.Server.Data;
+using Ando.Server.Hubs;
 using Ando.Server.Models;
 using Ando.Server.Services;
 using Ando.Server.Tests.TestFixtures;
 using Ando.Server.BuildExecution;
 using Hangfire;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
@@ -36,6 +38,7 @@ public class AuthorizationTests : IDisposable
             _db,
             jobClient.Object,
             cancellationRegistry,
+            CreateNoOpHubContext(),
             NullLogger<BuildService>.Instance);
 
         var mockSecretsDetector = new Mock<IRequiredSecretsDetector>();
@@ -51,6 +54,25 @@ public class AuthorizationTests : IDisposable
     public void Dispose()
     {
         _db.Dispose();
+    }
+
+    private static IHubContext<BuildLogHub> CreateNoOpHubContext()
+    {
+        var clientProxy = new Mock<IClientProxy>();
+        clientProxy
+            .Setup(x => x.SendCoreAsync(
+                It.IsAny<string>(),
+                It.IsAny<object?[]>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var hubClients = new Mock<IHubClients>();
+        hubClients.Setup(x => x.Group(It.IsAny<string>())).Returns(clientProxy.Object);
+        hubClients.Setup(x => x.All).Returns(clientProxy.Object);
+
+        var hubContext = new Mock<IHubContext<BuildLogHub>>();
+        hubContext.Setup(x => x.Clients).Returns(hubClients.Object);
+        return hubContext.Object;
     }
 
     // -------------------------------------------------------------------------

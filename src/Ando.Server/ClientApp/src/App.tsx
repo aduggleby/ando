@@ -16,6 +16,9 @@ import { Login } from '@/pages/auth/Login';
 import { Register } from '@/pages/auth/Register';
 import { ForgotPassword } from '@/pages/auth/ForgotPassword';
 import { ResetPassword } from '@/pages/auth/ResetPassword';
+import { VerifyEmail } from '@/pages/auth/VerifyEmail';
+import { RegisterSuccess } from '@/pages/auth/RegisterSuccess';
+import { AccessDenied } from '@/pages/auth/AccessDenied';
 import { ProjectList } from '@/pages/projects/ProjectList';
 import { ProjectDetails } from '@/pages/projects/ProjectDetails';
 import { ProjectCreate } from '@/pages/projects/ProjectCreate';
@@ -105,6 +108,9 @@ function AppRoutes() {
       />
       <Route path="/auth/forgot-password" element={<ForgotPassword />} />
       <Route path="/auth/reset-password" element={<ResetPassword />} />
+      <Route path="/auth/verify-email" element={<VerifyEmail />} />
+      <Route path="/auth/register-success" element={<RegisterSuccess />} />
+      <Route path="/auth/access-denied" element={<AccessDenied />} />
 
       {/* Protected routes with layout */}
       <Route

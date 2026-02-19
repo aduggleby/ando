@@ -94,6 +94,8 @@ export function ProjectList() {
                             {project.lastBuildAt && (
                               <> · Last build {formatDate(project.lastBuildAt)}</>
                             )}
+                            {' · '}
+                            Git Version Tag: <code className="font-mono">{project.lastBuildGitVersionTag || '-'}</code>
                           </p>
                         </div>
                       </div>

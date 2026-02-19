@@ -228,6 +228,9 @@ public class AndoDbContext : IdentityDbContext<ApplicationUser, ApplicationRole,
             entity.Property(e => e.CommitAuthor)
                 .HasMaxLength(200);
 
+            entity.Property(e => e.GitVersionTag)
+                .HasMaxLength(100);
+
             entity.Property(e => e.Status)
                 .IsRequired()
                 .HasConversion<string>()

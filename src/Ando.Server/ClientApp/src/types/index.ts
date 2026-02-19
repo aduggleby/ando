@@ -53,6 +53,7 @@ export interface ProjectListItemDto {
   createdAt: string;
   lastBuildAt: string | null;
   lastBuildStatus: string | null;
+  lastBuildGitVersionTag: string | null;
   totalBuilds: number;
   isConfigured: boolean;
   missingSecretsCount: number;
@@ -144,6 +145,7 @@ export interface BuildListItemDto {
   id: number;
   commitSha: string;
   shortCommitSha: string;
+  gitVersionTag: string | null;
   branch: string;
   commitMessage: string | null;
   commitAuthor: string | null;
@@ -221,6 +223,7 @@ export interface RecentBuildItemDto {
   projectName: string;
   branch: string;
   shortCommitSha: string;
+  gitVersionTag: string | null;
   status: string;
   startedAt: string | null;
   duration: string | null;

@@ -5,12 +5,19 @@
 // =============================================================================
 
 import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/Button';
+import { getAppVersion } from '@/api/system';
 
 export function Layout() {
   const { user, logout, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const { data: appVersion } = useQuery({
+    queryKey: ['app-version'],
+    queryFn: getAppVersion,
+    staleTime: 1000 * 60 * 5,
+  });
 
   const handleLogout = async () => {
     await logout();
@@ -18,7 +25,7 @@ export function Layout() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-950">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex flex-col">
       {/* Navigation */}
       <nav className="bg-white shadow-sm border-b border-gray-200 dark:bg-slate-900 dark:border-slate-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -72,9 +79,15 @@ export function Layout() {
       </nav>
 
       {/* Main content */}
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 w-full flex-1">
         <Outlet />
       </main>
+
+      <footer className="border-t border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+        <div className="max-w-7xl mx-auto px-4 py-3 sm:px-6 lg:px-8 text-xs text-gray-500 dark:text-slate-400">
+          Version <code className="font-mono">{appVersion?.version || '-'}</code>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -6,7 +6,7 @@ Ando.Server is a cloud-native CI/CD platform built on ASP.NET Core that orchestr
 
 ## Core Architectural Characteristics
 
-1. **Hybrid API Architecture** - Combines MVC controllers and FastEndpoints for transitional migration
+1. **API-First Architecture** - FastEndpoints for app APIs with a small set of attribute-routed compatibility/infrastructure controllers
 2. **Asynchronous Background Jobs** - Hangfire-based build orchestration with worker pool
 3. **Real-time Communication** - SignalR for streaming build logs to clients
 4. **Containerized Build Execution** - Docker-based isolated build environments
@@ -18,10 +18,10 @@ Ando.Server is a cloud-native CI/CD platform built on ASP.NET Core that orchestr
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     Web Layer                                │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │ MVC Views   │  │ FastEndpoints│  │ React ClientApp     │  │
-│  │ (Legacy)    │  │ REST API     │  │ SPA                 │  │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+│  ┌──────────────┐  ┌───────────────────────────┐            │
+│  │ FastEndpoints│  │ React ClientApp           │            │
+│  │ REST API     │  │ SPA                        │            │
+│  └──────────────┘  └───────────────────────────┘            │
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
@@ -82,19 +82,17 @@ Ando.Server is a cloud-native CI/CD platform built on ASP.NET Core that orchestr
 src/Ando.Server/
 ├── Program.cs              # Application bootstrap and configuration
 ├── AndoDbContext.cs        # Entity Framework database context
-├── Controllers/            # MVC controllers (legacy)
+├── Controllers/            # Attribute-routed controllers
 │   ├── WebhooksController.cs   # GitHub webhook receiver
-│   ├── BuildsController.cs     # Build views
-│   ├── ProjectsController.cs   # Project management views
-│   ├── AuthController.cs       # Authentication views
-│   ├── AdminController.cs      # Admin panel
-│   └── HomeController.cs       # Dashboard
+│   ├── SessionController.cs    # /session compatibility redirect
+│   ├── HomeController.cs       # Health + diagnostics endpoints
+│   └── TestController.cs       # Test-only endpoints (Testing/E2E)
 ├── Endpoints/              # FastEndpoints REST API
 │   ├── Auth/               # Authentication endpoints
 │   ├── Builds/             # Build management endpoints
 │   ├── Projects/           # Project CRUD endpoints
 │   ├── Admin/              # Admin-only endpoints
-│   └── Home/               # Dashboard/health endpoints
+│   └── Home/               # Health endpoints
 ├── Contracts/              # DTOs for API requests/responses
 │   ├── Auth/               # Auth contracts
 │   ├── Builds/             # Build contracts
@@ -136,11 +134,8 @@ src/Ando.Server/
 │   ├── BuildLogEntry.cs        # Log entries
 │   ├── BuildArtifact.cs        # Artifact metadata
 │   └── ProjectSecret.cs        # Encrypted secrets
-├── Views/                  # Razor views (legacy)
-│   ├── Shared/_Layout.cshtml
-│   ├── Builds/
-│   ├── Projects/
-│   └── Home/
+├── Views/                  # Razor email templates
+│   └── Email/
 ├── ClientApp/              # React SPA frontend
 │   ├── src/
 │   ├── package.json
@@ -212,7 +207,7 @@ Program.cs bootstraps the application in 8 distinct phases:
 - "RequireAdmin" authorization policy
 ```
 
-#### Phase 8: MVC & FastEndpoints
+#### Phase 8: Controller + FastEndpoints Routing
 - FastEndpoints with `/api` route prefix
 - Swagger documentation in dev/test environments
 - SPA fallback to `app/index.html`
@@ -233,23 +228,21 @@ Program.cs bootstraps the application in 8 distinct phases:
 12. Swagger (dev/test)
 13. SignalR hub mapping
 14. Hangfire dashboard (dev)
-15. MVC routes
+15. Controller mapping (`MapControllers`)
 16. SPA fallback
 
 ---
 
 ### 2. Controllers & API Endpoints
 
-#### MVC Controllers (Legacy)
+#### Attribute-Routed Controllers
 
 | Controller | Purpose | Authentication |
 |------------|---------|----------------|
 | `WebhooksController` | GitHub webhook receiver | AllowAnonymous (signature validation) |
-| `BuildsController` | Build detail views | Required |
-| `ProjectsController` | Project management views | Required |
-| `AuthController` | Registration, login, logout | Mixed |
-| `AdminController` | User management, impersonation, registration toggle | Admin role |
-| `HomeController` | Dashboard, health check | Mixed |
+| `SessionController` | `/session` compatibility redirect to SPA route | AllowAnonymous |
+| `HomeController` | `/health`, `/health/docker`, `/health/github`, `/error` | AllowAnonymous |
+| `TestController` | Test-only endpoints under `/api/test` | Testing/E2E only |
 
 #### FastEndpoints (REST API)
 

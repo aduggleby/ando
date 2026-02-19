@@ -70,6 +70,7 @@ public class GetProjectsEndpoint : EndpointWithoutRequest<GetProjectsResponse>
                 project.CreatedAt,
                 project.LastBuildAt,
                 lastBuild?.Status.ToString(),
+                lastBuild?.GitVersionTag,
                 buildCount,
                 missingSecrets.Count == 0,
                 missingSecrets.Count

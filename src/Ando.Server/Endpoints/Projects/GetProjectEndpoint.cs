@@ -66,6 +66,7 @@ public class GetProjectEndpoint : EndpointWithoutRequest<GetProjectResponse>
             b.Id,
             b.CommitSha,
             b.CommitSha.Length >= 8 ? b.CommitSha[..8] : b.CommitSha,
+            b.GitVersionTag,
             b.Branch,
             b.CommitMessage,
             b.CommitAuthor,

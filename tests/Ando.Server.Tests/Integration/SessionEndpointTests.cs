@@ -7,7 +7,7 @@ namespace Ando.Server.Tests.Integration;
 public class SessionEndpointTests
 {
     [Fact]
-    public async Task Post_Session_Redirects_To_GitHub_Callback()
+    public async Task Post_Session_Redirects_To_Project_Create()
     {
         using var factory = new AndoWebApplicationFactory();
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions
@@ -21,6 +21,6 @@ public class SessionEndpointTests
             resp.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.RedirectMethod or HttpStatusCode.RedirectKeepVerb,
             $"Expected redirect, got {(int)resp.StatusCode} {resp.StatusCode}");
 
-        Assert.Equal("/projects/github-callback?installation_id=123", resp.Headers.Location?.ToString());
+        Assert.Equal("/projects/create?installation_id=123", resp.Headers.Location?.ToString());
     }
 }
