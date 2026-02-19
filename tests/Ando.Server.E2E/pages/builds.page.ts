@@ -1,80 +1,43 @@
-/**
- * Builds Page Object Model
- *
- * Represents the build details page with logs, artifacts, and actions.
- */
-
 import { Page, Locator, expect } from '@playwright/test';
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 export class BuildDetailsPage {
   readonly page: Page;
-  readonly breadcrumb: Locator;
-
-  // Status
+  readonly heading: Locator;
   readonly statusBadge: Locator;
   readonly liveIndicator: Locator;
-
-  // Actions
   readonly cancelButton: Locator;
   readonly retryButton: Locator;
-
-  // Build info
-  readonly buildInfo: Locator;
-  readonly commitSha: Locator;
-  readonly branch: Locator;
-  readonly commitMessage: Locator;
-  readonly commitAuthor: Locator;
-  readonly trigger: Locator;
-  readonly duration: Locator;
-  readonly errorMessage: Locator;
-
-  // Artifacts
   readonly artifactsSection: Locator;
   readonly artifactItems: Locator;
-
-  // Logs
   readonly logContainer: Locator;
   readonly logEntries: Locator;
-  readonly scrollToggle: Locator;
-
-  // Alerts
+  readonly autoScrollToggle: Locator;
   readonly successAlert: Locator;
   readonly errorAlert: Locator;
 
   constructor(page: Page) {
     this.page = page;
-    this.breadcrumb = page.locator('.breadcrumb');
+    this.heading = page.getByRole('heading', { name: /build #/i, level: 1 });
+    this.statusBadge = page.locator('h1 + span').first();
+    this.liveIndicator = page.getByText('Live').first();
+    this.cancelButton = page.getByRole('button', { name: /cancel build/i });
+    this.retryButton = page.getByRole('button', { name: /retry build/i });
 
-    // Status
-    this.statusBadge = page.locator('#build-status, .build-status-large .status-badge');
-    this.liveIndicator = page.locator('#live-indicator, .live-indicator');
+    this.artifactsSection = page
+      .getByRole('heading', { name: /artifacts/i, level: 2 })
+      .locator('xpath=ancestor::div[contains(@class, "bg-white")][1]');
+    this.artifactItems = this.artifactsSection.getByRole('link', { name: /download/i });
 
-    // Actions
-    this.cancelButton = page.locator('button').filter({ hasText: /cancel build/i });
-    this.retryButton = page.locator('button').filter({ hasText: /retry build/i });
+    this.logContainer = page.locator('div.bg-gray-900.font-mono').first();
+    this.logEntries = this.logContainer.locator(':scope > div').filter({ hasNotText: /waiting for logs|no logs available/i });
+    this.autoScrollToggle = page.locator('label:has-text("Auto-scroll") input[type="checkbox"]');
 
-    // Build info
-    this.buildInfo = page.locator('.build-header');
-    this.commitSha = page.locator('.commit-sha').first();
-    this.branch = page.locator('.branch-name').first();
-    this.commitMessage = page.locator('.commit-message').first();
-    this.commitAuthor = page.locator('.info-item').filter({ has: page.locator('.info-label', { hasText: 'Author' }) }).locator('.info-value');
-    this.trigger = page.locator('.info-item').filter({ has: page.locator('.info-label', { hasText: 'Trigger' }) }).locator('.info-value');
-    this.duration = page.locator('.info-item').filter({ has: page.locator('.info-label', { hasText: 'Duration' }) }).locator('.info-value');
-    this.errorMessage = page.locator('.error-message pre');
-
-    // Artifacts
-    this.artifactsSection = page.locator('.section').filter({ hasText: /artifacts/i });
-    this.artifactItems = page.locator('.artifact-item');
-
-    // Logs
-    this.logContainer = page.locator('#log-container, .log-container');
-    this.logEntries = page.locator('.log-entry');
-    this.scrollToggle = page.locator('#scroll-toggle');
-
-    // Alerts
-    this.successAlert = page.locator('.alert-success');
-    this.errorAlert = page.locator('.alert-error');
+    this.successAlert = page.locator('.bg-success-50, .dark\\:bg-success-500\\/10');
+    this.errorAlert = page.locator('.bg-error-50, .dark\\:bg-error-500\\/10');
   }
 
   async goto(buildId: number) {
@@ -82,7 +45,7 @@ export class BuildDetailsPage {
   }
 
   async expectToBeVisible() {
-    await expect(this.breadcrumb).toBeVisible();
+    await expect(this.heading).toBeVisible();
     await expect(this.statusBadge).toBeVisible();
   }
 
@@ -91,7 +54,7 @@ export class BuildDetailsPage {
   }
 
   async expectStatus(status: string) {
-    await expect(this.statusBadge).toContainText(new RegExp(status, 'i'));
+    await expect(this.statusBadge).toContainText(new RegExp(escapeRegExp(status), 'i'));
   }
 
   async expectLive() {
@@ -99,7 +62,7 @@ export class BuildDetailsPage {
   }
 
   async expectNotLive() {
-    await expect(this.liveIndicator).not.toBeVisible();
+    await expect(this.liveIndicator).toBeHidden();
   }
 
   async expectCanCancel() {
@@ -107,7 +70,7 @@ export class BuildDetailsPage {
   }
 
   async expectCannotCancel() {
-    await expect(this.cancelButton).not.toBeVisible();
+    await expect(this.cancelButton).toBeHidden();
   }
 
   async expectCanRetry() {
@@ -115,7 +78,7 @@ export class BuildDetailsPage {
   }
 
   async expectCannotRetry() {
-    await expect(this.retryButton).not.toBeVisible();
+    await expect(this.retryButton).toBeHidden();
   }
 
   async cancel() {
@@ -127,62 +90,45 @@ export class BuildDetailsPage {
   }
 
   async getCommitSha(): Promise<string> {
-    return (await this.commitSha.textContent())?.trim() || '';
+    const meta = await this.page.locator('h1').locator('xpath=ancestor::div[1]/following-sibling::p[1]').textContent();
+    const match = meta?.match(/·\s*([0-9a-f]{7,40})\s*$/i);
+    return match?.[1] || '';
   }
 
   async getBranch(): Promise<string> {
-    return (await this.branch.textContent())?.trim() || '';
+    const meta = await this.page.locator('h1').locator('xpath=ancestor::div[1]/following-sibling::p[1]').textContent();
+    const match = meta?.match(/·\s*([^·]+?)\s*·\s*[0-9a-f]{7,40}\s*$/i);
+    return match?.[1]?.trim() || '';
   }
 
-  async getTrigger(): Promise<string> {
-    return (await this.trigger.textContent())?.trim() || '';
+  async getTriggeredBy(): Promise<string> {
+    const dt = this.page.locator('dt').filter({ hasText: /^Triggered By$/i }).first();
+    return (await dt.locator('xpath=following-sibling::dd[1]').textContent())?.trim() || '';
   }
 
-  async getDuration(): Promise<string> {
-    return (await this.duration.textContent())?.trim() || '';
-  }
-
-  async expectErrorMessage(message: string | RegExp) {
-    await expect(this.errorMessage).toBeVisible();
-    await expect(this.errorMessage).toContainText(message);
-  }
-
-  // Artifacts
   async getArtifactCount(): Promise<number> {
     return this.artifactItems.count();
   }
 
   async getArtifactNames(): Promise<string[]> {
-    const count = await this.artifactItems.count();
-    const names: string[] = [];
-    for (let i = 0; i < count; i++) {
-      const text = await this.artifactItems.nth(i).locator('.artifact-name').textContent();
-      if (text) names.push(text.trim());
-    }
-    return names;
+    const names = await this.artifactsSection.locator('p.text-sm.font-medium').allTextContents();
+    return names.map((n) => n.trim()).filter(Boolean);
   }
 
-  async downloadArtifact(name: string) {
-    const item = this.artifactItems.filter({ hasText: name });
-    const [download] = await Promise.all([
-      this.page.waitForEvent('download'),
-      item.locator('a').filter({ hasText: /download/i }).click(),
-    ]);
-    return download;
+  async expectArtifactSizeText(text: string | RegExp) {
+    await expect(this.artifactsSection).toContainText(text);
   }
 
-  // Logs
   async getLogCount(): Promise<number> {
-    return this.logEntries.count();
+    const lines = await this.logContainer.locator(':scope > div').allTextContents();
+    return lines
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .filter((line) => !/^(waiting for logs|no logs available)$/i.test(line)).length;
   }
 
   async expectLogEntry(message: string | RegExp) {
     await expect(this.logContainer).toContainText(message);
-  }
-
-  async expectLogEntryType(type: string, message: string | RegExp) {
-    const entry = this.logEntries.filter({ hasClass: `log-${type.toLowerCase()}` }).filter({ hasText: message });
-    await expect(entry).toBeVisible();
   }
 
   async waitForLogEntry(message: string | RegExp, timeout = 30000) {
@@ -190,16 +136,18 @@ export class BuildDetailsPage {
   }
 
   async toggleAutoScroll() {
-    await this.scrollToggle.click();
+    await this.autoScrollToggle.click();
+  }
+
+  async isAutoScrollEnabled(): Promise<boolean> {
+    return this.autoScrollToggle.isChecked();
   }
 
   async expectSuccessMessage(message: string | RegExp) {
-    await expect(this.successAlert).toBeVisible();
     await expect(this.successAlert).toContainText(message);
   }
 
   async expectErrorAlert(message: string | RegExp) {
-    await expect(this.errorAlert).toBeVisible();
     await expect(this.errorAlert).toContainText(message);
   }
 }

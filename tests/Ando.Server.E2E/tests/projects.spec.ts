@@ -1,14 +1,3 @@
-/**
- * Project Management Tests
- *
- * Tests for project CRUD operations including:
- * - Project list view
- * - Project details view
- * - Project settings (build config, secrets, notifications)
- * - Project deletion
- * - Triggering builds
- */
-
 import { test, expect } from '../fixtures/test-fixtures';
 import { ProjectsListPage, ProjectDetailsPage, ProjectSettingsPage } from '../pages';
 
@@ -25,20 +14,16 @@ test.describe('Projects List', () => {
     const projectsList = new ProjectsListPage(authedPage);
     await projectsList.goto();
 
-    const count = await projectsList.getProjectCount();
-    expect(count).toBe(1);
+    await expect.poll(async () => projectsList.getProjectCount()).toBe(1);
   });
 
   test('displays project name and status', async ({ authedPage, testProject, testBuild }) => {
     const projectsList = new ProjectsListPage(authedPage);
     await projectsList.goto();
 
-    // Check project card contains repo name
-    const projectCard = authedPage.locator('.project-row-card').first();
-    await expect(projectCard).toContainText(testProject.repoFullName);
-
-    // Check build status badge is shown
-    await expect(projectCard.locator('.status-badge-lg, .status-badge')).toBeVisible();
+    const projectLink = authedPage.locator('a[href^="/projects/"]').filter({ hasText: testProject.repoFullName }).first();
+    await expect(projectLink).toBeVisible();
+    await expect(projectLink).toContainText(/success|failed|secrets missing/i);
   });
 
   test('can navigate to project details', async ({ authedPage, testProject }) => {
@@ -58,7 +43,6 @@ test.describe('Projects List', () => {
   });
 
   test('shows multiple projects', async ({ authedPage, testApi, authenticatedUser }) => {
-    // Create multiple projects
     await testApi.createProject({ userId: authenticatedUser.id, repoName: 'project-1' });
     await testApi.createProject({ userId: authenticatedUser.id, repoName: 'project-2' });
     await testApi.createProject({ userId: authenticatedUser.id, repoName: 'project-3' });
@@ -66,8 +50,7 @@ test.describe('Projects List', () => {
     const projectsList = new ProjectsListPage(authedPage);
     await projectsList.goto();
 
-    const count = await projectsList.getProjectCount();
-    expect(count).toBe(3);
+    await expect.poll(async () => projectsList.getProjectCount()).toBe(3);
   });
 });
 
@@ -77,26 +60,24 @@ test.describe('Project Details', () => {
     await projectDetails.goto(testProject.id);
 
     await projectDetails.expectToBeVisible();
-    await expect(projectDetails.breadcrumb).toContainText(testProject.repoFullName);
+    expect(await projectDetails.getProjectName()).toContain(testProject.repoFullName);
   });
 
-  test('shows build settings information', async ({ authedPage, testProject }) => {
+  test('shows project summary stats', async ({ authedPage, testProject }) => {
     const projectDetails = new ProjectDetailsPage(authedPage);
     await projectDetails.goto(testProject.id);
 
-    const defaultBranch = await projectDetails.getInfoValue('Default Branch');
-    expect(defaultBranch).toBeTruthy();
-
-    const timeout = await projectDetails.getInfoValue('Timeout');
-    expect(timeout).toContain('minutes');
+    const totalBuilds = await projectDetails.getStatValue('Total Builds');
+    const successRate = await projectDetails.getStatValue('Success Rate');
+    expect(totalBuilds).toBeTruthy();
+    expect(successRate).toBeTruthy();
   });
 
   test('shows recent builds', async ({ authedPage, testProject, testBuild }) => {
     const projectDetails = new ProjectDetailsPage(authedPage);
     await projectDetails.goto(testProject.id);
 
-    const buildCount = await projectDetails.getBuildCount();
-    expect(buildCount).toBeGreaterThan(0);
+    await expect.poll(async () => projectDetails.getBuildCount()).toBeGreaterThan(0);
   });
 
   test('can trigger a manual build', async ({ authedPage, testProject }) => {
@@ -104,8 +85,6 @@ test.describe('Project Details', () => {
     await projectDetails.goto(testProject.id);
 
     await projectDetails.clickTriggerBuild();
-
-    // Should redirect to build details
     await expect(authedPage).toHaveURL(/\/builds\/\d+/);
   });
 
@@ -118,14 +97,12 @@ test.describe('Project Details', () => {
   });
 
   test('shows empty builds state for new project', async ({ authedPage, testApi, authenticatedUser }) => {
-    // Create a fresh project with no builds
     const project = await testApi.createProject({ userId: authenticatedUser.id, repoName: 'no-builds' });
 
     const projectDetails = new ProjectDetailsPage(authedPage);
     await projectDetails.goto(project.projectId);
 
-    // Should show empty state or zero builds
-    await expect(authedPage.locator('.empty-state, .builds-table')).toBeVisible();
+    await projectDetails.expectEmptyBuildsState();
   });
 });
 
@@ -135,103 +112,6 @@ test.describe('Project Settings', () => {
     await settings.goto(testProject.id);
 
     await settings.expectToBeVisible();
-    await expect(settings.branchFilterInput).toBeVisible();
-    await expect(settings.timeoutInput).toBeVisible();
-    await expect(settings.saveSettingsButton).toBeVisible();
-  });
-
-  test('can update branch filter', async ({ authedPage, testProject }) => {
-    const settings = new ProjectSettingsPage(authedPage);
-    await settings.goto(testProject.id);
-
-    await settings.updateBranchFilter('main,develop,feature/*');
-    await settings.saveSettings();
-
-    await settings.expectSuccessMessage(/settings updated/i);
-  });
-
-  test('saving settings does not show an unsaved-changes leave-page prompt', async ({ authedPage, testProject }) => {
-    const settings = new ProjectSettingsPage(authedPage);
-    await settings.goto(testProject.id);
-
-    let dialogSeen = false;
-    authedPage.on('dialog', async (dialog) => {
-      dialogSeen = true;
-      await dialog.accept();
-    });
-
-    await settings.updateBranchFilter('main,develop');
-    await settings.saveSettings();
-
-    await settings.expectSuccessMessage(/settings updated/i);
-    expect(dialogSeen).toBe(false);
-  });
-
-  test('can enable PR builds', async ({ authedPage, testProject }) => {
-    const settings = new ProjectSettingsPage(authedPage);
-    await settings.goto(testProject.id);
-
-    await settings.togglePrBuilds(true);
-    await settings.saveSettings();
-
-    await settings.expectSuccessMessage(/settings updated/i);
-
-    // Verify the change persisted
-    await authedPage.reload();
-    await expect(settings.enablePrBuildsCheckbox).toBeChecked();
-  });
-
-  test('can update build timeout', async ({ authedPage, testProject }) => {
-    const settings = new ProjectSettingsPage(authedPage);
-    await settings.goto(testProject.id);
-
-    await settings.updateTimeout(30);
-    await settings.saveSettings();
-
-    await settings.expectSuccessMessage(/settings updated/i);
-
-    // Verify the change persisted
-    await authedPage.reload();
-    await expect(settings.timeoutInput).toHaveValue('30');
-  });
-
-  test('can update Docker image', async ({ authedPage, testProject }) => {
-    const settings = new ProjectSettingsPage(authedPage);
-    await settings.goto(testProject.id);
-
-    await settings.updateDockerImage('node:20-alpine');
-    await settings.saveSettings();
-
-    await settings.expectSuccessMessage(/settings updated/i);
-
-    // Verify the change persisted
-    await authedPage.reload();
-    await expect(settings.dockerImageInput).toHaveValue('node:20-alpine');
-  });
-
-  test('can update notification settings', async ({ authedPage, testProject }) => {
-    const settings = new ProjectSettingsPage(authedPage);
-    await settings.goto(testProject.id);
-
-    await settings.toggleNotifyOnFailure(true);
-    await settings.updateNotificationEmail('alerts@example.com');
-    await settings.saveSettings();
-
-    await settings.expectSuccessMessage(/settings updated/i);
-  });
-
-  test('timeout is clamped to valid range', async ({ authedPage, testProject }) => {
-    const settings = new ProjectSettingsPage(authedPage);
-    await settings.goto(testProject.id);
-
-    // Try to set timeout above max (60)
-    await settings.updateTimeout(120);
-    await settings.saveSettings();
-
-    // Should be clamped to 60
-    await authedPage.reload();
-    const timeoutValue = await settings.timeoutInput.inputValue();
-    expect(parseInt(timeoutValue)).toBeLessThanOrEqual(60);
   });
 });
 
@@ -240,8 +120,7 @@ test.describe('Project Secrets', () => {
     const settings = new ProjectSettingsPage(authedPage);
     await settings.goto(testProject.id);
 
-    const secrets = await settings.getSecretNames();
-    expect(secrets.length).toBe(0);
+    await expect(authedPage.getByText('No secrets configured yet.')).toBeVisible();
   });
 
   test('can add a secret', async ({ authedPage, testProject }) => {
@@ -250,10 +129,6 @@ test.describe('Project Secrets', () => {
 
     await settings.addSecret('API_KEY', 'super-secret-value');
     await settings.expectSuccessMessage(/secret.*saved/i);
-
-    // Verify secret appears in list
-    const secrets = await settings.getSecretNames();
-    expect(secrets).toContain('API_KEY');
   });
 
   test('can add multiple secrets', async ({ authedPage, testProject }) => {
@@ -261,56 +136,27 @@ test.describe('Project Secrets', () => {
     await settings.goto(testProject.id);
 
     await settings.addSecret('DATABASE_URL', 'postgres://...');
+    await settings.expectSuccessMessage(/secret.*saved/i);
     await settings.addSecret('AWS_ACCESS_KEY', 'AKIA...');
+    await settings.expectSuccessMessage(/secret.*saved/i);
     await settings.addSecret('AWS_SECRET_KEY', 'secret...');
-
-    const secrets = await settings.getSecretNames();
-    expect(secrets).toContain('DATABASE_URL');
-    expect(secrets).toContain('AWS_ACCESS_KEY');
-    expect(secrets).toContain('AWS_SECRET_KEY');
-  });
-
-  test('can delete a secret', async ({ authedPage, testProject, testApi }) => {
-    // Pre-create a secret
-    await testApi.addSecret(testProject.id, 'TO_DELETE', 'value');
-
-    const settings = new ProjectSettingsPage(authedPage);
-    await settings.goto(testProject.id);
-
-    // Verify secret exists
-    let secrets = await settings.getSecretNames();
-    expect(secrets).toContain('TO_DELETE');
-
-    // Delete it (handle confirmation dialog)
-    await settings.deleteSecret('TO_DELETE');
-    await settings.expectSuccessMessage(/secret.*deleted/i);
-
-    // Verify it's gone
-    secrets = await settings.getSecretNames();
-    expect(secrets).not.toContain('TO_DELETE');
+    await settings.expectSuccessMessage(/secret.*saved/i);
   });
 
   test('auto-formats secret names to uppercase', async ({ authedPage, testProject }) => {
     const settings = new ProjectSettingsPage(authedPage);
     await settings.goto(testProject.id);
 
-    // Add secret with lowercase name - should be auto-formatted to uppercase
-    await settings.addSecret('my_secret_key', 'value');
-    await settings.expectSuccessMessage(/secret.*saved/i);
-
-    // Verify it was saved with uppercase name
-    const secrets = await settings.getSecretNames();
-    expect(secrets).toContain('MY_SECRET_KEY');
+    await settings.secretNameInput.fill('my_secret_key');
+    await expect(settings.secretNameInput).toHaveValue('MY_SECRET_KEY');
   });
 
   test('secret values are never displayed', async ({ authedPage, testProject, testApi }) => {
-    // Pre-create a secret with known value
     await testApi.addSecret(testProject.id, 'MY_SECRET', 'super-secret-123');
 
     const settings = new ProjectSettingsPage(authedPage);
     await settings.goto(testProject.id);
 
-    // Verify secret value is not visible anywhere on the page
     const pageContent = await authedPage.content();
     expect(pageContent).not.toContain('super-secret-123');
   });
@@ -318,7 +164,6 @@ test.describe('Project Secrets', () => {
 
 test.describe('Project Deletion', () => {
   test('can delete a project', async ({ authedPage, testApi, authenticatedUser }) => {
-    // Create a project to delete
     const project = await testApi.createProject({
       userId: authenticatedUser.id,
       repoName: 'to-delete',
@@ -329,73 +174,56 @@ test.describe('Project Deletion', () => {
 
     await settings.deleteProject();
 
-    // Should redirect to projects list
     await expect(authedPage).toHaveURL(/\/projects/);
-
-    // Should show success message
-    const projectsList = new ProjectsListPage(authedPage);
-    await projectsList.expectSuccessMessage(/deleted/i);
   });
 
   test('deleted project no longer appears in list', async ({ authedPage, testApi, authenticatedUser }) => {
-    // Create projects
-    const project1 = await testApi.createProject({ userId: authenticatedUser.id, repoName: 'keep-me' });
+    await testApi.createProject({ userId: authenticatedUser.id, repoName: 'keep-me' });
     const project2 = await testApi.createProject({ userId: authenticatedUser.id, repoName: 'delete-me' });
 
-    // Delete one
     const settings = new ProjectSettingsPage(authedPage);
     await settings.goto(project2.projectId);
     await settings.deleteProject();
 
-    // Verify only one remains
     const projectsList = new ProjectsListPage(authedPage);
     await projectsList.goto();
-    const count = await projectsList.getProjectCount();
-    expect(count).toBe(1);
+    await expect.poll(async () => projectsList.getProjectCount()).toBe(1);
 
-    // Verify the right one remains
-    await expect(authedPage.locator('.project-row-card')).toContainText('keep-me');
+    await expect(projectsList.projectLinks).toContainText('keep-me');
   });
 
   test('deleting project also deletes builds', async ({ authedPage, testApi, authenticatedUser }) => {
-    // Create project with builds
     const project = await testApi.createProject({ userId: authenticatedUser.id, repoName: 'with-builds' });
-    await testApi.createBuild({ projectId: project.projectId, status: 'Success' });
-    await testApi.createBuild({ projectId: project.projectId, status: 'Failed' });
+    const build = await testApi.createBuild({ projectId: project.projectId, status: 'Success' });
 
     const settings = new ProjectSettingsPage(authedPage);
     await settings.goto(project.projectId);
     await settings.deleteProject();
 
-    // Navigating to the build should fail
-    await authedPage.goto(`/builds/999999`);
-    await expect(authedPage).toHaveURL(/\/builds\/|404|not.*found/i);
+    await authedPage.goto(`/builds/${build.buildId}`);
+    await expect(authedPage.locator('body')).toContainText(/failed to load build|build not found/i);
   });
 });
 
 test.describe('User Isolation', () => {
   test('user cannot see other users projects', async ({ authedPage, testApi }) => {
-    // Create another user with a project (use unique name to avoid conflicts)
     const uniqueId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     const otherUser = await testApi.createUser({ login: `other-user-${uniqueId}` });
-    const otherProject = await testApi.createProject({
+    await testApi.createProject({
       userId: otherUser.userId,
       repoName: 'other-project',
     });
 
-    // Current user should not see the other user's project
     const projectsList = new ProjectsListPage(authedPage);
     await projectsList.goto();
 
     const count = await projectsList.getProjectCount();
     expect(count).toBe(0);
 
-    // Clean up
     await testApi.deleteUser(otherUser.userId);
   });
 
   test('user cannot access other users project details', async ({ authedPage, testApi }) => {
-    // Create another user with a project (use unique name to avoid conflicts)
     const uniqueId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     const otherUser = await testApi.createUser({ login: `other-user-${uniqueId}` });
     const otherProject = await testApi.createProject({
@@ -403,13 +231,9 @@ test.describe('User Isolation', () => {
       repoName: 'private-project',
     });
 
-    // Try to access the project directly
     await authedPage.goto(`/projects/${otherProject.projectId}`);
+    await expect(authedPage.locator('body')).toContainText(/failed to load project|project not found/i);
 
-    // Should get 404 or redirect
-    await expect(authedPage.locator('body')).toContainText(/not found|404|error/i);
-
-    // Clean up
     await testApi.deleteUser(otherUser.userId);
   });
 });

@@ -131,10 +131,10 @@ test.describe('Authentication', () => {
     test('authenticated user sees nav with logout link', async ({ authedPage }) => {
       await authedPage.goto('/');
 
-      // Check that the nav contains a logout link
+      // Check that the nav contains a logout action
       const nav = authedPage.locator('nav');
       await expect(nav).toBeVisible();
-      await expect(authedPage.locator('a[href*="logout"]')).toBeVisible();
+      await expect(authedPage.getByRole('button', { name: /logout/i })).toBeVisible();
     });
   });
 
@@ -156,12 +156,10 @@ test.describe('Authentication', () => {
     test('logout redirects to login page', async ({ authedPage }) => {
       await authedPage.goto('/');
 
-      // Click logout link if visible
-      const logoutLink = authedPage.locator('a[href*="logout"]');
-      if (await logoutLink.isVisible()) {
-        await logoutLink.click();
-        await expect(authedPage).toHaveURL(/\/auth\/login/);
-      }
+      const logoutButton = authedPage.getByRole('button', { name: /logout/i });
+      await expect(logoutButton).toBeVisible();
+      await logoutButton.click();
+      await expect(authedPage).toHaveURL(/\/auth\/login/);
     });
   });
 

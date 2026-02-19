@@ -1,36 +1,24 @@
-/**
- * Dashboard Page Object Model
- *
- * Represents the main dashboard page with statistics and recent builds.
- */
-
 import { Page, Locator, expect } from '@playwright/test';
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 export class DashboardPage {
   readonly page: Page;
   readonly heading: Locator;
-  readonly newProjectButton: Locator;
-  readonly projectsStatCard: Locator;
-  readonly buildsStatCard: Locator;
-  readonly failedStatCard: Locator;
-  readonly successRateCard: Locator;
   readonly recentBuildsSection: Locator;
-  readonly recentBuildsTable: Locator;
-  readonly emptyState: Locator;
-  readonly viewAllProjectsButton: Locator;
+  readonly recentBuildLinks: Locator;
+  readonly emptyStateText: Locator;
 
   constructor(page: Page) {
     this.page = page;
-    this.heading = page.locator('h1');
-    this.newProjectButton = page.locator('a[href="/projects/create"].btn-primary').first();
-    this.projectsStatCard = page.locator('.stat-card').filter({ hasText: /projects/i });
-    this.buildsStatCard = page.locator('.stat-card').filter({ hasText: /builds today/i });
-    this.failedStatCard = page.locator('.stat-card').filter({ hasText: /failed today/i });
-    this.successRateCard = page.locator('.stat-card').filter({ hasText: /success rate/i });
-    this.recentBuildsSection = page.locator('.recent-builds');
-    this.recentBuildsTable = page.locator('.builds-table');
-    this.emptyState = page.locator('.empty-state');
-    this.viewAllProjectsButton = page.locator('a').filter({ hasText: /view all projects/i });
+    this.heading = page.getByRole('heading', { name: 'Dashboard', level: 1 });
+    this.recentBuildsSection = page.locator('div').filter({
+      has: page.getByRole('heading', { name: 'Recent Builds', level: 2 }),
+    }).first();
+    this.recentBuildLinks = page.locator('a[href^="/builds/"]');
+    this.emptyStateText = page.getByText('No builds yet.');
   }
 
   async goto() {
@@ -39,49 +27,44 @@ export class DashboardPage {
 
   async expectToBeVisible() {
     await expect(this.heading).toBeVisible();
-    await expect(this.heading).toContainText('Dashboard');
+  }
+
+  private statValue(title: string): Locator {
+    const titleRe = new RegExp(`^${escapeRegExp(title)}$`, 'i');
+    const dt = this.page.locator('dt').filter({ hasText: titleRe }).first();
+    return dt.locator('xpath=following-sibling::dd[1]');
   }
 
   async getProjectsCount(): Promise<string> {
-    const statValue = this.projectsStatCard.locator('.stat-value');
-    return (await statValue.textContent()) || '0';
+    return (await this.statValue('Total Projects').textContent())?.trim() || '0';
   }
 
   async getBuildsToday(): Promise<string> {
-    const statValue = this.buildsStatCard.locator('.stat-value');
-    return (await statValue.textContent()) || '0';
+    return (await this.statValue('Builds Today').textContent())?.trim() || '0';
   }
 
   async getFailedToday(): Promise<string> {
-    const statValue = this.failedStatCard.locator('.stat-value');
-    return (await statValue.textContent()) || '0';
-  }
-
-  async getSuccessRate(): Promise<string> {
-    const statValue = this.successRateCard.locator('.stat-value');
-    return (await statValue.textContent()) || '-';
+    return (await this.statValue('Failed Today').textContent())?.trim() || '0';
   }
 
   async expectEmptyState() {
-    await expect(this.emptyState).toBeVisible();
+    await expect(this.emptyStateText).toBeVisible();
   }
 
   async expectRecentBuildsVisible() {
-    await expect(this.recentBuildsTable).toBeVisible();
-  }
-
-  async clickNewProject() {
-    await this.newProjectButton.click();
-    // Wait for navigation (may go to create page or login depending on GitHub connection)
-    await this.page.waitForLoadState('networkidle');
-  }
-
-  async clickBuildRow(buildId: number) {
-    await this.page.locator(`tr.build-row`).filter({ hasText: new RegExp(`${buildId}`) }).click();
-    await this.page.waitForURL(`**/builds/${buildId}**`);
+    await expect(this.recentBuildsSection).toBeVisible();
+    await expect(this.recentBuildLinks.first()).toBeVisible();
   }
 
   async getRecentBuildCount(): Promise<number> {
-    return this.recentBuildsTable.locator('tbody tr').count();
+    return this.recentBuildLinks.count();
+  }
+
+  async clickFirstBuild() {
+    await this.recentBuildLinks.first().click();
+  }
+
+  getFailedTodayValueLocator(): Locator {
+    return this.statValue('Failed Today');
   }
 }

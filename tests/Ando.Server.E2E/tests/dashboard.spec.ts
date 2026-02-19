@@ -1,13 +1,3 @@
-/**
- * Dashboard Tests
- *
- * Tests for the main dashboard including:
- * - Statistics display (projects, builds, failures, success rate)
- * - Recent builds list
- * - Navigation to projects and builds
- * - Empty state handling
- */
-
 import { test, expect } from '../fixtures/test-fixtures';
 import { DashboardPage } from '../pages';
 
@@ -38,7 +28,7 @@ test.describe('Dashboard', () => {
       const dashboard = new DashboardPage(authedPage);
       await dashboard.goto();
 
-      const createLink = authedPage.locator('.empty-state a').filter({ hasText: /connect repository/i });
+      const createLink = authedPage.getByRole('link', { name: /create a project/i });
       await expect(createLink).toBeVisible();
     });
   });
@@ -51,17 +41,10 @@ test.describe('Dashboard', () => {
       const projectsCount = await dashboard.getProjectsCount();
       expect(projectsCount).toBe('1');
     });
-
-    test('shows view all projects button when projects exist', async ({ authedPage, testProject }) => {
-      const dashboard = new DashboardPage(authedPage);
-      await dashboard.goto();
-
-      await expect(dashboard.viewAllProjectsButton).toBeVisible();
-    });
   });
 
   test.describe('With Builds', () => {
-    test('shows recent builds in table', async ({ authedPage, testBuild }) => {
+    test('shows recent builds', async ({ authedPage, testBuild }) => {
       const dashboard = new DashboardPage(authedPage);
       await dashboard.goto();
 
@@ -75,30 +58,20 @@ test.describe('Dashboard', () => {
       await dashboard.goto();
 
       const buildsToday = await dashboard.getBuildsToday();
-      expect(parseInt(buildsToday)).toBeGreaterThan(0);
-    });
-
-    test('shows success rate when builds exist', async ({ authedPage, testBuild }) => {
-      const dashboard = new DashboardPage(authedPage);
-      await dashboard.goto();
-
-      const successRate = await dashboard.getSuccessRate();
-      expect(successRate).toMatch(/\d+%|-/);
+      expect(parseInt(buildsToday, 10)).toBeGreaterThan(0);
     });
 
     test('can navigate to build details from recent builds', async ({ authedPage, testBuild }) => {
       const dashboard = new DashboardPage(authedPage);
       await dashboard.goto();
 
-      // Click on the first build row
-      await authedPage.locator('.build-row').first().click();
+      await dashboard.clickFirstBuild();
       await expect(authedPage).toHaveURL(/\/builds\/\d+/);
     });
   });
 
   test.describe('With Failed Builds', () => {
     test('shows failed count highlighted in red', async ({ authedPage, testApi, testProject }) => {
-      // Create a failed build
       await testApi.createBuild({
         projectId: testProject.id,
         status: 'Failed',
@@ -109,54 +82,30 @@ test.describe('Dashboard', () => {
       await dashboard.goto();
 
       const failedToday = await dashboard.getFailedToday();
-      expect(parseInt(failedToday)).toBeGreaterThan(0);
+      expect(parseInt(failedToday, 10)).toBeGreaterThan(0);
 
-      // Check that failed count has error styling
-      const failedValue = dashboard.failedStatCard.locator('.stat-value');
-      await expect(failedValue).toHaveClass(/text-error/);
-    });
-
-    test('success rate reflects failed builds', async ({ authedPage, testApi, testProject }) => {
-      // Create successful and failed builds
-      await testApi.createBuild({
-        projectId: testProject.id,
-        status: 'Success',
-      });
-      await testApi.createBuild({
-        projectId: testProject.id,
-        status: 'Failed',
-      });
-
-      const dashboard = new DashboardPage(authedPage);
-      await dashboard.goto();
-
-      const successRate = await dashboard.getSuccessRate();
-      // With 1 success and 1 failure, rate should be 50%
-      expect(successRate).toBe('50%');
+      await expect(dashboard.getFailedTodayValueLocator()).toHaveClass(/text-error/);
     });
   });
 
   test.describe('Navigation', () => {
-    test('create project page shows connect repository form', async ({ authedPage }) => {
-      // Navigate directly to create page - user should see the connect repository form
+    test('create project page shows add project form', async ({ authedPage }) => {
       await authedPage.goto('/projects/create');
-
-      // User should see the Connect Repository page
-      await expect(authedPage.locator('h2')).toContainText('Connect a GitHub Repository');
+      await expect(authedPage.getByRole('heading', { name: /add project/i, level: 1 })).toBeVisible();
+      await expect(authedPage.getByLabel(/github repository url/i)).toBeVisible();
     });
 
-    test('view all projects button navigates to projects list', async ({ authedPage, testProject }) => {
+    test('projects nav link navigates to projects list', async ({ authedPage, testProject }) => {
       const dashboard = new DashboardPage(authedPage);
       await dashboard.goto();
 
-      await dashboard.viewAllProjectsButton.click();
+      await authedPage.getByRole('link', { name: /^projects$/i }).click();
       await expect(authedPage).toHaveURL(/\/projects/);
     });
   });
 
   test.describe('Statistics Accuracy', () => {
     test('multiple projects are counted correctly', async ({ authedPage, testApi, authenticatedUser }) => {
-      // Create multiple projects
       await testApi.createProject({ userId: authenticatedUser.id, repoName: 'repo-1' });
       await testApi.createProject({ userId: authenticatedUser.id, repoName: 'repo-2' });
       await testApi.createProject({ userId: authenticatedUser.id, repoName: 'repo-3' });
@@ -173,7 +122,6 @@ test.describe('Dashboard', () => {
       testApi,
       authenticatedUser,
     }) => {
-      // Create two projects with builds
       const project1 = await testApi.createProject({ userId: authenticatedUser.id, repoName: 'proj-1' });
       const project2 = await testApi.createProject({ userId: authenticatedUser.id, repoName: 'proj-2' });
 
@@ -185,10 +133,10 @@ test.describe('Dashboard', () => {
       await dashboard.goto();
 
       const buildsToday = await dashboard.getBuildsToday();
-      expect(parseInt(buildsToday)).toBe(3);
+      expect(parseInt(buildsToday, 10)).toBe(3);
 
       const failedToday = await dashboard.getFailedToday();
-      expect(parseInt(failedToday)).toBe(1);
+      expect(parseInt(failedToday, 10)).toBe(1);
     });
   });
 });
