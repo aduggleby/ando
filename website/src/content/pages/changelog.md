@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.117
+
+**2026-02-19**
+
+- Improve git version display in build listings
+
 ## 0.9.116
 
 **2026-02-19**
