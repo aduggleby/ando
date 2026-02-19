@@ -144,9 +144,11 @@ ando bump [patch|minor|major]
 1. Detects projects from `build.csando` (Dotnet.Project, Npm directories)
 2. Validates all versions match (prompts if mismatched)
 3. Updates all project files (.csproj, package.json)
-4. Generates changelog entry using Claude from commit history
+4. Generates changelog entry using Claude from commit history since the last tag
 5. Updates CHANGELOG.md and version badges
 6. Commits the changes
+
+**Tag resolution for changelog:** The bump command looks for a git tag matching the current version (`vX.Y.Z` or `X.Y.Z`). If no exact match is found, it falls back to the most recent git tag. This ensures changelogs are generated even when exact version tags are missing.
 
 **Supported projects:**
 - `.csproj` files via `Dotnet.Project("path")`

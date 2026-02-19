@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.111
+
+**2026-02-19**
+
+- Fall back to the most recent git tag when the exact version tag is missing during version bump
+
 ## 0.9.110
 
 **2026-02-18**

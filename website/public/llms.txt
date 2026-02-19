@@ -65,7 +65,7 @@ ANDO requires Docker to run builds in isolated containers. If Docker is not avai
 
 - `ando` or `ando run` - Run the build script in a Docker container
 - `ando commit` - Commit all changes with AI-generated message using Claude
-- `ando bump [patch|minor|major]` - Bump version across all projects in build.csando (default: patch)
+- `ando bump [patch|minor|major]` - Bump version across all projects in build.csando (default: patch). Changelog is generated from commits since the matching version tag (vX.Y.Z or X.Y.Z), falling back to the most recent tag if no exact match exists.
 - `ando docs` - Update documentation using Claude (syncs version badges in docs files, then analyzes changes and updates relevant docs)
 - `ando release` - Interactive release workflow (commit, docs, bump, push, publish). Steps are contextually enabled: commit skipped if no uncommitted changes, bump skipped if no changes since last tag, push skipped if no remote tracking.
 - `ando release --all` - Run all applicable release steps non-interactively
