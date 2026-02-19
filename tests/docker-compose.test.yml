@@ -2,7 +2,7 @@
 # Docker Compose for E2E Test Infrastructure
 #
 # Creates an isolated network where SQL Server and Ando.Server communicate
-# privately. Only the server's web port (5000) is exposed publicly.
+# privately. Only the server's web port (17110) is exposed publicly.
 #
 # Usage:
 #   docker compose -f tests/docker-compose.test.yml up -d --build
@@ -48,7 +48,7 @@ services:
       - Build__ReposPath=/data/repos
     ports:
       # Only expose the web server port (project range: 17100-17199)
-      - "17100:8080"
+      - "17110:8080"
     networks:
       - ando-e2e-network
     depends_on:

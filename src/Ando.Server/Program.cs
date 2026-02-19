@@ -817,6 +817,12 @@ if (!app.Environment.IsEnvironment("Testing"))
     // Seed roles
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
     await SeedRolesAsync(roleManager);
+
+    if (app.Environment.IsDevelopment())
+    {
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        await SeedDevelopmentDataAsync(db, userManager);
+    }
 }
 
 // =============================================================================
@@ -877,6 +883,69 @@ static async Task SeedRolesAsync(RoleManager<ApplicationRole> roleManager)
             };
             await roleManager.CreateAsync(role);
         }
+    }
+}
+
+/// <summary>
+/// Seeds a local development user and demo project for quick UI testing.
+/// </summary>
+static async Task SeedDevelopmentDataAsync(
+    AndoDbContext db,
+    UserManager<ApplicationUser> userManager)
+{
+    const string devEmail = "dev@ando.local";
+    const string devPassword = "DevPassword123";
+    const string devProjectRepo = "github/ando";
+
+    var user = await userManager.FindByEmailAsync(devEmail);
+    if (user == null)
+    {
+        user = new ApplicationUser
+        {
+            UserName = devEmail,
+            Email = devEmail,
+            DisplayName = "Development User",
+            EmailConfirmed = true,
+            EmailVerified = true,
+            CreatedAt = DateTime.UtcNow,
+            LastLoginAt = DateTime.UtcNow,
+            GitHubId = 9913377,
+            GitHubLogin = "github",
+            GitHubConnectedAt = DateTime.UtcNow
+        };
+
+        var createResult = await userManager.CreateAsync(user, devPassword);
+        if (!createResult.Succeeded)
+        {
+            throw new InvalidOperationException(
+                $"Failed to seed development user: {string.Join("; ", createResult.Errors.Select(e => e.Description))}");
+        }
+
+        await userManager.AddToRoleAsync(user, UserRoles.User);
+    }
+    else if (!await userManager.IsInRoleAsync(user, UserRoles.User))
+    {
+        await userManager.AddToRoleAsync(user, UserRoles.User);
+    }
+
+    var hasProject = await db.Projects.AnyAsync(p => p.OwnerId == user.Id && p.RepoFullName == devProjectRepo);
+    if (!hasProject)
+    {
+        db.Projects.Add(new Project
+        {
+            OwnerId = user.Id,
+            GitHubRepoId = 9913377001,
+            RepoFullName = devProjectRepo,
+            RepoUrl = "https://github.com/github/ando",
+            DefaultBranch = "main",
+            BranchFilter = "main,master",
+            InstallationId = 1,
+            TimeoutMinutes = 15,
+            NotifyOnFailure = false,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        await db.SaveChangesAsync();
     }
 }
 

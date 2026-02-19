@@ -27,7 +27,7 @@ function isInsideContainer(): boolean {
  * - Outside container: use localhost
  */
 function getBaseUrl(): string {
-  const port = 17100;
+  const port = 17110;
   const host = isInsideContainer() ? 'host.docker.internal' : 'localhost';
   return `http://${host}:${port}`;
 }

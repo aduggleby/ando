@@ -5,7 +5,7 @@
 # Includes Docker CLI for Docker-in-Docker build execution.
 #
 # Build: docker build -t ando-server -f src/Ando.Server/Dockerfile .
-# Run: docker run -p 5000:8080 -v /var/run/docker.sock:/var/run/docker.sock ando-server
+# Run: docker run -p 17100:8080 -v /var/run/docker.sock:/var/run/docker.sock ando-server
 # =============================================================================
 
 # -----------------------------------------------------------------------------

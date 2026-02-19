@@ -25,11 +25,11 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:17100',
         changeOrigin: true,
       },
       '/hubs': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:17100',
         ws: true,
         changeOrigin: true,
       },

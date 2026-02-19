@@ -23,7 +23,7 @@ function requiredEnv(name) {
 }
 
 async function main() {
-  const baseURL = process.env.ANDO_BASE_URL || 'http://localhost:17100';
+  const baseURL = process.env.ANDO_BASE_URL || 'http://localhost:17110';
   const email = requiredEnv('ANDO_EMAIL');
   const password = requiredEnv('ANDO_PASSWORD');
   const tokenName = process.env.ANDO_TOKEN_NAME || `automation-${new Date().toISOString()}`;
@@ -84,4 +84,3 @@ main().catch((err) => {
   console.error(err.message || String(err));
   process.exit(1);
 });
-

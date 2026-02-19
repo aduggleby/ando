@@ -19,9 +19,10 @@ export function Login() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const { login } = useAuth();
+  const { login, devLogin } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const showDevLogin = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   // ASP.NET cookie middleware uses PascalCase "ReturnUrl", SPA uses camelCase "returnUrl".
   const returnUrl = searchParams.get('returnUrl') || searchParams.get('ReturnUrl') || '/';
 
@@ -39,6 +40,21 @@ export function Login() {
       }
     } catch {
       setError('An error occurred. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDevLogin = async () => {
+    setError('');
+    setIsLoading(true);
+    try {
+      const result = await devLogin();
+      if (result.success) {
+        navigate(returnUrl, { replace: true });
+      } else {
+        setError(result.error || 'Development login failed');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -115,6 +131,18 @@ export function Login() {
           >
             Sign in
           </Button>
+
+          {showDevLogin && (
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              onClick={handleDevLogin}
+              isLoading={isLoading}
+            >
+              Development Login
+            </Button>
+          )}
         </form>
       </div>
     </div>

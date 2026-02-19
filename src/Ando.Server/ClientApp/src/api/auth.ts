@@ -52,6 +52,15 @@ export async function login(data: LoginRequest): Promise<LoginResponse> {
   }
 }
 
+export async function devLogin(): Promise<LoginResponse> {
+  try {
+    const response = await api.post<LoginResponse>('/auth/dev-login');
+    return response.data;
+  } catch (error) {
+    return { success: false, error: extractErrorMessage(error, 'Development login failed.'), user: null };
+  }
+}
+
 export async function logout(): Promise<void> {
   await api.post('/auth/logout');
 }

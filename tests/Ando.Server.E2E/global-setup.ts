@@ -3,7 +3,7 @@
  *
  * Uses docker-compose to start an isolated test environment with:
  * - SQL Server container (private network, no exposed ports)
- * - Ando.Server container (exposes port 17100 only)
+ * - Ando.Server container (exposes port 17110 only)
  *
  * The containers communicate over a private Docker network.
  *
@@ -54,7 +54,7 @@ function isDockerAvailable(): boolean {
  * Uses host.docker.internal when inside a container (ANDO build).
  */
 function getServerUrl(): string {
-  const port = 17100;
+  const port = 17110;
   const host = isInsideContainer() ? 'host.docker.internal' : 'localhost';
   return `http://${host}:${port}/health`;
 }

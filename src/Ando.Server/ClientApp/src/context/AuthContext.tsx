@@ -21,6 +21,7 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string, rememberMe?: boolean) => Promise<{ success: boolean; error?: string }>;
+  devLogin: () => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   register: (email: string, password: string, displayName?: string) => Promise<{ success: boolean; error?: string; isFirstUser?: boolean }>;
   refresh: () => Promise<void>;
@@ -111,6 +112,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  const devLogin = async () => {
+    const response = await authApi.devLogin();
+    if (response.success && response.user) {
+      setUser(response.user);
+      return { success: true };
+    }
+    return { success: false, error: response.error || 'Development login failed' };
+  };
+
   const register = async (email: string, password: string, displayName?: string) => {
     const response = await authApi.register({
       email,
@@ -132,6 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         isAuthenticated: !!user,
         login,
+        devLogin,
         logout,
         register,
         refresh,
