@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.115
+
+**2026-02-19**
+
+- Fix Docker build failures caused by deleted tracked files being included in the file list
+
 ## 0.9.114
 
 **2026-02-19**
