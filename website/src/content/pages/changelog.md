@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.113
+
+**2026-02-19**
+
+- Add build status links and running indicator to the project list
+
 ## 0.9.112
 
 **2026-02-19**
