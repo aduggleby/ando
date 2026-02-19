@@ -114,9 +114,9 @@ dotnet test tests/Ando.Tests/Ando.Tests.csproj
 dotnet publish src/Ando/Ando.csproj -c Release -r linux-x64 --self-contained -o dist
 ```
 
-## Ando.Server Deployment (Production)
+## Ando.Server Deployment (Self-Hosted)
 
-Production server connection details (IP/host, SSH user, and key) are documented in `AGENTS.md` to avoid hard-coding environment-specific addresses here.
+Use host-specific SSH details from your own environment. Do not hard-code IPs, SSH users, or key paths in repository docs.
 
 ### Deployment Steps
 
