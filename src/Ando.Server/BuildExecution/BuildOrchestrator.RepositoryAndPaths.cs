@@ -25,6 +25,39 @@ public partial class BuildOrchestrator
             return null;
         }
 
+        var target = string.IsNullOrWhiteSpace(commitSha) ? "HEAD" : commitSha;
+
+        // Priority 1: Exact tag that points to this commit.
+        var exactTag = await RunGitAndReadFirstLineAsync(
+            repoPath,
+            "tag",
+            "--points-at",
+            target,
+            "--sort=-version:refname");
+
+        if (!string.IsNullOrWhiteSpace(exactTag))
+        {
+            return exactTag.Length > 100 ? exactTag[..100] : exactTag;
+        }
+
+        // Priority 2: Nearest reachable tag from this commit.
+        var nearestTag = await RunGitAndReadFirstLineAsync(
+            repoPath,
+            "describe",
+            "--tags",
+            "--abbrev=0",
+            target);
+
+        if (!string.IsNullOrWhiteSpace(nearestTag))
+        {
+            return nearestTag.Length > 100 ? nearestTag[..100] : nearestTag;
+        }
+
+        return null;
+    }
+
+    private async Task<string?> RunGitAndReadFirstLineAsync(string repoPath, params string[] args)
+    {
         var startInfo = new ProcessStartInfo
         {
             FileName = "git",
@@ -35,10 +68,10 @@ public partial class BuildOrchestrator
 
         startInfo.ArgumentList.Add("-C");
         startInfo.ArgumentList.Add(repoPath);
-        startInfo.ArgumentList.Add("tag");
-        startInfo.ArgumentList.Add("--points-at");
-        startInfo.ArgumentList.Add(string.IsNullOrWhiteSpace(commitSha) ? "HEAD" : commitSha);
-        startInfo.ArgumentList.Add("--sort=-version:refname");
+        foreach (var arg in args)
+        {
+            startInfo.ArgumentList.Add(arg);
+        }
 
         try
         {
@@ -53,9 +86,9 @@ public partial class BuildOrchestrator
             {
                 var error = await process.StandardError.ReadToEndAsync();
                 _logger.LogDebug(
-                    "Failed resolving git version tag for repoPath={RepoPath} commit={CommitSha}: {Error}",
+                    "Failed running git command for repoPath={RepoPath}. args=[{Args}] error={Error}",
                     repoPath,
-                    commitSha,
+                    string.Join(' ', args),
                     error);
                 return null;
             }
@@ -70,15 +103,15 @@ public partial class BuildOrchestrator
                 return null;
             }
 
-            return tag.Length > 100 ? tag[..100] : tag;
+            return tag;
         }
         catch (Exception ex)
         {
             _logger.LogDebug(
                 ex,
-                "Error while resolving git version tag for repoPath={RepoPath} commit={CommitSha}",
+                "Error while running git command for repoPath={RepoPath}. args=[{Args}]",
                 repoPath,
-                commitSha);
+                string.Join(' ', args));
             return null;
         }
     }
