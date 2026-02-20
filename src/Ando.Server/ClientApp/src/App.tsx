@@ -7,6 +7,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryProvider } from '@/context/QueryProvider';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { ThemeProvider } from '@/context/ThemeContext';
 import { Layout } from '@/components/layout/Layout';
 import { Loading } from '@/components/ui/Loading';
 
@@ -23,10 +24,11 @@ import { ProjectList } from '@/pages/projects/ProjectList';
 import { ProjectDetails } from '@/pages/projects/ProjectDetails';
 import { ProjectCreate } from '@/pages/projects/ProjectCreate';
 import { ProjectSettings } from '@/pages/projects/ProjectSettings';
-import { ProjectStatus } from '@/pages/projects/ProjectStatus';
 import { BuildDetails } from '@/pages/builds/BuildDetails';
 import { AdminDashboard } from '@/pages/admin/AdminDashboard';
 import { UserManagement } from '@/pages/admin/UserManagement';
+import { UserDetails } from '@/pages/admin/UserDetails';
+import { ApiTokens } from '@/pages/settings/ApiTokens';
 import { NotFound } from '@/pages/NotFound';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -123,10 +125,10 @@ function AppRoutes() {
         <Route index element={<Home />} />
         <Route path="projects" element={<ProjectList />} />
         <Route path="projects/create" element={<ProjectCreate />} />
-        <Route path="projects/status" element={<ProjectStatus />} />
         <Route path="projects/:id" element={<ProjectDetails />} />
         <Route path="projects/:id/settings" element={<ProjectSettings />} />
         <Route path="builds/:id" element={<BuildDetails />} />
+        <Route path="settings/api-tokens" element={<ApiTokens />} />
 
         {/* Admin routes */}
         <Route
@@ -145,6 +147,14 @@ function AppRoutes() {
             </AdminRoute>
           }
         />
+        <Route
+          path="admin/users/:id"
+          element={
+            <AdminRoute>
+              <UserDetails />
+            </AdminRoute>
+          }
+        />
       </Route>
 
       {/* 404 */}
@@ -156,11 +166,13 @@ function AppRoutes() {
 export function App() {
   return (
     <BrowserRouter>
-      <QueryProvider>
-        <AuthProvider>
-          <AppRoutes />
-        </AuthProvider>
-      </QueryProvider>
+      <ThemeProvider>
+        <QueryProvider>
+          <AuthProvider>
+            <AppRoutes />
+          </AuthProvider>
+        </QueryProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }

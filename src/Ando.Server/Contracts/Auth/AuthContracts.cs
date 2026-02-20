@@ -58,6 +58,12 @@ public record LoginResponse(
     UserDto? User = null
 );
 
+/// <summary>
+/// Response describing whether development-login shortcuts are available.
+/// </summary>
+/// <param name="IsAvailable">True when the server is running in Development mode.</param>
+public record DevLoginAvailabilityResponse(bool IsAvailable);
+
 // =============================================================================
 // Register
 // =============================================================================

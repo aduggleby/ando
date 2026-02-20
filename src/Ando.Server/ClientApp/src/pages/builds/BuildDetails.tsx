@@ -56,15 +56,19 @@ export function BuildDetails() {
     }
 
     const connection = new HubConnectionBuilder()
-      .withUrl('/hubs/build-log')
+      .withUrl('/hubs/build-logs')
       .withAutomaticReconnect()
       .configureLogging(LogLevel.Warning)
       .build();
 
     connectionRef.current = connection;
 
-    connection.on('ReceiveLog', (logEntry: LogEntry) => {
-      setLogs((prev) => [...prev, logEntry]);
+    connection.on('LogEntry', (logEntry: LogEntry & { type?: string }) => {
+      const normalized: LogEntry = {
+        ...logEntry,
+        level: logEntry.level || logEntry.type || 'Output',
+      };
+      setLogs((prev) => [...prev, normalized]);
     });
 
     connection.on('BuildCompleted', () => {
@@ -76,7 +80,7 @@ export function BuildDetails() {
       .start()
       .then(() => {
         setIsStreaming(true);
-        return connection.invoke('JoinBuild', Number(id));
+        return connection.invoke('JoinBuildLog', Number(id));
       })
       .catch((err) => {
         console.error('SignalR connection error:', err);
@@ -133,7 +137,7 @@ export function BuildDetails() {
       <div className="flex justify-between items-start">
         <div>
           <div className="flex items-center space-x-3">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-50">Build #{build.id}</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100 tracking-tight">Build #{build.id}</h1>
             <Badge variant={getBuildStatusVariant(build.status)} size="lg">
               {build.status}
             </Badge>
@@ -179,11 +183,11 @@ export function BuildDetails() {
 
       {/* Artifacts */}
       {build.artifacts && build.artifacts.length > 0 && (
-        <div className="bg-white shadow rounded-lg dark:bg-slate-900">
-          <div className="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-slate-700">
-            <h2 className="text-lg font-medium text-gray-900 dark:text-slate-50">Artifacts</h2>
+        <div className="bg-white border border-gray-200 rounded-xl dark:bg-slate-900 dark:border-slate-800">
+          <div className="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-slate-800">
+            <h2 className="text-lg font-medium text-gray-900 dark:text-slate-100">Artifacts</h2>
           </div>
-          <div className="divide-y divide-gray-200 dark:divide-slate-700">
+          <div className="divide-y divide-gray-100 dark:divide-slate-800">
             {build.artifacts.map((artifact) => (
               <div key={artifact.id} className="px-4 py-3 flex items-center justify-between">
                 {/*
@@ -218,10 +222,10 @@ export function BuildDetails() {
       )}
 
       {/* Build Logs */}
-      <div className="bg-white shadow rounded-lg dark:bg-slate-900">
-        <div className="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-slate-700 flex justify-between items-center">
+      <div className="bg-white border border-gray-200 rounded-xl dark:bg-slate-900 dark:border-slate-800">
+        <div className="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-slate-800 flex justify-between items-center">
           <div className="flex items-center space-x-3">
-            <h2 className="text-lg font-medium text-gray-900 dark:text-slate-50">Build Logs</h2>
+            <h2 className="text-lg font-medium text-gray-900 dark:text-slate-100">Build Logs</h2>
             {isStreaming && (
               <span className="flex items-center text-sm text-success-600 dark:text-success-400">
                 <span className="w-2 h-2 bg-success-500 rounded-full mr-2 animate-pulse"></span>
@@ -245,7 +249,7 @@ export function BuildDetails() {
           style={{ maxHeight: '600px' }}
         >
           {logs.length === 0 ? (
-            <div className="text-gray-500 italic dark:text-slate-500">
+            <div className="text-gray-500 italic dark:text-slate-1000">
               {isInProgress ? 'Waiting for logs...' : 'No logs available'}
             </div>
           ) : (
@@ -254,7 +258,7 @@ export function BuildDetails() {
                 key={log.id}
                 className={`whitespace-pre-wrap ${getLogColor(log.level)}`}
               >
-                <span className="text-gray-500 select-none dark:text-slate-500">
+                <span className="text-gray-500 select-none dark:text-slate-1000">
                   [{formatTime(log.timestamp)}]
                 </span>{' '}
                 {log.message}
@@ -269,7 +273,7 @@ export function BuildDetails() {
 
 function InfoCard({ title, value }: { title: string; value: string }) {
   return (
-    <div className="bg-white shadow rounded-lg px-4 py-4 dark:bg-slate-900">
+    <div className="bg-white border border-gray-200 rounded-xl px-4 py-4 dark:bg-slate-900 dark:border-slate-800">
       <dt className="text-sm font-medium text-gray-500 dark:text-slate-400">{title}</dt>
       <dd className="mt-1 text-sm text-gray-900 dark:text-slate-100">{value}</dd>
     </div>

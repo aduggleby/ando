@@ -109,6 +109,32 @@ To skip the prompt, use `--dind` flag, add `dind: true` to `ando.config`, or set
 
 **CI Server:** When running on the ANDO CI Server, the Docker CLI is automatically installed in DIND build containers. `Docker.Install()` is not required in build scripts on the server, but is recommended for portability. The server also configures a git committer identity (`user.name`/`user.email`) in build containers automatically, so `Git.Tag()` with annotated tags works without manual setup. Default: `Ando Server <ando-server@localhost>`. Override with `GIT_COMMITTER_NAME`/`GIT_COMMITTER_EMAIL` env vars.
 
+**CI Server + External SQL setup:** If you install the CI server with `--external-sql`, create a dedicated SQL database/login first.
+
+Example (`sqlcmd`):
+```bash
+sqlcmd -S YOUR_SERVER_IP,1433 -U sa -P 'YOUR_SA_PASSWORD' -C
+```
+
+SQL:
+```sql
+CREATE DATABASE AndoServer;
+GO
+CREATE LOGIN ando WITH PASSWORD = 'YourSecurePassword123!';
+GO
+USE AndoServer;
+GO
+CREATE USER ando FOR LOGIN ando;
+GO
+ALTER ROLE db_owner ADD MEMBER ando;
+GO
+```
+
+Connection string example:
+```bash
+ConnectionStrings__DefaultConnection=Server=YOUR_SERVER_IP,1433;Database=AndoServer;User Id=ando;Password=YourSecurePassword123!;TrustServerCertificate=true;Encrypt=true
+```
+
 ### Project File Copying
 
 When ANDO starts a build, it copies project files into the Docker container. If the project is a git repository and `git` is available, ANDO uses `git ls-files` to respect `.gitignore` rules — ignored files (build outputs, node_modules, etc.) are automatically excluded. If not a git repo (or git unavailable), ANDO falls back to excluding a fixed set of directories: .git, node_modules, bin, obj, and .ando/cache.

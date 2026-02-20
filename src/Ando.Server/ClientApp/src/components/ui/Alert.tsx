@@ -1,7 +1,7 @@
 // =============================================================================
 // components/ui/Alert.tsx
 //
-// Alert component for displaying messages to the user.
+// Phosphor alert with rounded-xl and left accent border.
 // =============================================================================
 
 import { type ReactNode } from 'react';
@@ -16,19 +16,19 @@ interface AlertProps {
 
 const variantStyles = {
   success: {
-    container: 'bg-success-50 border-success-500 text-success-800 dark:bg-success-500/10 dark:text-success-400',
+    container: 'bg-success-50 border-success-500 text-success-800 dark:bg-success-500/10 dark:text-success-400 dark:border-success-500/50',
     icon: 'text-success-500 dark:text-success-400',
   },
   warning: {
-    container: 'bg-warning-50 border-warning-500 text-warning-800 dark:bg-warning-500/10 dark:text-warning-400',
+    container: 'bg-warning-50 border-warning-500 text-warning-800 dark:bg-warning-500/10 dark:text-warning-400 dark:border-warning-500/50',
     icon: 'text-warning-500 dark:text-warning-400',
   },
   error: {
-    container: 'bg-error-50 border-error-500 text-error-800 dark:bg-error-500/10 dark:text-error-400',
+    container: 'bg-error-50 border-error-500 text-error-800 dark:bg-error-500/10 dark:text-error-400 dark:border-error-500/50',
     icon: 'text-error-500 dark:text-error-400',
   },
   info: {
-    container: 'bg-primary-50 border-primary-500 text-primary-800 dark:bg-primary-500/10 dark:text-primary-400',
+    container: 'bg-primary-50 border-primary-500 text-primary-800 dark:bg-primary-500/10 dark:text-primary-400 dark:border-primary-500/50',
     icon: 'text-primary-500 dark:text-primary-400',
   },
 };
@@ -37,18 +37,18 @@ export function Alert({ variant = 'info', title, children, onClose, className = 
   const styles = variantStyles[variant];
 
   return (
-    <div className={`rounded-md border-l-4 p-4 ${styles.container} ${className}`}>
+    <div className={`rounded-xl border-l-4 p-4 ${styles.container} ${className}`}>
       <div className="flex">
         <div className="flex-1">
           {title && (
-            <h3 className="text-sm font-medium mb-1">{title}</h3>
+            <h3 className="text-sm font-semibold mb-1">{title}</h3>
           )}
           <div className="text-sm">{children}</div>
         </div>
         {onClose && (
           <button
             onClick={onClose}
-            className="ml-4 text-gray-400 hover:text-gray-500 dark:text-slate-500 dark:hover:text-slate-400"
+            className="ml-4 text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
           >
             <span className="sr-only">Close</span>
             <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">

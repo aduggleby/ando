@@ -36,7 +36,10 @@ export class DashboardPage {
   }
 
   async getProjectsCount(): Promise<string> {
-    return (await this.statValue('Total Projects').textContent())?.trim() || '0';
+    const value =
+      (await this.statValue('Projects').textContent()) ??
+      (await this.statValue('Total Projects').textContent());
+    return value?.trim() || '0';
   }
 
   async getBuildsToday(): Promise<string> {

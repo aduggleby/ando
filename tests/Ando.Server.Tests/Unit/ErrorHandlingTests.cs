@@ -10,7 +10,6 @@
 
 using Ando.Server.BuildExecution;
 using Ando.Server.Configuration;
-using Ando.Server.Controllers;
 using Ando.Server.Data;
 using Ando.Server.Hubs;
 using Ando.Server.Models;
@@ -18,14 +17,11 @@ using Ando.Server.Services;
 using Ando.Server.Tests.TestFixtures;
 using Hangfire;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace Ando.Server.Tests.Unit;
 
@@ -46,107 +42,6 @@ public class ErrorHandlingTests : IDisposable
     public void Dispose()
     {
         _db.Dispose();
-    }
-
-    // -------------------------------------------------------------------------
-    // Webhook Error Handling Tests
-    // -------------------------------------------------------------------------
-
-    [Fact]
-    public async Task Webhook_WhenBuildServiceThrows_ExceptionPropagates()
-    {
-        // Arrange
-        var buildService = new MockBuildService
-        {
-            ThrowOnQueueBuild = new InvalidOperationException("Database connection failed")
-        };
-
-        var controller = CreateWebhooksController(buildService);
-        var project = await CreateTestProjectAsync();
-        var payload = CreatePushPayload(project.GitHubRepoId, project.RepoFullName, "main");
-        SetupRequest(controller, payload, "push");
-
-        // Act & Assert - exception propagates (would be caught by middleware in production)
-        await Should.ThrowAsync<InvalidOperationException>(async () =>
-            await controller.GitHub());
-    }
-
-    [Fact]
-    public async Task Webhook_WhenBuildServiceThrows_NoBuildQueued()
-    {
-        // Arrange
-        var buildService = new MockBuildService
-        {
-            ThrowOnQueueBuild = new Exception("Service unavailable")
-        };
-
-        var controller = CreateWebhooksController(buildService);
-        var project = await CreateTestProjectAsync();
-        var payload = CreatePushPayload(project.GitHubRepoId, project.RepoFullName, "main");
-        SetupRequest(controller, payload, "push");
-
-        // Act
-        try { await controller.GitHub(); } catch { }
-
-        // Assert - no build was queued
-        buildService.QueueBuildCalls.ShouldBeEmpty();
-    }
-
-    [Fact]
-    public async Task Webhook_WithEmptyBody_ReturnsUnauthorized()
-    {
-        // Arrange - empty body means signature can't match
-        var buildService = new MockBuildService();
-        var controller = CreateWebhooksController(buildService);
-        SetupRequest(controller, "", "push");
-
-        // Act
-        var result = await controller.GitHub();
-
-        // Assert - signature validation fails first
-        result.ShouldBeOfType<UnauthorizedObjectResult>();
-        buildService.QueueBuildCalls.ShouldBeEmpty();
-    }
-
-    [Fact]
-    public async Task Webhook_WithInvalidSignature_ReturnsUnauthorized()
-    {
-        // Arrange
-        var buildService = new MockBuildService();
-        var controller = CreateWebhooksController(buildService);
-
-        // Set up with invalid signature
-        var context = new DefaultHttpContext();
-        var payload = "{\"test\": true}";
-        var bodyBytes = Encoding.UTF8.GetBytes(payload);
-        context.Request.Body = new MemoryStream(bodyBytes);
-        context.Request.ContentLength = bodyBytes.Length;
-        context.Request.Headers["X-GitHub-Event"] = "push";
-        context.Request.Headers["X-Hub-Signature-256"] = "sha256=invalid";
-        controller.ControllerContext = new ControllerContext { HttpContext = context };
-
-        // Act
-        var result = await controller.GitHub();
-
-        // Assert
-        result.ShouldBeOfType<UnauthorizedObjectResult>();
-    }
-
-    [Fact]
-    public async Task Webhook_WithUnknownRepository_ReturnsOkButSkips()
-    {
-        // Arrange
-        var buildService = new MockBuildService();
-        var controller = CreateWebhooksController(buildService);
-        var payload = CreatePushPayload(999999, "unknown/repo", "main");
-        SetupRequest(controller, payload, "push");
-
-        // Act
-        var result = await controller.GitHub();
-
-        // Assert - OK response but no build queued
-        result.ShouldBeOfType<OkObjectResult>();
-        buildService.QueueBuildCalls.ShouldBeEmpty();
     }
 
     // -------------------------------------------------------------------------
@@ -464,24 +359,6 @@ public class ErrorHandlingTests : IDisposable
     // Helpers
     // -------------------------------------------------------------------------
 
-    private WebhooksController CreateWebhooksController(MockBuildService buildService)
-    {
-        var mockProjectService = new Mock<IProjectService>();
-        var controller = new WebhooksController(
-            _db,
-            Options.Create(_gitHubSettings),
-            buildService,
-            mockProjectService.Object,
-            NullLogger<WebhooksController>.Instance);
-
-        controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = new DefaultHttpContext()
-        };
-
-        return controller;
-    }
-
     private async Task<ApplicationUser> CreateTestUserAsync(string login = "testuser")
     {
         var user = new ApplicationUser
@@ -532,52 +409,6 @@ public class ErrorHandlingTests : IDisposable
         _db.Builds.Add(build);
         await _db.SaveChangesAsync();
         return build;
-    }
-
-    private string CreatePushPayload(long repoId, string repoFullName, string branch)
-    {
-        return $$"""
-        {
-            "ref": "refs/heads/{{branch}}",
-            "after": "abc123def456789012345678901234567890abcd",
-            "repository": {
-                "id": {{repoId}},
-                "full_name": "{{repoFullName}}"
-            },
-            "head_commit": {
-                "id": "abc123def456789012345678901234567890abcd",
-                "message": "Test commit",
-                "author": {
-                    "name": "Test Author"
-                }
-            },
-            "installation": {
-                "id": 111
-            }
-        }
-        """;
-    }
-
-    private void SetupRequest(WebhooksController controller, string payload, string eventType)
-    {
-        var context = new DefaultHttpContext();
-
-        var bodyBytes = Encoding.UTF8.GetBytes(payload);
-        context.Request.Body = new MemoryStream(bodyBytes);
-        context.Request.ContentLength = bodyBytes.Length;
-        context.Request.ContentType = "application/json";
-
-        context.Request.Headers["X-GitHub-Event"] = eventType;
-
-        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(_gitHubSettings.WebhookSecret));
-        var hash = hmac.ComputeHash(bodyBytes);
-        var signature = "sha256=" + Convert.ToHexString(hash).ToLowerInvariant();
-        context.Request.Headers["X-Hub-Signature-256"] = signature;
-
-        controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = context
-        };
     }
 
     private static IHubContext<BuildLogHub> CreateNoOpHubContext()

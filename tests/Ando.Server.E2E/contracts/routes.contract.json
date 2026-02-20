@@ -1,0 +1,53 @@
+{
+  "version": "2026-02-19",
+  "spaRoutes": [
+    { "path": "/", "auth": "required" },
+    { "path": "/auth/login", "auth": "public_only" },
+    { "path": "/auth/register", "auth": "public_only" },
+    { "path": "/auth/forgot-password", "auth": "public" },
+    { "path": "/auth/reset-password", "auth": "public" },
+    { "path": "/auth/verify-email", "auth": "public" },
+    { "path": "/auth/register-success", "auth": "public" },
+    { "path": "/auth/access-denied", "auth": "public" },
+    { "path": "/projects", "auth": "required" },
+    { "path": "/projects/create", "auth": "required" },
+    { "path": "/projects/status", "auth": "required" },
+    { "path": "/projects/:id", "auth": "required", "fixture": "project" },
+    { "path": "/projects/:id/settings", "auth": "required", "fixture": "project" },
+    { "path": "/builds/:id", "auth": "required", "fixture": "build" },
+    { "path": "/settings/api-tokens", "auth": "required" },
+    { "path": "/admin", "auth": "admin" },
+    { "path": "/admin/users", "auth": "admin" },
+    { "path": "/admin/users/:id", "auth": "admin", "fixture": "user" }
+  ],
+  "controllerRoutes": [
+    { "method": "GET", "path": "/health" },
+    { "method": "GET", "path": "/health/docker" },
+    { "method": "GET", "path": "/health/github" },
+    { "method": "GET", "path": "/error" },
+    { "method": "GET", "path": "/session" },
+    { "method": "POST", "path": "/session" },
+    { "method": "POST", "path": "/webhooks/github" }
+  ],
+  "apiRoutes": [
+    "GET /api/dashboard",
+    "GET /api/app/version",
+    "GET /api/projects",
+    "GET /api/projects/status",
+    "GET /api/projects/{id}",
+    "GET /api/projects/{id}/settings",
+    "POST /api/projects/{id}/build",
+    "GET /api/builds/{id}",
+    "GET /api/builds/{id}/logs",
+    "POST /api/builds/{id}/cancel",
+    "POST /api/builds/{id}/retry",
+    "GET /api/auth/me",
+    "GET /api/auth/tokens",
+    "POST /api/auth/tokens",
+    "DELETE /api/auth/tokens/{id}",
+    "GET /api/admin/dashboard",
+    "GET /api/admin/users",
+    "GET /api/admin/users/{id}",
+    "GET /api/admin/projects"
+  ]
+}

@@ -49,8 +49,8 @@ export function ProjectCreate() {
     <div className="max-w-2xl mx-auto">
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-50">Add Project</h1>
-          <p className="mt-1 text-gray-500 dark:text-slate-400">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100 tracking-tight">Add Project</h1>
+          <p className="mt-1 text-sm text-gray-400 dark:text-slate-500">
             Connect a GitHub repository to start building.
           </p>
         </div>
@@ -59,7 +59,7 @@ export function ProjectCreate() {
           <Alert variant="error">{error}</Alert>
         )}
 
-        <div className="bg-white shadow rounded-lg p-6 dark:bg-slate-900">
+        <div className="bg-white border border-gray-200 rounded-xl p-6 dark:bg-slate-900 dark:border-slate-800">
           <form onSubmit={handleSubmit} className="space-y-6">
             <Input
               label="GitHub Repository URL"
@@ -71,16 +71,16 @@ export function ProjectCreate() {
               required
             />
 
-            <div className="bg-gray-50 rounded-lg p-4 dark:bg-slate-800">
+            <div className="bg-gray-50 border border-gray-100 rounded-lg p-4 dark:bg-slate-800 dark:border-slate-700">
               <h3 className="text-sm font-medium text-gray-900 mb-2 dark:text-slate-100">Requirements</h3>
-              <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside dark:text-slate-400">
+              <ul className="text-xs text-gray-500 space-y-1.5 list-disc list-inside dark:text-slate-400">
                 <li>Repository must be accessible by the Ando GitHub App</li>
-                <li>Repository must contain a <code className="bg-gray-200 px-1 rounded dark:bg-slate-700">build.csando</code> file</li>
+                <li>Repository must contain a <code className="bg-gray-200 px-1 rounded text-[11px] dark:bg-slate-700">build.csando</code> file</li>
                 <li>Repository must have webhooks enabled</li>
               </ul>
             </div>
 
-            <div className="flex justify-end space-x-3">
+            <div className="flex justify-end gap-2">
               <Button
                 type="button"
                 variant="secondary"

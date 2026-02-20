@@ -6,7 +6,7 @@ Ando.Server is a cloud-native CI/CD platform built on ASP.NET Core that orchestr
 
 ## Core Architectural Characteristics
 
-1. **API-First Architecture** - FastEndpoints for app APIs with a small set of attribute-routed compatibility/infrastructure controllers
+1. **Endpoint-First Architecture** - FastEndpoints for app APIs and non-API compatibility/infrastructure routes
 2. **Asynchronous Background Jobs** - Hangfire-based build orchestration with worker pool
 3. **Real-time Communication** - SignalR for streaming build logs to clients
 4. **Containerized Build Execution** - Docker-based isolated build environments
@@ -82,17 +82,15 @@ Ando.Server is a cloud-native CI/CD platform built on ASP.NET Core that orchestr
 src/Ando.Server/
 ├── Program.cs              # Application bootstrap and configuration
 ├── AndoDbContext.cs        # Entity Framework database context
-├── Controllers/            # Attribute-routed controllers
-│   ├── WebhooksController.cs   # GitHub webhook receiver
-│   ├── SessionController.cs    # /session compatibility redirect
-│   ├── HomeController.cs       # Health + diagnostics endpoints
-│   └── TestController.cs       # Test-only endpoints (Testing/E2E)
 ├── Endpoints/              # FastEndpoints REST API
 │   ├── Auth/               # Authentication endpoints
 │   ├── Builds/             # Build management endpoints
 │   ├── Projects/           # Project CRUD endpoints
 │   ├── Admin/              # Admin-only endpoints
-│   └── Home/               # Health endpoints
+│   ├── Home/               # API home/version endpoints
+│   ├── Infrastructure/     # Non-API compatibility endpoints (/health, /session, /error)
+│   ├── Webhooks/           # GitHub webhook receiver
+│   └── Test/               # Test-only endpoints (Testing/E2E)
 ├── Contracts/              # DTOs for API requests/responses
 │   ├── Auth/               # Auth contracts
 │   ├── Builds/             # Build contracts
@@ -207,8 +205,9 @@ Program.cs bootstraps the application in 8 distinct phases:
 - "RequireAdmin" authorization policy
 ```
 
-#### Phase 8: Controller + FastEndpoints Routing
+#### Phase 8: FastEndpoints Routing
 - FastEndpoints with `/api` route prefix
+- Route-prefix override for non-API compatibility/infrastructure routes (`/health*`, `/session`, `/error`, `/webhooks/*`)
 - Swagger documentation in dev/test environments
 - SPA fallback to `app/index.html`
 
@@ -228,21 +227,20 @@ Program.cs bootstraps the application in 8 distinct phases:
 12. Swagger (dev/test)
 13. SignalR hub mapping
 14. Hangfire dashboard (dev)
-15. Controller mapping (`MapControllers`)
-16. SPA fallback
+15. SPA fallback
 
 ---
 
-### 2. Controllers & API Endpoints
+### 2. Endpoint Surface
 
-#### Attribute-Routed Controllers
+#### Non-API Compatibility Endpoints (FastEndpoints with route prefix override)
 
-| Controller | Purpose | Authentication |
-|------------|---------|----------------|
-| `WebhooksController` | GitHub webhook receiver | AllowAnonymous (signature validation) |
-| `SessionController` | `/session` compatibility redirect to SPA route | AllowAnonymous |
-| `HomeController` | `/health`, `/health/docker`, `/health/github`, `/error` | AllowAnonymous |
-| `TestController` | Test-only endpoints under `/api/test` | Testing/E2E only |
+| Endpoint | Purpose | Authentication |
+|----------|---------|----------------|
+| `/webhooks/github` | GitHub webhook receiver | AllowAnonymous (signature validation) |
+| `/session` (GET/POST) | GitHub App setup compatibility redirect | AllowAnonymous |
+| `/health`, `/health/docker`, `/health/github`, `/error` | Health and diagnostics | AllowAnonymous |
+| `/api/test/*` | Test-only routes for E2E tooling | Testing/E2E only + API key |
 
 #### FastEndpoints (REST API)
 

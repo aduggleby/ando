@@ -97,7 +97,7 @@ export function UserManagement() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-50">User Management</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">User Management</h1>
           <p className="text-gray-500 dark:text-slate-400">{users.length} users</p>
         </div>
         <Link to="/admin">
@@ -108,8 +108,8 @@ export function UserManagement() {
       {error && <Alert variant="error">{error}</Alert>}
       {success && <Alert variant="success">{success}</Alert>}
 
-      <div className="bg-white shadow rounded-lg overflow-hidden dark:bg-slate-900">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden dark:bg-slate-900 dark:border-slate-800">
+        <table className="min-w-full divide-y divide-gray-100 dark:divide-slate-800">
           <thead className="bg-gray-50 dark:bg-slate-800">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-slate-400">
@@ -173,6 +173,11 @@ export function UserManagement() {
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                     {!isCurrentUser && (
                       <>
+                        <Link to={`/admin/users/${user.id}`}>
+                          <Button variant="ghost" size="sm">
+                            View
+                          </Button>
+                        </Link>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -229,7 +234,7 @@ export function UserManagement() {
                       </>
                     )}
                     {isCurrentUser && (
-                      <span className="text-gray-400 italic dark:text-slate-500">Current user</span>
+                      <span className="text-gray-400 italic dark:text-slate-1000">Current user</span>
                     )}
                   </td>
                 </tr>

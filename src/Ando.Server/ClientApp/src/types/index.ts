@@ -12,6 +12,7 @@ export interface UserDto {
   emailVerified: boolean;
   isAdmin: boolean;
   avatarUrl: string | null;
+  impersonating?: boolean;
 }
 
 export interface LoginRequest {
@@ -24,6 +25,10 @@ export interface LoginResponse {
   success: boolean;
   error: string | null;
   user: UserDto | null;
+}
+
+export interface DevLoginAvailabilityResponse {
+  isAvailable: boolean;
 }
 
 export interface RegisterRequest {
@@ -297,6 +302,35 @@ export interface UserProjectDto {
   description: string | null;
   createdAt: string;
   buildCount: number;
+}
+
+export interface GetUserDetailsResponse {
+  user: UserDetailsDto;
+}
+
+// API token types
+export interface ApiTokenDto {
+  id: number;
+  name: string;
+  prefix: string;
+  createdAtUtc: string;
+  lastUsedAtUtc: string | null;
+  revokedAtUtc: string | null;
+}
+
+export interface CreateApiTokenResponse {
+  success: boolean;
+  token: ApiTokenDto | null;
+  value: string | null;
+  error: string | null;
+}
+
+export interface ListApiTokensResponse {
+  tokens: ApiTokenDto[];
+}
+
+export interface RevokeApiTokenResponse {
+  success: boolean;
 }
 
 // Admin project type

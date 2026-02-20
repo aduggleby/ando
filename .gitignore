@@ -4,6 +4,7 @@ obj/
 dist/
 artifacts/
 out/
+.dev-data/
 
 # IDE
 .vs/

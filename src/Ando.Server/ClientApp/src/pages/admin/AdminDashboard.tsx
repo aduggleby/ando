@@ -40,7 +40,7 @@ export function AdminDashboard() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-50">Admin Dashboard</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Admin Dashboard</h1>
           <p className="text-gray-500 dark:text-slate-400">System overview and management</p>
         </div>
         {user?.impersonating && (
@@ -66,9 +66,9 @@ export function AdminDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Link
           to="/admin/users"
-          className="bg-white shadow rounded-lg p-6 hover:shadow-md transition-shadow dark:bg-slate-900 dark:hover:shadow-slate-800/50"
+          className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-md transition-shadow dark:bg-slate-900 dark:hover:shadow-slate-800/50"
         >
-          <h2 className="text-lg font-medium text-gray-900 dark:text-slate-50">User Management</h2>
+          <h2 className="text-lg font-medium text-gray-900 dark:text-slate-100">User Management</h2>
           <p className="text-gray-500 mt-1 dark:text-slate-400">
             Manage users, roles, and account status
           </p>
@@ -77,8 +77,8 @@ export function AdminDashboard() {
           </div>
         </Link>
 
-        <div className="bg-white shadow rounded-lg p-6 dark:bg-slate-900">
-          <h2 className="text-lg font-medium text-gray-900 dark:text-slate-50">System Health</h2>
+        <div className="bg-white border border-gray-200 rounded-xl p-6 dark:bg-slate-900 dark:border-slate-800">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-slate-100">System Health</h2>
           <div className="mt-4 space-y-2">
             <HealthItem label="Database" status="healthy" />
             <HealthItem label="Background Jobs" status="healthy" />
@@ -88,12 +88,12 @@ export function AdminDashboard() {
       </div>
 
       {/* All Projects */}
-      <div className="bg-white shadow rounded-lg dark:bg-slate-900">
-        <div className="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-slate-700">
-          <h2 className="text-lg font-medium text-gray-900 dark:text-slate-50">All Projects</h2>
+      <div className="bg-white border border-gray-200 rounded-xl dark:bg-slate-900 dark:border-slate-800">
+        <div className="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-slate-800">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-slate-100">All Projects</h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
+          <table className="min-w-full divide-y divide-gray-100 dark:divide-slate-800">
             <thead className="bg-gray-50 dark:bg-slate-800">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-slate-400">
@@ -143,7 +143,7 @@ export function AdminDashboard() {
                           {project.lastBuildStatus}
                         </Badge>
                       ) : (
-                        <span className="text-gray-400 dark:text-slate-500">-</span>
+                        <span className="text-gray-400 dark:text-slate-1000">-</span>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-slate-400">
@@ -164,9 +164,9 @@ export function AdminDashboard() {
 
 function StatCard({ title, value, className = '' }: { title: string; value: number; className?: string }) {
   return (
-    <div className="bg-white shadow rounded-lg px-4 py-5 sm:p-6 dark:bg-slate-900">
+    <div className="bg-white border border-gray-200 rounded-xl px-4 py-5 sm:p-6 dark:bg-slate-900 dark:border-slate-800">
       <dt className="text-sm font-medium text-gray-500 truncate dark:text-slate-400">{title}</dt>
-      <dd className={`mt-1 text-3xl font-semibold text-gray-900 dark:text-slate-50 ${className}`}>{value}</dd>
+      <dd className={`mt-1 text-3xl font-semibold text-gray-900 dark:text-slate-100 ${className}`}>{value}</dd>
     </div>
   );
 }

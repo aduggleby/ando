@@ -1,7 +1,7 @@
 // =============================================================================
 // components/ui/Badge.tsx
 //
-// Badge component for status indicators.
+// Phosphor badge with dot indicator and pill shape.
 // =============================================================================
 
 import type { ReactNode } from 'react';
@@ -14,30 +14,40 @@ interface BadgeProps {
 }
 
 const variantStyles = {
-  success: 'border border-success-200 bg-success-100 text-success-800 dark:border-success-500/30 dark:bg-success-500/20 dark:text-success-300',
-  warning: 'border border-warning-200 bg-warning-100 text-warning-800 dark:border-warning-500/30 dark:bg-warning-500/20 dark:text-warning-300',
-  error: 'border border-error-200 bg-error-100 text-error-800 dark:border-error-500/30 dark:bg-error-500/20 dark:text-error-300',
-  info: 'border border-primary-200 bg-primary-100 text-primary-800 dark:border-primary-500/30 dark:bg-primary-500/20 dark:text-primary-300',
-  primary: 'border border-primary-200 bg-primary-100 text-primary-800 dark:border-primary-500/30 dark:bg-primary-500/20 dark:text-primary-300',
-  default: 'border border-gray-200 bg-gray-100 text-gray-800 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200',
+  success: 'text-success-600 bg-success-50 dark:text-success-400 dark:bg-success-500/10',
+  warning: 'text-warning-600 bg-warning-50 dark:text-warning-500 dark:bg-warning-500/10',
+  error: 'text-error-600 bg-error-50 dark:text-error-400 dark:bg-error-500/10',
+  info: 'text-primary-600 bg-primary-50 dark:text-primary-400 dark:bg-primary-500/10',
+  primary: 'text-primary-600 bg-primary-50 dark:text-primary-400 dark:bg-primary-500/10',
+  default: 'text-gray-600 bg-gray-100 dark:text-slate-300 dark:bg-slate-700',
+};
+
+const dotStyles = {
+  success: 'bg-success-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]',
+  warning: 'bg-warning-500 shadow-[0_0_6px_rgba(245,158,11,0.5)]',
+  error: 'bg-error-500 shadow-[0_0_6px_rgba(244,63,94,0.5)]',
+  info: 'bg-primary-500 shadow-[0_0_6px_rgba(6,182,212,0.5)]',
+  primary: 'bg-primary-500 shadow-[0_0_6px_rgba(6,182,212,0.5)]',
+  default: 'bg-gray-400 dark:bg-slate-400',
 };
 
 const sizeStyles = {
-  sm: 'px-2 py-0.5 text-xs',
-  md: 'px-2.5 py-0.5 text-xs',
-  lg: 'px-3 py-1 text-sm',
+  sm: 'px-2 py-0.5 text-[10px]',
+  md: 'px-2.5 py-0.5 text-[11px]',
+  lg: 'px-3 py-1 text-xs',
 };
 
 export function Badge({ variant = 'default', size = 'md', children, className = '' }: BadgeProps) {
   return (
     <span
       className={`
-        inline-flex items-center rounded-full font-medium
+        inline-flex items-center gap-1.5 rounded-full font-semibold
         ${variantStyles[variant]}
         ${sizeStyles[size]}
         ${className}
       `}
     >
+      <span className={`w-1.5 h-1.5 rounded-full ${dotStyles[variant]}`} />
       {children}
     </span>
   );

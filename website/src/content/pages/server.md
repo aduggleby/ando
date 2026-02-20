@@ -35,6 +35,47 @@ curl -fsSL https://andobuild.com/server-install.sh | bash -s user@your-server-ip
 ./server-install.sh --external-sql user@your-server-ip
 ```
 
+### Create SQL Database and User (External SQL)
+
+If you install with `--external-sql`, create a dedicated database and login first.
+
+Connect to your SQL Server using any SQL client (Azure Data Studio, SSMS, `sqlcmd`, etc.):
+
+```bash
+# Example using sqlcmd
+sqlcmd -S YOUR_SERVER_IP,1433 -U sa -P 'YOUR_SA_PASSWORD' -C
+```
+
+Run these SQL commands to create the database and dedicated login for ANDO:
+
+```sql
+-- Create database
+CREATE DATABASE AndoServer;
+GO
+
+-- Create login with a strong password
+CREATE LOGIN ando WITH PASSWORD = 'YourSecurePassword123!';
+GO
+
+-- Create user and grant permissions
+USE AndoServer;
+GO
+
+CREATE USER ando FOR LOGIN ando;
+GO
+
+ALTER ROLE db_owner ADD MEMBER ando;
+GO
+```
+
+Type `exit` to quit `sqlcmd`.
+
+Then set your server connection string in `/opt/ando/config/.env`:
+
+```bash
+ConnectionStrings__DefaultConnection=Server=YOUR_SERVER_IP,1433;Database=AndoServer;User Id=ando;Password=YourSecurePassword123!;TrustServerCertificate=true;Encrypt=true
+```
+
 ### TrueNAS SCALE
 
 For TrueNAS SCALE installations, see the dedicated guide: **[TrueNAS Installation](/server-truenas)**

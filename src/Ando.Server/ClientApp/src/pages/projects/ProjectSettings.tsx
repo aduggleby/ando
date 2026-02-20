@@ -124,8 +124,8 @@ export function ProjectSettings() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-50">Project Settings</h1>
-          <p className="text-gray-500 dark:text-slate-400">{settings.repoFullName}</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100 tracking-tight">Project Settings</h1>
+          <p className="text-sm text-gray-400 dark:text-slate-1000">{settings.repoFullName}</p>
         </div>
         <Link to={`/projects/${id}`}>
           <Button variant="secondary">Back to Project</Button>
@@ -136,9 +136,9 @@ export function ProjectSettings() {
       {success && <Alert variant="success">{success}</Alert>}
 
       {/* Required Secrets */}
-      <div className="bg-white shadow rounded-lg dark:bg-slate-900">
-        <div className="px-4 py-5 sm:px-6 border-b border-gray-200 flex justify-between items-center dark:border-slate-700">
-          <h2 className="text-lg font-medium text-gray-900 dark:text-slate-50">Required Secrets</h2>
+      <div className="bg-white border border-gray-200 rounded-xl dark:bg-slate-900 dark:border-slate-800">
+        <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center dark:border-slate-800">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-slate-100">Required Secrets</h2>
           <Button
             variant="ghost"
             size="sm"
@@ -182,8 +182,8 @@ export function ProjectSettings() {
       </div>
 
       {/* Add Secret */}
-      <div className="bg-white shadow rounded-lg p-6 dark:bg-slate-900">
-        <h2 className="text-lg font-medium text-gray-900 mb-4 dark:text-slate-50">Add Secret</h2>
+      <div className="bg-white border border-gray-200 rounded-xl p-6 dark:bg-slate-900">
+        <h2 className="text-lg font-medium text-gray-900 mb-4 dark:text-slate-100">Add Secret</h2>
         <form onSubmit={handleAddSecret} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
@@ -216,7 +216,7 @@ export function ProjectSettings() {
 
         {/* Bulk Import */}
         {showBulkImport && (
-          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-slate-700">
+          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-slate-800">
             <h3 className="text-sm font-medium text-gray-900 mb-2 dark:text-slate-100">Bulk Import</h3>
             <p className="text-sm text-gray-500 mb-4 dark:text-slate-400">
               Paste environment variables in KEY=value format, one per line.
@@ -240,9 +240,9 @@ export function ProjectSettings() {
       </div>
 
       {/* All Secrets */}
-      <div className="bg-white shadow rounded-lg dark:bg-slate-900">
-        <div className="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-slate-700">
-          <h2 className="text-lg font-medium text-gray-900 dark:text-slate-50">All Secrets</h2>
+      <div className="bg-white border border-gray-200 rounded-xl dark:bg-slate-900 dark:border-slate-800">
+        <div className="px-5 py-4 border-b border-gray-100 dark:border-slate-800">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-slate-100">All Secrets</h2>
         </div>
         <div className="divide-y divide-gray-200 dark:divide-slate-700">
           {allSecrets.length === 0 ? (
@@ -276,7 +276,7 @@ export function ProjectSettings() {
       </div>
 
       {/* Danger Zone */}
-      <div className="bg-white shadow rounded-lg border border-error-200 dark:bg-slate-900 dark:border-error-500/30">
+      <div className="bg-white border border-gray-200 rounded-xl border border-error-200 dark:bg-slate-900 dark:border-error-500/30">
         <div className="px-4 py-5 sm:px-6 border-b border-error-200 dark:border-error-500/30">
           <h2 className="text-lg font-medium text-error-600 dark:text-error-400">Danger Zone</h2>
         </div>

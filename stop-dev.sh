@@ -21,9 +21,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="$SCRIPT_DIR/docker-compose.yml"
 
 if [ "$DELETE_CONTAINERS" = true ]; then
-  docker compose -f "$COMPOSE_FILE" down --remove-orphans
+  docker compose -f "$COMPOSE_FILE" down --remove-orphans || true
 else
-  docker compose -f "$COMPOSE_FILE" stop
+  docker compose -f "$COMPOSE_FILE" stop || true
 fi
 
 if command -v tmux >/dev/null 2>&1 && tmux has-session -t "$SESSION_NAME" 2>/dev/null; then

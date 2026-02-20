@@ -16,6 +16,10 @@ import type {
   RegisterRequest,
   RegisterResponse,
   GetMeResponse,
+  ListApiTokensResponse,
+  CreateApiTokenResponse,
+  RevokeApiTokenResponse,
+  DevLoginAvailabilityResponse,
 } from '@/types';
 
 // Extracts a user-friendly error message from an axios error response.
@@ -58,6 +62,15 @@ export async function devLogin(): Promise<LoginResponse> {
     return response.data;
   } catch (error) {
     return { success: false, error: extractErrorMessage(error, 'Development login failed.'), user: null };
+  }
+}
+
+export async function getDevLoginAvailability(): Promise<boolean> {
+  try {
+    const response = await api.get<DevLoginAvailabilityResponse>('/auth/dev-login-availability');
+    return response.data.isAvailable;
+  } catch {
+    return false;
   }
 }
 
@@ -122,4 +135,28 @@ export async function resendVerification(): Promise<{ success: boolean; error?: 
   } catch (error) {
     return { success: false, error: extractErrorMessage(error, 'Failed to resend verification email. Please try again.') };
   }
+}
+
+export async function listApiTokens(): Promise<ListApiTokensResponse> {
+  const response = await api.get<ListApiTokensResponse>('/auth/tokens');
+  return response.data;
+}
+
+export async function createApiToken(name: string): Promise<CreateApiTokenResponse> {
+  try {
+    const response = await api.post<CreateApiTokenResponse>('/auth/tokens', { name });
+    return response.data;
+  } catch (error) {
+    return {
+      success: false,
+      token: null,
+      value: null,
+      error: extractErrorMessage(error, 'Failed to create API token. Please try again.'),
+    };
+  }
+}
+
+export async function revokeApiToken(id: number): Promise<RevokeApiTokenResponse> {
+  const response = await api.delete<RevokeApiTokenResponse>(`/auth/tokens/${id}`);
+  return response.data;
 }

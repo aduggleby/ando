@@ -32,14 +32,10 @@ export function ProjectList() {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
     });
 
-    connection.start().catch(() => {
-      // Non-fatal: project list still works via regular query fetch.
-    });
+    connection.start().catch(() => {});
 
     return () => {
-      connection.stop().catch(() => {
-        // Ignore shutdown errors
-      });
+      connection.stop().catch(() => {});
     };
   }, [queryClient]);
 
@@ -56,46 +52,52 @@ export function ProjectList() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-50">Projects</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100 tracking-tight">Projects</h1>
         <Link to="/projects/create">
           <Button>Add Project</Button>
         </Link>
       </div>
 
       {projects.length === 0 ? (
-        <div className="bg-white shadow rounded-lg px-4 py-12 text-center dark:bg-slate-900">
-          <p className="text-gray-500 mb-4 dark:text-slate-400">No projects yet.</p>
+        <div className="bg-white border border-gray-200 rounded-xl px-4 py-12 text-center dark:bg-slate-900 dark:border-slate-800">
+          <p className="text-gray-400 dark:text-slate-500 mb-4">No projects yet.</p>
           <Link to="/projects/create">
             <Button>Create your first project</Button>
           </Link>
         </div>
       ) : (
-        <div className="bg-white shadow overflow-hidden rounded-lg dark:bg-slate-900">
-          <ul className="divide-y divide-gray-200 dark:divide-slate-700">
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden dark:bg-slate-900 dark:border-slate-800">
+          <ul className="divide-y divide-gray-100 dark:divide-slate-800/50">
             {projects.map((project) => {
               const status = getProjectStatusBadge(project);
               return (
                 <li key={project.id}>
                   <Link
                     to={`/projects/${project.id}`}
-                    className="block hover:bg-gray-50 dark:hover:bg-slate-800"
+                    className="block hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors"
                   >
-                    <div className="px-4 py-4 sm:px-6">
+                    <div className="px-5 py-4">
                       <div className="flex items-center justify-between">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium text-primary-600 truncate dark:text-primary-400">
+                          <div className="flex items-center gap-2.5">
+                            <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">
                               {project.repoFullName}
                             </p>
                             <Badge variant={status.variant}>{status.label}</Badge>
                           </div>
-                          <p className="text-sm text-gray-500 dark:text-slate-400">
+                          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
                             {project.totalBuilds} builds
                             {project.lastBuildAt && (
                               <> · Last build {formatDate(project.lastBuildAt)}</>
                             )}
-                            {' · '}
-                            Git Version Tag: <code className="font-mono">{project.lastBuildGitVersionTag || '-'}</code>
+                            {project.lastBuildGitVersionTag && (
+                              <>
+                                {' · '}
+                                <span className="font-mono text-primary-600 dark:text-primary-400">
+                                  {project.lastBuildGitVersionTag}
+                                </span>
+                              </>
+                            )}
                           </p>
                         </div>
                       </div>

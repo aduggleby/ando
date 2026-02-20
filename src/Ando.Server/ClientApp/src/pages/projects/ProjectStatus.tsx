@@ -40,7 +40,7 @@ export function ProjectStatus() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-50">Project Status</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Project Status</h1>
         <p className="text-gray-500 dark:text-slate-400">Overview of all project build statuses</p>
       </div>
 
@@ -103,9 +103,9 @@ function ProjectGroup({ title, projects, variant }: ProjectGroupProps) {
   };
 
   return (
-    <div className="bg-white shadow rounded-lg overflow-hidden dark:bg-slate-900">
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden dark:bg-slate-900 dark:border-slate-800">
       <div className={`px-4 py-3 border-b ${headerColors[variant]}`}>
-        <h2 className="font-medium text-gray-900 dark:text-slate-50">{title} ({projects.length})</h2>
+        <h2 className="font-medium text-gray-900 dark:text-slate-100">{title} ({projects.length})</h2>
       </div>
       <div className="divide-y divide-gray-200 dark:divide-slate-700">
         {projects.map((project) => (

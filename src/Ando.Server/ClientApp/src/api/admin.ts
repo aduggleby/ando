@@ -8,20 +8,21 @@ import api from './client';
 import type {
   AdminDashboardDto,
   UserListItemDto,
+  UserDetailsDto,
   AdminProjectDto,
 } from '@/types';
 
 export async function getAdminDashboard(): Promise<{ dashboard: AdminDashboardDto }> {
   const response = await api.get('/admin/dashboard');
-  return response.data;
+  return { dashboard: response.data };
 }
 
 export async function getUsers(): Promise<{ users: UserListItemDto[] }> {
   const response = await api.get('/admin/users');
-  return response.data;
+  return { users: response.data.users ?? [] };
 }
 
-export async function getUserDetails(id: number): Promise<{ user: UserListItemDto }> {
+export async function getUserDetails(id: number): Promise<{ user: UserDetailsDto }> {
   const response = await api.get(`/admin/users/${id}`);
   return response.data;
 }
@@ -30,7 +31,9 @@ export async function changeUserRole(
   userId: number,
   isAdmin: boolean
 ): Promise<{ success: boolean; error?: string }> {
-  const response = await api.post(`/admin/users/${userId}/role`, { isAdmin });
+  const response = await api.post(`/admin/users/${userId}/role`, {
+    newRole: isAdmin ? 'Admin' : 'User',
+  });
   return response.data;
 }
 
@@ -70,5 +73,5 @@ export async function getImpersonationStatus(): Promise<{
 
 export async function getAdminProjects(): Promise<{ projects: AdminProjectDto[] }> {
   const response = await api.get('/admin/projects');
-  return response.data;
+  return { projects: response.data.projects ?? [] };
 }

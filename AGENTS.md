@@ -3,7 +3,7 @@
 ## Project Structure
 
 - `src/Ando/`: Ando CLI (.NET tool) and core libraries.
-- `src/Ando.Server/`: ASP.NET Core server (EF Core + SQL Server), React client in `src/Ando.Server/ClientApp/`.
+- `src/Ando.Server/`: ASP.NET Core server (EF Core + SQL Server), FastEndpoints-based route surface (API + compatibility/infrastructure), React client in `src/Ando.Server/ClientApp/`.
 - `tests/`:
   - `tests/Ando.Tests/`: unit tests for CLI/core.
   - `tests/Ando.Server.Tests/`: server tests (see `tests/Ando.Server.Tests/TESTING.md`).

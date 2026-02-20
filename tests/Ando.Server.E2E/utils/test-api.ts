@@ -28,6 +28,15 @@ export interface CreateBuildResponse {
   status: string;
 }
 
+export interface EmailVerificationTokenResponse {
+  emailVerified: boolean;
+  token?: string | null;
+}
+
+export interface PasswordResetTokenResponse {
+  token: string;
+}
+
 export type BuildStatus = 'Queued' | 'Running' | 'Success' | 'Failed' | 'Cancelled' | 'TimedOut';
 export type BuildTrigger = 'Push' | 'PullRequest' | 'Manual';
 export type LogEntryType = 'StepStarted' | 'StepCompleted' | 'StepFailed' | 'Info' | 'Warning' | 'Error' | 'Output';
@@ -83,6 +92,41 @@ export class TestApi {
 
     if (!response.ok()) {
       throw new Error(`Failed to delete user: ${response.status()}`);
+    }
+  }
+
+  async getEmailVerificationToken(userId: number): Promise<EmailVerificationTokenResponse> {
+    const response = await this.request.get(`${this.baseUrl}/api/test/users/${userId}/verification-token`, {
+      headers: this.headers,
+    });
+
+    if (!response.ok()) {
+      throw new Error(`Failed to get email verification token: ${response.status()} ${await response.text()}`);
+    }
+
+    return response.json();
+  }
+
+  async generatePasswordResetToken(userId: number): Promise<PasswordResetTokenResponse> {
+    const response = await this.request.post(`${this.baseUrl}/api/test/users/${userId}/password-reset-token`, {
+      headers: this.headers,
+    });
+
+    if (!response.ok()) {
+      throw new Error(`Failed to generate password reset token: ${response.status()} ${await response.text()}`);
+    }
+
+    return response.json();
+  }
+
+  async setUserRole(userId: number, role: 'Admin' | 'User'): Promise<void> {
+    const response = await this.request.post(`${this.baseUrl}/api/test/users/${userId}/role`, {
+      headers: this.headers,
+      data: { role },
+    });
+
+    if (!response.ok()) {
+      throw new Error(`Failed to set user role: ${response.status()} ${await response.text()}`);
     }
   }
 

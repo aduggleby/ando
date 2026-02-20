@@ -1,7 +1,7 @@
 // =============================================================================
 // SqlServerFixture.cs
 //
-// Summary: Manages a SQL Server container for integration/E2E tests.
+// Summary: Manages a SQL Server container for Ando.Server integration tests.
 //
 // Uses Testcontainers to spin up a real SQL Server instance in Docker.
 // The container is shared across all tests in the collection for performance,
@@ -9,10 +9,10 @@
 //
 // Design Decisions:
 // - Uses SQL Server 2022 for compatibility with production
-// - Container is named "ando-e2e-sqlserver" for easy identification
+// - Uses a dedicated container name to avoid conflicts with E2E docker-compose
+// - Container is recreated for each test run to guarantee expected port mapping
 // - Container is left running after tests for data inspection
 // - Databases are NOT dropped - restart container for fresh state
-// - Reuses existing container if already running
 // - Implements IAsyncLifetime for proper async setup/teardown
 // =============================================================================
 
@@ -24,11 +24,11 @@ using Testcontainers.MsSql;
 namespace Ando.Server.Tests.TestFixtures;
 
 /// <summary>
-/// xUnit fixture that manages a SQL Server container for E2E tests.
+/// xUnit fixture that manages a SQL Server container for integration tests.
 /// </summary>
 public class SqlServerFixture : IAsyncLifetime
 {
-    private const string ContainerName = "ando-e2e-sqlserver";
+    private const string ContainerName = "ando-server-tests-sqlserver";
     private const string Password = "Test@Password123!";
     private const int Port = 11433; // Use fixed port for reuse
 
@@ -43,15 +43,9 @@ public class SqlServerFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        // Check if container already exists and is running
-        if (await IsContainerRunningAsync())
-        {
-            // Reuse existing container
-            _connectionString = $"Server=localhost,{Port};Database=master;User Id=sa;Password={Password};TrustServerCertificate=true";
-            return;
-        }
-
-        // Remove stopped container if it exists
+        // Always recreate the container to avoid conflicts with containers
+        // created by other workflows that use the same name but different
+        // networking/port exposure settings.
         await RemoveContainerIfExistsAsync();
 
         // Create new container
@@ -71,31 +65,8 @@ public class SqlServerFixture : IAsyncLifetime
     {
         // Don't stop the container - leave it running for data inspection
         // To get a fresh database, restart the container manually:
-        //   docker stop ando-e2e-sqlserver && docker rm ando-e2e-sqlserver
+        //   docker stop ando-server-tests-sqlserver && docker rm ando-server-tests-sqlserver
         return Task.CompletedTask;
-    }
-
-    private static async Task<bool> IsContainerRunningAsync()
-    {
-        var psi = new ProcessStartInfo
-        {
-            FileName = "docker",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
-        psi.ArgumentList.Add("inspect");
-        psi.ArgumentList.Add("-f");
-        psi.ArgumentList.Add("{{.State.Running}}");
-        psi.ArgumentList.Add(ContainerName);
-
-        using var process = Process.Start(psi);
-        if (process == null) return false;
-
-        var output = await process.StandardOutput.ReadToEndAsync();
-        await process.WaitForExitAsync();
-
-        return process.ExitCode == 0 && output.Trim() == "true";
     }
 
     private static async Task RemoveContainerIfExistsAsync()

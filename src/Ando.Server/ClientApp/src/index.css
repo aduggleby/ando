@@ -1,69 +1,187 @@
 @import "tailwindcss";
 
-/* Map Tailwind's dark: variant to the server's class-based theme toggle.
-   The _Layout.cshtml theme switcher sets .theme-dark on <html>. */
+/* =============================================================================
+   Phosphor Design System for Ando CI
+
+   Theme switching: .theme-dark on <html> activates dark mode.
+   Defaults to prefers-color-scheme via inline script in index.html.
+   ============================================================================= */
+
 @custom-variant dark (&:where(.theme-dark, .theme-dark *));
 
-/* Custom theme colors matching the existing Ando design */
+/* Phosphor color palette */
 @theme {
-  --color-primary-50: #eff6ff;
-  --color-primary-100: #dbeafe;
-  --color-primary-200: #bfdbfe;
-  --color-primary-300: #93c5fd;
-  --color-primary-400: #60a5fa;
-  --color-primary-500: #3b82f6;
-  --color-primary-600: #2563eb;
-  --color-primary-700: #1d4ed8;
-  --color-primary-800: #1e40af;
-  --color-primary-900: #1e3a8a;
+  /* Cyan accent (replaces blue primary) */
+  --color-primary-50: #ecfeff;
+  --color-primary-100: #cffafe;
+  --color-primary-200: #a5f3fc;
+  --color-primary-300: #67e8f9;
+  --color-primary-400: #22d3ee;
+  --color-primary-500: #06b6d4;
+  --color-primary-600: #0891b2;
+  --color-primary-700: #0e7490;
+  --color-primary-800: #155e75;
+  --color-primary-900: #164e63;
 
-  --color-success-50: #f0fdf4;
-  --color-success-100: #dcfce7;
-  --color-success-500: #22c55e;
-  --color-success-600: #16a34a;
-  --color-success-800: #166534;
+  /* Status colors */
+  --color-success-50: #ecfdf5;
+  --color-success-100: #d1fae5;
+  --color-success-200: #a7f3d0;
+  --color-success-300: #6ee7b7;
+  --color-success-400: #34d399;
+  --color-success-500: #10b981;
+  --color-success-600: #059669;
+  --color-success-800: #065f46;
 
   --color-warning-50: #fffbeb;
   --color-warning-100: #fef3c7;
+  --color-warning-200: #fde68a;
   --color-warning-500: #f59e0b;
   --color-warning-600: #d97706;
   --color-warning-800: #92400e;
 
-  --color-error-50: #fef2f2;
-  --color-error-100: #fee2e2;
-  --color-error-200: #fecaca;
-  --color-error-400: #f87171;
-  --color-error-500: #ef4444;
-  --color-error-600: #dc2626;
-  --color-error-700: #b91c1c;
-  --color-error-800: #991b1b;
+  --color-error-50: #fff1f2;
+  --color-error-100: #ffe4e6;
+  --color-error-200: #fecdd3;
+  --color-error-400: #fb7185;
+  --color-error-500: #f43f5e;
+  --color-error-600: #e11d48;
+  --color-error-700: #be123c;
+  --color-error-800: #9f1239;
+
+  /* Font families */
+  --font-sans: 'Outfit', system-ui, sans-serif;
+  --font-mono: 'Fira Code', ui-monospace, monospace;
 }
 
-/* Base styles */
+/* ---- Base styles ---- */
 body {
   @apply bg-gray-50 text-gray-900 antialiased dark:bg-slate-950 dark:text-slate-100;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-sans);
 }
 
-/* Focus styles for accessibility */
+/* Focus ring */
 *:focus-visible {
-  @apply outline-none ring-2 ring-primary-500 ring-offset-2 dark:ring-offset-slate-900;
+  @apply outline-none ring-2 ring-primary-500/50 ring-offset-2 dark:ring-offset-slate-900;
 }
 
-/* Custom scrollbar */
+/* ---- Phosphor ambient effects ---- */
+
+/* Grid background (dark mode only) */
+.theme-dark body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(6, 182, 212, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(6, 182, 212, 0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  z-index: 0;
+}
+
+/* Radial glow from top (dark mode only) */
+.theme-dark body::after {
+  content: '';
+  position: fixed;
+  top: -200px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 900px;
+  height: 600px;
+  background: radial-gradient(ellipse, rgba(6, 182, 212, 0.05) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Ensure main content is above ambient effects */
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---- Phosphor utility classes ---- */
+
+/* Glowing top edge for cards (dark mode) */
+.phosphor-glow-cyan::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, theme(--color-primary-500), transparent);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.theme-dark .phosphor-glow-cyan::after {
+  opacity: 1;
+}
+
+.phosphor-glow-green::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, theme(--color-success-500), transparent);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.theme-dark .phosphor-glow-green::after {
+  opacity: 1;
+}
+
+.phosphor-glow-red::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, theme(--color-error-500), transparent);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.theme-dark .phosphor-glow-red::after {
+  opacity: 1;
+}
+
+/* Frosted glass effect */
+.phosphor-glass {
+  @apply dark:bg-slate-900/85 dark:backdrop-blur-xl;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+}
+.theme-dark .phosphor-glass {
+  background: rgba(10, 15, 26, 0.85);
+}
+
+/* ---- Custom scrollbar ---- */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-gray-100 dark:bg-slate-800;
+  @apply bg-transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-gray-300 rounded-full dark:bg-slate-600;
+  @apply bg-gray-300 rounded-full dark:bg-slate-700;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-gray-400 dark:bg-slate-500;
+  @apply bg-gray-400 dark:bg-slate-600;
+}
+
+/* ---- Animation keyframes ---- */
+@keyframes phosphor-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.animate-phosphor-pulse {
+  animation: phosphor-pulse 2s ease-in-out infinite;
 }

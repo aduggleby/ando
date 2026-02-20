@@ -1,7 +1,7 @@
 // =============================================================================
 // pages/auth/Register.tsx
 //
-// Registration page component.
+// Phosphor-styled registration page.
 // =============================================================================
 
 import { useState } from 'react';
@@ -54,12 +54,15 @@ export function Register() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-950 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-slate-50">
+      <div className="max-w-sm w-full space-y-8">
+        <div className="text-center">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-400 to-purple-500 flex items-center justify-center text-white text-base font-bold shadow-lg shadow-primary-500/20 mx-auto">
+            A
+          </div>
+          <h2 className="mt-4 text-2xl font-bold text-gray-900 dark:text-slate-100 tracking-tight">
             Create your account
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600 dark:text-slate-400">
+          <p className="mt-1.5 text-sm text-gray-500 dark:text-slate-400">
             Or{' '}
             <Link to="/auth/login" className="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400">
               sign in to your existing account
@@ -73,7 +76,7 @@ export function Register() {
           </Alert>
         )}
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <form className="space-y-5" onSubmit={handleSubmit}>
           <div className="space-y-4">
             <Input
               label="Email address"

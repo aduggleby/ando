@@ -22,13 +22,15 @@ using Ando.Server.Configuration;
 using Ando.Server.Data;
 using Ando.Server.GitHub;
 using Ando.Server.Hubs;
+using Ando.Server.Infrastructure.DataProtection;
+using Ando.Server.Infrastructure.Hangfire;
+using Ando.Server.Infrastructure.Startup;
 using Ando.Server.Jobs;
 using Ando.Server.Models;
 using Ando.Server.Services;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using Hangfire;
-using Hangfire.States;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Hangfire.SqlServer;
@@ -265,118 +267,7 @@ builder.Services.ConfigureApplicationCookie(options =>
 
     // Extensive auth diagnostics to troubleshoot "random logouts" and proxy/cookie issues.
     // We intentionally do NOT log raw cookie values.
-    options.Events = new Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationEvents
-    {
-        // Log cookie details and then delegate to Identity's SecurityStampValidator.
-        // Previously this handler ONLY logged and returned Task.CompletedTask, which
-        // completely disabled security stamp validation. Now we call the validator
-        // so that password changes etc. properly invalidate old sessions, while the
-        // ValidationInterval (24h) prevents overly aggressive re-checks.
-        OnValidatePrincipal = async context =>
-        {
-            var logger = context.HttpContext.RequestServices
-                .GetRequiredService<ILoggerFactory>()
-                .CreateLogger("Auth.Cookie");
-
-            var userName = context.Principal?.Identity?.Name ?? "(unknown)";
-            var isAuthenticated = context.Principal?.Identity?.IsAuthenticated == true;
-
-            logger.LogDebug(
-                "Cookie validating: path={Path} user={User} auth={IsAuthenticated} issuedUtc={IssuedUtc} expiresUtc={ExpiresUtc} remoteIp={RemoteIp} xff={Xff} xfproto={XfProto} hasCookieHeader={HasCookieHeader} cookieHeaderLength={CookieHeaderLength}",
-                context.HttpContext.Request.Path,
-                userName,
-                isAuthenticated,
-                context.Properties.IssuedUtc,
-                context.Properties.ExpiresUtc,
-                context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "(unknown)",
-                context.HttpContext.Request.Headers["X-Forwarded-For"].ToString(),
-                context.HttpContext.Request.Headers["X-Forwarded-Proto"].ToString(),
-                context.HttpContext.Request.Headers.Cookie.Count > 0,
-                context.HttpContext.Request.Headers.Cookie.ToString().Length);
-
-            // Run Identity's security stamp validation (respects ValidationInterval).
-            await SecurityStampValidator.ValidatePrincipalAsync(context);
-
-            // If the validator rejected the principal, log it prominently.
-            if (context.Principal == null)
-            {
-                logger.LogWarning(
-                    "Security stamp validation rejected cookie for user={User}. "
-                    + "This means the user's security stamp changed (password change, "
-                    + "security update, etc.) since the cookie was issued.",
-                    userName);
-            }
-        },
-        OnSigningIn = context =>
-        {
-            var logger = context.HttpContext.RequestServices
-                .GetRequiredService<ILoggerFactory>()
-                .CreateLogger("Auth.Cookie");
-
-            logger.LogInformation(
-                "Signing in: path={Path} user={User} remoteIp={RemoteIp} xff={Xff} xfproto={XfProto}",
-                context.HttpContext.Request.Path,
-                context.Principal?.Identity?.Name ?? "(unknown)",
-                context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "(unknown)",
-                context.HttpContext.Request.Headers["X-Forwarded-For"].ToString(),
-                context.HttpContext.Request.Headers["X-Forwarded-Proto"].ToString());
-
-            return Task.CompletedTask;
-        },
-        OnSignedIn = context =>
-        {
-            var logger = context.HttpContext.RequestServices
-                .GetRequiredService<ILoggerFactory>()
-                .CreateLogger("Auth.Cookie");
-
-            logger.LogInformation(
-                "Signed in: user={User} remoteIp={RemoteIp} xff={Xff} xfproto={XfProto}",
-                context.Principal?.Identity?.Name ?? "(unknown)",
-                context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "(unknown)",
-                context.HttpContext.Request.Headers["X-Forwarded-For"].ToString(),
-                context.HttpContext.Request.Headers["X-Forwarded-Proto"].ToString());
-
-            return Task.CompletedTask;
-        },
-        OnSigningOut = context =>
-        {
-            var logger = context.HttpContext.RequestServices
-                .GetRequiredService<ILoggerFactory>()
-                .CreateLogger("Auth.Cookie");
-
-            logger.LogInformation(
-                "Signing out: user={User} path={Path} remoteIp={RemoteIp} xff={Xff} xfproto={XfProto}",
-                context.HttpContext.User?.Identity?.Name ?? "(unknown)",
-                context.HttpContext.Request.Path,
-                context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "(unknown)",
-                context.HttpContext.Request.Headers["X-Forwarded-For"].ToString(),
-                context.HttpContext.Request.Headers["X-Forwarded-Proto"].ToString());
-
-            return Task.CompletedTask;
-        },
-
-        // Return 401/403 for API requests instead of redirecting to login.
-        OnRedirectToLogin = context =>
-        {
-            if (context.Request.Path.StartsWithSegments("/api"))
-            {
-                context.Response.StatusCode = 401;
-                return Task.CompletedTask;
-            }
-            context.Response.Redirect(context.RedirectUri);
-            return Task.CompletedTask;
-        },
-        OnRedirectToAccessDenied = context =>
-        {
-            if (context.Request.Path.StartsWithSegments("/api"))
-            {
-                context.Response.StatusCode = 403;
-                return Task.CompletedTask;
-            }
-            context.Response.Redirect(context.RedirectUri);
-            return Task.CompletedTask;
-        }
-    };
+    options.Events = CookieAuthDiagnostics.CreateEvents();
 });
 
 builder.Services.AddAuthorization(options =>
@@ -517,7 +408,7 @@ builder.Services.AddSession(options =>
 });
 
 // =============================================================================
-// MVC & Razor (kept for parallel operation during migration)
+// Razor View Services
 // =============================================================================
 
 builder.Services.AddControllersWithViews()
@@ -816,12 +707,12 @@ if (!app.Environment.IsEnvironment("Testing"))
 
     // Seed roles
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
-    await SeedRolesAsync(roleManager);
+    await DatabaseSeeding.SeedRolesAsync(roleManager);
 
     if (app.Environment.IsDevelopment())
     {
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-        await SeedDevelopmentDataAsync(db, userManager);
+        await DatabaseSeeding.SeedDevelopmentDataAsync(db, userManager);
     }
 }
 
@@ -848,9 +739,6 @@ if (!app.Environment.IsEnvironment("Testing") && !app.Environment.IsEnvironment(
         "*/15 * * * *");
 }
 
-// Attribute-routed controllers (webhooks/session/health/test endpoints).
-app.MapControllers();
-
 // =============================================================================
 // SPA Fallback (React App)
 // Serves the React SPA for client-side routing
@@ -862,94 +750,6 @@ app.MapFallbackToFile("app/index.html");
 app.Run();
 
 // =============================================================================
-// Database Seeding Functions
-// =============================================================================
-
-/// <summary>
-/// Seeds the required application roles.
-/// </summary>
-static async Task SeedRolesAsync(RoleManager<ApplicationRole> roleManager)
-{
-    foreach (var roleName in UserRoles.AllRoles)
-    {
-        if (!await roleManager.RoleExistsAsync(roleName))
-        {
-            var role = new ApplicationRole
-            {
-                Name = roleName,
-                Description = roleName == UserRoles.Admin
-                    ? "Global administrator with full system access"
-                    : "Standard user with access to their own projects"
-            };
-            await roleManager.CreateAsync(role);
-        }
-    }
-}
-
-/// <summary>
-/// Seeds a local development user and demo project for quick UI testing.
-/// </summary>
-static async Task SeedDevelopmentDataAsync(
-    AndoDbContext db,
-    UserManager<ApplicationUser> userManager)
-{
-    const string devEmail = "dev@ando.local";
-    const string devPassword = "DevPassword123";
-    const string devProjectRepo = "github/ando";
-
-    var user = await userManager.FindByEmailAsync(devEmail);
-    if (user == null)
-    {
-        user = new ApplicationUser
-        {
-            UserName = devEmail,
-            Email = devEmail,
-            DisplayName = "Development User",
-            EmailConfirmed = true,
-            EmailVerified = true,
-            CreatedAt = DateTime.UtcNow,
-            LastLoginAt = DateTime.UtcNow,
-            GitHubId = 9913377,
-            GitHubLogin = "github",
-            GitHubConnectedAt = DateTime.UtcNow
-        };
-
-        var createResult = await userManager.CreateAsync(user, devPassword);
-        if (!createResult.Succeeded)
-        {
-            throw new InvalidOperationException(
-                $"Failed to seed development user: {string.Join("; ", createResult.Errors.Select(e => e.Description))}");
-        }
-
-        await userManager.AddToRoleAsync(user, UserRoles.User);
-    }
-    else if (!await userManager.IsInRoleAsync(user, UserRoles.User))
-    {
-        await userManager.AddToRoleAsync(user, UserRoles.User);
-    }
-
-    var hasProject = await db.Projects.AnyAsync(p => p.OwnerId == user.Id && p.RepoFullName == devProjectRepo);
-    if (!hasProject)
-    {
-        db.Projects.Add(new Project
-        {
-            OwnerId = user.Id,
-            GitHubRepoId = 9913377001,
-            RepoFullName = devProjectRepo,
-            RepoUrl = "https://github.com/github/ando",
-            DefaultBranch = "main",
-            BranchFilter = "main,master",
-            InstallationId = 1,
-            TimeoutMinutes = 15,
-            NotifyOnFailure = false,
-            CreatedAt = DateTime.UtcNow
-        });
-
-        await db.SaveChangesAsync();
-    }
-}
-
-// =============================================================================
 // Program Class Marker (for WebApplicationFactory in tests)
 // =============================================================================
 
@@ -957,51 +757,3 @@ static async Task SeedDevelopmentDataAsync(
 /// Partial class marker to make Program accessible for integration tests.
 /// </summary>
 public partial class Program { }
-
-// =============================================================================
-// Stub Hangfire Services (for E2E environment)
-// =============================================================================
-
-/// <summary>
-/// No-op implementation of IBackgroundJobClient for E2E testing.
-/// </summary>
-internal class NoOpBackgroundJobClient : IBackgroundJobClient
-{
-    private int _jobCounter;
-
-    public string Create(Hangfire.Common.Job job, IState state)
-    {
-        // Return a fake job ID
-        return $"e2e-job-{Interlocked.Increment(ref _jobCounter)}";
-    }
-
-    public bool ChangeState(string jobId, IState state, string expectedState)
-    {
-        return true;
-    }
-}
-
-/// <summary>
-/// No-op implementation of IRecurringJobManager for E2E testing.
-/// </summary>
-internal class NoOpRecurringJobManager : IRecurringJobManager
-{
-    public void AddOrUpdate(string recurringJobId, Hangfire.Common.Job job, string cronExpression, RecurringJobOptions options)
-    {
-        // No-op
-    }
-
-    public void Trigger(string recurringJobId)
-    {
-        // No-op
-    }
-
-    public void RemoveIfExists(string recurringJobId)
-    {
-        // No-op
-    }
-}
-
-// Used to surface a single warning in E2E/Testing when Data Protection key persistence
-// cannot be enabled (e.g., missing/unwritable /data/keys mount).
-file sealed record DataProtectionFallbackWarning(string KeysPath, Exception Exception);

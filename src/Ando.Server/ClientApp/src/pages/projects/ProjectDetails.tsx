@@ -54,21 +54,16 @@ export function ProjectDetails() {
       {/* Header */}
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-50">{project.repoFullName}</h1>
-          <p className="text-gray-500 dark:text-slate-400">{project.defaultBranch}</p>
-          {latestBuild && (
-            <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
-              Last Built Git Version Tag:{' '}
-              <code className="font-mono">{latestBuild.gitVersionTag || '-'}</code>
-            </p>
-          )}
-          {!latestBuild && (
-            <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
-              Last Built Git Version Tag: <code className="font-mono">-</code>
-            </p>
-          )}
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100 tracking-tight">{project.repoFullName}</h1>
+          <p className="text-sm text-gray-400 dark:text-slate-500 mt-0.5">{project.defaultBranch}</p>
+          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 font-mono">
+            {latestBuild?.gitVersionTag
+              ? <span className="text-primary-600 dark:text-primary-400">{latestBuild.gitVersionTag}</span>
+              : '—'
+            }
+          </p>
         </div>
-        <div className="flex space-x-3">
+        <div className="flex gap-2">
           <Link to={`/projects/${id}/settings`}>
             <Button variant="secondary">Settings</Button>
           </Link>
@@ -94,8 +89,8 @@ export function ProjectDetails() {
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard title="Total Builds" value={project.totalBuilds} />
-        <StatCard title="Successful" value={project.successfulBuilds} className="text-success-600 dark:text-success-400" />
-        <StatCard title="Failed" value={project.failedBuilds} className="text-error-600 dark:text-error-400" />
+        <StatCard title="Successful" value={project.successfulBuilds} valueClass="text-success-600 dark:text-success-400" />
+        <StatCard title="Failed" value={project.failedBuilds} valueClass="text-error-600 dark:text-error-400" />
         <StatCard
           title="Success Rate"
           value={project.totalBuilds > 0
@@ -106,13 +101,13 @@ export function ProjectDetails() {
       </div>
 
       {/* Recent Builds */}
-      <div className="bg-white shadow rounded-lg dark:bg-slate-900">
-        <div className="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-slate-700">
-          <h2 className="text-lg font-medium text-gray-900 dark:text-slate-50">Recent Builds</h2>
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden dark:bg-slate-900 dark:border-slate-800">
+        <div className="px-5 py-4 border-b border-gray-100 dark:border-slate-800">
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Recent Builds</h2>
         </div>
-        <div className="divide-y divide-gray-200 dark:divide-slate-700">
+        <div className="divide-y divide-gray-100 dark:divide-slate-800/50">
           {project.recentBuilds.length === 0 ? (
-            <div className="px-4 py-8 text-center text-gray-500 dark:text-slate-400">
+            <div className="px-5 py-10 text-center text-gray-400 dark:text-slate-500 text-sm">
               No builds yet. Trigger a build to get started.
             </div>
           ) : (
@@ -120,33 +115,28 @@ export function ProjectDetails() {
               <Link
                 key={build.id}
                 to={`/builds/${build.id}`}
-                className="block px-4 py-4 hover:bg-gray-50 dark:hover:bg-slate-800"
+                className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-slate-100">
-                      Build #{build.id}
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-slate-400">
-                      Git Version:{' '}
-                      <code className="font-mono">{build.branch}@{build.shortCommitSha}</code>
-                      {build.commitMessage && ` · ${build.commitMessage}`}
-                    </p>
-                  </div>
-                  <div className="flex items-center space-x-4">
-                    <Badge variant={getBuildStatusVariant(build.status)}>
-                      {build.status}
-                    </Badge>
-                    {build.duration && (
-                      <span className="text-sm text-gray-500 dark:text-slate-400">
-                        {formatDuration(build.duration)}
-                      </span>
-                    )}
-                    <span className="text-sm text-gray-500 dark:text-slate-400">
-                      {formatDate(build.queuedAt)}
-                    </span>
-                  </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+                    Build #{build.id}
+                  </p>
+                  <p className="text-xs text-gray-400 dark:text-slate-500 font-mono mt-0.5">
+                    {build.branch}@{build.shortCommitSha}
+                    {build.commitMessage && <span className="text-gray-400 dark:text-slate-500 font-sans"> · {build.commitMessage}</span>}
+                  </p>
                 </div>
+                <Badge variant={getBuildStatusVariant(build.status)}>
+                  {build.status}
+                </Badge>
+                {build.duration && (
+                  <span className="text-xs font-mono text-gray-400 dark:text-slate-500 min-w-[56px] text-right">
+                    {formatDuration(build.duration)}
+                  </span>
+                )}
+                <span className="text-xs text-gray-400 dark:text-slate-500 min-w-[60px] text-right">
+                  {formatDate(build.queuedAt)}
+                </span>
               </Link>
             ))
           )}
@@ -156,11 +146,11 @@ export function ProjectDetails() {
   );
 }
 
-function StatCard({ title, value, className = '' }: { title: string; value: number | string; className?: string }) {
+function StatCard({ title, value, valueClass = '' }: { title: string; value: number | string; valueClass?: string }) {
   return (
-    <div className="bg-white shadow rounded-lg px-4 py-5 sm:p-6 dark:bg-slate-900">
-      <dt className="text-sm font-medium text-gray-500 truncate dark:text-slate-400">{title}</dt>
-      <dd className={`mt-1 text-3xl font-semibold text-gray-900 dark:text-slate-50 ${className}`}>{value}</dd>
+    <div className="bg-white border border-gray-200 rounded-xl px-5 py-5 dark:bg-slate-900 dark:border-slate-800">
+      <dt className="text-xs font-medium text-gray-400 dark:text-slate-500 uppercase tracking-wider">{title}</dt>
+      <dd className={`mt-2 text-2xl font-light text-gray-900 dark:text-slate-100 ${valueClass}`}>{value}</dd>
     </div>
   );
 }
