@@ -10,6 +10,8 @@ import type {
   UserListItemDto,
   UserDetailsDto,
   AdminProjectDto,
+  SystemUpdateStatusResponse,
+  TriggerSystemUpdateResponse,
 } from '@/types';
 
 export async function getAdminDashboard(): Promise<{ dashboard: AdminDashboardDto }> {
@@ -74,4 +76,18 @@ export async function getImpersonationStatus(): Promise<{
 export async function getAdminProjects(): Promise<{ projects: AdminProjectDto[] }> {
   const response = await api.get('/admin/projects');
   return { projects: response.data.projects ?? [] };
+}
+
+export async function getSystemUpdateStatus(
+  refresh = false
+): Promise<SystemUpdateStatusResponse> {
+  const response = await api.get('/admin/system-update', {
+    params: refresh ? { refresh: true } : undefined,
+  });
+  return response.data;
+}
+
+export async function triggerSystemUpdate(): Promise<TriggerSystemUpdateResponse> {
+  const response = await api.post('/admin/system-update');
+  return response.data;
 }

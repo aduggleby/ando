@@ -141,6 +141,37 @@ Build__AcknowledgeRootDockerRisk=true
 
 **Warning**: Running Docker as root allows container escapes to gain root access to the host system. Only use this option on platforms that require it.
 
+### Optional In-App Self-Update (Admin)
+
+ANDO can optionally show admins when a newer `ghcr.io/aduggleby/ando-server:latest` image is available and let them trigger an update from the web UI.
+
+Enable it in `/opt/ando/config/.env`:
+
+```bash
+SelfUpdate__Enabled=true
+```
+
+Optional overrides:
+
+```bash
+SelfUpdate__Image=ghcr.io/aduggleby/ando-server:latest
+SelfUpdate__ComposeFilePath=/opt/ando/docker-compose.yml
+SelfUpdate__ServiceName=ando-server
+SelfUpdate__ContainerName=ando-server
+SelfUpdate__CheckIntervalMinutes=5
+SelfUpdate__HelperImage=docker:27-cli
+```
+
+How it works:
+
+- The server checks for updates every 5 minutes (configurable).
+- If a newer image is found, admins see an update bar in the UI.
+- Clicking update queues a background job that starts a helper Docker CLI container to run:
+  - `docker compose pull ando-server`
+  - `docker compose up -d ando-server`
+
+If disabled (default), no update checks or update UI are shown.
+
 ### User Registration
 
 By default, anyone can register an account on the server. The first user to register automatically becomes an admin. Admins can disable new user self-registration from the Admin panel, which toggles the setting in the database (`SystemSettings.AllowUserRegistration`). When registration is disabled, the `/api/auth/register` endpoint returns an error for all users except the first (initial setup is always allowed).

@@ -65,6 +65,8 @@ builder.Services.Configure<RateLimitSettings>(
     builder.Configuration.GetSection(RateLimitSettings.SectionName));
 builder.Services.Configure<ServerSettings>(
     builder.Configuration.GetSection(ServerSettings.SectionName));
+builder.Services.Configure<SelfUpdateSettings>(
+    builder.Configuration.GetSection(SelfUpdateSettings.SectionName));
 
 // =============================================================================
 // Database
@@ -511,6 +513,11 @@ builder.Services.AddScoped<IProjectService, ProjectService>();
 // Cleanup Jobs
 builder.Services.AddScoped<CleanupArtifactsJob>();
 builder.Services.AddScoped<CleanupOldBuildsJob>();
+builder.Services.AddScoped<ApplySystemUpdateJob>();
+
+// Optional self-update (admin-only)
+builder.Services.AddSingleton<ISystemUpdateService, SystemUpdateService>();
+builder.Services.AddHostedService<SystemUpdateCheckBackgroundService>();
 
 // Configuration Validation
 builder.Services.AddConfigurationValidation();

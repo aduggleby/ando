@@ -308,6 +308,26 @@ export interface GetUserDetailsResponse {
   user: UserDetailsDto;
 }
 
+export interface SystemUpdateStatusResponse {
+  enabled: boolean;
+  isChecking: boolean;
+  isUpdateAvailable: boolean;
+  isUpdateInProgress: boolean;
+  currentImageId: string | null;
+  latestImageId: string | null;
+  currentVersion: string | null;
+  latestVersion: string | null;
+  lastCheckedAtUtc: string | null;
+  lastTriggeredAtUtc: string | null;
+  lastError: string | null;
+}
+
+export interface TriggerSystemUpdateResponse {
+  success: boolean;
+  message: string;
+  jobId: string | null;
+}
+
 // API token types
 export interface ApiTokenDto {
   id: number;

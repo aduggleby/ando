@@ -5,11 +5,12 @@
 // =============================================================================
 
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Button } from '@/components/ui/Button';
 import { getAppVersion } from '@/api/system';
+import { getSystemUpdateStatus, triggerSystemUpdate } from '@/api/admin';
 
 export function Layout() {
   const { user, logout, isAuthenticated } = useAuth();
@@ -20,6 +21,17 @@ export function Layout() {
     queryKey: ['app-version'],
     queryFn: getAppVersion,
     staleTime: 1000 * 60 * 5,
+  });
+  const { data: systemUpdateStatus } = useQuery({
+    queryKey: ['system-update-status'],
+    queryFn: () => getSystemUpdateStatus(false),
+    enabled: isAuthenticated && !!user?.isAdmin,
+    refetchInterval: 1000 * 60 * 5,
+    staleTime: 1000 * 30,
+    retry: false,
+  });
+  const updateMutation = useMutation({
+    mutationFn: triggerSystemUpdate,
   });
 
   const handleLogout = async () => {
@@ -41,6 +53,14 @@ export function Layout() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex flex-col">
+      {isAuthenticated && user?.isAdmin && systemUpdateStatus?.enabled && (
+        <SelfUpdateBanner
+          status={systemUpdateStatus}
+          isUpdating={updateMutation.isPending}
+          onUpdate={() => updateMutation.mutate()}
+        />
+      )}
+
       {/* Navigation */}
       <nav className="phosphor-glass sticky top-0 z-50 border-b border-gray-200 dark:border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -120,6 +140,65 @@ export function Layout() {
           Ando <span className="text-gray-300 dark:text-slate-600 mx-1">·</span> {appVersion?.version || '-'}
         </div>
       </footer>
+    </div>
+  );
+}
+
+function SelfUpdateBanner({
+  status,
+  isUpdating,
+  onUpdate,
+}: {
+  status: {
+    isChecking: boolean;
+    isUpdateAvailable: boolean;
+    isUpdateInProgress: boolean;
+    currentVersion: string | null;
+    latestVersion: string | null;
+    lastError: string | null;
+  };
+  isUpdating: boolean;
+  onUpdate: () => void;
+}) {
+  if (!status.isUpdateAvailable && !status.isUpdateInProgress && !status.lastError) {
+    return null;
+  }
+
+  return (
+    <div className="border-b border-primary-200 bg-primary-50 dark:border-primary-700/40 dark:bg-primary-950/40">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center gap-3 text-sm">
+        {status.isUpdateInProgress ? (
+          <span className="text-primary-800 dark:text-primary-200">
+            Server update in progress. The app may restart shortly.
+          </span>
+        ) : status.isUpdateAvailable ? (
+          <span className="text-primary-800 dark:text-primary-200">
+            New server image available
+            {status.currentVersion || status.latestVersion
+              ? ` (${status.currentVersion ?? 'current'} -> ${status.latestVersion ?? 'latest'})`
+              : ''}
+            .
+          </span>
+        ) : null}
+
+        {status.lastError && (
+          <span className="text-error-700 dark:text-error-300">
+            Update check error: {status.lastError}
+          </span>
+        )}
+
+        {status.isUpdateAvailable && !status.isUpdateInProgress && (
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={onUpdate}
+            isLoading={isUpdating}
+            disabled={status.isChecking || isUpdating}
+          >
+            Update now
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

@@ -348,3 +348,47 @@ public record AdminProjectDto(
     int BuildCount,
     DateTime? LastBuildAt
 );
+
+// =============================================================================
+// System Update
+// =============================================================================
+
+/// <summary>
+/// Response containing server self-update status.
+/// </summary>
+/// <param name="Enabled">Whether self-update is enabled.</param>
+/// <param name="IsChecking">Whether a background check is currently running.</param>
+/// <param name="IsUpdateAvailable">Whether a newer image is available.</param>
+/// <param name="IsUpdateInProgress">Whether an update workflow is currently running.</param>
+/// <param name="CurrentImageId">Current running image ID.</param>
+/// <param name="LatestImageId">Latest pulled image ID.</param>
+/// <param name="CurrentVersion">Current image version label, if available.</param>
+/// <param name="LatestVersion">Latest image version label, if available.</param>
+/// <param name="LastCheckedAtUtc">Timestamp of the last update check.</param>
+/// <param name="LastTriggeredAtUtc">Timestamp of the last admin-triggered update.</param>
+/// <param name="LastError">Latest check/apply error, if any.</param>
+public record SystemUpdateStatusResponse(
+    bool Enabled,
+    bool IsChecking,
+    bool IsUpdateAvailable,
+    bool IsUpdateInProgress,
+    string? CurrentImageId,
+    string? LatestImageId,
+    string? CurrentVersion,
+    string? LatestVersion,
+    DateTime? LastCheckedAtUtc,
+    DateTime? LastTriggeredAtUtc,
+    string? LastError
+);
+
+/// <summary>
+/// Response from an admin-triggered update request.
+/// </summary>
+/// <param name="Success">Whether the update job was queued.</param>
+/// <param name="Message">Status message for UI display.</param>
+/// <param name="JobId">Queued Hangfire job ID, if available.</param>
+public record TriggerSystemUpdateResponse(
+    bool Success,
+    string Message,
+    string? JobId = null
+);

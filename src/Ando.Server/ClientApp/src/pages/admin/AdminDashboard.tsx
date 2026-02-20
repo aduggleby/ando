@@ -4,12 +4,18 @@
 // Admin dashboard page with system overview.
 // =============================================================================
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { getAdminDashboard, getAdminProjects } from '@/api/admin';
+import {
+  getAdminDashboard,
+  getAdminProjects,
+  getSystemUpdateStatus,
+  triggerSystemUpdate,
+} from '@/api/admin';
 import { Loading } from '@/components/ui/Loading';
 import { Alert } from '@/components/ui/Alert';
 import { Badge, getBuildStatusVariant } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/context/AuthContext';
 
 export function AdminDashboard() {
@@ -23,6 +29,22 @@ export function AdminDashboard() {
   const { data: projectsData, isLoading: projectsLoading } = useQuery({
     queryKey: ['admin-projects'],
     queryFn: getAdminProjects,
+  });
+  const {
+    data: updateStatus,
+    isLoading: updateStatusLoading,
+    refetch: refetchUpdateStatus,
+  } = useQuery({
+    queryKey: ['admin-system-update-status'],
+    queryFn: () => getSystemUpdateStatus(false),
+    refetchInterval: 1000 * 60 * 5,
+    retry: false,
+  });
+  const triggerUpdateMutation = useMutation({
+    mutationFn: triggerSystemUpdate,
+    onSuccess: () => {
+      void refetchUpdateStatus();
+    },
   });
 
   if (dashboardLoading || projectsLoading) {
@@ -84,6 +106,72 @@ export function AdminDashboard() {
             <HealthItem label="Background Jobs" status="healthy" />
             <HealthItem label="GitHub Integration" status="healthy" />
           </div>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-xl p-6 dark:bg-slate-900 dark:border-slate-800">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-slate-100">Server Updates</h2>
+
+          {updateStatusLoading ? (
+            <p className="mt-4 text-sm text-gray-500 dark:text-slate-400">Checking update status...</p>
+          ) : !updateStatus?.enabled ? (
+            <p className="mt-4 text-sm text-gray-500 dark:text-slate-400">
+              Self-update is disabled. Set <code>SelfUpdate__Enabled=true</code> in server config to enable.
+            </p>
+          ) : (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-gray-700 dark:text-slate-300">
+                {updateStatus.isUpdateInProgress
+                  ? 'Update in progress. The service may restart shortly.'
+                  : updateStatus.isUpdateAvailable
+                    ? 'A newer server image is available.'
+                    : 'Server is up to date.'}
+              </p>
+
+              {(updateStatus.currentVersion || updateStatus.latestVersion) && (
+                <p className="text-xs text-gray-500 dark:text-slate-400 font-mono">
+                  {updateStatus.currentVersion ?? 'current'} -&gt; {updateStatus.latestVersion ?? 'latest'}
+                </p>
+              )}
+
+              {updateStatus.lastError && (
+                <Alert variant="error" className="text-sm">
+                  Update check error: {updateStatus.lastError}
+                </Alert>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void refetchUpdateStatus()}
+                  disabled={updateStatus.isChecking || triggerUpdateMutation.isPending}
+                >
+                  Refresh
+                </Button>
+
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => triggerUpdateMutation.mutate()}
+                  isLoading={triggerUpdateMutation.isPending}
+                  disabled={
+                    !updateStatus.isUpdateAvailable ||
+                    updateStatus.isUpdateInProgress ||
+                    updateStatus.isChecking ||
+                    triggerUpdateMutation.isPending
+                  }
+                >
+                  Update now
+                </Button>
+              </div>
+
+              {triggerUpdateMutation.data && (
+                <p className="text-xs text-gray-500 dark:text-slate-400">
+                  {triggerUpdateMutation.data.message}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

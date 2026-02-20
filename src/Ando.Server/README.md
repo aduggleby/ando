@@ -149,6 +149,21 @@ sudo -u ando /opt/ando/scripts/backup.sh   # Run backup now
 systemctl status caddy                      # Check Caddy status
 ```
 
+## Optional In-App Self-Update (Admin)
+
+Enable this in `/opt/ando/config/.env` to let admins trigger updates from the UI:
+
+```bash
+SelfUpdate__Enabled=true
+```
+
+The server checks for a newer `ghcr.io/aduggleby/ando-server:latest` image every 5 minutes and shows an admin banner when available. Clicking update queues a background job that runs:
+
+```bash
+docker compose -f /opt/ando/docker-compose.yml pull ando-server
+docker compose -f /opt/ando/docker-compose.yml up -d ando-server
+```
+
 ## Troubleshooting
 
 ### Docker Socket Permission Denied

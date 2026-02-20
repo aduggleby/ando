@@ -55,6 +55,7 @@ cd tests/Ando.Server.E2E && npm ci && npm test
 
 - **Never push by yourself.** Do not run `git push`, `docker push`, `docker buildx --push`, `dotnet nuget push`, or create/upload releases.
 - If publishing is needed: ask the user to push, then **wait**. After the user confirms, you may pull/restart the image on the Ando server.
+- **Production server access context:** Before making assumptions about production host access details, check `CLAUDE.md` first, then apply the deployment guidance in this file.
 
 ## Ando Server Access (Self-Hosted)
 
