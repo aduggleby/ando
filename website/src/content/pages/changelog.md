@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.134
+
+**2026-02-20**
+
+- Add sortable project table and improve admin dashboard
+
 ## 0.9.133
 
 **2026-02-20**
