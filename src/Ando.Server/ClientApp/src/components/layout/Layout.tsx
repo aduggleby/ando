@@ -50,29 +50,43 @@ export function Layout() {
     const version = appVersion?.version;
     if (!version) return;
 
-    let previousVersion: string | null = null;
-    try {
-      previousVersion = localStorage.getItem(SERVER_VERSION_STORAGE_KEY);
-      localStorage.setItem(SERVER_VERSION_STORAGE_KEY, version);
-    } catch {
-      return;
-    }
+    let isCancelled = false;
 
-    if (!previousVersion || previousVersion === version) {
-      return;
-    }
+    const applyVersionRefresh = async () => {
+      let previousVersion: string | null = null;
+      try {
+        previousVersion = localStorage.getItem(SERVER_VERSION_STORAGE_KEY);
+        localStorage.setItem(SERVER_VERSION_STORAGE_KEY, version);
+      } catch {
+        return;
+      }
 
-    // Version changed on the server while the SPA was open.
-    // Clear browser caches and hard-reload with a version marker.
-    if ('caches' in window) {
-      void caches.keys()
-        .then((cacheKeys) => Promise.all(cacheKeys.map((key) => caches.delete(key))))
-        .catch(() => {});
-    }
+      if (!previousVersion || previousVersion === version || isCancelled) {
+        return;
+      }
 
-    const nextUrl = new URL(window.location.href);
-    nextUrl.searchParams.set('sv', version);
-    window.location.replace(nextUrl.toString());
+      // Version changed on the server while the SPA was open.
+      // Clear browser caches and hard-reload with a version marker.
+      if ('caches' in window) {
+        try {
+          const cacheKeys = await caches.keys();
+          await Promise.all(cacheKeys.map((key) => caches.delete(key)));
+        } catch {
+          // Ignore cache API failures and still force refresh.
+        }
+      }
+
+      if (isCancelled) return;
+
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.set('sv', version);
+      window.location.replace(nextUrl.toString());
+    };
+
+    void applyVersionRefresh();
+    return () => {
+      isCancelled = true;
+    };
   }, [appVersion?.version]);
 
   const handleLogout = async () => {

@@ -6,6 +6,7 @@
 
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { useMemo, useState } from 'react';
 import {
   getAdminDashboard,
   getAdminProjects,
@@ -26,6 +27,10 @@ export function AdminDashboard() {
   const { user } = useAuth();
   const updateFlow = useServerUpdateFlow();
   useSystemUpdateRefresh(true);
+  const [projectSort, setProjectSort] = useState<{
+    key: 'project' | 'owner' | 'builds' | 'status' | 'lastBuild';
+    direction: 'asc' | 'desc';
+  }>({ key: 'lastBuild', direction: 'desc' });
 
   const { data: dashboardData, isLoading: dashboardLoading, error: dashboardError } = useQuery({
     queryKey: ['admin-dashboard'],
@@ -74,6 +79,38 @@ export function AdminDashboard() {
 
   const dashboard = dashboardData?.dashboard;
   const projects = projectsData?.projects || [];
+  const sortedProjects = useMemo(() => {
+    const sorted = [...projects];
+    sorted.sort((a, b) => {
+      const direction = projectSort.direction === 'asc' ? 1 : -1;
+
+      switch (projectSort.key) {
+        case 'project':
+          return a.repoFullName.localeCompare(b.repoFullName) * direction;
+        case 'owner':
+          return a.ownerEmail.localeCompare(b.ownerEmail) * direction;
+        case 'builds':
+          return (a.totalBuilds - b.totalBuilds) * direction;
+        case 'status':
+          return ((a.lastBuildStatus ?? '').localeCompare(b.lastBuildStatus ?? '')) * direction;
+        case 'lastBuild': {
+          const aTime = a.lastBuildAt ? new Date(a.lastBuildAt).getTime() : -1;
+          const bTime = b.lastBuildAt ? new Date(b.lastBuildAt).getTime() : -1;
+          return (aTime - bTime) * direction;
+        }
+      }
+    });
+    return sorted;
+  }, [projects, projectSort]);
+
+  const toggleProjectSort = (key: 'project' | 'owner' | 'builds' | 'status' | 'lastBuild') => {
+    setProjectSort((current) => {
+      if (current.key === key) {
+        return { key, direction: current.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, direction: key === 'lastBuild' ? 'desc' : 'asc' };
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -133,15 +170,26 @@ export function AdminDashboard() {
               Failed to probe system health
             </Alert>
           ) : (
-            <div className="mt-4 space-y-2">
-              {(systemHealth?.checks ?? []).map((check) => (
-                <HealthItem
-                  key={check.name}
-                  label={check.name}
-                  status={check.status}
-                  message={check.message}
-                />
-              ))}
+            <div className="mt-4 overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-slate-800">
+                    <th className="py-2 pr-3 text-left font-medium text-gray-500 dark:text-slate-400">Check</th>
+                    <th className="py-2 pr-3 text-left font-medium text-gray-500 dark:text-slate-400">Status</th>
+                    <th className="py-2 text-left font-medium text-gray-500 dark:text-slate-400">Message</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(systemHealth?.checks ?? []).map((check) => (
+                    <HealthItemRow
+                      key={check.name}
+                      label={check.name}
+                      status={check.status}
+                      message={check.message}
+                    />
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -223,19 +271,44 @@ export function AdminDashboard() {
             <thead className="bg-gray-50 dark:bg-slate-800">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-slate-400">
-                  Project
+                  <SortButton
+                    label="Project"
+                    active={projectSort.key === 'project'}
+                    direction={projectSort.direction}
+                    onClick={() => toggleProjectSort('project')}
+                  />
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-slate-400">
-                  Owner
+                  <SortButton
+                    label="Owner"
+                    active={projectSort.key === 'owner'}
+                    direction={projectSort.direction}
+                    onClick={() => toggleProjectSort('owner')}
+                  />
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-slate-400">
-                  Builds
+                  <SortButton
+                    label="Builds"
+                    active={projectSort.key === 'builds'}
+                    direction={projectSort.direction}
+                    onClick={() => toggleProjectSort('builds')}
+                  />
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-slate-400">
-                  Status
+                  <SortButton
+                    label="Status"
+                    active={projectSort.key === 'status'}
+                    direction={projectSort.direction}
+                    onClick={() => toggleProjectSort('status')}
+                  />
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-slate-400">
-                  Last Build
+                  <SortButton
+                    label="Last Build"
+                    active={projectSort.key === 'lastBuild'}
+                    direction={projectSort.direction}
+                    onClick={() => toggleProjectSort('lastBuild')}
+                  />
                 </th>
               </tr>
             </thead>
@@ -247,7 +320,7 @@ export function AdminDashboard() {
                   </td>
                 </tr>
               ) : (
-                projects.map((project) => (
+                sortedProjects.map((project) => (
                   <tr key={project.id} className="hover:bg-gray-50 dark:hover:bg-slate-800">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <Link
@@ -288,6 +361,29 @@ export function AdminDashboard() {
   );
 }
 
+function SortButton({
+  label,
+  active,
+  direction,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  direction: 'asc' | 'desc';
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1 hover:text-gray-700 dark:hover:text-slate-200"
+    >
+      <span>{label}</span>
+      {active && <span>{direction === 'asc' ? '^' : 'v'}</span>}
+    </button>
+  );
+}
+
 function StatCard({ title, value, className = '' }: { title: string; value: number; className?: string }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl px-4 py-5 sm:p-6 dark:bg-slate-900 dark:border-slate-800">
@@ -297,7 +393,7 @@ function StatCard({ title, value, className = '' }: { title: string; value: numb
   );
 }
 
-function HealthItem({
+function HealthItemRow({
   label,
   status,
   message,
@@ -313,18 +409,18 @@ function HealthItem({
   };
 
   return (
-    <div className="flex items-center justify-between text-sm">
-      <span className="text-gray-600 dark:text-slate-400">{label}</span>
-      <div className="flex items-center">
-        <span className={`w-2 h-2 rounded-full ${colors[status]} mr-2`}></span>
-        <span className="text-gray-900 capitalize dark:text-slate-100">{status}</span>
-      </div>
-      {message && (
-        <span className="text-xs text-gray-400 dark:text-slate-500 ml-2 truncate max-w-[160px]" title={message}>
-          {message}
-        </span>
-      )}
-    </div>
+    <tr className="border-b border-gray-100 last:border-0 dark:border-slate-800">
+      <td className="py-2 pr-3 text-gray-600 dark:text-slate-400 whitespace-nowrap">{label}</td>
+      <td className="py-2 pr-3 whitespace-nowrap">
+        <div className="flex items-center">
+          <span className={`w-2 h-2 rounded-full ${colors[status]} mr-2`}></span>
+          <span className="text-gray-900 capitalize dark:text-slate-100">{status}</span>
+        </div>
+      </td>
+      <td className="py-2 text-xs text-gray-400 dark:text-slate-500">
+        {message ? <span title={message}>{message}</span> : '-'}
+      </td>
+    </tr>
   );
 }
 
