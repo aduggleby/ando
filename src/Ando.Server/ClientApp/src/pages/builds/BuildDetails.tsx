@@ -4,7 +4,7 @@
 // Build details page with real-time log streaming via SignalR.
 // =============================================================================
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
 import { HubConnectionBuilder, HubConnection, LogLevel } from '@microsoft/signalr';
@@ -21,6 +21,7 @@ export function BuildDetails() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const logsContainerRef = useRef<HTMLDivElement>(null);
   const connectionRef = useRef<HubConnection | null>(null);
 
@@ -131,6 +132,21 @@ export function BuildDetails() {
 
   const isInProgress = build.status === 'Running' || build.status === 'Pending';
 
+  const handleCopyLogs = async () => {
+    const payload = logs
+      .map((log) => `[${new Date(log.timestamp).toISOString()}] ${stripAnsi(log.message)}`)
+      .join('\n');
+
+    try {
+      await navigator.clipboard.writeText(payload);
+      setCopyStatus('success');
+    } catch {
+      setCopyStatus('error');
+    }
+
+    setTimeout(() => setCopyStatus('idle'), 1500);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -233,15 +249,26 @@ export function BuildDetails() {
               </span>
             )}
           </div>
-          <label className="flex items-center text-sm text-gray-600 dark:text-slate-300">
-            <input
-              type="checkbox"
-              checked={autoScroll}
-              onChange={(e) => setAutoScroll(e.target.checked)}
-              className="mr-2"
-            />
-            Auto-scroll
-          </label>
+          <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={handleCopyLogs}
+              disabled={logs.length === 0}
+            >
+              {copyStatus === 'success' ? 'Copied' : (copyStatus === 'error' ? 'Copy failed' : 'Copy logs')}
+            </Button>
+            <label className="flex items-center text-sm text-gray-600 dark:text-slate-300">
+              <input
+                type="checkbox"
+                checked={autoScroll}
+                onChange={(e) => setAutoScroll(e.target.checked)}
+                className="mr-2"
+              />
+              Auto-scroll
+            </label>
+          </div>
         </div>
         <div
           ref={logsContainerRef}
@@ -256,12 +283,12 @@ export function BuildDetails() {
             logs.map((log) => (
               <div
                 key={log.id}
-                className={`whitespace-pre-wrap ${getLogColor(log.level)}`}
+                className="whitespace-pre-wrap"
               >
                 <span className="text-gray-500 select-none dark:text-slate-1000">
                   [{formatTime(log.timestamp)}]
                 </span>{' '}
-                {log.message}
+                {renderAnsiLogMessage(log.message, getLogColor(log.level))}
               </div>
             ))
           )}
@@ -290,6 +317,101 @@ function getLogColor(level?: string): string {
       return 'text-success-400';
     default:
       return 'text-gray-100';
+  }
+}
+
+function stripAnsi(value: string): string {
+  return value.replace(/\u001b\[[0-9;]*m/g, '');
+}
+
+function renderAnsiLogMessage(message: string, fallbackClass: string) {
+  const ansiPattern = /\u001b\[([0-9;]*)m/g;
+  const segments: ReactNode[] = [];
+  let currentClass = fallbackClass;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = ansiPattern.exec(message)) !== null) {
+    if (match.index > lastIndex) {
+      const text = message.slice(lastIndex, match.index);
+      segments.push(
+        <span key={`${lastIndex}-${match.index}`} className={currentClass}>
+          {text}
+        </span>,
+      );
+    }
+
+    const codes = match[1]
+      .split(';')
+      .filter((part) => part.length > 0)
+      .map((part) => parseInt(part, 10));
+
+    if (codes.length === 0) {
+      currentClass = fallbackClass;
+    }
+
+    for (const code of codes) {
+      if (code === 0 || code === 39) {
+        currentClass = fallbackClass;
+        continue;
+      }
+
+      const mappedClass = getAnsiColorClass(code);
+      if (mappedClass) {
+        currentClass = mappedClass;
+      }
+    }
+
+    lastIndex = ansiPattern.lastIndex;
+  }
+
+  if (lastIndex < message.length) {
+    segments.push(
+      <span key={`${lastIndex}-${message.length}`} className={currentClass}>
+        {message.slice(lastIndex)}
+      </span>,
+    );
+  }
+
+  return segments.length > 0 ? segments : <span className={fallbackClass}>{message}</span>;
+}
+
+function getAnsiColorClass(code: number): string | null {
+  switch (code) {
+    case 30:
+      return 'text-gray-500';
+    case 31:
+      return 'text-error-400';
+    case 32:
+      return 'text-success-400';
+    case 33:
+      return 'text-warning-400';
+    case 34:
+      return 'text-blue-400';
+    case 35:
+      return 'text-fuchsia-400';
+    case 36:
+      return 'text-cyan-400';
+    case 37:
+      return 'text-gray-100';
+    case 90:
+      return 'text-gray-400';
+    case 91:
+      return 'text-red-300';
+    case 92:
+      return 'text-green-300';
+    case 93:
+      return 'text-yellow-300';
+    case 94:
+      return 'text-blue-300';
+    case 95:
+      return 'text-fuchsia-300';
+    case 96:
+      return 'text-cyan-300';
+    case 97:
+      return 'text-white';
+    default:
+      return null;
   }
 }
 

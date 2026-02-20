@@ -76,7 +76,27 @@ export async function getImpersonationStatus(): Promise<{
 
 export async function getAdminProjects(): Promise<{ projects: AdminProjectDto[] }> {
   const response = await api.get('/admin/projects');
-  return { projects: response.data.projects ?? [] };
+  const projects = ((response.data.projects ?? []) as Array<{
+    id: number;
+    repoFullName?: string;
+    name?: string;
+    ownerEmail?: string;
+    totalBuilds?: number;
+    buildCount?: number;
+    lastBuildStatus?: string | null;
+    lastBuildAt?: string | null;
+    isConfigured?: boolean;
+  }>).map((project) => ({
+    id: project.id,
+    repoFullName: project.repoFullName ?? project.name ?? '',
+    ownerEmail: project.ownerEmail ?? '',
+    totalBuilds: project.totalBuilds ?? project.buildCount ?? 0,
+    lastBuildStatus: project.lastBuildStatus ?? null,
+    lastBuildAt: project.lastBuildAt ?? null,
+    isConfigured: project.isConfigured ?? true,
+  }));
+
+  return { projects };
 }
 
 export async function getSystemUpdateStatus(

@@ -65,21 +65,39 @@ public class GetAdminProjectsEndpoint : EndpointWithoutRequest<GetAdminProjectsR
             .OrderByDescending(p => p.CreatedAt)
             .Skip((page - 1) * PageSize)
             .Take(PageSize)
+            .Select(p => new
+            {
+                p.Id,
+                p.RepoFullName,
+                OwnerEmail = p.Owner.Email ?? "",
+                OwnerDisplayName = p.Owner.DisplayName ?? p.Owner.Email ?? "User",
+                OwnerId = p.Owner.Id,
+                p.CreatedAt,
+                BuildCount = p.Builds.Count,
+                LastBuild = p.Builds
+                    .OrderByDescending(b => b.QueuedAt)
+                    .Select(b => new { b.QueuedAt, b.Status })
+                    .FirstOrDefault()
+            })
+            .ToListAsync(ct);
+
+        var projectDtos = projects
             .Select(p => new AdminProjectDto(
                 p.Id,
                 p.RepoFullName,
                 null,
-                p.Owner.Email ?? "",
-                p.Owner.DisplayName ?? p.Owner.Email ?? "User",
-                p.Owner.Id,
+                p.OwnerEmail,
+                p.OwnerDisplayName,
+                p.OwnerId,
                 p.CreatedAt,
-                p.Builds.Count,
-                p.Builds.OrderByDescending(b => b.QueuedAt).Select(b => (DateTime?)b.QueuedAt).FirstOrDefault()
+                p.BuildCount,
+                p.LastBuild?.QueuedAt,
+                p.LastBuild?.Status.ToString()
             ))
-            .ToListAsync(ct);
+            .ToList();
 
         await SendAsync(new GetAdminProjectsResponse(
-            projects,
+            projectDtos,
             page,
             totalPages,
             totalProjects,

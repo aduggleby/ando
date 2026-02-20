@@ -61,6 +61,11 @@ cd tests/Ando.Server.E2E && npm ci && npm test
 
 Use this generic guidance for any host running Ando Server. Do not hard-code environment-specific IPs, usernames, or SSH key paths in repository docs.
 
+Current production host details (requested override):
+- Host: `192.168.1.150`
+- User: `ando`
+- SSH key: `~/.sshkeys/id_ad_dualconsult_com`
+
 Common management commands (run over SSH on your server):
 
 ```bash

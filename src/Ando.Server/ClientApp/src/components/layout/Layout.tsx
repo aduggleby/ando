@@ -6,6 +6,7 @@
 
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Button } from '@/components/ui/Button';
@@ -14,6 +15,8 @@ import { getSystemUpdateStatus, triggerSystemUpdate } from '@/api/admin';
 import { ServerUpdateOverlay } from './ServerUpdateOverlay';
 import { useServerUpdateFlow } from './useServerUpdateFlow';
 import { useSystemUpdateRefresh } from '@/hooks/useSystemUpdateRefresh';
+
+const SERVER_VERSION_STORAGE_KEY = 'ando.server.version';
 
 export function Layout() {
   const { user, logout, isAuthenticated } = useAuth();
@@ -24,7 +27,8 @@ export function Layout() {
   const { data: appVersion } = useQuery({
     queryKey: ['app-version'],
     queryFn: getAppVersion,
-    staleTime: 1000 * 60 * 5,
+    staleTime: 0,
+    refetchInterval: 1000 * 60,
   });
   const { data: systemUpdateStatus } = useQuery({
     queryKey: ['system-update-status'],
@@ -41,6 +45,35 @@ export function Layout() {
     },
   });
   useSystemUpdateRefresh(isAuthenticated && !!user?.isAdmin);
+
+  useEffect(() => {
+    const version = appVersion?.version;
+    if (!version) return;
+
+    let previousVersion: string | null = null;
+    try {
+      previousVersion = localStorage.getItem(SERVER_VERSION_STORAGE_KEY);
+      localStorage.setItem(SERVER_VERSION_STORAGE_KEY, version);
+    } catch {
+      return;
+    }
+
+    if (!previousVersion || previousVersion === version) {
+      return;
+    }
+
+    // Version changed on the server while the SPA was open.
+    // Clear browser caches and hard-reload with a version marker.
+    if ('caches' in window) {
+      void caches.keys()
+        .then((cacheKeys) => Promise.all(cacheKeys.map((key) => caches.delete(key))))
+        .catch(() => {});
+    }
+
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set('sv', version);
+    window.location.replace(nextUrl.toString());
+  }, [appVersion?.version]);
 
   const handleLogout = async () => {
     await logout();

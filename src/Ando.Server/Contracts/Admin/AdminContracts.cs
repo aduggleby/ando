@@ -337,6 +337,7 @@ public record GetAdminProjectsResponse(
 /// <param name="CreatedAt">When the project was created.</param>
 /// <param name="BuildCount">Total number of builds for this project.</param>
 /// <param name="LastBuildAt">When the last build was started.</param>
+/// <param name="LastBuildStatus">Status of the most recent build, if any.</param>
 public record AdminProjectDto(
     int Id,
     string Name,
@@ -346,7 +347,8 @@ public record AdminProjectDto(
     int OwnerId,
     DateTime CreatedAt,
     int BuildCount,
-    DateTime? LastBuildAt
+    DateTime? LastBuildAt,
+    string? LastBuildStatus
 );
 
 // =============================================================================
