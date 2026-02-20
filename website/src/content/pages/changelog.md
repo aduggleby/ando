@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.127
+
+**2026-02-20**
+
+- Add self-update system for Ando Server
+
 ## 0.9.126
 
 **2026-02-20**
