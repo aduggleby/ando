@@ -109,6 +109,8 @@ To skip the prompt, use `--dind` flag, add `dind: true` to `ando.config`, or set
 
 **CI Server:** When running on the ANDO CI Server, the Docker CLI is automatically installed in DIND build containers. `Docker.Install()` is not required in build scripts on the server, but is recommended for portability. The server also configures a git committer identity (`user.name`/`user.email`) in build containers automatically, so `Git.Tag()` with annotated tags works without manual setup. Default: `Ando Server <ando-server@localhost>`. Override with `GIT_COMMITTER_NAME`/`GIT_COMMITTER_EMAIL` env vars.
 
+**CI Server health checks:** `GET /health` returns 200 when the database is reachable, 503 otherwise (no auth required — use for load balancers and Docker health checks). `GET /api/admin/system-health` (admin-only) probes database, background jobs, and GitHub App authentication, returning per-subsystem status (`healthy`/`warning`/`error`).
+
 **CI Server optional in-app self-update (admin):** Enable with `SelfUpdate__Enabled=true` in `/opt/ando/config/.env`. The server checks every 5 minutes for a newer `ghcr.io/aduggleby/ando-server:latest` image. When available, admins see an update bar in the web UI. Triggering update queues a background job that starts a helper Docker CLI container to run `docker compose pull ando-server` and `docker compose up -d ando-server`.
 
 **CI Server + External SQL setup:** If you install the CI server with `--external-sql`, create a dedicated SQL database/login first.

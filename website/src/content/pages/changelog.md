@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.128
+
+**2026-02-20**
+
+- Add system health monitoring endpoint
+- Improve project status grouping on the dashboard
+
 ## 0.9.127
 
 **2026-02-20**

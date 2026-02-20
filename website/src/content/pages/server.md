@@ -284,6 +284,28 @@ ANDO_TOKEN_NAME="CI automation" \
 node tests/Ando.Server.E2E/tools/create-api-token.js
 ```
 
+## Health Checks
+
+The server exposes health endpoints for monitoring and load balancers.
+
+### Basic Health (`GET /health`)
+
+Returns `200` with `{"status": "healthy"}` when the server can connect to and query the database. Returns `503` with `{"status": "unhealthy", "error": "..."}` when the database is unreachable. No authentication required.
+
+Use this endpoint for Docker health checks, load balancer probes, and uptime monitoring.
+
+### System Health (`GET /api/admin/system-health`)
+
+Admin-only endpoint that runs live probes against all subsystems:
+
+| Check | What It Tests |
+|-------|---------------|
+| Database | Connectivity and query execution |
+| Background Jobs | Hangfire worker availability |
+| GitHub Integration | GitHub App authentication |
+
+Each check returns a status of `healthy`, `warning`, or `error` with a descriptive message. Results are displayed in the admin dashboard.
+
 ## Server Management
 
 Management scripts installed to `/opt/ando/scripts/`:
