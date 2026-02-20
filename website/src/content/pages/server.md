@@ -169,6 +169,7 @@ How it works:
 - Clicking update queues a background job that starts a helper Docker CLI container to run:
   - `docker compose pull ando-server`
   - `docker compose up -d ando-server`
+- After triggering an update, a full-screen overlay appears with a 30-second countdown while the container restarts, then automatically reconnects by polling the `/health` endpoint and reloads the page when the server is back.
 
 If disabled (default), no update checks or update UI are shown.
 

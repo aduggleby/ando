@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.129
+
+**2026-02-20**
+
+- Add server update overlay with countdown and automatic reconnect
+
 ## 0.9.128
 
 **2026-02-20**
