@@ -18,9 +18,12 @@ import { Alert } from '@/components/ui/Alert';
 import { Badge, getBuildStatusVariant } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/context/AuthContext';
+import { ServerUpdateOverlay } from '@/components/layout/ServerUpdateOverlay';
+import { useServerUpdateFlow } from '@/components/layout/useServerUpdateFlow';
 
 export function AdminDashboard() {
   const { user } = useAuth();
+  const updateFlow = useServerUpdateFlow();
 
   const { data: dashboardData, isLoading: dashboardLoading, error: dashboardError } = useQuery({
     queryKey: ['admin-dashboard'],
@@ -54,6 +57,7 @@ export function AdminDashboard() {
   const triggerUpdateMutation = useMutation({
     mutationFn: triggerSystemUpdate,
     onSuccess: () => {
+      updateFlow.start();
       void refetchUpdateStatus();
     },
   });
@@ -71,6 +75,14 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-6">
+      {updateFlow.isVisible && (
+        <ServerUpdateOverlay
+          phase={updateFlow.phase === 'reconnecting' ? 'reconnecting' : 'countdown'}
+          remainingSeconds={updateFlow.remainingSeconds}
+          attempts={updateFlow.attempts}
+        />
+      )}
+
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Admin Dashboard</h1>

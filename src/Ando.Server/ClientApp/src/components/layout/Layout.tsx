@@ -11,12 +11,15 @@ import { useTheme } from '@/context/ThemeContext';
 import { Button } from '@/components/ui/Button';
 import { getAppVersion } from '@/api/system';
 import { getSystemUpdateStatus, triggerSystemUpdate } from '@/api/admin';
+import { ServerUpdateOverlay } from './ServerUpdateOverlay';
+import { useServerUpdateFlow } from './useServerUpdateFlow';
 
 export function Layout() {
   const { user, logout, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { preference, setPreference, resolved } = useTheme();
+  const updateFlow = useServerUpdateFlow();
   const { data: appVersion } = useQuery({
     queryKey: ['app-version'],
     queryFn: getAppVersion,
@@ -32,6 +35,9 @@ export function Layout() {
   });
   const updateMutation = useMutation({
     mutationFn: triggerSystemUpdate,
+    onSuccess: () => {
+      updateFlow.start();
+    },
   });
 
   const handleLogout = async () => {
@@ -53,6 +59,14 @@ export function Layout() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex flex-col">
+      {updateFlow.isVisible && (
+        <ServerUpdateOverlay
+          phase={updateFlow.phase === 'reconnecting' ? 'reconnecting' : 'countdown'}
+          remainingSeconds={updateFlow.remainingSeconds}
+          attempts={updateFlow.attempts}
+        />
+      )}
+
       {isAuthenticated && user?.isAdmin && systemUpdateStatus?.enabled && (
         <SelfUpdateBanner
           status={systemUpdateStatus}
@@ -165,14 +179,14 @@ function SelfUpdateBanner({
   }
 
   return (
-    <div className="border-b border-primary-200 bg-primary-50 dark:border-primary-700/40 dark:bg-primary-950/40">
+    <div className="border-b border-warning-200 bg-warning-50 dark:border-warning-500/40 dark:bg-warning-500/15">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center gap-3 text-sm">
         {status.isUpdateInProgress ? (
-          <span className="text-primary-800 dark:text-primary-200">
+          <span className="text-warning-800 dark:text-warning-100">
             Server update in progress. The app may restart shortly.
           </span>
         ) : status.isUpdateAvailable ? (
-          <span className="text-primary-800 dark:text-primary-200">
+          <span className="text-warning-800 dark:text-warning-100">
             New server image available
             {status.currentVersion || status.latestVersion
               ? ` (${status.currentVersion ?? 'current'} -> ${status.latestVersion ?? 'latest'})`
