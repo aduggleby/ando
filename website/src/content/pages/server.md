@@ -11,6 +11,7 @@ The ANDO CI Server runs your `build.csando` scripts automatically when you push 
 ### Features
 
 - **GitHub App Integration**: Receives webhooks on push events and reports build status back to GitHub.
+- **Real-Time Updates**: Build status changes and system updates are pushed to the web UI via SignalR — dashboards and project lists refresh automatically.
 - **Rootless Docker**: Runs under rootless Docker for enhanced security. Build containers are isolated.
 - **Automatic HTTPS**: Caddy reverse proxy automatically obtains and renews Let's Encrypt certificates.
 - **Automated Backups**: Daily backups with 7-day daily + 12-month monthly retention.

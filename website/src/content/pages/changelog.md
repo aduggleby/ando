@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.131
+
+**2026-02-20**
+
+- Add real-time build status and system update notifications
+
 ## 0.9.130
 
 **2026-02-20**
