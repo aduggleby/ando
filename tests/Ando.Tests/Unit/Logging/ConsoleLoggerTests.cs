@@ -268,6 +268,35 @@ public class ConsoleLoggerTests
         logger.Dispose();
     }
 
+    [Fact]
+    public void Constructor_AllowsNestedLoggerToShareSameLogFile()
+    {
+        var logFilePath = Path.Combine(Path.GetTempPath(), $"ando-log-{Guid.NewGuid():N}.log");
+        var originalIndentLevel = Environment.GetEnvironmentVariable(ConsoleLogger.IndentLevelEnvVar);
+
+        try
+        {
+            Environment.SetEnvironmentVariable(ConsoleLogger.IndentLevelEnvVar, null);
+            using var parentLogger = new ConsoleLogger(useColor: false, logFilePath: logFilePath);
+
+            Environment.SetEnvironmentVariable(ConsoleLogger.IndentLevelEnvVar, "1");
+            var exception = Record.Exception(() =>
+            {
+                using var childLogger = new ConsoleLogger(useColor: false, logFilePath: logFilePath);
+            });
+
+            exception.ShouldBeNull();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ConsoleLogger.IndentLevelEnvVar, originalIndentLevel);
+            if (File.Exists(logFilePath))
+            {
+                File.Delete(logFilePath);
+            }
+        }
+    }
+
     private static string CaptureOutput(Action action)
     {
         var originalOut = Console.Out;

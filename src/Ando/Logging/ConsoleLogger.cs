@@ -80,10 +80,13 @@ public class ConsoleLogger : IBuildLogger, IDisposable
             : "";
 
         // Set up log file if path provided.
-        // File is cleared on each run to avoid growing indefinitely.
+        // Top-level builds start with a fresh file, nested builds append.
+        // FileShare.ReadWrite allows parent/child ando processes to log concurrently on Windows.
         if (logFilePath != null)
         {
-            _logFile = new StreamWriter(logFilePath, append: false) { AutoFlush = true };
+            var fileMode = _indentLevel > 0 ? FileMode.Append : FileMode.Create;
+            var fileStream = new FileStream(logFilePath, fileMode, FileAccess.Write, FileShare.ReadWrite);
+            _logFile = new StreamWriter(fileStream) { AutoFlush = true };
             LogToFile($"Build started at {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
             LogToFile(new string('-', 60));
         }
