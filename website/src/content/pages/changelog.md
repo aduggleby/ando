@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.130
+
+**2026-02-20**
+
+- Improve version detection when no exact tag matches the current commit
+
 ## 0.9.129
 
 **2026-02-20**
