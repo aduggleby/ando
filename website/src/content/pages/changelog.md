@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.136
+
+**2026-02-20**
+
+- Fix Docker inspect command formatting
+
 ## 0.9.135
 
 **2026-02-20**
