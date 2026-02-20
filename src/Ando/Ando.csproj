@@ -8,7 +8,7 @@
     <!-- Allow running on newer .NET versions (e.g., .NET 10 when built for .NET 9) -->
     <RollForward>Major</RollForward>
     <AssemblyName>ando</AssemblyName>
-    <Version>0.9.131</Version>
+    <Version>0.9.132</Version>
     <!-- Required for Roslyn scripting to work with single-file publishing -->
     <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
 
