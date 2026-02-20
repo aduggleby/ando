@@ -407,7 +407,7 @@ public class SystemUpdateService : ISystemUpdateService
 
     private async Task<string?> InspectMountSourceAsync(string containerNameOrId, string destination, CancellationToken ct)
     {
-        var format = $"{{{{range .Mounts}}}}{{{{if eq .Destination \\\"{destination}\\\"}}}}{{{{.Source}}}}{{{{end}}}}{{{{end}}}}";
+        var format = $"{{{{range .Mounts}}}}{{{{if eq .Destination \"{destination}\"}}}}{{{{.Source}}}}{{{{end}}}}{{{{end}}}}";
         var result = await RunDockerAsync(
             ["inspect", containerNameOrId, "--format", format],
             ct,
