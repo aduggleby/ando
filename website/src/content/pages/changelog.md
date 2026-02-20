@@ -3,6 +3,15 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.126
+
+**2026-02-20**
+
+- Migrate server API to FastEndpoints for improved performance and maintainability
+- Modernize the web dashboard frontend
+- Fix logging to allow nested processes to share the same log file
+- Add stop-dev script for managing the development environment
+
 ## 0.9.118
 
 **2026-02-19**
