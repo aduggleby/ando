@@ -328,6 +328,17 @@ export interface TriggerSystemUpdateResponse {
   jobId: string | null;
 }
 
+export interface SystemHealthCheckDto {
+  name: string;
+  status: 'healthy' | 'warning' | 'error';
+  message: string;
+}
+
+export interface SystemHealthResponse {
+  checks: SystemHealthCheckDto[];
+  checkedAtUtc: string;
+}
+
 // API token types
 export interface ApiTokenDto {
   id: number;

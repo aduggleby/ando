@@ -12,6 +12,7 @@ import type {
   AdminProjectDto,
   SystemUpdateStatusResponse,
   TriggerSystemUpdateResponse,
+  SystemHealthResponse,
 } from '@/types';
 
 export async function getAdminDashboard(): Promise<{ dashboard: AdminDashboardDto }> {
@@ -89,5 +90,10 @@ export async function getSystemUpdateStatus(
 
 export async function triggerSystemUpdate(): Promise<TriggerSystemUpdateResponse> {
   const response = await api.post('/admin/system-update');
+  return response.data;
+}
+
+export async function getSystemHealth(): Promise<SystemHealthResponse> {
+  const response = await api.get('/admin/system-health');
   return response.data;
 }

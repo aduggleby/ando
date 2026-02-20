@@ -8,9 +8,11 @@
 // =============================================================================
 
 using System.Diagnostics;
+using Ando.Server.Data;
 using Ando.Server.GitHub;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
 
 namespace Ando.Server.Endpoints.Infrastructure;
 
@@ -19,6 +21,13 @@ namespace Ando.Server.Endpoints.Infrastructure;
 /// </summary>
 public class RootHealthEndpoint : EndpointWithoutRequest<object>
 {
+    private readonly AndoDbContext _db;
+
+    public RootHealthEndpoint(AndoDbContext db)
+    {
+        _db = db;
+    }
+
     public override void Configure()
     {
         Get("/health");
@@ -28,7 +37,32 @@ public class RootHealthEndpoint : EndpointWithoutRequest<object>
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        await SendAsync(new { status = "healthy", timestamp = DateTime.UtcNow }, cancellation: ct);
+        try
+        {
+            var canConnect = await _db.Database.CanConnectAsync(ct);
+            if (!canConnect)
+            {
+                await SendAsync(new
+                {
+                    status = "unhealthy",
+                    error = "Cannot connect to database",
+                    timestamp = DateTime.UtcNow
+                }, 503, ct);
+                return;
+            }
+
+            await _db.Projects.AsNoTracking().Select(p => p.Id).FirstOrDefaultAsync(ct);
+            await SendAsync(new { status = "healthy", timestamp = DateTime.UtcNow }, cancellation: ct);
+        }
+        catch (Exception ex)
+        {
+            await SendAsync(new
+            {
+                status = "unhealthy",
+                error = ex.Message,
+                timestamp = DateTime.UtcNow
+            }, 503, ct);
+        }
     }
 }
 
@@ -150,12 +184,24 @@ public class GitHubHealthEndpoint : EndpointWithoutRequest<object>
 
         try
         {
+            var slug = await _gitHubService.GetAppSlugAsync();
+            if (string.IsNullOrWhiteSpace(slug))
+            {
+                await SendAsync(new
+                {
+                    status = "unhealthy",
+                    error = "GitHub App authentication failed",
+                    timestamp = DateTime.UtcNow
+                }, 503, ct);
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(repo))
             {
                 await SendAsync(new
                 {
                     status = "healthy",
-                    message = "GitHub App configuration is valid. Provide ?repo=owner/repo to test specific repository access.",
+                    message = $"GitHub App authentication is valid ({slug}). Provide ?repo=owner/repo to test specific repository access.",
                     timestamp = DateTime.UtcNow
                 }, cancellation: ct);
                 return;

@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom';
 import {
   getAdminDashboard,
   getAdminProjects,
+  getSystemHealth,
   getSystemUpdateStatus,
   triggerSystemUpdate,
 } from '@/api/admin';
@@ -29,6 +30,16 @@ export function AdminDashboard() {
   const { data: projectsData, isLoading: projectsLoading } = useQuery({
     queryKey: ['admin-projects'],
     queryFn: getAdminProjects,
+  });
+  const {
+    data: systemHealth,
+    isLoading: systemHealthLoading,
+    error: systemHealthError,
+  } = useQuery({
+    queryKey: ['admin-system-health'],
+    queryFn: getSystemHealth,
+    refetchInterval: 1000 * 60,
+    retry: false,
   });
   const {
     data: updateStatus,
@@ -101,11 +112,24 @@ export function AdminDashboard() {
 
         <div className="bg-white border border-gray-200 rounded-xl p-6 dark:bg-slate-900 dark:border-slate-800">
           <h2 className="text-lg font-medium text-gray-900 dark:text-slate-100">System Health</h2>
-          <div className="mt-4 space-y-2">
-            <HealthItem label="Database" status="healthy" />
-            <HealthItem label="Background Jobs" status="healthy" />
-            <HealthItem label="GitHub Integration" status="healthy" />
-          </div>
+          {systemHealthLoading ? (
+            <p className="mt-4 text-sm text-gray-500 dark:text-slate-400">Probing health...</p>
+          ) : systemHealthError ? (
+            <Alert variant="error" className="mt-4 text-sm">
+              Failed to probe system health
+            </Alert>
+          ) : (
+            <div className="mt-4 space-y-2">
+              {(systemHealth?.checks ?? []).map((check) => (
+                <HealthItem
+                  key={check.name}
+                  label={check.name}
+                  status={check.status}
+                  message={check.message}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="bg-white border border-gray-200 rounded-xl p-6 dark:bg-slate-900 dark:border-slate-800">
@@ -259,7 +283,15 @@ function StatCard({ title, value, className = '' }: { title: string; value: numb
   );
 }
 
-function HealthItem({ label, status }: { label: string; status: 'healthy' | 'warning' | 'error' }) {
+function HealthItem({
+  label,
+  status,
+  message,
+}: {
+  label: string;
+  status: 'healthy' | 'warning' | 'error';
+  message?: string;
+}) {
   const colors = {
     healthy: 'bg-success-500',
     warning: 'bg-warning-500',
@@ -273,6 +305,11 @@ function HealthItem({ label, status }: { label: string; status: 'healthy' | 'war
         <span className={`w-2 h-2 rounded-full ${colors[status]} mr-2`}></span>
         <span className="text-gray-900 capitalize dark:text-slate-100">{status}</span>
       </div>
+      {message && (
+        <span className="text-xs text-gray-400 dark:text-slate-500 ml-2 truncate max-w-[160px]" title={message}>
+          {message}
+        </span>
+      )}
     </div>
   );
 }

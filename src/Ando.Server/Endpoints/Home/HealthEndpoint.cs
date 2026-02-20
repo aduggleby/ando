@@ -3,15 +3,17 @@
 //
 // Summary: FastEndpoint for basic health check.
 //
-// Returns a simple healthy status for load balancer and Docker health checks.
+// Returns readiness status based on live database connectivity.
 //
 // Design Decisions:
-// - Always returns 200 if the server is running
+// - Returns 200 only when the API can execute a database query
 // - No authentication required
 // =============================================================================
 
 using Ando.Server.Contracts.Home;
+using Ando.Server.Data;
 using FastEndpoints;
+using Microsoft.EntityFrameworkCore;
 
 namespace Ando.Server.Endpoints.Home;
 
@@ -20,6 +22,17 @@ namespace Ando.Server.Endpoints.Home;
 /// </summary>
 public class HealthEndpoint : EndpointWithoutRequest<HealthResponse>
 {
+    private readonly AndoDbContext _db;
+
+    /// <summary>
+    /// Initializes endpoint dependencies.
+    /// </summary>
+    /// <param name="db">Application database context.</param>
+    public HealthEndpoint(AndoDbContext db)
+    {
+        _db = db;
+    }
+
     public override void Configure()
     {
         Get("/health");
@@ -28,6 +41,22 @@ public class HealthEndpoint : EndpointWithoutRequest<HealthResponse>
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        await SendAsync(new HealthResponse("healthy", DateTime.UtcNow), cancellation: ct);
+        try
+        {
+            var canConnect = await _db.Database.CanConnectAsync(ct);
+            if (!canConnect)
+            {
+                await SendAsync(new HealthResponse("unhealthy", DateTime.UtcNow), 503, ct);
+                return;
+            }
+
+            // Run a tiny query to validate command execution, not just TCP reachability.
+            await _db.Projects.AsNoTracking().Select(p => p.Id).FirstOrDefaultAsync(ct);
+            await SendAsync(new HealthResponse("healthy", DateTime.UtcNow), cancellation: ct);
+        }
+        catch
+        {
+            await SendAsync(new HealthResponse("unhealthy", DateTime.UtcNow), 503, ct);
+        }
     }
 }

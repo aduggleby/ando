@@ -392,3 +392,25 @@ public record TriggerSystemUpdateResponse(
     string Message,
     string? JobId = null
 );
+
+/// <summary>
+/// Response containing live system health probe results.
+/// </summary>
+/// <param name="Checks">Individual health checks.</param>
+/// <param name="CheckedAtUtc">Timestamp of the probe execution.</param>
+public record SystemHealthResponse(
+    IReadOnlyList<SystemHealthCheckDto> Checks,
+    DateTime CheckedAtUtc
+);
+
+/// <summary>
+/// A single health check result.
+/// </summary>
+/// <param name="Name">Display name of the subsystem.</param>
+/// <param name="Status">Health status (`healthy`, `warning`, `error`).</param>
+/// <param name="Message">Additional status context.</param>
+public record SystemHealthCheckDto(
+    string Name,
+    string Status,
+    string Message
+);

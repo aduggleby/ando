@@ -37,14 +37,30 @@ export function Home() {
   const dashboard = data?.dashboard;
   const projects = projectsData?.projects || [];
 
-  // Group projects by status
-  const failed = projects.filter(p => p.lastBuildStatus === 'Failed');
-  const building = projects.filter(p => p.lastBuildStatus === 'Running' || p.lastBuildStatus === 'Pending');
-  const succeeded = projects.filter(p => p.lastBuildStatus === 'Succeeded');
-  const other = projects.filter(p =>
-    !p.lastBuildStatus ||
-    !['Failed', 'Running', 'Pending', 'Succeeded'].includes(p.lastBuildStatus)
-  );
+  // Group projects by normalized status. "No Builds" is based on build count,
+  // not unknown status strings, to avoid contradictory UI states.
+  const noBuilds = projects.filter(p => p.totalBuilds === 0 || !p.lastBuildStatus);
+  const withBuilds = projects.filter(p => p.totalBuilds > 0 && !!p.lastBuildStatus);
+
+  const failed = withBuilds.filter(p => {
+    const status = normalizeStatus(p.lastBuildStatus);
+    return status === 'failed' || status === 'cancelled' || status === 'timedout';
+  });
+
+  const building = withBuilds.filter(p => {
+    const status = normalizeStatus(p.lastBuildStatus);
+    return status === 'running' || status === 'queued' || status === 'pending';
+  });
+
+  const succeeded = withBuilds.filter(p => {
+    const status = normalizeStatus(p.lastBuildStatus);
+    return status === 'success' || status === 'succeeded';
+  });
+
+  const other = withBuilds.filter(p => {
+    const status = normalizeStatus(p.lastBuildStatus);
+    return !['failed', 'cancelled', 'timedout', 'running', 'queued', 'pending', 'success', 'succeeded'].includes(status);
+  });
 
   return (
     <div className="space-y-6">
@@ -164,8 +180,17 @@ export function Home() {
           />
           {other.length > 0 && (
             <ProjectHealthGroup
-              title="No Builds"
+              title="Other"
               projects={other}
+              dotColor="bg-gray-400 dark:bg-slate-500"
+              dotGlow=""
+            />
+          )}
+
+          {noBuilds.length > 0 && (
+            <ProjectHealthGroup
+              title="No Builds"
+              projects={noBuilds}
               dotColor="bg-gray-400 dark:bg-slate-500"
               dotGlow=""
             />
@@ -273,4 +298,8 @@ function formatDuration(duration: string): string {
     return `${seconds}s`;
   }
   return duration;
+}
+
+function normalizeStatus(status: string | null): string {
+  return (status ?? '').trim().toLowerCase();
 }
