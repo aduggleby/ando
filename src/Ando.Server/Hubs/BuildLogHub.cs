@@ -14,6 +14,7 @@
 
 using Microsoft.AspNetCore.SignalR;
 using System.Security.Claims;
+using Ando.Server.Models;
 
 namespace Ando.Server.Hubs;
 
@@ -35,6 +36,11 @@ public class BuildLogHub : Hub
         if (int.TryParse(userIdClaim, out var userId))
         {
             _ = Groups.AddToGroupAsync(Context.ConnectionId, GetUserGroupName(userId));
+        }
+
+        if (Context.User?.IsInRole(UserRoles.Admin) == true)
+        {
+            _ = Groups.AddToGroupAsync(Context.ConnectionId, GetAdminsGroupName());
         }
 
         _logger.LogInformation(
@@ -110,4 +116,9 @@ public class BuildLogHub : Hub
     /// Gets the SignalR group name for a user.
     /// </summary>
     public static string GetUserGroupName(int userId) => $"user-{userId}";
+
+    /// <summary>
+    /// Gets the SignalR group name for admin users.
+    /// </summary>
+    public static string GetAdminsGroupName() => "admins";
 }

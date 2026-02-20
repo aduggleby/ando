@@ -4,40 +4,22 @@
 // Projects list page showing all user's projects.
 // =============================================================================
 
-import { useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { HubConnectionBuilder, LogLevel } from '@microsoft/signalr';
 import { getProjects } from '@/api/projects';
 import { Loading } from '@/components/ui/Loading';
 import { Alert } from '@/components/ui/Alert';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { useBuildLifecycleRefresh } from '@/hooks/useBuildLifecycleRefresh';
 
 export function ProjectList() {
-  const queryClient = useQueryClient();
+  useBuildLifecycleRefresh(['projects']);
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['projects'],
     queryFn: getProjects,
   });
-
-  useEffect(() => {
-    const connection = new HubConnectionBuilder()
-      .withUrl('/hubs/build-logs')
-      .withAutomaticReconnect()
-      .configureLogging(LogLevel.Warning)
-      .build();
-
-    connection.on('BuildQueued', () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-    });
-
-    connection.start().catch(() => {});
-
-    return () => {
-      connection.stop().catch(() => {});
-    };
-  }, [queryClient]);
 
   if (isLoading) {
     return <Loading size="lg" className="py-12" text="Loading projects..." />;

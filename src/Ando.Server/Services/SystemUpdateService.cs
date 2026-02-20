@@ -15,6 +15,8 @@
 
 using System.Diagnostics;
 using Ando.Server.Configuration;
+using Ando.Server.Hubs;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 
 namespace Ando.Server.Services;
@@ -69,6 +71,7 @@ public class SystemUpdateService : ISystemUpdateService
 {
     private const string DockerSocketMountDestination = "/var/run/docker.sock";
     private readonly SelfUpdateSettings _settings;
+    private readonly IHubContext<BuildLogHub> _hubContext;
     private readonly ILogger<SystemUpdateService> _logger;
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
     private readonly SemaphoreSlim _updateLock = new(1, 1);
@@ -80,9 +83,11 @@ public class SystemUpdateService : ISystemUpdateService
     /// </summary>
     public SystemUpdateService(
         IOptions<SelfUpdateSettings> settings,
+        IHubContext<BuildLogHub> hubContext,
         ILogger<SystemUpdateService> logger)
     {
         _settings = settings.Value;
+        _hubContext = hubContext;
         _logger = logger;
         _status = new SystemUpdateStatusSnapshot(
             _settings.Enabled,
@@ -276,9 +281,40 @@ public class SystemUpdateService : ISystemUpdateService
 
     private void UpdateStatus(Func<SystemUpdateStatusSnapshot, SystemUpdateStatusSnapshot> updater)
     {
+        SystemUpdateStatusSnapshot updated;
         lock (_statusLock)
         {
             _status = updater(_status);
+            updated = _status;
+        }
+
+        _ = BroadcastStatusChangedAsync(updated);
+    }
+
+    private async Task BroadcastStatusChangedAsync(SystemUpdateStatusSnapshot status)
+    {
+        try
+        {
+            await _hubContext.Clients
+                .Group(BuildLogHub.GetAdminsGroupName())
+                .SendAsync("SystemUpdateStatusChanged", new
+                {
+                    enabled = status.Enabled,
+                    isChecking = status.IsChecking,
+                    isUpdateAvailable = status.IsUpdateAvailable,
+                    isUpdateInProgress = status.IsUpdateInProgress,
+                    currentImageId = status.CurrentImageId,
+                    latestImageId = status.LatestImageId,
+                    currentVersion = status.CurrentVersion,
+                    latestVersion = status.LatestVersion,
+                    lastCheckedAtUtc = status.LastCheckedAtUtc,
+                    lastTriggeredAtUtc = status.LastTriggeredAtUtc,
+                    lastError = status.LastError
+                });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed broadcasting system update status change.");
         }
     }
 
@@ -377,4 +413,3 @@ public class SystemUpdateService : ISystemUpdateService
 
     private sealed record ProcessResult(int ExitCode, string StdOut, string StdErr);
 }
-

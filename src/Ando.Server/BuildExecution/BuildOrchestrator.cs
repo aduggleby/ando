@@ -182,6 +182,7 @@ public partial class BuildOrchestrator : IBuildOrchestrator
             build.Status = BuildStatus.Running;
             build.StartedAt = DateTime.UtcNow;
             await db.SaveChangesAsync(linkedCts.Token);
+            await PublishBuildStatusChangedAsync(build, project.OwnerId, linkedCts.Token);
 
             // Post pending status to GitHub
             if (project.InstallationId.HasValue)
@@ -276,6 +277,16 @@ public partial class BuildOrchestrator : IBuildOrchestrator
             }
 
             await db.SaveChangesAsync();
+            await PublishBuildStatusChangedAsync(build, project.OwnerId, CancellationToken.None);
+            await _hubContext.Clients
+                .Group(BuildLogHub.GetGroupName(build.Id))
+                .SendAsync("BuildCompleted", new
+                {
+                    buildId = build.Id,
+                    status = build.Status.ToString(),
+                    finishedAt = build.FinishedAt,
+                    durationSeconds = build.Duration?.TotalSeconds
+                });
 
             // Unregister cancellation
             _cancellationRegistry.Unregister(buildId);
@@ -319,6 +330,24 @@ public partial class BuildOrchestrator : IBuildOrchestrator
                 "Build {BuildId} completed with status {Status} in {Duration:F1}s (gitTag: {GitTag})",
                 buildId, build.Status, build.Duration?.TotalSeconds ?? 0, build.GitVersionTag ?? "-");
         }
+    }
+
+    private async Task PublishBuildStatusChangedAsync(Build build, int ownerId, CancellationToken ct)
+    {
+        await _hubContext.Clients
+            .Group(BuildLogHub.GetUserGroupName(ownerId))
+            .SendAsync("BuildStatusChanged", new
+            {
+                buildId = build.Id,
+                projectId = build.ProjectId,
+                status = build.Status.ToString(),
+                queuedAt = build.QueuedAt,
+                startedAt = build.StartedAt,
+                finishedAt = build.FinishedAt,
+                durationSeconds = build.Duration?.TotalSeconds,
+                gitVersionTag = build.GitVersionTag,
+                errorMessage = build.ErrorMessage
+            }, ct);
     }
 
     /// <summary>

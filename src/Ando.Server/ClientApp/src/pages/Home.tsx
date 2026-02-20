@@ -12,9 +12,12 @@ import { getProjects } from '@/api/projects';
 import { Loading } from '@/components/ui/Loading';
 import { Alert } from '@/components/ui/Alert';
 import { Badge, getBuildStatusVariant } from '@/components/ui/Badge';
+import { useBuildLifecycleRefresh } from '@/hooks/useBuildLifecycleRefresh';
 import type { ProjectListItemDto } from '@/types';
 
 export function Home() {
+  useBuildLifecycleRefresh(['dashboard', 'projects']);
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard'],
     queryFn: getDashboard,

@@ -99,29 +99,9 @@ public class BuildService : IBuildService
             "Queued build {BuildId} for project {ProjectId} (job: {JobId})",
             build.Id, projectId, jobId);
 
-        // Notify UI clients to refresh project lists when a new build is queued.
-        if (project != null)
-        {
-            _ = _hubContext.Clients
-                .Group(BuildLogHub.GetUserGroupName(project.OwnerId))
-                .SendAsync("BuildQueued", new
-                {
-                    BuildId = build.Id,
-                    ProjectId = projectId,
-                    QueuedAt = build.QueuedAt
-                });
-        }
-        else
-        {
-            _ = _hubContext.Clients
-                .All
-                .SendAsync("BuildQueued", new
-                {
-                    BuildId = build.Id,
-                    ProjectId = projectId,
-                    QueuedAt = build.QueuedAt
-                });
-        }
+        // Notify UI clients so dashboard/project lists refresh immediately.
+        await PublishBuildQueuedAsync(build, project?.OwnerId);
+        await PublishBuildStatusChangedAsync(build, project?.OwnerId);
 
         return build.Id;
     }
@@ -191,6 +171,11 @@ public class BuildService : IBuildService
             await _db.SaveChangesAsync();
 
             _logger.LogInformation("Cancelled build {BuildId} (status: {Status})", buildId, build.Status);
+            var ownerId = await _db.Projects
+                .Where(p => p.Id == build.ProjectId)
+                .Select(p => (int?)p.OwnerId)
+                .FirstOrDefaultAsync();
+            await PublishBuildStatusChangedAsync(build, ownerId);
             return true;
         }
 
@@ -262,5 +247,71 @@ public class BuildService : IBuildService
         if (stepsFailed.HasValue) build.StepsFailed = stepsFailed.Value;
 
         await _db.SaveChangesAsync();
+
+        var ownerId = await _db.Projects
+            .Where(p => p.Id == build.ProjectId)
+            .Select(p => (int?)p.OwnerId)
+            .FirstOrDefaultAsync();
+        await PublishBuildStatusChangedAsync(build, ownerId);
+    }
+
+    private async Task PublishBuildQueuedAsync(Build build, int? ownerId)
+    {
+        try
+        {
+            var payload = new
+            {
+                buildId = build.Id,
+                projectId = build.ProjectId,
+                queuedAt = build.QueuedAt
+            };
+
+            if (ownerId.HasValue)
+            {
+                await _hubContext.Clients
+                    .Group(BuildLogHub.GetUserGroupName(ownerId.Value))
+                    .SendAsync("BuildQueued", payload);
+                return;
+            }
+
+            await _hubContext.Clients.All.SendAsync("BuildQueued", payload);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed publishing BuildQueued event for build {BuildId}", build.Id);
+        }
+    }
+
+    private async Task PublishBuildStatusChangedAsync(Build build, int? ownerId)
+    {
+        try
+        {
+            var payload = new
+            {
+                buildId = build.Id,
+                projectId = build.ProjectId,
+                status = build.Status.ToString(),
+                queuedAt = build.QueuedAt,
+                startedAt = build.StartedAt,
+                finishedAt = build.FinishedAt,
+                durationSeconds = build.Duration?.TotalSeconds,
+                gitVersionTag = build.GitVersionTag,
+                errorMessage = build.ErrorMessage
+            };
+
+            if (ownerId.HasValue)
+            {
+                await _hubContext.Clients
+                    .Group(BuildLogHub.GetUserGroupName(ownerId.Value))
+                    .SendAsync("BuildStatusChanged", payload);
+                return;
+            }
+
+            await _hubContext.Clients.All.SendAsync("BuildStatusChanged", payload);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed publishing BuildStatusChanged event for build {BuildId}", build.Id);
+        }
     }
 }

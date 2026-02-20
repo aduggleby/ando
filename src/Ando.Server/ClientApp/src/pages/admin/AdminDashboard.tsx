@@ -20,10 +20,12 @@ import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/context/AuthContext';
 import { ServerUpdateOverlay } from '@/components/layout/ServerUpdateOverlay';
 import { useServerUpdateFlow } from '@/components/layout/useServerUpdateFlow';
+import { useSystemUpdateRefresh } from '@/hooks/useSystemUpdateRefresh';
 
 export function AdminDashboard() {
   const { user } = useAuth();
   const updateFlow = useServerUpdateFlow();
+  useSystemUpdateRefresh(true);
 
   const { data: dashboardData, isLoading: dashboardLoading, error: dashboardError } = useQuery({
     queryKey: ['admin-dashboard'],

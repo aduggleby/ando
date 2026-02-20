@@ -13,6 +13,7 @@ import { getAppVersion } from '@/api/system';
 import { getSystemUpdateStatus, triggerSystemUpdate } from '@/api/admin';
 import { ServerUpdateOverlay } from './ServerUpdateOverlay';
 import { useServerUpdateFlow } from './useServerUpdateFlow';
+import { useSystemUpdateRefresh } from '@/hooks/useSystemUpdateRefresh';
 
 export function Layout() {
   const { user, logout, isAuthenticated } = useAuth();
@@ -39,6 +40,7 @@ export function Layout() {
       updateFlow.start();
     },
   });
+  useSystemUpdateRefresh(isAuthenticated && !!user?.isAdmin);
 
   const handleLogout = async () => {
     await logout();
