@@ -70,6 +70,7 @@ public interface ISystemUpdateService
 public class SystemUpdateService : ISystemUpdateService
 {
     private const string DockerSocketMountDestination = "/var/run/docker.sock";
+    private const string DockerSocketFallbackSource = "/var/run/docker.sock";
     private readonly SelfUpdateSettings _settings;
     private readonly IHubContext<BuildLogHub> _hubContext;
     private readonly ILogger<SystemUpdateService> _logger;
@@ -355,12 +356,92 @@ public class SystemUpdateService : ISystemUpdateService
 
     private async Task<string?> ResolveDockerSocketSourceAsync(CancellationToken ct)
     {
-        var format = "{{range .Mounts}}{{if eq .Destination \\\"/var/run/docker.sock\\\"}}{{.Source}}{{end}}{{end}}";
+        // Try the configured container first.
+        var fromConfiguredContainer = await InspectMountSourceAsync(_settings.ContainerName, DockerSocketMountDestination, ct);
+        if (!string.IsNullOrWhiteSpace(fromConfiguredContainer))
+        {
+            return fromConfiguredContainer;
+        }
+
+        // Fall back to this container ID/name from HOSTNAME when available.
+        var hostName = Environment.GetEnvironmentVariable("HOSTNAME");
+        if (!string.IsNullOrWhiteSpace(hostName) &&
+            !string.Equals(hostName, _settings.ContainerName, StringComparison.OrdinalIgnoreCase))
+        {
+            var fromHostName = await InspectMountSourceAsync(hostName, DockerSocketMountDestination, ct);
+            if (!string.IsNullOrWhiteSpace(fromHostName))
+            {
+                return fromHostName;
+            }
+        }
+
+        // Fall back to the currently running compose service container.
+        var serviceContainerName = await GetRunningServiceContainerNameAsync(ct);
+        if (!string.IsNullOrWhiteSpace(serviceContainerName) &&
+            !string.Equals(serviceContainerName, _settings.ContainerName, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(serviceContainerName, hostName, StringComparison.OrdinalIgnoreCase))
+        {
+            var fromServiceContainer = await InspectMountSourceAsync(serviceContainerName, DockerSocketMountDestination, ct);
+            if (!string.IsNullOrWhiteSpace(fromServiceContainer))
+            {
+                return fromServiceContainer;
+            }
+        }
+
+        // If DOCKER_HOST is a unix socket, use its path directly.
+        var dockerHost = Environment.GetEnvironmentVariable("DOCKER_HOST");
+        if (!string.IsNullOrWhiteSpace(dockerHost) &&
+            Uri.TryCreate(dockerHost, UriKind.Absolute, out var dockerHostUri) &&
+            string.Equals(dockerHostUri.Scheme, "unix", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(dockerHostUri.AbsolutePath))
+        {
+            return dockerHostUri.AbsolutePath;
+        }
+
+        _logger.LogWarning(
+            "Could not resolve socket mount source via inspect for container '{ContainerName}'. Falling back to {FallbackSource}.",
+            _settings.ContainerName,
+            DockerSocketFallbackSource);
+        return DockerSocketFallbackSource;
+    }
+
+    private async Task<string?> InspectMountSourceAsync(string containerNameOrId, string destination, CancellationToken ct)
+    {
+        var format = $"{{{{range .Mounts}}}}{{{{if eq .Destination \\\"{destination}\\\"}}}}{{{{.Source}}}}{{{{end}}}}{{{{end}}}}";
         var result = await RunDockerAsync(
-            ["inspect", _settings.ContainerName, "--format", format],
+            ["inspect", containerNameOrId, "--format", format],
             ct,
             throwOnError: false);
-        return result.ExitCode == 0 ? result.StdOut.Trim() : null;
+
+        if (result.ExitCode != 0)
+        {
+            _logger.LogDebug(
+                "docker inspect failed while resolving socket source for {Container}: {Error}",
+                containerNameOrId,
+                result.StdErr.Trim());
+            return null;
+        }
+
+        var source = result.StdOut.Trim();
+        return string.IsNullOrWhiteSpace(source) ? null : source;
+    }
+
+    private async Task<string?> GetRunningServiceContainerNameAsync(CancellationToken ct)
+    {
+        var result = await RunDockerAsync(
+            ["ps", "--filter", $"label=com.docker.compose.service={_settings.ServiceName}", "--format", "{{.Names}}"],
+            ct,
+            throwOnError: false);
+
+        if (result.ExitCode != 0)
+        {
+            return null;
+        }
+
+        var firstLine = result.StdOut
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault();
+        return string.IsNullOrWhiteSpace(firstLine) ? null : firstLine.Trim();
     }
 
     private async Task<bool> IsUpdateHelperRunningAsync(CancellationToken ct)
