@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.135
+
+**2026-02-20**
+
+- Improve Docker socket resolution with multi-strategy fallback
+
 ## 0.9.134
 
 **2026-02-20**
