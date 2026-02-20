@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.133
+
+**2026-02-20**
+
+- Add automatic version reload, copy logs button, and admin project field mapping
+
 ## 0.9.132
 
 **2026-02-20**

@@ -171,6 +171,7 @@ How it works:
   - `docker compose pull ando-server`
   - `docker compose up -d ando-server`
 - After triggering an update, a full-screen overlay appears with a 30-second countdown while the container restarts, then automatically reconnects by polling the `/health` endpoint and reloads the page when the server is back.
+- The web UI also detects version changes independently — if the server is updated externally (e.g., by another admin or via SSH), all open browser tabs automatically clear caches and reload within 60 seconds.
 
 If disabled (default), no update checks or update UI are shown.
 
