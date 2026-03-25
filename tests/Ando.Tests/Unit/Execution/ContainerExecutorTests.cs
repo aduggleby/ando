@@ -14,13 +14,26 @@
 using System.Diagnostics;
 using Ando.Execution;
 using Ando.Tests.TestFixtures;
+using Ando.Utilities;
 
 namespace Ando.Tests.Unit.Execution;
 
 [Trait("Category", "Unit")]
-public class ContainerExecutorTests
+public class ContainerExecutorTests : IDisposable
 {
     private readonly TestLogger _logger = new();
+    private readonly string? _originalTrackedKeys = Environment.GetEnvironmentVariable(LoadedEnvironmentVariables.TrackedKeysEnvVar);
+    private readonly Dictionary<string, string?> _originalEnvValues = new(StringComparer.Ordinal);
+
+    public void Dispose()
+    {
+        Environment.SetEnvironmentVariable(LoadedEnvironmentVariables.TrackedKeysEnvVar, _originalTrackedKeys);
+
+        foreach (var (key, value) in _originalEnvValues)
+        {
+            Environment.SetEnvironmentVariable(key, value);
+        }
+    }
 
     // Testable subclass that exposes the protected PrepareProcessStartInfo method
     private class TestableContainerExecutor : ContainerExecutor
@@ -32,6 +45,16 @@ public class ContainerExecutorTests
 
         public ProcessStartInfo TestPrepareProcessStartInfo(string command, string[] args, CommandOptions options)
             => PrepareProcessStartInfo(command, args, options);
+    }
+
+    private void SetEnvironmentVariable(string key, string? value)
+    {
+        if (!_originalEnvValues.ContainsKey(key))
+        {
+            _originalEnvValues[key] = Environment.GetEnvironmentVariable(key);
+        }
+
+        Environment.SetEnvironmentVariable(key, value);
     }
 
     [Fact]
@@ -116,6 +139,40 @@ public class ContainerExecutorTests
         args.Count(a => a == "-e").ShouldBe(2);
         args.ShouldContain("DOTNET_CLI_TELEMETRY_OPTOUT=1");
         args.ShouldContain("CI=true");
+    }
+
+    [Fact]
+    public void PrepareProcessStartInfo_WithTrackedLoadedEnvironmentVariables_AddsEnvFlags()
+    {
+        SetEnvironmentVariable("OPENAI_API_KEY", "test-key");
+        LoadedEnvironmentVariables.Track(["OPENAI_API_KEY"]);
+
+        var executor = new TestableContainerExecutor("my-container", _logger);
+
+        var startInfo = executor.TestPrepareProcessStartInfo("npm", ["run", "translate"], new CommandOptions());
+
+        startInfo.ArgumentList.ShouldContain("-e");
+        startInfo.ArgumentList.ShouldContain("OPENAI_API_KEY=test-key");
+    }
+
+    [Fact]
+    public void PrepareProcessStartInfo_WithExplicitEnvironmentVariable_DoesNotDuplicateTrackedValue()
+    {
+        SetEnvironmentVariable("OPENAI_API_KEY", "tracked-key");
+        LoadedEnvironmentVariables.Track(["OPENAI_API_KEY"]);
+
+        var executor = new TestableContainerExecutor("my-container", _logger);
+        var options = new CommandOptions
+        {
+            Environment = { ["OPENAI_API_KEY"] = "explicit-key" }
+        };
+
+        var startInfo = executor.TestPrepareProcessStartInfo("npm", ["run", "translate"], options);
+        var args = startInfo.ArgumentList.ToList();
+
+        args.Count(a => a == "-e").ShouldBe(1);
+        args.ShouldContain("OPENAI_API_KEY=explicit-key");
+        args.ShouldNotContain("OPENAI_API_KEY=tracked-key");
     }
 
     [Fact]

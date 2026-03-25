@@ -1174,6 +1174,7 @@ public class AndoCli : IDisposable
         {
             Environment.SetEnvironmentVariable(key, value);
         }
+        LoadedEnvironmentVariables.Track(unsetVars.Select(kv => kv.Key));
         _logger.Info($"Loaded {unsetVars.Count} environment variable(s) from {envFileName}");
 
         Console.WriteLine();

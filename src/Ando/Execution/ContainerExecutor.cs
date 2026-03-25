@@ -22,6 +22,7 @@
 
 using System.Diagnostics;
 using Ando.Logging;
+using Ando.Utilities;
 
 namespace Ando.Execution;
 
@@ -75,6 +76,17 @@ public class ContainerExecutor : CommandExecutorBase
         foreach (var (key, value) in options.Environment)
         {
             dockerArgs.AddRange(["-e", $"{key}={value}"]);
+        }
+
+        // Forward environment variables that ANDO explicitly loaded from env files.
+        // This keeps containerized subprocesses consistent with the build script's
+        // host-side environment without inheriting the full host environment.
+        foreach (var (key, value) in LoadedEnvironmentVariables.GetTrackedVariables())
+        {
+            if (!options.Environment.ContainsKey(key))
+            {
+                dockerArgs.AddRange(["-e", $"{key}={value}"]);
+            }
         }
 
         // Append container ID and the actual command to execute.
