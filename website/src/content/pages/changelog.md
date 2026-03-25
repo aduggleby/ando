@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.138
+
+**2026-03-25**
+
+- Fix environment variable tracking to include all keys from env files
+
 ## 0.9.137
 
 **2026-03-25**
