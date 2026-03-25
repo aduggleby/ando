@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.137
+
+**2026-03-25**
+
+- Normalize file permissions across the repository
+- Internal improvements
+
 ## 0.9.136
 
 **2026-02-20**
