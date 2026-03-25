@@ -8,13 +8,17 @@
 // =============================================================================
 
 using Ando.Cli;
+using Ando.Utilities;
 
 namespace Ando.Tests.Unit.Cli;
 
+[Collection("Environment Variables")]
 [Trait("Category", "Unit")]
 public class EnvFileTests : IDisposable
 {
     private readonly string _tempDir;
+    private readonly string? _originalTrackedKeys = Environment.GetEnvironmentVariable(LoadedEnvironmentVariables.TrackedKeysEnvVar);
+    private readonly string? _originalOpenAiApiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
 
     public EnvFileTests()
     {
@@ -24,6 +28,9 @@ public class EnvFileTests : IDisposable
 
     public void Dispose()
     {
+        Environment.SetEnvironmentVariable(LoadedEnvironmentVariables.TrackedKeysEnvVar, _originalTrackedKeys);
+        Environment.SetEnvironmentVariable("OPENAI_API_KEY", _originalOpenAiApiKey);
+
         if (Directory.Exists(_tempDir))
         {
             Directory.Delete(_tempDir, recursive: true);

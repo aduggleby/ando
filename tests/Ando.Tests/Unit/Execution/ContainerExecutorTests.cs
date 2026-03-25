@@ -18,12 +18,18 @@ using Ando.Utilities;
 
 namespace Ando.Tests.Unit.Execution;
 
+[Collection("Environment Variables")]
 [Trait("Category", "Unit")]
 public class ContainerExecutorTests : IDisposable
 {
     private readonly TestLogger _logger = new();
     private readonly string? _originalTrackedKeys = Environment.GetEnvironmentVariable(LoadedEnvironmentVariables.TrackedKeysEnvVar);
     private readonly Dictionary<string, string?> _originalEnvValues = new(StringComparer.Ordinal);
+
+    public ContainerExecutorTests()
+    {
+        Environment.SetEnvironmentVariable(LoadedEnvironmentVariables.TrackedKeysEnvVar, null);
+    }
 
     public void Dispose()
     {

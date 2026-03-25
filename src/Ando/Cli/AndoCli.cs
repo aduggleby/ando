@@ -1102,6 +1102,12 @@ public class AndoCli : IDisposable
         if (envVars.Count == 0)
             return;
 
+        // Track all env file keys, even if some are already set in the current
+        // process. This allows containerized subprocesses to receive values that
+        // were preloaded by the caller (for example via `source .env`) rather than
+        // loaded directly by ANDO during this invocation.
+        LoadedEnvironmentVariables.Track(envVars.Keys);
+
         // Check if any variables are already set - if all are set, skip prompting.
         var unsetVars = envVars.Where(kv => Environment.GetEnvironmentVariable(kv.Key) == null).ToList();
         if (unsetVars.Count == 0)
@@ -1174,7 +1180,6 @@ public class AndoCli : IDisposable
         {
             Environment.SetEnvironmentVariable(key, value);
         }
-        LoadedEnvironmentVariables.Track(unsetVars.Select(kv => kv.Key));
         _logger.Info($"Loaded {unsetVars.Count} environment variable(s) from {envFileName}");
 
         Console.WriteLine();
