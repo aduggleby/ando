@@ -6,7 +6,7 @@
 // Tests verify that:
 // - Each operation registers correct steps
 // - DirectoryRef correctly sets working directory for deploy operations
-// - Steps execute the correct wrangler CLI commands with proper arguments
+// - Steps execute the correct Wrangler or Cloudflare API commands with proper arguments
 // - Environment variable resolution works correctly
 // - Options are correctly applied to commands
 //
@@ -18,6 +18,7 @@ using Ando.Operations;
 using Ando.References;
 using Ando.Steps;
 using Ando.Tests.TestFixtures;
+using Ando.Workflow;
 
 namespace Ando.Tests.Unit.Operations;
 
@@ -74,7 +75,7 @@ public class CloudflareOperationsTests : IDisposable
     }
 
     [Fact]
-    public async Task EnsureAuthenticated_ExecutesWhoamiCommand()
+    public async Task EnsureAuthenticated_VerifiesTokenWithCloudflareApi()
     {
         var cf = CreateCloudflare();
         cf.EnsureAuthenticated();
@@ -82,9 +83,12 @@ public class CloudflareOperationsTests : IDisposable
         await _registry.Steps[0].Execute();
 
         var cmd = _executor.LastCommand!;
-        Assert.Equal("npx", cmd.Command);
-        Assert.Contains("wrangler", cmd.Args);
-        Assert.Contains("whoami", cmd.Args);
+        var script = cmd.GetArgValue("-c")!;
+        Assert.Equal("bash", cmd.Command);
+        Assert.Contains("https://api.cloudflare.com/client/v4/user/tokens/verify", script);
+        Assert.Contains("Authorization: Bearer $CLOUDFLARE_API_TOKEN", script);
+        Assert.DoesNotContain("test-token", script);
+        Assert.Equal("test-token", cmd.Options?.Environment["CLOUDFLARE_API_TOKEN"]);
     }
 
     [Fact]
@@ -106,6 +110,55 @@ public class CloudflareOperationsTests : IDisposable
     }
 
     [Fact]
+    public void EnsurePagesProject_RegistersStep()
+    {
+        var cf = CreateCloudflare();
+
+        cf.EnsurePagesProject("my-site");
+
+        Assert.Single(_registry.Steps);
+        Assert.Equal("Cloudflare.Pages.EnsureProject", _registry.Steps[0].Name);
+        Assert.Equal("my-site", _registry.Steps[0].Context);
+    }
+
+    [Fact]
+    public async Task EnsurePagesProject_VerifiesProjectWithCloudflareApi()
+    {
+        var cf = CreateCloudflare();
+        cf.EnsurePagesProject("my-site");
+
+        await _registry.Steps[0].Execute();
+
+        var cmd = _executor.LastCommand!;
+        var script = cmd.GetArgValue("-c")!;
+        Assert.Equal("bash", cmd.Command);
+        Assert.Contains("https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/my-site", script);
+        Assert.Contains("Authorization: Bearer $CLOUDFLARE_API_TOKEN", script);
+        Assert.DoesNotContain("test-token", script);
+        Assert.Equal("test-token", cmd.Options?.Environment["CLOUDFLARE_API_TOKEN"]);
+        Assert.Equal("test-account-id", cmd.Options?.Environment["CLOUDFLARE_ACCOUNT_ID"]);
+    }
+
+    [Fact]
+    public void EnsurePagesProject_DeduplicatesProjectChecks()
+    {
+        var cf = CreateCloudflare();
+
+        cf.EnsurePagesProject("my-site");
+        cf.EnsurePagesProject("MY-SITE");
+
+        Assert.Single(_registry.Steps);
+    }
+
+    [Fact]
+    public void EnsurePagesProject_ThrowsWhenProjectNameBlank()
+    {
+        var cf = CreateCloudflare();
+
+        Assert.Throws<ArgumentException>(() => cf.EnsurePagesProject(" "));
+    }
+
+    [Fact]
     public void PagesDeploy_WithProjectName_RegistersStep()
     {
         var cf = CreateCloudflare();
@@ -113,9 +166,11 @@ public class CloudflareOperationsTests : IDisposable
 
         cf.PagesDeploy(dir, "my-site");
 
-        Assert.Single(_registry.Steps);
-        Assert.Equal("Cloudflare.Pages.Deploy", _registry.Steps[0].Name);
+        Assert.Equal(2, _registry.Steps.Count);
+        Assert.Equal("Cloudflare.Pages.EnsureProject", _registry.Steps[0].Name);
         Assert.Equal("my-site", _registry.Steps[0].Context);
+        Assert.Equal("Cloudflare.Pages.Deploy", _registry.Steps[1].Name);
+        Assert.Equal("my-site", _registry.Steps[1].Context);
     }
 
     [Fact]
@@ -125,7 +180,7 @@ public class CloudflareOperationsTests : IDisposable
         var dir = TestDir();
         cf.PagesDeploy(dir, "test-project");
 
-        await _registry.Steps[0].Execute();
+        await _registry.Steps[1].Execute();
 
         var cmd = _executor.LastCommand!;
         Assert.Equal("npx", cmd.Command);
@@ -147,7 +202,7 @@ public class CloudflareOperationsTests : IDisposable
             .WithCommitHash("abc123")
             .WithCommitMessage("Test deployment"));
 
-        await _registry.Steps[0].Execute();
+        await _registry.Steps[1].Execute();
 
         var cmd = _executor.LastCommand!;
         Assert.Equal("main", cmd.GetArgValue("--branch"));
@@ -164,8 +219,9 @@ public class CloudflareOperationsTests : IDisposable
 
         cf.PagesDeploy(dir, o => { }); // No project name in options.
 
-        Assert.Single(_registry.Steps);
+        Assert.Equal(2, _registry.Steps.Count);
         Assert.Equal("env-project", _registry.Steps[0].Context);
+        Assert.Equal("env-project", _registry.Steps[1].Context);
     }
 
     [Fact]
@@ -187,8 +243,8 @@ public class CloudflareOperationsTests : IDisposable
 
         cf.PagesDeploy(dir, "my-site");
 
-        Assert.Single(_registry.Steps);
-        Assert.Equal("Cloudflare.Pages.Deploy", _registry.Steps[0].Name);
+        Assert.Equal(2, _registry.Steps.Count);
+        Assert.Equal("Cloudflare.Pages.Deploy", _registry.Steps[1].Name);
     }
 
     [Fact]
@@ -198,10 +254,25 @@ public class CloudflareOperationsTests : IDisposable
         var dir = TestDir("./website") / "dist";
         cf.PagesDeploy(dir, "my-site");
 
-        await _registry.Steps[0].Execute();
+        await _registry.Steps[1].Execute();
 
         var cmd = _executor.LastCommand!;
         Assert.Equal("./website/dist", cmd.Options?.WorkingDirectory);
+    }
+
+    [Fact]
+    public void PagesDeploy_DoesNotDuplicateProjectPreflightForSameProject()
+    {
+        var cf = CreateCloudflare();
+        var dir = TestDir();
+
+        cf.PagesDeploy(dir, "my-site");
+        cf.PagesDeploy(dir, "my-site");
+
+        Assert.Equal(3, _registry.Steps.Count);
+        Assert.Equal("Cloudflare.Pages.EnsureProject", _registry.Steps[0].Name);
+        Assert.Equal("Cloudflare.Pages.Deploy", _registry.Steps[1].Name);
+        Assert.Equal("Cloudflare.Pages.Deploy", _registry.Steps[2].Name);
     }
 
     [Fact]
@@ -339,12 +410,14 @@ public class CloudflareOperationsTests : IDisposable
         await _registry.Steps[0].Execute();
 
         var cmd = _executor.LastCommand!;
-        Assert.Equal("curl", cmd.Command);
-        Assert.Contains("-X", cmd.Args);
-        Assert.Contains("POST", cmd.Args);
-        Assert.Contains("https://api.cloudflare.com/client/v4/zones/my-zone-123/purge_cache", cmd.Args);
-        Assert.Contains("--data", cmd.Args);
-        Assert.Contains("{\"purge_everything\":true}", cmd.Args);
+        var script = cmd.GetArgValue("-c")!;
+        Assert.Equal("bash", cmd.Command);
+        Assert.Contains("-X POST", script);
+        Assert.Contains("https://api.cloudflare.com/client/v4/zones/my-zone-123/purge_cache", script);
+        Assert.Contains("Authorization: Bearer $CLOUDFLARE_API_TOKEN", script);
+        Assert.Contains("--data '{\"purge_everything\":true}'", script);
+        Assert.DoesNotContain("test-token", script);
+        Assert.Equal("test-token", cmd.Options?.Environment["CLOUDFLARE_API_TOKEN"]);
     }
 
     [Fact]
@@ -385,5 +458,16 @@ public class CloudflareOperationsTests : IDisposable
         Assert.NotNull(instructions);
         Assert.NotEmpty(instructions);
         Assert.Contains("npm", instructions);
+    }
+
+    [Fact]
+    public void CloudflareChecker_OnlyMatchesWranglerBackedSteps()
+    {
+        var checker = new CloudflareChecker();
+
+        Assert.True(checker.CanCheck("Cloudflare.Pages.Deploy"));
+        Assert.False(checker.CanCheck("Cloudflare.EnsureAuthenticated"));
+        Assert.False(checker.CanCheck("Cloudflare.Pages.EnsureProject"));
+        Assert.False(checker.CanCheck("Cloudflare.PurgeCache"));
     }
 }

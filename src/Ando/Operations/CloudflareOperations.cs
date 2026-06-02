@@ -1,14 +1,16 @@
 // =============================================================================
 // CloudflareOperations.cs
 //
-// Summary: Provides Cloudflare CLI operations for build scripts.
+// Summary: Provides Cloudflare operations for build scripts.
 //
-// CloudflareOperations handles Cloudflare deployments through the wrangler CLI.
-// Currently supports Cloudflare Pages static site deployments, with extensibility
-// for future Workers and other Cloudflare services.
+// CloudflareOperations handles Cloudflare deployments through the wrangler CLI
+// and targeted Cloudflare API preflight checks. Currently supports Cloudflare
+// Pages static site deployments, with extensibility for future Workers and
+// other Cloudflare services.
 //
 // Architecture:
-// - Uses wrangler CLI (npx wrangler) for Cloudflare operations
+// - Uses wrangler CLI (npx wrangler) for Pages deployment operations
+// - Uses Cloudflare REST APIs for credential and project-access preflights
 // - Authentication via CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID env vars
 // - Follows OperationsBase pattern for step registration
 // - Deploy methods accept DirectoryRef for explicit working directory
@@ -17,6 +19,7 @@
 // - Uses npx wrangler to avoid requiring global wrangler installation
 // - Project name can come from options or environment variable
 // - DirectoryRef parameter provides explicit, type-safe working directory
+// - PagesDeploy automatically verifies project API access before deploying
 //
 // Authentication:
 // - EnsureAuthenticated() prompts interactively if env vars are not set
@@ -40,7 +43,7 @@ using Ando.Utilities;
 namespace Ando.Operations;
 
 /// <summary>
-/// Provides Cloudflare CLI operations for build scripts.
+/// Provides Cloudflare operations for build scripts.
 /// Methods register steps in the workflow rather than executing immediately.
 /// </summary>
 public class CloudflareOperations : OperationsBase
@@ -51,11 +54,12 @@ public class CloudflareOperations : OperationsBase
     private const string EnvProjectName = "CLOUDFLARE_PROJECT_NAME";
     private const string EnvZoneId = "CLOUDFLARE_ZONE_ID";
 
-    // Captured credentials to pass to container.
-    // These are populated by EnsureAuthenticated() and used by subsequent commands.
+    // Captured credentials to pass to Cloudflare commands in the container.
+    // These are populated by authentication/preflight helpers and reused by subsequent commands.
     private string? _apiToken;
     private string? _accountId;
     private string? _zoneId;
+    private readonly HashSet<string> _registeredPagesProjectChecks = new(StringComparer.OrdinalIgnoreCase);
 
     public CloudflareOperations(StepRegistry registry, IBuildLogger logger, Func<ICommandExecutor> executorFactory)
         : base(registry, logger, executorFactory)
@@ -63,7 +67,7 @@ public class CloudflareOperations : OperationsBase
     }
 
     /// <summary>
-    /// Registers a step to verify Cloudflare credentials are configured.
+    /// Registers a step to verify Cloudflare credentials are configured and the API token is valid.
     /// If environment variables are not set, prompts the user for values interactively.
     /// </summary>
     public void EnsureAuthenticated()
@@ -73,10 +77,31 @@ public class CloudflareOperations : OperationsBase
         _apiToken = EnvironmentHelper.GetRequiredOrPrompt(EnvApiToken, "Cloudflare API Token", isSecret: true);
         _accountId = EnvironmentHelper.GetRequiredOrPrompt(EnvAccountId, "Cloudflare Account ID");
 
-        // Register a step that verifies authentication by calling wrangler whoami.
-        RegisterCommand("Cloudflare.EnsureAuthenticated", "npx",
-            () => new ArgumentBuilder()
-                .Add("wrangler", "whoami"),
+        // Verify the token directly with Cloudflare's API. Wrangler whoami depends on
+        // broader user/account lookup endpoints and has regressed for valid API tokens.
+        RegisterCommand("Cloudflare.EnsureAuthenticated", "bash",
+            BuildTokenVerifyArgs,
+            environment: GetCloudflareEnvironment());
+    }
+
+    /// <summary>
+    /// Registers a step to verify the current credentials can read a Cloudflare Pages project.
+    /// </summary>
+    /// <param name="projectName">Cloudflare Pages project name to verify.</param>
+    public void EnsurePagesProject(string projectName)
+    {
+        var resolvedProjectName = RequireProjectName(projectName, nameof(projectName));
+
+        EnsureCredentialsCaptured();
+
+        if (!_registeredPagesProjectChecks.Add(resolvedProjectName))
+        {
+            return;
+        }
+
+        RegisterCommand("Cloudflare.Pages.EnsureProject", "bash",
+            () => BuildPagesProjectVerifyArgs(resolvedProjectName),
+            resolvedProjectName,
             environment: GetCloudflareEnvironment());
     }
 
@@ -105,11 +130,13 @@ public class CloudflareOperations : OperationsBase
     /// <param name="projectName">Cloudflare Pages project name.</param>
     public void PagesDeploy(DirectoryRef directory, string projectName)
     {
-        EnsureCredentialsCaptured();
+        var resolvedProjectName = RequireProjectName(projectName, nameof(projectName));
+
+        EnsurePagesProject(resolvedProjectName);
 
         RegisterCommand("Cloudflare.Pages.Deploy", "npx",
-            () => BuildPagesDeployArgs(".", projectName, new CloudflarePagesDeployOptions()),
-            projectName,
+            () => BuildPagesDeployArgs(".", resolvedProjectName, new CloudflarePagesDeployOptions()),
+            resolvedProjectName,
             directory.Path,
             GetCloudflareEnvironment());
     }
@@ -127,17 +154,18 @@ public class CloudflareOperations : OperationsBase
 
         // Resolve project name from options or environment.
         var projectName = options.ProjectName ?? Environment.GetEnvironmentVariable(EnvProjectName);
-        if (string.IsNullOrEmpty(projectName))
+        if (string.IsNullOrWhiteSpace(projectName))
         {
             throw new InvalidOperationException(
                 $"Cloudflare Pages project name must be provided via WithProjectName() or {EnvProjectName} environment variable.");
         }
+        var resolvedProjectName = projectName.Trim();
 
-        EnsureCredentialsCaptured();
+        EnsurePagesProject(resolvedProjectName);
 
         RegisterCommand("Cloudflare.Pages.Deploy", "npx",
-            () => BuildPagesDeployArgs(".", projectName, options),
-            projectName,
+            () => BuildPagesDeployArgs(".", resolvedProjectName, options),
+            resolvedProjectName,
             directory.Path,
             GetCloudflareEnvironment());
     }
@@ -205,23 +233,18 @@ public class CloudflareOperations : OperationsBase
         // Use curl to call the Cloudflare API directly since wrangler doesn't have cache purge.
         // Zone ID resolution is deferred to execution time (inside the lambda) so it happens
         // when the step runs, not when the script is parsed.
-        RegisterCommand("Cloudflare.PurgeCache", "curl",
+        RegisterCommand("Cloudflare.PurgeCache", "bash",
             () =>
             {
                 // Resolve zone ID at execution time, not registration time.
                 var resolvedZoneId = LooksLikeDomain(input) ? ResolveZoneId(input) : input;
                 _zoneId = resolvedZoneId;
+                var script = $"curl -X POST \"https://api.cloudflare.com/client/v4/zones/{resolvedZoneId}/purge_cache\" -H \"Authorization: Bearer $CLOUDFLARE_API_TOKEN\" -H \"Content-Type: application/json\" --data '{{\"purge_everything\":true}}' --fail-with-body --silent --show-error";
 
                 return new ArgumentBuilder()
-                    .Add("-X", "POST")
-                    .Add($"https://api.cloudflare.com/client/v4/zones/{resolvedZoneId}/purge_cache")
-                    .Add("-H", $"Authorization: Bearer {_apiToken}")
-                    .Add("-H", "Content-Type: application/json")
-                    .Add("--data", "{\"purge_everything\":true}")
-                    .Add("--fail-with-body")
-                    .Add("--silent")
-                    .Add("--show-error");
-            });
+                    .Add("-c", script);
+            },
+            environment: GetCloudflareEnvironment());
     }
 
     /// <summary>
@@ -298,6 +321,42 @@ public class CloudflareOperations : OperationsBase
         {
             _accountId = EnvironmentHelper.GetRequired(EnvAccountId, "Cloudflare Account ID");
         }
+    }
+
+    /// <summary>
+    /// Builds the argument array for the token verification API call.
+    /// </summary>
+    private ArgumentBuilder BuildTokenVerifyArgs()
+    {
+        const string script = "curl --fail-with-body --silent --show-error -H \"Authorization: Bearer $CLOUDFLARE_API_TOKEN\" \"https://api.cloudflare.com/client/v4/user/tokens/verify\"";
+
+        return new ArgumentBuilder()
+            .Add("-c", script);
+    }
+
+    /// <summary>
+    /// Builds the argument array for the Pages project verification API call.
+    /// </summary>
+    private ArgumentBuilder BuildPagesProjectVerifyArgs(string projectName)
+    {
+        var encodedProjectName = Uri.EscapeDataString(projectName);
+        var script = $"curl --fail-with-body --silent --show-error -H \"Authorization: Bearer $CLOUDFLARE_API_TOKEN\" \"https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/{encodedProjectName}\"";
+
+        return new ArgumentBuilder()
+            .Add("-c", script);
+    }
+
+    /// <summary>
+    /// Requires a non-empty Cloudflare Pages project name and trims incidental whitespace.
+    /// </summary>
+    private static string RequireProjectName(string projectName, string paramName)
+    {
+        if (string.IsNullOrWhiteSpace(projectName))
+        {
+            throw new ArgumentException("Cloudflare Pages project name must be provided.", paramName);
+        }
+
+        return projectName.Trim();
     }
 
     /// <summary>

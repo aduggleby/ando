@@ -665,8 +665,9 @@ BicepDeployment objects provide typed access to deployment outputs:
 - deployment.GetOutput("name") - Gets output value directly (call during step execution)
 
 ### Cloudflare
-- Cloudflare.EnsureAuthenticated() - Verify Cloudflare credentials
-- Cloudflare.PagesDeploy(directory, projectName, options?) - Deploy to Pages
+- Cloudflare.EnsureAuthenticated() - Verify Cloudflare API token credentials
+- Cloudflare.EnsurePagesProject(projectName) - Verify credentials can read a Pages project
+- Cloudflare.PagesDeploy(directory, projectName, options?) - Deploy to Pages; automatically verifies project access first
 - Cloudflare.PagesListProjects() - List all Pages projects
 - Cloudflare.PagesCreateProject(name, branch?) - Create a Pages project
 - Cloudflare.PagesListDeployments(projectName?) - List deployments
@@ -898,7 +899,7 @@ Note: Annotated tags require a git identity (user.name/user.email). The ANDO CI 
 4. Use Dotnet.Project() for .csproj files, Directory() for folders
 5. The `/` operator concatenates paths: Root / "src" / "app"
 6. Options are configured via fluent lambdas: o => o.Output(...).WithRuntime(...)
-7. Always call EnsureAuthenticated() before cloud operations
+7. Call EnsureAuthenticated() early when you want to validate cloud credentials; Cloudflare.PagesDeploy() also verifies Pages project access automatically
 8. Use `ando verify` to check scripts without executing
 
 ## Common Mistakes

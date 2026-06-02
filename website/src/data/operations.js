@@ -371,14 +371,21 @@ export const operations = [
   {
     group: "Cloudflare",
     name: "Cloudflare.EnsureAuthenticated",
-    desc: "Verify Cloudflare credentials. Prompts interactively if environment variables are not set. See [authentication](/providers/cloudflare#authentication) for setup.",
+    desc: "Verify Cloudflare credentials by checking the API token with Cloudflare's API. Prompts interactively if environment variables are not set. See [authentication](/providers/cloudflare#authentication) for setup.",
     examples: ["Cloudflare.EnsureAuthenticated();"],
     sourceFile: "Operations/CloudflareOperations.cs",
   },
   {
     group: "Cloudflare",
+    name: "Cloudflare.EnsurePagesProject",
+    desc: "Verify that the current Cloudflare credentials can read a specific Pages project. `PagesDeploy()` registers this check automatically before deploying.",
+    examples: ['Cloudflare.EnsurePagesProject("my-site");'],
+    sourceFile: "Operations/CloudflareOperations.cs",
+  },
+  {
+    group: "Cloudflare",
     name: "Cloudflare.PagesDeploy",
-    desc: "Deploy a directory to Cloudflare Pages. The directory should be the build output folder.",
+    desc: "Deploy a directory to Cloudflare Pages. The directory should be the build output folder. Automatically verifies Pages project access before running wrangler deploy.",
     examples: [
       'var frontend = Directory("./frontend");',
       'Cloudflare.PagesDeploy(frontend / "dist", "my-site");',

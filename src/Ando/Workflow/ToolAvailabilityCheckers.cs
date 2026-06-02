@@ -31,9 +31,15 @@ public static class ToolRequirements
     public static readonly string[] AzureCliPrefixes = ["Azure.", "Bicep."];
 
     /// <summary>
-    /// Step prefixes that require Cloudflare wrangler.
+    /// Step names that require Cloudflare wrangler.
     /// </summary>
-    public static readonly string[] CloudflarePrefixes = ["Cloudflare."];
+    public static readonly string[] CloudflareWranglerSteps =
+    [
+        "Cloudflare.Pages.Deploy",
+        "Cloudflare.Pages.ListProjects",
+        "Cloudflare.Pages.CreateProject",
+        "Cloudflare.Pages.ListDeployments"
+    ];
 
     /// <summary>
     /// Step prefixes that require Azure Functions Core Tools.
@@ -45,6 +51,12 @@ public static class ToolRequirements
     /// </summary>
     public static bool MatchesPrefixes(string stepName, string[] prefixes) =>
         prefixes.Any(prefix => stepName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Checks if a step name exactly matches any of the given step names.
+    /// </summary>
+    public static bool MatchesStepNames(string stepName, string[] stepNames) =>
+        stepNames.Any(name => stepName.Equals(name, StringComparison.OrdinalIgnoreCase));
 }
 
 /// <summary>
@@ -68,7 +80,7 @@ public class AzureCliChecker : IToolAvailabilityChecker
 public class CloudflareChecker : IToolAvailabilityChecker
 {
     public bool CanCheck(string stepName) =>
-        ToolRequirements.MatchesPrefixes(stepName, ToolRequirements.CloudflarePrefixes);
+        ToolRequirements.MatchesStepNames(stepName, ToolRequirements.CloudflareWranglerSteps);
 
     public bool IsAvailable() => CloudflareOperations.IsWranglerAvailable();
 
