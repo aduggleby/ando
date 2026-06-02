@@ -3,6 +3,16 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.139
+
+**2026-06-02**
+
+- Add automatic server update detection and in-app update notifications
+- Cloudflare: `EnsureAuthenticated()` now verifies the API token via Cloudflare's token verification API instead of `wrangler whoami`
+- Cloudflare: Add `EnsurePagesProject(projectName)` operation to verify credentials can read a Pages project
+- Cloudflare: `PagesDeploy()` automatically verifies Pages project access before running wrangler deploy
+- Cloudflare: `PurgeCache()` now passes credentials via environment variables rather than inline arguments
+
 ## 0.9.138
 
 **2026-03-25**
