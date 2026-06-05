@@ -75,7 +75,7 @@ public class CloudflareOperationsTests : IDisposable
     }
 
     [Fact]
-    public async Task EnsureAuthenticated_VerifiesCredentialsWithWrangler()
+    public async Task EnsureAuthenticated_VerifiesTokenWithCloudflareApi()
     {
         var cf = CreateCloudflare();
         cf.EnsureAuthenticated();
@@ -83,12 +83,12 @@ public class CloudflareOperationsTests : IDisposable
         await _registry.Steps[0].Execute();
 
         var cmd = _executor.LastCommand!;
-        Assert.Equal("npx", cmd.Command);
-        Assert.Contains("wrangler", cmd.Args);
-        Assert.Contains("whoami", cmd.Args);
-        Assert.DoesNotContain("test-token", cmd.Args);
+        var script = cmd.GetArgValue("-c")!;
+        Assert.Equal("bash", cmd.Command);
+        Assert.Contains("https://api.cloudflare.com/client/v4/user/tokens/verify", script);
+        Assert.Contains("Authorization: Bearer $CLOUDFLARE_API_TOKEN", script);
+        Assert.DoesNotContain("test-token", script);
         Assert.Equal("test-token", cmd.Options?.Environment["CLOUDFLARE_API_TOKEN"]);
-        Assert.Equal("test-account-id", cmd.Options?.Environment["CLOUDFLARE_ACCOUNT_ID"]);
     }
 
     [Fact]
@@ -466,7 +466,7 @@ public class CloudflareOperationsTests : IDisposable
         var checker = new CloudflareChecker();
 
         Assert.True(checker.CanCheck("Cloudflare.Pages.Deploy"));
-        Assert.True(checker.CanCheck("Cloudflare.EnsureAuthenticated"));
+        Assert.False(checker.CanCheck("Cloudflare.EnsureAuthenticated"));
         Assert.False(checker.CanCheck("Cloudflare.Pages.EnsureProject"));
         Assert.False(checker.CanCheck("Cloudflare.PurgeCache"));
     }

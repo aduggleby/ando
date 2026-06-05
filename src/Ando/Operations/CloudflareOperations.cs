@@ -9,8 +9,8 @@
 // services.
 //
 // Architecture:
-// - Uses wrangler CLI (npx wrangler) for credential checks and Pages deployments
-// - Uses Cloudflare REST APIs for project-access preflights and cache purges
+// - Uses wrangler CLI (npx wrangler) for Pages deployments
+// - Uses Cloudflare REST APIs for token, project-access, and cache-purge calls
 // - Authentication via CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID env vars
 // - Follows OperationsBase pattern for step registration
 // - Deploy methods accept DirectoryRef for explicit working directory
@@ -67,7 +67,7 @@ public class CloudflareOperations : OperationsBase
     }
 
     /// <summary>
-    /// Registers a step to verify Cloudflare credentials are configured and accepted by Wrangler.
+    /// Registers a step to verify Cloudflare credentials are configured and the API token is valid.
     /// If environment variables are not set, prompts the user for values interactively.
     /// </summary>
     public void EnsureAuthenticated()
@@ -77,10 +77,30 @@ public class CloudflareOperations : OperationsBase
         _apiToken = EnvironmentHelper.GetRequiredOrPrompt(EnvApiToken, "Cloudflare API Token", isSecret: true);
         _accountId = EnvironmentHelper.GetRequiredOrPrompt(EnvAccountId, "Cloudflare Account ID");
 
-        // Verify credentials through the same tool used for Pages deploys. PagesDeploy
-        // still adds a project-specific API preflight before deployment.
-        RegisterCommand("Cloudflare.EnsureAuthenticated", "npx",
-            BuildWranglerWhoamiArgs,
+        // Keep this check on Cloudflare's token verification endpoint instead of
+        // replacing it with `wrangler whoami`.
+        //
+        // Wrangler's `whoami` command is an identity/account-discovery command,
+        // not a narrow API-token validation command. In containerized builds it
+        // has failed for valid scoped API tokens because it needs broader user or
+        // account-listing access than a Pages deploy token should require. That
+        // creates two bad outcomes:
+        // - Deployable tokens fail early before the Pages-specific preflight can run.
+        // - WorkflowRunner may interpret the failed `npx wrangler whoami` step as
+        //   a missing Wrangler installation and print misleading install guidance.
+        //
+        // The responsibilities are intentionally split:
+        // - EnsureAuthenticated verifies that the token itself is accepted by
+        //   Cloudflare using /user/tokens/verify.
+        // - EnsurePagesProject verifies that the same token and account ID can read
+        //   the target Pages project before a deploy step runs.
+        // - PagesDeploy remains the only step here that needs Wrangler.
+        //
+        // Do not collapse these checks back into `wrangler whoami` unless Cloudflare
+        // changes Wrangler to provide a token-only validation command whose required
+        // permissions match /user/tokens/verify.
+        RegisterCommand("Cloudflare.EnsureAuthenticated", "bash",
+            BuildTokenVerifyArgs,
             environment: GetCloudflareEnvironment());
     }
 
@@ -324,12 +344,14 @@ public class CloudflareOperations : OperationsBase
     }
 
     /// <summary>
-    /// Builds the argument array for the Wrangler identity check.
+    /// Builds the argument array for the Cloudflare token verification API call.
     /// </summary>
-    private ArgumentBuilder BuildWranglerWhoamiArgs()
+    private ArgumentBuilder BuildTokenVerifyArgs()
     {
+        const string script = "curl --fail-with-body --silent --show-error -H \"Authorization: Bearer $CLOUDFLARE_API_TOKEN\" \"https://api.cloudflare.com/client/v4/user/tokens/verify\"";
+
         return new ArgumentBuilder()
-            .Add("wrangler", "whoami");
+            .Add("-c", script);
     }
 
     /// <summary>

@@ -8,6 +8,7 @@ description: Release history and changelog for ANDO.
 **2026-06-05**
 
 - Limit database memory usage in Docker setups to keep local environments more stable
+- Fix Cloudflare authentication preflight to validate API tokens directly instead of using `wrangler whoami`, avoiding false failures for scoped Pages tokens
 
 ## 0.9.141
 

@@ -32,10 +32,13 @@ public static class ToolRequirements
 
     /// <summary>
     /// Step names that require Cloudflare wrangler.
+    /// Cloudflare.EnsureAuthenticated is intentionally absent because it validates
+    /// API tokens through Cloudflare's token verification endpoint, not Wrangler.
+    /// Adding it here would bring back misleading "install Wrangler" diagnostics
+    /// when scoped Cloudflare API tokens fail an identity/account-discovery check.
     /// </summary>
     public static readonly string[] CloudflareWranglerSteps =
     [
-        "Cloudflare.EnsureAuthenticated",
         "Cloudflare.Pages.Deploy",
         "Cloudflare.Pages.ListProjects",
         "Cloudflare.Pages.CreateProject",
