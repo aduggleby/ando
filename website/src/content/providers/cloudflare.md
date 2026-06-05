@@ -6,7 +6,7 @@ provider: Cloudflare
 
 ## Authentication
 
-Cloudflare operations require an API token and account ID. Set these as environment variables or enter them when prompted. Authentication and Pages project checks use the Cloudflare API directly; Pages deployment still uses Wrangler.
+Cloudflare operations require an API token and account ID. Set these as environment variables or enter them when prompted. Authentication and Pages deployment use Wrangler; Pages project checks and cache purges use the Cloudflare API directly.
 
 ### Environment Variables
 
@@ -20,7 +20,7 @@ Cloudflare operations require an API token and account ID. Set these as environm
 
 When running locally without environment variables set, `Cloudflare.EnsureAuthenticated()` will prompt for credentials interactively. The API token input is hidden for security. Credentials are only stored for the current build session and are cleared when the process exits.
 
-`Cloudflare.EnsureAuthenticated()` verifies the token with Cloudflare's token verification API. `Cloudflare.PagesDeploy()` also registers `Cloudflare.EnsurePagesProject(projectName)` automatically, which checks that the same token can read the target Pages project before Wrangler starts the deployment.
+`Cloudflare.EnsureAuthenticated()` verifies the credentials with Wrangler. `Cloudflare.PagesDeploy()` also registers `Cloudflare.EnsurePagesProject(projectName)` automatically, which checks that the same token can read the target Pages project before Wrangler starts the deployment.
 
 ### Creating a Cloudflare API Token
 

@@ -371,7 +371,7 @@ export const operations = [
   {
     group: "Cloudflare",
     name: "Cloudflare.EnsureAuthenticated",
-    desc: "Verify Cloudflare credentials by checking the API token with Cloudflare's API. Prompts interactively if environment variables are not set. See [authentication](/providers/cloudflare#authentication) for setup.",
+    desc: "Verify Cloudflare credentials with Wrangler. Prompts interactively if environment variables are not set. See [authentication](/providers/cloudflare#authentication) for setup.",
     examples: ["Cloudflare.EnsureAuthenticated();"],
     sourceFile: "Operations/CloudflareOperations.cs",
   },

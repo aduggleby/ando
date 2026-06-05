@@ -35,6 +35,7 @@ public static class ToolRequirements
     /// </summary>
     public static readonly string[] CloudflareWranglerSteps =
     [
+        "Cloudflare.EnsureAuthenticated",
         "Cloudflare.Pages.Deploy",
         "Cloudflare.Pages.ListProjects",
         "Cloudflare.Pages.CreateProject",

@@ -8,13 +8,14 @@ description: Release history and changelog for ANDO.
 **2026-06-05**
 
 - Fix command timeouts so they now clearly report a timeout error
+- Fix Cloudflare authentication preflight to use Wrangler, matching Pages deploy behavior
 
 ## 0.9.139
 
 **2026-06-02**
 
 - Add automatic server update detection and in-app update notifications
-- Cloudflare: `EnsureAuthenticated()` now verifies the API token via Cloudflare's token verification API instead of `wrangler whoami`
+- Cloudflare: Add safer Cloudflare credential handling so API tokens are passed through environment variables rather than inline command arguments
 - Cloudflare: Add `EnsurePagesProject(projectName)` operation to verify credentials can read a Pages project
 - Cloudflare: `PagesDeploy()` automatically verifies Pages project access before running wrangler deploy
 - Cloudflare: `PurgeCache()` now passes credentials via environment variables rather than inline arguments

@@ -667,7 +667,7 @@ BicepDeployment objects provide typed access to deployment outputs:
 - deployment.GetOutput("name") - Gets output value directly (call during step execution)
 
 ### Cloudflare
-- Cloudflare.EnsureAuthenticated() - Verify Cloudflare API token credentials
+- Cloudflare.EnsureAuthenticated() - Verify Cloudflare credentials with Wrangler
 - Cloudflare.EnsurePagesProject(projectName) - Verify credentials can read a Pages project
 - Cloudflare.PagesDeploy(directory, projectName, options?) - Deploy to Pages; automatically verifies project access first
 - Cloudflare.PagesListProjects() - List all Pages projects

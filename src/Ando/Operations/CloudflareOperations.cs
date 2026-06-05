@@ -4,13 +4,13 @@
 // Summary: Provides Cloudflare operations for build scripts.
 //
 // CloudflareOperations handles Cloudflare deployments through the wrangler CLI
-// and targeted Cloudflare API preflight checks. Currently supports Cloudflare
-// Pages static site deployments, with extensibility for future Workers and
-// other Cloudflare services.
+// and targeted Cloudflare API calls. Currently supports Cloudflare Pages static
+// site deployments, with extensibility for future Workers and other Cloudflare
+// services.
 //
 // Architecture:
-// - Uses wrangler CLI (npx wrangler) for Pages deployment operations
-// - Uses Cloudflare REST APIs for credential and project-access preflights
+// - Uses wrangler CLI (npx wrangler) for credential checks and Pages deployments
+// - Uses Cloudflare REST APIs for project-access preflights and cache purges
 // - Authentication via CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID env vars
 // - Follows OperationsBase pattern for step registration
 // - Deploy methods accept DirectoryRef for explicit working directory
@@ -67,7 +67,7 @@ public class CloudflareOperations : OperationsBase
     }
 
     /// <summary>
-    /// Registers a step to verify Cloudflare credentials are configured and the API token is valid.
+    /// Registers a step to verify Cloudflare credentials are configured and accepted by Wrangler.
     /// If environment variables are not set, prompts the user for values interactively.
     /// </summary>
     public void EnsureAuthenticated()
@@ -77,10 +77,10 @@ public class CloudflareOperations : OperationsBase
         _apiToken = EnvironmentHelper.GetRequiredOrPrompt(EnvApiToken, "Cloudflare API Token", isSecret: true);
         _accountId = EnvironmentHelper.GetRequiredOrPrompt(EnvAccountId, "Cloudflare Account ID");
 
-        // Verify the token directly with Cloudflare's API. Wrangler whoami depends on
-        // broader user/account lookup endpoints and has regressed for valid API tokens.
-        RegisterCommand("Cloudflare.EnsureAuthenticated", "bash",
-            BuildTokenVerifyArgs,
+        // Verify credentials through the same tool used for Pages deploys. PagesDeploy
+        // still adds a project-specific API preflight before deployment.
+        RegisterCommand("Cloudflare.EnsureAuthenticated", "npx",
+            BuildWranglerWhoamiArgs,
             environment: GetCloudflareEnvironment());
     }
 
@@ -324,14 +324,12 @@ public class CloudflareOperations : OperationsBase
     }
 
     /// <summary>
-    /// Builds the argument array for the token verification API call.
+    /// Builds the argument array for the Wrangler identity check.
     /// </summary>
-    private ArgumentBuilder BuildTokenVerifyArgs()
+    private ArgumentBuilder BuildWranglerWhoamiArgs()
     {
-        const string script = "curl --fail-with-body --silent --show-error -H \"Authorization: Bearer $CLOUDFLARE_API_TOKEN\" \"https://api.cloudflare.com/client/v4/user/tokens/verify\"";
-
         return new ArgumentBuilder()
-            .Add("-c", script);
+            .Add("wrangler", "whoami");
     }
 
     /// <summary>
