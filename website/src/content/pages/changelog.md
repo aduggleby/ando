@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.143
+
+**2026-06-05**
+
+- Improve Cloudflare authentication check to verify API tokens directly, avoiding false failures for scoped tokens
+
 ## 0.9.142
 
 **2026-06-05**
