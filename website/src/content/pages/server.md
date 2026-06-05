@@ -115,6 +115,17 @@ Server__BaseUrl=https://ci.yourdomain.com
 
 The URL must include the scheme (`https://`) and should not have a trailing slash.
 
+### Build Timeouts
+
+The CI server applies a whole-build timeout to each build. The default is 15 minutes and the maximum is 60 minutes.
+
+```bash
+Build__DefaultTimeoutMinutes=15
+Build__MaxTimeoutMinutes=60
+```
+
+Project settings can lower or raise an individual project's timeout within the server maximum. This server timeout is separate from ANDO's per-command timeout: standard command operations, including `Npm.Install`, `Npm.Ci`, `Npm.Run`, `Npm.Test`, and `Npm.Build`, time out after 5 minutes. If a command timeout occurs, the build log reports the command timeout as the failed-step error.
+
 ### Docker-in-Docker Builds
 
 When a build requires DIND mode (e.g., `Docker.Build`, `Docker.Push`), the server automatically installs the Docker CLI inside the build container if it is not already present. This supports Alpine and Debian/Ubuntu-based images. You do not need to call `Docker.Install()` in your build script when running on the CI server — though it is harmless to include.

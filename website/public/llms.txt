@@ -109,6 +109,8 @@ To skip the prompt, use `--dind` flag, add `dind: true` to `ando.config`, or set
 
 **CI Server:** When running on the ANDO CI Server, the Docker CLI is automatically installed in DIND build containers. `Docker.Install()` is not required in build scripts on the server, but is recommended for portability. The server also configures a git committer identity (`user.name`/`user.email`) in build containers automatically, so `Git.Tag()` with annotated tags works without manual setup. Default: `Ando Server <ando-server@localhost>`. Override with `GIT_COMMITTER_NAME`/`GIT_COMMITTER_EMAIL` env vars.
 
+**Timeouts:** Standard command operations use a 5-minute per-command timeout. This includes Npm.Install, Npm.Ci, Npm.Run, Npm.Test, and Npm.Build. If the command exceeds the timeout, ANDO stops the process tree and the failed-step log reports the timeout (for example, `Command timed out after 300000ms`). The ANDO CI Server also applies a separate whole-build timeout: default 15 minutes, max 60 minutes, configurable with project settings and `Build__DefaultTimeoutMinutes` / `Build__MaxTimeoutMinutes`.
+
 **CI Server health checks:** `GET /health` returns 200 when the database is reachable, 503 otherwise (no auth required — use for load balancers and Docker health checks). `GET /api/admin/system-health` (admin-only) probes database, background jobs, and GitHub App authentication, returning per-subsystem status (`healthy`/`warning`/`error`).
 
 **CI Server optional in-app self-update (admin):** Enable with `SelfUpdate__Enabled=true` in `/opt/ando/config/.env`. The server checks every 5 minutes for a newer `ghcr.io/aduggleby/ando-server:latest` image. When available, admins see an update bar in the web UI. Triggering update queues a background job that starts a helper Docker CLI container to run `docker compose pull ando-server` and `docker compose up -d ando-server`. A full-screen overlay with countdown and automatic reconnect handles the restart seamlessly. The web UI also detects version changes independently — if the server is updated externally, all open browser tabs automatically clear caches and reload within 60 seconds.
@@ -639,11 +641,11 @@ Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");
 - Ef.Script(context, outputPath) - Generate SQL migration script
 
 ### Npm
-- Npm.Install(directory) - Run npm install
-- Npm.Ci(directory) - Run npm ci (clean install)
-- Npm.Run(directory, script) - Run an npm script
-- Npm.Test(directory) - Run npm test
-- Npm.Build(directory) - Run npm run build
+- Npm.Install(directory) - Run npm install. Uses the standard 5-minute command timeout.
+- Npm.Ci(directory) - Run npm ci (clean install). Uses the standard 5-minute command timeout.
+- Npm.Run(directory, script) - Run an npm script. Uses the standard 5-minute command timeout.
+- Npm.Test(directory) - Run npm test. Uses the standard 5-minute command timeout.
+- Npm.Build(directory) - Run npm run build. Uses the standard 5-minute command timeout.
 
 ### Azure
 - Azure.EnsureAuthenticated() - Authenticate using best available method

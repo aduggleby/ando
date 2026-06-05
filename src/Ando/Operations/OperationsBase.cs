@@ -85,10 +85,17 @@ public abstract class OperationsBase
             var args = getArgs();
             var options = BuildCommandOptions(workingDirectory, environment);
             var result = await ExecutorFactory().ExecuteAsync(command, args, options);
+            if (!result.Success && IsTimeout(result))
+            {
+                throw new TimeoutException(result.Error);
+            }
 
             return result.Success;
         }, context);
     }
+
+    private static bool IsTimeout(CommandResult result) =>
+        result.Error?.Contains("timed out", StringComparison.OrdinalIgnoreCase) == true;
 
     /// <summary>
     /// Registers a step that executes a command with the given arguments.

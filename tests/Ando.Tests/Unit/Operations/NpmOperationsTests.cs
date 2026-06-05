@@ -14,6 +14,7 @@ using Ando.Operations;
 using Ando.References;
 using Ando.Steps;
 using Ando.Tests.TestFixtures;
+using Ando.Workflow;
 
 namespace Ando.Tests.Unit.Operations;
 
@@ -205,5 +206,26 @@ public class NpmOperationsTests
         var result = await _registry.Steps[0].Execute();
 
         result.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task CommandTimeout_LogsTimeoutMessage()
+    {
+        var npm = CreateNpm();
+        var dir = TestDir();
+        _executor.SimulateTimeout = true;
+
+        npm.Install(dir);
+        var runner = new WorkflowRunner(_registry, _logger);
+
+        var result = await runner.RunAsync(new BuildOptions());
+
+        result.Success.ShouldBeFalse();
+        var resultError = result.StepResults[0].ErrorMessage;
+        resultError.ShouldNotBeNull();
+        resultError!.ShouldContain("Command timed out");
+        var logMessage = _logger.StepsFailed[0].Message;
+        logMessage.ShouldNotBeNull();
+        logMessage!.ShouldContain("Command timed out");
     }
 }
