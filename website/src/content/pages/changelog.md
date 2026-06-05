@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.142
+
+**2026-06-05**
+
+- Limit database memory usage in Docker setups to keep local environments more stable
+
 ## 0.9.141
 
 **2026-06-05**
