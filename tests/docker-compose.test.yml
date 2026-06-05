@@ -18,6 +18,7 @@ services:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=Test@Password123!
       - MSSQL_PID=Developer
+      - MSSQL_MEMORY_LIMIT_MB=2048
     # No ports exposed - only accessible within the network
     networks:
       - ando-e2e-network
