@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.140
+
+**2026-06-05**
+
+- Fix command timeouts so they now clearly report a timeout error
+
 ## 0.9.139
 
 **2026-06-02**
