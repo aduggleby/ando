@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.141
+
+**2026-06-05**
+
+- Improve Cloudflare authentication check to verify credentials with Wrangler, matching how deployments run
+
 ## 0.9.140
 
 **2026-06-05**
