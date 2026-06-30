@@ -3,6 +3,14 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.146
+
+**2026-06-30**
+
+- Add the ability to wait for an HTTP service to become healthy before continuing
+- Add one-step folder deployment for app services
+- Fix Docker compatibility so the Docker socket mounts correctly with Docker 29
+
 ## 0.9.143
 
 **2026-06-05**

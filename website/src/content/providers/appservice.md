@@ -24,6 +24,11 @@ AppService.DeployWithSwap("my-web-app", Root / "app.zip");
 // Or deploy directly to a specific slot
 AppService.DeployZip("my-web-app", Root / "app.zip", "my-rg", o => o
   .WithDeploymentSlot("staging"));
+
+// Or skip the manual zip and deploy the publish folder directly
+// (contents are placed at the archive root, as config-zip expects)
+AppService.DeployFolder("my-web-app", Root / "publish", "my-rg", o => o
+  .WithDeploymentSlot("staging"));
 ```
 
 ## Options Reference

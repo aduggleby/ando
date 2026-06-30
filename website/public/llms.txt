@@ -967,6 +967,7 @@ All pages are available in markdown format for LLM consumption:
 - https://andobuild.com/providers/functions.md - Azure Functions deployments
 - https://andobuild.com/providers/git.md - Git version control operations
 - https://andobuild.com/providers/github.md - GitHub releases and container registry
+- https://andobuild.com/providers/http.md - HTTP health-check gating (wait for an endpoint to be healthy)
 - https://andobuild.com/providers/node.md - Node.js installation
 - https://andobuild.com/providers/npm.md - npm operations
 - https://andobuild.com/providers/nuget.md - NuGet package operations

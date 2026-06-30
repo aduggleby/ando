@@ -12,6 +12,7 @@ export const providers = [
   { id: "Ef", href: "/providers/ef", label: "Entity Framework Core" },
   { id: "Git", href: "/providers/git", label: "Git" },
   { id: "GitHub", href: "/providers/github", label: "GitHub" },
+  { id: "Http", href: "/providers/http", label: "HTTP" },
   { id: "Node", href: "/providers/node", label: "Node" },
   { id: "Npm", href: "/providers/npm", label: "Npm" },
   { id: "Nuget", href: "/providers/nuget", label: "NuGet" },
