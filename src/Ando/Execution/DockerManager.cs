@@ -337,12 +337,20 @@ public class DockerManager
 
         // Optional: Mount Docker socket for Docker-in-Docker scenarios.
         // Required when builds need to create Docker images.
-        // Note: /var/run/docker.sock works cross-platform. On Windows and macOS,
-        // Docker Desktop translates this path internally so containers can always
-        // use the Unix socket path regardless of the host OS.
+        //
+        // The container target is /run/docker.sock, NOT /var/run/docker.sock. On
+        // most Linux images (for example ubuntu:22.04) /var/run is a symlink to
+        // /run, and bind-mounting onto /var/run/docker.sock materializes that
+        // symlinked parent. Docker 29+ then fails `docker cp` into the container
+        // with "mkdirat var/run: file exists" when it rebuilds destination paths,
+        // which breaks project file sync. Mounting at the real /run/docker.sock
+        // avoids that; the default client path /var/run/docker.sock still resolves
+        // to it through the symlink, so docker-in-docker keeps working. The host
+        // source stays /var/run/docker.sock (Docker Desktop translates it on
+        // Windows/macOS, and warm-container detection matches on the source path).
         if (config.MountDockerSocket)
         {
-            args.AddRange(["-v", "/var/run/docker.sock:/var/run/docker.sock"]);
+            args.AddRange(["-v", "/var/run/docker.sock:/run/docker.sock"]);
             // Enable host.docker.internal on Linux (works by default on Docker Desktop)
             // This allows containers to reach services on the host (e.g., E2E test servers)
             args.AddRange(["--add-host", "host.docker.internal:host-gateway"]);

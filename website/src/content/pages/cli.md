@@ -291,6 +291,22 @@ ANDO handles Ctrl+C gracefully:
 | `--container` | Remove the project's warm container (clears package caches). |
 | `--all` | Remove all of the above. |
 
+### When to clean
+
+ANDO reuses a **warm container** between runs for speed, so the build environment
+persists across runs. Clean it whenever you change something that the warm
+container would otherwise keep stale:
+
+- After changing the build image (`Ando.UseImage` / `--image`), upgrading ANDO
+  itself, or changing container-affecting config — run `ando clean --container`
+  (or `--all`), or use `--cold` for a single fresh-container run.
+- If a build gets into a bad container state.
+
+Note: a build that fails at "Copying project files to container" with
+`Error response from daemon: mkdirat var/run: file exists` is a separate,
+Docker 29+ specific issue (the Docker socket was mounted onto the `/var/run`
+symlink); it is fixed in ANDO 0.9.145+ and is not resolved by cleaning.
+
 ## Project Files
 
 ANDO uses and creates various files in your project directory:

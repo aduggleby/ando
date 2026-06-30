@@ -74,7 +74,7 @@ ANDO requires Docker to run builds in isolated containers. If Docker is not avai
 - `ando ship --all` - Run all applicable ship steps non-interactively
 - `ando ship --dry-run` - Preview what ship would do
 - `ando verify` - Check build script for errors without executing
-- `ando clean` - Remove artifacts, temp files, and containers (removing container clears caches)
+- `ando clean` - Remove artifacts, temp files, and containers (removing container clears caches). Clean (or use `--cold`) after changing the build image, upgrading ANDO, or changing container-affecting config, since the warm container persists the build environment between runs.
 - `ando help` - Show available commands
 - `ando --version` or `ando -v` - Show version number
 
