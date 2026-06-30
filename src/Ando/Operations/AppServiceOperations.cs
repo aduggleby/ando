@@ -52,6 +52,36 @@ public class AppServiceOperations(StepRegistry registry, IBuildLogger logger, Fu
     }
 
     /// <summary>
+    /// Registers steps to zip a published folder and deploy it with zip deploy.
+    /// Use this instead of DeployZip when you have a publish directory rather than a
+    /// pre-built zip: it archives the folder's CONTENTS at the archive root (no
+    /// nested top-level directory), which is the layout config-zip expects. The zip
+    /// step runs in the build container and installs the zip tool if the image does
+    /// not already provide it.
+    /// </summary>
+    /// <param name="appName">Name of the Azure App Service.</param>
+    /// <param name="folderPath">Path to the published folder to deploy.</param>
+    /// <param name="resourceGroup">Optional resource group name.</param>
+    /// <param name="configure">Optional deployment options (slot, restart, no-wait).</param>
+    public void DeployFolder(string appName, string folderPath,
+        string? resourceGroup = null, Action<AppServiceDeployOptions>? configure = null)
+    {
+        var folder = folderPath.TrimEnd('/', '\\');
+        var zipPath = $"{folder}.zip";
+
+        // Archive the folder contents at the root (cd into the folder, zip "."), so
+        // the resulting zip has no nested top-level directory. Written as a sibling
+        // file (folder.zip) so it is not included in its own archive.
+        RegisterCommand("AppService.ZipFolder", "sh",
+            () => new ArgumentBuilder()
+                .Add("-c",
+                    $"command -v zip >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq zip); cd '{folder}' && zip -rq '{zipPath}' ."),
+            folder);
+
+        DeployZip(appName, zipPath, resourceGroup, configure);
+    }
+
+    /// <summary>
     /// Registers a step to deploy to a specific slot and then swap to production.
     /// This enables zero-downtime deployments.
     /// </summary>

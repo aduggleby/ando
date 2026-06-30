@@ -437,6 +437,7 @@ if (publish) {
 | Azure | AzureOperations | Azure CLI authentication. |
 | Bicep | BicepOperations | Azure Bicep deployments. |
 | AppService | AppServiceOperations | Azure App Service deployments. |
+| Http | HttpOperations | HTTP health-check gating (wait for an endpoint to be healthy). |
 | Functions | FunctionsOperations | Azure Functions deployments. |
 | Cloudflare | CloudflareOperations | Cloudflare Pages deployments. Requires DirectoryRef arguments. |
 | Nuget | NugetOperations | NuGet package operations (pack, push). |
@@ -686,6 +687,7 @@ BicepDeployment objects provide typed access to deployment outputs:
 
 ### AppService
 - AppService.DeployZip(name, zipPath, rg?, options?) - Deploy via zip deploy
+- AppService.DeployFolder(name, folderPath, rg?, options?) - Zip a published folder (contents at root) and deploy
 - AppService.DeployWithSwap(name, zipPath, slot?, rg?) - Deploy then swap
 - AppService.SwapSlots(name, sourceSlot, rg?, targetSlot?) - Swap slots
 - AppService.CreateSlot(name, slotName, rg?, configSource?) - Create slot
@@ -693,6 +695,9 @@ BicepDeployment objects provide typed access to deployment outputs:
 - AppService.ListSlots(name, rg?) - List deployment slots
 - AppService.Restart(name, rg?, slot?) - Restart app service
 - AppService.Start(name, rg?, slot?) - Start app service
+
+### Http
+- Http.WaitForHealthy(url, options?) - Poll a URL until it returns the expected status (default 200) or the timeout elapses; gates a deploy on a health check. Options: WithExpectedStatus(int), WithTimeoutSeconds(int), WithIntervalSeconds(int), WithRequestTimeoutSeconds(int)
 - AppService.Stop(name, rg?, slot?) - Stop app service
 
 ### Nuget

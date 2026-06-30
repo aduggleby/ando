@@ -86,6 +86,9 @@ public class BuildContext
     /// <summary>Azure App Service deployment operations.</summary>
     public AppServiceOperations AppService => Operations.AppService;
 
+    /// <summary>HTTP operations (for example waiting for an endpoint to be healthy).</summary>
+    public HttpOperations Http => Operations.Http;
+
     /// <summary>Artifact operations for copying files to host.</summary>
     public ArtifactOperations Artifacts => Operations.Artifacts;
 

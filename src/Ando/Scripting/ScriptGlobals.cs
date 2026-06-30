@@ -93,6 +93,12 @@ public class ScriptGlobals
     public AppServiceOperations AppService { get; }
 
     /// <summary>
+    /// HTTP operations for build scripts.
+    /// Usage: Http.WaitForHealthy("https://app.example.com/healthz", o => o.WithTimeoutSeconds(300))
+    /// </summary>
+    public HttpOperations Http { get; }
+
+    /// <summary>
     /// Node.js installation operations (installs Node.js globally).
     /// Usage: Node.Install() or Node.Install("20")
     /// </summary>
@@ -211,6 +217,7 @@ public class ScriptGlobals
         Cloudflare = buildContext.Cloudflare;
         Functions = buildContext.Functions;
         AppService = buildContext.AppService;
+        Http = buildContext.Http;
         Node = buildContext.Node;
         Log = buildContext.Log;
         Nuget = buildContext.Nuget;

@@ -501,6 +501,16 @@ export const operations = [
   },
   {
     group: "AppService",
+    name: "AppService.DeployFolder",
+    desc: "Zip a published folder (contents at the archive root) and deploy it with zip deploy. Use when you have a publish directory rather than a pre-built zip.",
+    examples: [
+      'AppService.DeployFolder("my-app", "dist/api");',
+      'AppService.DeployFolder("my-app", "dist/api", "my-rg", o => o\n  .WithDeploymentSlot("release"));',
+    ],
+    sourceFile: "Operations/AppServiceOperations.cs",
+  },
+  {
+    group: "AppService",
     name: "AppService.DeployWithSwap",
     desc: "Deploy to a slot then swap to production (zero-downtime).",
     examples: [
@@ -563,6 +573,16 @@ export const operations = [
     desc: "Stop an app service.",
     examples: ['AppService.Stop("my-app");', 'AppService.Stop("my-app", slot: "staging");'],
     sourceFile: "Operations/AppServiceOperations.cs",
+  },
+  {
+    group: "Http",
+    name: "Http.WaitForHealthy",
+    desc: "Poll a URL until it returns the expected status code (default 200) or the timeout elapses. Runs in-process on the build host, so it needs no curl in the image. Use it to gate a deploy on a health check, for example before swapping a slot into production.",
+    examples: [
+      'Http.WaitForHealthy("https://app.example.com/healthz");',
+      'Http.WaitForHealthy("https://app.example.com/healthz/db", o => o\n  .WithTimeoutSeconds(300)\n  .WithIntervalSeconds(5));',
+    ],
+    sourceFile: "Operations/HttpOperations.cs",
   },
   {
     group: "Nuget",

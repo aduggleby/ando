@@ -63,6 +63,9 @@ public class BuildOperations
     /// <summary>Azure App Service deployment operations.</summary>
     public AppServiceOperations AppService { get; }
 
+    /// <summary>HTTP operations (for example waiting for an endpoint to be healthy).</summary>
+    public HttpOperations Http { get; }
+
     /// <summary>Artifact operations for copying files to host (internal use).</summary>
     internal ArtifactOperations Artifacts { get; }
 
@@ -133,6 +136,7 @@ public class BuildOperations
         Cloudflare = new CloudflareOperations(registry, logger, executorFactory);
         Functions = new FunctionsOperations(registry, logger, executorFactory);
         AppService = new AppServiceOperations(registry, logger, executorFactory);
+        Http = new HttpOperations(registry, logger, executorFactory);
         Artifacts = new ArtifactOperations(logger);
         Node = new NodeInstallOperations(registry, logger, executorFactory, nodeEnsurer);
         NpmGlobal = new NpmInstallOperations(registry, logger, executorFactory, nodeEnsurer);

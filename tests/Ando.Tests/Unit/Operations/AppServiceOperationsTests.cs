@@ -430,4 +430,57 @@ public class AppServiceOperationsTests
         Assert.Equal("staging", cmd.GetArgValue("--slot"));
         Assert.Contains("--async", cmd.Args);
     }
+
+    [Fact]
+    public void DeployFolder_RegistersZipThenDeploySteps()
+    {
+        var appService = CreateAppService();
+
+        appService.DeployFolder("my-app", "dist/api");
+
+        Assert.Equal(2, _registry.Steps.Count);
+        Assert.Equal("AppService.ZipFolder", _registry.Steps[0].Name);
+        Assert.Equal("AppService.DeployZip", _registry.Steps[1].Name);
+    }
+
+    [Fact]
+    public async Task DeployFolder_ZipStep_ArchivesFolderContentsAtRoot()
+    {
+        var appService = CreateAppService();
+        appService.DeployFolder("my-app", "dist/api");
+
+        await _registry.Steps[0].Execute();
+
+        var cmd = _executor.LastCommand!;
+        Assert.Equal("sh", cmd.Command);
+        // cd into the folder and zip "." so the archive has no nested top-level dir.
+        var script = string.Join(" ", cmd.Args);
+        Assert.Contains("cd 'dist/api'", script);
+        Assert.Contains("zip -rq 'dist/api.zip' .", script);
+    }
+
+    [Fact]
+    public async Task DeployFolder_DeployStep_UsesSiblingZipPath()
+    {
+        var appService = CreateAppService();
+        appService.DeployFolder("my-app", "dist/api", "my-rg");
+
+        await _registry.Steps[1].Execute();
+
+        var cmd = _executor.LastCommand!;
+        Assert.Equal("az", cmd.Command);
+        Assert.Equal("dist/api.zip", cmd.GetArgValue("--src"));
+        Assert.Equal("my-rg", cmd.GetArgValue("--resource-group"));
+    }
+
+    [Fact]
+    public async Task DeployFolder_WithSlot_PassesSlotToDeploy()
+    {
+        var appService = CreateAppService();
+        appService.DeployFolder("my-app", "dist/api", configure: o => o.WithDeploymentSlot("release"));
+
+        await _registry.Steps[1].Execute();
+
+        Assert.Equal("release", _executor.LastCommand!.GetArgValue("--slot"));
+    }
 }
