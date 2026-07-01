@@ -649,7 +649,7 @@ Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");
 - Npm.Build(directory) - Run npm run build. Uses the standard 5-minute command timeout.
 
 ### Azure
-- Azure.EnsureAuthenticated() - Authenticate using best available method
+- Azure.EnsureAuthenticated(clientId?, clientSecret?, tenantId?, requireServicePrincipal?) - Authenticate using best available method. Pass explicit SP credentials to avoid env reliance, and requireServicePrincipal: true (or set ANDO_REQUIRE_SERVICE_PRINCIPAL) to force SP auth and never fall back to an existing az login session. Default unchanged (fallback allowed)
 - Azure.EnsureLoggedIn() - Verify logged in to Azure CLI
 - Azure.ShowAccount() - Display current account info
 - Azure.LoginWithServicePrincipal(clientId?, secret?, tenantId?) - Login with SP

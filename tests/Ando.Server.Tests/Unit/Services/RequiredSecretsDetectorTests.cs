@@ -521,6 +521,36 @@ public class RequiredSecretsDetectorTests
     }
 
     [Fact]
+    public async Task DetectRequiredSecretsAsync_WithSubBuildOptions_DetectsSecretsFromSubBuild()
+    {
+        // Arrange
+        var mainScript = """
+            Nuget.EnsureAuthenticated();
+            Ando.Build(Directory("./website"), o => o.WithProfile("publish"));
+            """;
+
+        var subScript = """
+            Cloudflare.EnsureAuthenticated();
+            """;
+
+        _mockGitHubService.Setup(x => x.GetFileContentAsync(
+            It.IsAny<long>(), It.IsAny<string>(), "build.csando", It.IsAny<string?>()))
+            .ReturnsAsync(mainScript);
+
+        _mockGitHubService.Setup(x => x.GetFileContentAsync(
+            It.IsAny<long>(), It.IsAny<string>(), "website/build.csando", It.IsAny<string?>()))
+            .ReturnsAsync(subScript);
+
+        // Act
+        var secrets = await _detector.DetectRequiredSecretsAsync(123, "owner/repo", "main");
+
+        // Assert
+        secrets.ShouldContain("NUGET_API_KEY");
+        secrets.ShouldContain("CLOUDFLARE_API_TOKEN");
+        secrets.ShouldContain("CLOUDFLARE_ACCOUNT_ID");
+    }
+
+    [Fact]
     public async Task DetectRequiredSecretsAsync_WithNoBuildScript_ReturnsEmpty()
     {
         // Arrange

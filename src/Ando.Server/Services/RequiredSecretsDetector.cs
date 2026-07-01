@@ -76,8 +76,8 @@ public partial class RequiredSecretsDetector : IRequiredSecretsDetector
     // Regex patterns for sub-build detection
     // -------------------------------------------------------------------------
 
-    // Matches: Ando.Build(Directory("subdir")) or Ando.Build(Directory("./subdir"))
-    [GeneratedRegex(@"Ando\s*\.\s*Build\s*\(\s*Directory\s*\(\s*""([^""]+)""\s*\)\s*\)", RegexOptions.Compiled)]
+    // Matches: Ando.Build(Directory("subdir")) or Ando.Build(Directory("./subdir"), options).
+    [GeneratedRegex(@"Ando\s*\.\s*Build\s*\(\s*Directory\s*\(\s*""([^""]+)""\s*\)", RegexOptions.Compiled)]
     private static partial Regex AndoBuildPattern();
 
     // Matches: Build("subdir") for backward compatibility

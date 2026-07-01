@@ -272,11 +272,11 @@ export const operations = [
   {
     group: "Azure",
     name: "Azure.EnsureAuthenticated",
-    desc: "Authenticate to Azure using the best available method. Checks for service principal credentials (AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID), then falls back to existing CLI session or interactive login. Prompts to install Azure CLI if not available.",
+    desc: "Authenticate to Azure using the best available method. Uses service principal credentials when provided (explicit arguments or AZURE_CLIENT_ID/SECRET/TENANT_ID), otherwise falls back to an existing CLI session or interactive login. Pass requireServicePrincipal: true (or set ANDO_REQUIRE_SERVICE_PRINCIPAL) to force service principal auth and fail instead of ever using a developer's az login session. Default behavior is unchanged (fallback allowed).",
     examples: [
-      "Azure.EnsureAuthenticated(); // Auto-detects auth method",
-      "// CI/CD: Uses env vars if set",
-      "// Local: Uses az login session or prompts for login",
+      "Azure.EnsureAuthenticated(); // Auto-detects: SP env vars, else CLI session/interactive",
+      "Azure.EnsureAuthenticated(clientId, secret, tenantId); // explicit SP, no env reliance",
+      "Azure.EnsureAuthenticated(clientId, secret, tenantId, requireServicePrincipal: true); // never fall back to az login",
     ],
     sourceFile: "Operations/AzureOperations.cs",
   },

@@ -267,4 +267,45 @@ public class AzureOperationsTests
 
         Assert.True(containsInstallInfo, $"Expected install instructions, got: {instructions}");
     }
+
+    [Fact]
+    public void EnsureAuthenticated_WithExplicitCredentials_RegistersServicePrincipalLogin()
+    {
+        var azure = CreateAzure();
+
+        azure.EnsureAuthenticated(clientId: "client", clientSecret: "secret", tenantId: "tenant");
+
+        // Explicit credentials always use the service principal path (no fallback).
+        Assert.Single(_registry.Steps);
+        Assert.Equal("Azure.Login.ServicePrincipal", _registry.Steps[0].Name);
+    }
+
+    [Fact]
+    public void EnsureAuthenticated_RequireServicePrincipal_WithoutCredentials_Throws()
+    {
+        var azure = CreateAzure();
+
+        // Clear any ambient credentials so the require path is deterministic.
+        var saved = new Dictionary<string, string?>();
+        foreach (var name in new[] { "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_TENANT_ID", "ANDO_REQUIRE_SERVICE_PRINCIPAL" })
+        {
+            saved[name] = Environment.GetEnvironmentVariable(name);
+            Environment.SetEnvironmentVariable(name, null);
+        }
+
+        try
+        {
+            // requireServicePrincipal must fail rather than fall back to a session.
+            Assert.Throws<InvalidOperationException>(() =>
+                azure.EnsureAuthenticated(requireServicePrincipal: true));
+            Assert.Empty(_registry.Steps);
+        }
+        finally
+        {
+            foreach (var (name, value) in saved)
+            {
+                Environment.SetEnvironmentVariable(name, value);
+            }
+        }
+    }
 }

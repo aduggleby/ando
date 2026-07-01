@@ -39,6 +39,10 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
     private const string EnvTenantId = "AZURE_TENANT_ID";
     private const string EnvSubscriptionId = "AZURE_SUBSCRIPTION_ID";
 
+    // When truthy, EnsureAuthenticated must authenticate with a service principal
+    // and will never fall back to an existing CLI session or interactive login.
+    private const string EnvRequireServicePrincipal = "ANDO_REQUIRE_SERVICE_PRINCIPAL";
+
     /// <summary>
     /// Registers a step to verify the user is logged in to Azure.
     /// Fails the build if not authenticated.
@@ -53,24 +57,57 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
 
     /// <summary>
     /// Ensures Azure authentication is available, using the best available method:
-    /// 1. If service principal env vars are set (AZURE_CLIENT_ID, etc.), uses service principal login
+    /// 1. If service principal credentials are provided (explicit arguments or the
+    ///    AZURE_CLIENT_ID/SECRET/TENANT_ID env vars), uses service principal login
     /// 2. If Azure CLI is available and already logged in, uses existing session
     /// 3. If Azure CLI is available but not logged in, runs interactive `az login`
     /// 4. If Azure CLI is not installed, prompts user to install it
+    ///
+    /// When <paramref name="requireServicePrincipal"/> is true (or the
+    /// ANDO_REQUIRE_SERVICE_PRINCIPAL environment variable is truthy), only step 1
+    /// is allowed: if no service principal credentials are available the build
+    /// fails instead of falling back to an existing CLI session or interactive
+    /// login. This guarantees a build always runs as the intended service
+    /// principal and never as a developer's personal `az login` session.
     /// </summary>
-    public void EnsureAuthenticated()
+    /// <param name="clientId">Service principal application (client) ID, or null to use AZURE_CLIENT_ID.</param>
+    /// <param name="clientSecret">Service principal client secret, or null to use AZURE_CLIENT_SECRET.</param>
+    /// <param name="tenantId">Tenant ID, or null to use AZURE_TENANT_ID.</param>
+    /// <param name="requireServicePrincipal">When true, never fall back to an existing or interactive session.</param>
+    public void EnsureAuthenticated(
+        string? clientId = null,
+        string? clientSecret = null,
+        string? tenantId = null,
+        bool requireServicePrincipal = false)
     {
-        // Check if service principal credentials are available.
-        var clientId = EnvironmentHelper.Get(EnvClientId);
-        var clientSecret = EnvironmentHelper.Get(EnvClientSecret);
-        var tenantId = EnvironmentHelper.Get(EnvTenantId);
+        // Resolve service principal credentials from explicit arguments first,
+        // then environment variables.
+        var resolvedClientId = clientId ?? EnvironmentHelper.Get(EnvClientId);
+        var resolvedClientSecret = clientSecret ?? EnvironmentHelper.Get(EnvClientSecret);
+        var resolvedTenantId = tenantId ?? EnvironmentHelper.Get(EnvTenantId);
 
-        if (!string.IsNullOrEmpty(clientId) && !string.IsNullOrEmpty(clientSecret) && !string.IsNullOrEmpty(tenantId))
+        var mustUseServicePrincipal =
+            requireServicePrincipal || IsTruthy(EnvironmentHelper.Get(EnvRequireServicePrincipal));
+
+        if (!string.IsNullOrEmpty(resolvedClientId)
+            && !string.IsNullOrEmpty(resolvedClientSecret)
+            && !string.IsNullOrEmpty(resolvedTenantId))
         {
             // Service principal credentials found - use them.
             Logger.Info("Azure: Using service principal authentication");
-            LoginWithServicePrincipal(clientId, clientSecret, tenantId);
+            LoginWithServicePrincipal(resolvedClientId, resolvedClientSecret, resolvedTenantId);
             return;
+        }
+
+        // No service principal credentials. If one is required, fail fast rather
+        // than silently using whoever is logged in to the Azure CLI.
+        if (mustUseServicePrincipal)
+        {
+            throw new InvalidOperationException(
+                "Service principal authentication is required (requireServicePrincipal or "
+                + "ANDO_REQUIRE_SERVICE_PRINCIPAL), but no client ID/secret/tenant was provided. "
+                + "Pass them explicitly or set AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, and AZURE_TENANT_ID. "
+                + "Refusing to fall back to an existing 'az login' session or interactive login.");
         }
 
         // No service principal credentials - check if Azure CLI is available.
@@ -112,6 +149,13 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
             Logger.Info("Azure: Running interactive login...");
             RegisterInteractiveLogin();
         }
+    }
+
+    // Treats "1", "true", "yes", "on" (case-insensitive) as true; everything else false.
+    private static bool IsTruthy(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        return value.Trim().ToLowerInvariant() is "1" or "true" or "yes" or "on";
     }
 
     /// <summary>

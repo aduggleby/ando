@@ -232,10 +232,19 @@ if (publish)
         .WithGeneratedNotes()
         .WithFiles(releaseAssets.ToArray()));
 
-		// Build and deploy the documentation website
-		// API docs are generated via `ando docs` pre-hook
-		Ando.Build(Directory("./website"), o => o.WithProfile("publish"));
-	}
+    // Build and deploy the documentation website.
+    // API docs are generated via `ando docs` pre-hook.
+    // Ando.Server builds should not depend on external docs deployment credentials;
+    // use the explicit `docs` profile when deploying docs from a controlled environment.
+    if (!isOnServer)
+    {
+        Ando.Build(Directory("./website"), o => o.WithProfile("publish"));
+    }
+    else
+    {
+        Log.Info("Skipping documentation website deploy (disabled on Ando.Server builds).");
+    }
+}
 
 // Copy the dist folder from container to host both individually and as a compressed archive
 Ando.CopyArtifactsToHost("dist", "./dist");
