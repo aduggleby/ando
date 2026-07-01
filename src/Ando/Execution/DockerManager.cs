@@ -110,6 +110,8 @@ public class DockerManager
     private readonly IBuildLogger _logger;
     private readonly ProcessRunner _processRunner;
     private bool? _tarSupportsNullFileList;
+    private const string DockerSocketHostPath = "/var/run/docker.sock";
+    private const string DockerSocketContainerPath = "/run/docker.sock";
 
     // Directories to exclude when copying project to container.
     // These are typically large, generated, or version-controlled directories.
@@ -201,10 +203,25 @@ public class DockerManager
     /// </summary>
     public async Task<bool> HasDockerSocketMountedAsync(string containerId)
     {
+        var mountLines = await GetContainerMountLinesAsync(containerId);
+        return DockerSocketMountsHostSocket(mountLines);
+    }
+
+    // Checks if the Docker socket uses the current container destination.
+    // Legacy warm containers mounted to /var/run/docker.sock and can break
+    // Docker 29+ project sync before the build script starts.
+    private async Task<bool> HasCurrentDockerSocketMountAsync(string containerId)
+    {
+        var mountLines = await GetContainerMountLinesAsync(containerId);
+        return DockerSocketMountUsesCurrentDestination(mountLines);
+    }
+
+    private async Task<string?> GetContainerMountLinesAsync(string containerId)
+    {
         var startInfo = new ProcessStartInfo
         {
             FileName = "docker",
-            ArgumentList = { "inspect", containerId, "--format", "{{range .Mounts}}{{.Source}}{{\"\\n\"}}{{end}}" },
+            ArgumentList = { "inspect", containerId, "--format", "{{range .Mounts}}{{.Source}}{{\"\\t\"}}{{.Destination}}{{\"\\n\"}}{{end}}" },
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -212,15 +229,53 @@ public class DockerManager
         };
 
         using var process = Process.Start(startInfo);
-        if (process == null) return false;
+        if (process == null) return null;
 
         var output = await process.StandardOutput.ReadToEndAsync();
         await process.WaitForExitAsync();
 
-        if (process.ExitCode != 0) return false;
+        return process.ExitCode == 0 ? output : null;
+    }
 
-        // Check if Docker socket is in the list of mounted sources.
-        return output.Contains("/var/run/docker.sock");
+    internal static bool DockerSocketMountsHostSocket(string? dockerInspectMountLines)
+    {
+        return EnumerateDockerInspectMounts(dockerInspectMountLines)
+            .Any(mount => string.Equals(mount.Source, DockerSocketHostPath, StringComparison.Ordinal));
+    }
+
+    internal static bool DockerSocketMountUsesCurrentDestination(string? dockerInspectMountLines)
+    {
+        foreach (var mount in EnumerateDockerInspectMounts(dockerInspectMountLines))
+        {
+            if (string.Equals(mount.Source, DockerSocketHostPath, StringComparison.Ordinal) &&
+                string.Equals(mount.Destination, DockerSocketContainerPath, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<(string Source, string Destination)> EnumerateDockerInspectMounts(string? dockerInspectMountLines)
+    {
+        if (string.IsNullOrWhiteSpace(dockerInspectMountLines))
+        {
+            yield break;
+        }
+
+        var mountLines = dockerInspectMountLines.Split(
+            ['\r', '\n'],
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        foreach (var mountLine in mountLines)
+        {
+            var parts = mountLine.Split('\t', 2, StringSplitOptions.TrimEntries);
+            if (parts.Length == 2)
+            {
+                yield return (parts[0], parts[1]);
+            }
+        }
     }
 
     /// <summary>
@@ -273,10 +328,10 @@ public class DockerManager
             // This happens when a container was created without --dind and later --dind is needed.
             if (config.MountDockerSocket)
             {
-                var hasSocket = await HasDockerSocketMountedAsync(existing.Id);
-                if (!hasSocket)
+                var hasCurrentSocketMount = await HasCurrentDockerSocketMountAsync(existing.Id);
+                if (!hasCurrentSocketMount)
                 {
-                    _logger.Info($"Recreating container '{config.Name}' to enable Docker-in-Docker mode...");
+                    _logger.Info($"Recreating container '{config.Name}' to enable the current Docker-in-Docker socket mount...");
                     await RemoveContainerAsync(config.Name);
                     return await CreateContainerAsync(config);
                 }
@@ -350,7 +405,7 @@ public class DockerManager
         // Windows/macOS, and warm-container detection matches on the source path).
         if (config.MountDockerSocket)
         {
-            args.AddRange(["-v", "/var/run/docker.sock:/run/docker.sock"]);
+            args.AddRange(["-v", $"{DockerSocketHostPath}:{DockerSocketContainerPath}"]);
             // Enable host.docker.internal on Linux (works by default on Docker Desktop)
             // This allows containers to reach services on the host (e.g., E2E test servers)
             args.AddRange(["--add-host", "host.docker.internal:host-gateway"]);
@@ -514,7 +569,7 @@ public class DockerManager
                 if (copyProcess.ExitCode != 0)
                 {
                     var copyError = await copyProcess.StandardError.ReadToEndAsync();
-                    throw new InvalidOperationException($"Failed to copy tar to container: {copyError}");
+                    throw new InvalidOperationException(FormatProjectTarCopyFailure(copyError));
                 }
             }
 
@@ -539,6 +594,17 @@ public class DockerManager
                 File.Delete(gitFileListPath);
             }
         }
+    }
+
+    internal static string FormatProjectTarCopyFailure(string? copyError)
+    {
+        var message = $"Failed to copy tar to container: {copyError}";
+        if (copyError?.Contains("mkdirat var/run: file exists", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            message += $"{Environment.NewLine}This can happen when a warm Docker-in-Docker container has an old Docker socket mount. Run `ando clean --all` and then retry the build.";
+        }
+
+        return message;
     }
 
     // Uses git to honor .gitignore when possible, with a directory exclusion fallback.

@@ -165,4 +165,56 @@ public class DockerManagerGitIgnoreTests : IDisposable
 
         Assert.True(supportsNull);
     }
+
+    [Fact]
+    public void DockerSocketMountUsesCurrentDestination_WithCurrentDestination_ReturnsTrue()
+    {
+        var mounts = "/var/run/docker.sock\t/run/docker.sock\n";
+
+        var usesCurrentDestination = DockerManager.DockerSocketMountUsesCurrentDestination(mounts);
+
+        Assert.True(usesCurrentDestination);
+    }
+
+    [Fact]
+    public void DockerSocketMountUsesCurrentDestination_WithLegacyDestination_ReturnsFalse()
+    {
+        var mounts = "/var/run/docker.sock\t/var/run/docker.sock\n";
+
+        var usesCurrentDestination = DockerManager.DockerSocketMountUsesCurrentDestination(mounts);
+
+        Assert.False(usesCurrentDestination);
+    }
+
+    [Fact]
+    public void DockerSocketMountUsesCurrentDestination_WithoutDockerSocket_ReturnsFalse()
+    {
+        var mounts = "/tmp/cache\t/workspace/.ando/cache\n";
+
+        var usesCurrentDestination = DockerManager.DockerSocketMountUsesCurrentDestination(mounts);
+
+        Assert.False(usesCurrentDestination);
+    }
+
+    [Fact]
+    public void FormatProjectTarCopyFailure_WithVarRunMountConflict_SuggestsCleanAll()
+    {
+        var copyError = "Error response from daemon: mkdirat var/run: file exists";
+
+        var message = DockerManager.FormatProjectTarCopyFailure(copyError);
+
+        message.ShouldContain("Failed to copy tar to container");
+        message.ShouldContain("ando clean --all");
+    }
+
+    [Fact]
+    public void FormatProjectTarCopyFailure_WithOtherCopyError_DoesNotSuggestCleanAll()
+    {
+        var copyError = "Error response from daemon: no such container";
+
+        var message = DockerManager.FormatProjectTarCopyFailure(copyError);
+
+        message.ShouldContain(copyError);
+        message.ShouldNotContain("ando clean --all");
+    }
 }
