@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.147
+
+**2026-07-01**
+
+- Add the option to require service principal sign-in when verifying Azure authentication
+
 ## 0.9.146
 
 **2026-06-30**
