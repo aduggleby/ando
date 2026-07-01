@@ -13,29 +13,29 @@ ANDO requires **Docker** to run builds in isolated containers. If Docker is not 
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| [`ando`](#run-options) | Run the build script in a Docker container. |
-| [`ando commit`](#commit-command) | Commit all changes with AI-generated message. |
-| [`ando bump`](#bump-command) | Bump version across all projects. |
-| [`ando docs`](#docs-command) | Update documentation using Claude. |
-| [`ando release`](#release-command) | Interactive release workflow. |
-| [`ando ship`](#ship-command) | Ship workflow (release without publish). |
-| [`ando verify`](#run-options) | Check build script for errors without executing. |
-| [`ando clean`](#clean-options) | Remove artifacts, temp files, and containers. |
+| Command                            | Description                                      |
+| ---------------------------------- | ------------------------------------------------ |
+| [`ando`](#run-options)             | Run the build script in a Docker container.      |
+| [`ando commit`](#commit-command)   | Commit all changes with AI-generated message.    |
+| [`ando bump`](#bump-command)       | Bump version across all projects.                |
+| [`ando docs`](#docs-command)       | Update documentation using Claude.               |
+| [`ando release`](#release-command) | Interactive release workflow.                    |
+| [`ando ship`](#ship-command)       | Ship workflow (release without publish).         |
+| [`ando verify`](#run-options)      | Check build script for errors without executing. |
+| [`ando clean`](#clean-options)     | Remove artifacts, temp files, and containers.    |
 
 ## Run Options
 
-| Flag | Description |
-|------|-------------|
-| `-f, --file <file>` | Use a specific build file instead of build.csando. |
-| `-p, --profile <profiles>` | Activate build profiles (comma-separated). |
-| `--read-env` | Load environment file without prompting. |
-| `--verbosity <level>` | Set output verbosity (quiet\|minimal\|normal\|detailed). |
-| `--no-color` | Disable colored output. |
-| `--cold` | Always create a fresh container. |
-| `--image <image>` | Use a custom Docker image. |
-| `--dind` | Mount Docker socket for Docker-in-Docker builds. |
+| Flag                       | Description                                              |
+| -------------------------- | -------------------------------------------------------- |
+| `-f, --file <file>`        | Use a specific build file instead of build.csando.       |
+| `-p, --profile <profiles>` | Activate build profiles (comma-separated).               |
+| `--read-env`               | Load environment file without prompting.                 |
+| `--verbosity <level>`      | Set output verbosity (quiet\|minimal\|normal\|detailed). |
+| `--no-color`               | Disable colored output.                                  |
+| `--cold`                   | Always create a fresh container.                         |
+| `--image <image>`          | Use a custom Docker image.                               |
+| `--dind`                   | Mount Docker socket for Docker-in-Docker builds.         |
 
 ## Docker-in-Docker (DIND)
 
@@ -68,10 +68,10 @@ readEnv: true
 allowClaude: true
 ```
 
-| Setting | Description |
-|---------|-------------|
-| `dind` | Enable Docker-in-Docker mode by default. |
-| `readEnv` | Automatically load environment files without prompting. |
+| Setting       | Description                                                          |
+| ------------- | -------------------------------------------------------------------- |
+| `dind`        | Enable Docker-in-Docker mode by default.                             |
+| `readEnv`     | Automatically load environment files without prompting.              |
 | `allowClaude` | Allow Claude CLI to run with elevated permissions without prompting. |
 
 ## Environment Files
@@ -97,11 +97,11 @@ Use `--read-env` or set `readEnv: true` in `ando.config` to skip the prompt and 
 
 Several ANDO commands use Claude CLI for AI-powered features:
 
-| Command | Claude Usage |
-|---------|-------------|
-| `ando commit` | Generates commit messages from diffs |
-| `ando bump` | Generates changelog entries and updates changelog files |
-| `ando docs` | Reviews code changes and updates documentation |
+| Command       | Claude Usage                                            |
+| ------------- | ------------------------------------------------------- |
+| `ando commit` | Generates commit messages from diffs                    |
+| `ando bump`   | Generates changelog entries and updates changelog files |
+| `ando docs`   | Reviews code changes and updates documentation          |
 
 **Requirements:** Claude CLI must be installed (`npm install -g @anthropic-ai/claude-code`)
 
@@ -141,6 +141,7 @@ ando bump [patch|minor|major]
 ```
 
 **What it does:**
+
 1. Detects projects from `build.csando` (Dotnet.Project, Npm directories)
 2. Validates all versions match (prompts if mismatched)
 3. Updates all project files (.csproj, package.json)
@@ -151,6 +152,7 @@ ando bump [patch|minor|major]
 **Tag resolution for changelog:** The bump command looks for a git tag matching the current version (`vX.Y.Z` or `X.Y.Z`). If no exact match is found, it falls back to the most recent git tag. This ensures changelogs are generated even when exact version tags are missing.
 
 **Supported projects:**
+
 - `.csproj` files via `Dotnet.Project("path")`
 - `package.json` in directories used with `Npm.*` operations
 
@@ -163,6 +165,7 @@ ando docs
 ```
 
 **What it does:**
+
 1. Syncs version badges in documentation files (`index.astro`, `README.md`) to the current project version
 2. Gets commits since last git tag (or recent commits if no tag)
 3. Analyzes each commit to understand what changed
@@ -173,18 +176,18 @@ ando docs
 
 Claude searches for and updates these file types:
 
-| Pattern | Location | Description |
-|---------|----------|-------------|
-| `*.md` | Anywhere | Markdown documentation files |
-| `*.astro` | `website/` | Astro page components |
-| `*.js` | `website/` | JavaScript data files (operations, providers) |
-| `llms.txt` | `public/` | LLM-friendly documentation (must stay in sync) |
+| Pattern    | Location   | Description                                    |
+| ---------- | ---------- | ---------------------------------------------- |
+| `*.md`     | Anywhere   | Markdown documentation files                   |
+| `*.astro`  | `website/` | Astro page components                          |
+| `*.js`     | `website/` | JavaScript data files (operations, providers)  |
+| `llms.txt` | `public/`  | LLM-friendly documentation (must stay in sync) |
 
 ### Files Skipped
 
-| File | Reason |
-|------|--------|
-| `CHANGELOG.md` | Handled separately by `ando bump` |
+| File                 | Reason                             |
+| -------------------- | ---------------------------------- |
+| `CHANGELOG.md`       | Handled separately by `ando bump`  |
 | Internal refactoring | Only user-facing changes need docs |
 
 ### What Triggers Updates
@@ -226,11 +229,12 @@ ando release --minor   # Specify bump type (default: patch)
 ```
 
 **Steps:**
+
 1. **Build Verification** - Runs `ando run --read-env` first
-2. **Commit** - Commit uncommitted changes (uses `ando commit`) - *skipped if no uncommitted changes*
+2. **Commit** - Commit uncommitted changes (uses `ando commit`) - _skipped if no uncommitted changes_
 3. **Docs** - Update documentation (uses `ando docs`)
-4. **Bump** - Bump version across all projects (uses `ando bump`) - *skipped if no changes since last tag*
-5. **Push** - Push to remote repository - *skipped if no remote tracking*
+4. **Bump** - Bump version across all projects (uses `ando bump`) - _skipped if no changes since last tag_
+5. **Push** - Push to remote repository - _skipped if no remote tracking_
 6. **Publish** - Run `ando run -p publish --dind --read-env`
 
 Steps are contextually enabled/disabled based on repository state.
@@ -247,11 +251,12 @@ ando ship minor        # Specify bump type (default: patch)
 ```
 
 **Steps:**
+
 1. **Build Verification** - Runs `ando run --read-env` first
-2. **Commit** - Commit uncommitted changes (uses `ando commit`) - *skipped if no uncommitted changes*
-3. **Bump** - Bump version across all projects (uses `ando bump`) - *skipped if no changes since last tag*
+2. **Commit** - Commit uncommitted changes (uses `ando commit`) - _skipped if no uncommitted changes_
+3. **Bump** - Bump version across all projects (uses `ando bump`) - _skipped if no changes since last tag_
 4. **Docs** - Update documentation (uses `ando docs`)
-5. **Push** - Push to remote repository - *skipped if no remote tracking*
+5. **Push** - Push to remote repository - _skipped if no remote tracking_
 
 Steps are contextually enabled/disabled based on repository state. Hooks use the command name `ship` (e.g., `ando-pre-ship.csando`).
 
@@ -259,14 +264,15 @@ Steps are contextually enabled/disabled based on repository state. Hooks use the
 
 ANDO supports pre-build and post-build hooks that run before and after CLI commands. Hooks are `.csando` scripts that execute on the host machine.
 
-| Hook | When it runs |
-|------|--------------|
-| `ando-pre.csando` | Before ANY command |
-| `ando-pre-{cmd}.csando` | Before specific command |
-| `ando-post-{cmd}.csando` | After specific command |
-| `ando-post.csando` | After ANY command |
+| Hook                     | When it runs            |
+| ------------------------ | ----------------------- |
+| `ando-pre.csando`        | Before ANY command      |
+| `ando-pre-{cmd}.csando`  | Before specific command |
+| `ando-post-{cmd}.csando` | After specific command  |
+| `ando-post.csando`       | After ANY command       |
 
 **Quick example:**
+
 ```csharp
 // scripts/ando-pre-bump.csando
 var result = await Shell.RunAsync("dotnet", "test", "--no-build");
@@ -284,12 +290,12 @@ ANDO handles Ctrl+C gracefully:
 
 ## Clean Options
 
-| Flag | Description |
-|------|-------------|
-| `--artifacts` | Remove the artifacts directory. |
-| `--temp` | Remove temp directory. |
+| Flag          | Description                                                  |
+| ------------- | ------------------------------------------------------------ |
+| `--artifacts` | Remove the artifacts directory.                              |
+| `--temp`      | Remove temp directory.                                       |
 | `--container` | Remove the project's warm container (clears package caches). |
-| `--all` | Remove all of the above. |
+| `--all`       | Remove all of the above.                                     |
 
 ### When to clean
 
@@ -304,8 +310,11 @@ container would otherwise keep stale:
 
 Note: a build that fails at "Copying project files to container" with
 `Error response from daemon: mkdirat var/run: file exists` is a separate,
-Docker 29+ specific issue (the Docker socket was mounted onto the `/var/run`
-symlink); it is fixed in ANDO 0.9.145+ and is not resolved by cleaning.
+Docker 29+ specific issue caused by an old warm container whose Docker socket
+was mounted onto the `/var/run` symlink. ANDO 0.9.148+ detects these legacy
+warm containers and automatically recreates them with the corrected socket
+mount before the build runs. If you still hit the error on an older warm
+container, run `ando clean --all` and retry the build.
 
 ## Project Files
 
@@ -313,37 +322,37 @@ ANDO uses and creates various files in your project directory:
 
 ### Environment Files
 
-| File | Description |
-|------|-------------|
+| File        | Description                                                                         |
+| ----------- | ----------------------------------------------------------------------------------- |
 | `.env.ando` | **Preferred** - Project-specific environment variables. Takes priority over `.env`. |
-| `.env` | **Fallback** - Standard environment file, used if `.env.ando` doesn't exist. |
+| `.env`      | **Fallback** - Standard environment file, used if `.env.ando` doesn't exist.        |
 
 ANDO prompts before loading environment files (unless `--read-env` flag or `readEnv: true` in config).
 
 ### Configuration Files
 
-| File | Description |
-|------|-------------|
-| `ando.config` | YAML configuration file for persistent settings (`dind`, `readEnv`). |
-| `build.csando` | Build script (C# with Roslyn scripting). |
+| File           | Description                                                          |
+| -------------- | -------------------------------------------------------------------- |
+| `ando.config`  | YAML configuration file for persistent settings (`dind`, `readEnv`). |
+| `build.csando` | Build script (C# with Roslyn scripting).                             |
 
 ### Generated Files & Directories
 
-| Path | Description |
-|------|-------------|
+| Path               | Description                                                   |
+| ------------------ | ------------------------------------------------------------- |
 | `build.csando.log` | Plain-text log of the last build run. Overwrites on each run. |
-| `.ando/cache/` | Package caches persist inside warm containers (not on host). |
-| `.ando/tmp/` | Temporary files used during builds. |
-| `artifacts/` | Default output directory for build artifacts. |
+| `.ando/cache/`     | Package caches persist inside warm containers (not on host).  |
+| `.ando/tmp/`       | Temporary files used during builds.                           |
+| `artifacts/`       | Default output directory for build artifacts.                 |
 
 ### Hook Scripts
 
-| File | Description |
-|------|-------------|
-| `ando-pre.csando` | Runs before any command. |
-| `ando-pre-{cmd}.csando` | Runs before a specific command. |
-| `ando-post-{cmd}.csando` | Runs after a specific command. |
-| `ando-post.csando` | Runs after any command. |
+| File                     | Description                     |
+| ------------------------ | ------------------------------- |
+| `ando-pre.csando`        | Runs before any command.        |
+| `ando-pre-{cmd}.csando`  | Runs before a specific command. |
+| `ando-post-{cmd}.csando` | Runs after a specific command.  |
+| `ando-post.csando`       | Runs after any command.         |
 
 Hook scripts are searched in `./scripts/` first, then `./`.
 
@@ -370,12 +379,12 @@ artifacts/
 
 **Explanation:**
 
-| Pattern | Why ignore |
-|---------|------------|
-| `.env.ando` | Contains secrets (API keys, tokens, passwords). ANDO warns if not gitignored. |
-| `build.csando.log` | Build output log, regenerated on each run. |
-| `.ando/` | Cache directories (NuGet, npm) and temp files. Large and machine-specific. |
-| `artifacts/` | Build outputs. Should be regenerated, not committed. |
+| Pattern            | Why ignore                                                                    |
+| ------------------ | ----------------------------------------------------------------------------- |
+| `.env.ando`        | Contains secrets (API keys, tokens, passwords). ANDO warns if not gitignored. |
+| `build.csando.log` | Build output log, regenerated on each run.                                    |
+| `.ando/`           | Cache directories (NuGet, npm) and temp files. Large and machine-specific.    |
+| `artifacts/`       | Build outputs. Should be regenerated, not committed.                          |
 
 **Optional:**
 

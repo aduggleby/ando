@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.148
+
+**2026-07-01**
+
+- Fix Docker compatibility so reused containers connect to the Docker socket correctly
+
 ## 0.9.147
 
 **2026-07-01**
