@@ -35,8 +35,22 @@ AppService.DeployFolder("my-web-app", Root / "publish", "my-rg", o => o
 
 ### AppService.DeployZip Options
 
-| Option | Description |
-|--------|-------------|
-| `WithDeploymentSlot(string)` | Deploy to a specific slot instead of production. Common slots: "staging", "dev", "canary". Slots have their own URLs and can be swapped with production. |
-| `WithNoWait()` | Don't wait for deployment to complete. Returns immediately after starting the deployment. Use when you don't need to verify deployment success in the build. |
-| `WithRestart()` | Restart the app after deployment. Forces the app to pick up new code immediately instead of waiting for the next scheduled restart. |
+| Option                       | Description                                                                                                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `WithDeploymentSlot(string)` | Deploy to a specific slot instead of production. Common slots: "staging", "dev", "canary". Slots have their own URLs and can be swapped with production.     |
+| `WithNoWait()`               | Don't wait for deployment to complete. Returns immediately after starting the deployment. Use when you don't need to verify deployment success in the build. |
+| `WithRestart()`              | Restart the app after deployment. Forces the app to pick up new code immediately instead of waiting for the next scheduled restart.                          |
+| `WithTimeout(TimeSpan)`      | Maximum time to wait for the zip deploy command before reconciling and retrying. Must be greater than zero. Default `20` minutes.                            |
+
+## Resilient zip deploy
+
+`AppService.DeployZip` (and the operations built on it) tolerate the flaky
+behaviour Azure App Service sometimes exhibits during large uploads:
+
+- **Timeout reconciliation.** If the `az webapp deploy` command times out, ANDO
+  queries the latest Kudu deployment status. When Kudu reports the deployment
+  completed successfully after the command timed out, the step is treated as
+  successful instead of failing.
+- **Automatic retries.** Transient failures (HTTP 5xx, "Service Unavailable",
+  connection resets) are retried with backoff, up to three attempts, as long as
+  the overall `WithTimeout` budget has not been exhausted.

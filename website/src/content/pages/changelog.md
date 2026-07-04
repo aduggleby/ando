@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.149
+
+**2026-07-04**
+
+- Improve Docker so reused containers are refreshed automatically when a different image is requested
+
 ## 0.9.148
 
 **2026-07-01**

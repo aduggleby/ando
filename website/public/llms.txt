@@ -74,7 +74,7 @@ ANDO requires Docker to run builds in isolated containers. If Docker is not avai
 - `ando ship --all` - Run all applicable ship steps non-interactively
 - `ando ship --dry-run` - Preview what ship would do
 - `ando verify` - Check build script for errors without executing
-- `ando clean` - Remove artifacts, temp files, and containers (removing container clears caches). Clean (or use `--cold`) after changing the build image, upgrading ANDO, or changing container-affecting config, since the warm container persists the build environment between runs.
+- `ando clean` - Remove artifacts, temp files, and containers (removing container clears caches). ANDO automatically recreates the warm container when the requested build image differs from the running one, so changing the build image no longer requires a manual clean. Still clean (or use `--cold`) after upgrading ANDO or changing other container-affecting config, since the warm container persists the build environment between runs.
 - `ando help` - Show available commands
 - `ando --version` or `ando -v` - Show version number
 
@@ -884,6 +884,9 @@ Note: Annotated tags require a git identity (user.name/user.email). The ANDO CI 
 - WithDeploymentSlot(string) - Deploy to specific slot
 - WithNoWait() - Don't wait for completion
 - WithRestart() - Restart after deployment
+- WithTimeout(TimeSpan) - Max time to wait for zip deploy before reconciling/retrying (default 20 minutes)
+
+AppService.DeployZip is resilient to flaky Azure uploads: if the deploy command times out it reconciles against the latest Kudu deployment status (treating a completed deployment as success), and it retries transient failures (5xx, Service Unavailable, connection resets) with backoff up to 3 attempts within the WithTimeout budget.
 
 ### Functions.DeployZip / Publish Options
 - WithDeploymentSlot(string) - Deploy to specific slot
