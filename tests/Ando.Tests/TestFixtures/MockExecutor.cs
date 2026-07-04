@@ -89,6 +89,12 @@ public class MockExecutor : ICommandExecutor
     /// </summary>
     public Dictionary<string, string> CommandOutputs { get; } = new();
 
+    /// <summary>
+    /// Results to return in execution order.
+    /// When populated, these take precedence over the other simulation settings.
+    /// </summary>
+    public Queue<CommandResult> QueuedResults { get; } = new();
+
     public async Task<CommandResult> ExecuteAsync(string command, string[] args, CommandOptions? options = null)
     {
         var executed = new ExecutedCommand(command, args, options);
@@ -97,6 +103,11 @@ public class MockExecutor : ICommandExecutor
         if (ExecutionDelay > TimeSpan.Zero)
         {
             await Task.Delay(ExecutionDelay);
+        }
+
+        if (QueuedResults.Count > 0)
+        {
+            return QueuedResults.Dequeue();
         }
 
         if (SimulateTimeout)
@@ -157,6 +168,7 @@ public class MockExecutor : ICommandExecutor
         ExecutionDelay = TimeSpan.Zero;
         SimulatedOutput = null;
         CommandOutputs.Clear();
+        QueuedResults.Clear();
     }
 
     /// <summary>

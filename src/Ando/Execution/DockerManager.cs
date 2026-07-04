@@ -216,7 +216,7 @@ public class DockerManager
         return DockerSocketMountUsesCurrentDestination(mountLines);
     }
 
-    private async Task<string?> GetContainerMountLinesAsync(string containerId)
+    protected virtual async Task<string?> GetContainerMountLinesAsync(string containerId)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -235,6 +235,31 @@ public class DockerManager
         await process.WaitForExitAsync();
 
         return process.ExitCode == 0 ? output : null;
+    }
+
+    /// <summary>
+    /// Gets the image reference that was used to create a container.
+    /// Returns null when Docker cannot inspect the container so callers can fail safe.
+    /// </summary>
+    protected virtual async Task<string?> GetContainerImageAsync(string containerId)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "docker",
+            ArgumentList = { "inspect", containerId, "--format", "{{.Config.Image}}" },
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+
+        using var process = Process.Start(startInfo);
+        if (process == null) return null;
+
+        var output = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        return process.ExitCode == 0 ? output.Trim() : null;
     }
 
     internal static bool DockerSocketMountsHostSocket(string? dockerInspectMountLines)
@@ -281,7 +306,7 @@ public class DockerManager
     /// <summary>
     /// Finds an existing warm container for the project.
     /// </summary>
-    public async Task<ContainerInfo?> FindWarmContainerAsync(string containerName)
+    public virtual async Task<ContainerInfo?> FindWarmContainerAsync(string containerName)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -324,6 +349,15 @@ public class DockerManager
 
         if (existing != null)
         {
+            var existingImage = await GetContainerImageAsync(existing.Id);
+            if (!string.Equals(existingImage, config.Image, StringComparison.Ordinal))
+            {
+                var oldImage = existingImage ?? "unknown";
+                _logger.Info($"Recreating container '{config.Name}' because its image '{oldImage}' does not match the requested image '{config.Image}'...");
+                await RemoveContainerAsync(config.Name);
+                return await CreateContainerAsync(config);
+            }
+
             // Check if --dind is requested but the existing container doesn't have Docker socket.
             // This happens when a container was created without --dind and later --dind is needed.
             if (config.MountDockerSocket)
@@ -363,7 +397,7 @@ public class DockerManager
     // Creates a new container (project files copied in, caches persist in container).
     // Project files are copied in separately for isolation.
     // Container runs 'tail -f /dev/null' to stay alive indefinitely.
-    private async Task<ContainerInfo> CreateContainerAsync(ContainerConfig config)
+    protected virtual async Task<ContainerInfo> CreateContainerAsync(ContainerConfig config)
     {
         _logger.Info($"Creating Docker container '{config.Name}'");
         _logger.Info($"  Image: {config.Image}");
@@ -475,7 +509,7 @@ public class DockerManager
     /// Excludes large/generated directories for efficiency.
     /// This is the key to isolation - the container works on a copy, not the original.
     /// </summary>
-    public async Task CopyProjectToContainerAsync(string containerId, string projectRoot)
+    public virtual async Task CopyProjectToContainerAsync(string containerId, string projectRoot)
     {
         // Verify tar is available on the host before attempting to create the archive.
         if (!_processRunner.IsAvailable("tar"))
@@ -890,7 +924,7 @@ public class DockerManager
     /// <summary>
     /// Starts a stopped container.
     /// </summary>
-    private async Task StartContainerAsync(string containerId)
+    protected virtual async Task StartContainerAsync(string containerId)
     {
         var result = await _processRunner.ExecuteAsync("docker", ["start", containerId]);
         if (!result.Success)
@@ -910,7 +944,7 @@ public class DockerManager
     /// <summary>
     /// Removes a container.
     /// </summary>
-    public async Task RemoveContainerAsync(string containerName)
+    public virtual async Task RemoveContainerAsync(string containerName)
     {
         await _processRunner.ExecuteAsync("docker", ["rm", "-f", containerName]);
     }

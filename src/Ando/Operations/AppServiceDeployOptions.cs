@@ -20,6 +20,8 @@ namespace Ando.Operations;
 /// </summary>
 public class AppServiceDeployOptions
 {
+    internal const int DefaultZipDeployTimeoutMs = 20 * 60 * 1000;
+
     /// <summary>Deployment slot name (e.g., "staging", "preview").</summary>
     internal string? DeploymentSlot { get; private set; }
 
@@ -28,6 +30,9 @@ public class AppServiceDeployOptions
 
     /// <summary>Restart the app after deployment.</summary>
     internal bool Restart { get; private set; }
+
+    /// <summary>Timeout for the zip deploy command.</summary>
+    internal int TimeoutMs { get; private set; } = DefaultZipDeployTimeoutMs;
 
     /// <summary>
     /// Sets the deployment slot for the app service.
@@ -55,6 +60,21 @@ public class AppServiceDeployOptions
     public AppServiceDeployOptions WithRestart()
     {
         Restart = true;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the maximum time to wait for zip deploy before reconciliation.
+    /// </summary>
+    /// <param name="timeout">Timeout duration. Must be greater than zero.</param>
+    public AppServiceDeployOptions WithTimeout(TimeSpan timeout)
+    {
+        if (timeout <= TimeSpan.Zero || timeout.TotalMilliseconds > int.MaxValue)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout), "Timeout must be greater than zero and fit within an Int32 millisecond value.");
+        }
+
+        TimeoutMs = Math.Max(1, (int)timeout.TotalMilliseconds);
         return this;
     }
 }

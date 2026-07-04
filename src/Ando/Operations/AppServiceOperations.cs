@@ -19,6 +19,8 @@
 // - Consistent API with FunctionsOperations for familiarity
 // =============================================================================
 
+using System.Globalization;
+using System.Text.RegularExpressions;
 using Ando.Execution;
 using Ando.Logging;
 using Ando.Steps;
@@ -29,9 +31,20 @@ namespace Ando.Operations;
 /// Provides Azure App Service deployment operations for build scripts.
 /// Methods register steps in the workflow rather than executing immediately.
 /// </summary>
-public class AppServiceOperations(StepRegistry registry, IBuildLogger logger, Func<ICommandExecutor> executorFactory)
+public class AppServiceOperations(
+    StepRegistry registry,
+    IBuildLogger logger,
+    Func<ICommandExecutor> executorFactory,
+    Func<TimeSpan, Task>? delayAsync = null)
     : OperationsBase(registry, logger, executorFactory)
 {
+    private const int MaxZipDeployAttempts = 3;
+    private const int MaxZipDeployTimeoutAttempts = 2;
+    private static readonly Regex IsoTimestampPattern = new(
+        @"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})",
+        RegexOptions.Compiled);
+    private readonly Func<TimeSpan, Task> _delayAsync = delayAsync ?? Task.Delay;
+
     /// <summary>
     /// Registers a step to deploy an app service using zip deploy.
     /// Requires the app service to already exist in Azure.
@@ -46,8 +59,8 @@ public class AppServiceOperations(StepRegistry registry, IBuildLogger logger, Fu
         var options = new AppServiceDeployOptions();
         configure?.Invoke(options);
 
-        RegisterCommand("AppService.DeployZip", "az",
-            () => BuildZipDeployArgs(appName, zipPath, resourceGroup, options),
+        Registry.Register("AppService.DeployZip",
+            () => ExecuteZipDeployAsync(appName, zipPath, resourceGroup, options),
             appName);
     }
 
@@ -260,5 +273,152 @@ public class AppServiceOperations(StepRegistry registry, IBuildLogger logger, Fu
             .AddIfNotNull("--slot", options.DeploymentSlot)
             .AddFlag(options.NoWait, "--async")
             .Add("--output", "none");
+    }
+
+    private async Task<bool> ExecuteZipDeployAsync(
+        string appName,
+        string zipPath,
+        string? resourceGroup,
+        AppServiceDeployOptions options)
+    {
+        var startedAt = DateTimeOffset.UtcNow;
+        var timeoutAttempts = 0;
+
+        for (var attempt = 1; attempt <= MaxZipDeployAttempts; attempt++)
+        {
+            var timeoutMs = RemainingTimeoutMs(startedAt, options.TimeoutMs);
+            if (timeoutMs <= 0)
+            {
+                Logger.Error($"App Service zip deploy timed out after {options.TimeoutMs}ms.");
+                return false;
+            }
+
+            var result = await ExecutorFactory().ExecuteAsync(
+                "az",
+                BuildZipDeployArgs(appName, zipPath, resourceGroup, options).Build(),
+                new CommandOptions { TimeoutMs = timeoutMs });
+
+            if (result.Success)
+            {
+                return true;
+            }
+
+            if (IsTimeout(result))
+            {
+                timeoutAttempts++;
+                Logger.Warning("App Service zip deploy timed out. Checking latest Kudu deployment status before retrying...");
+
+                if (await LatestDeploymentSucceededAsync(appName, resourceGroup, options.DeploymentSlot, startedAt))
+                {
+                    Logger.Info("Latest Kudu deployment completed successfully after the zip deploy command timed out.");
+                    return true;
+                }
+
+                if (timeoutAttempts >= MaxZipDeployTimeoutAttempts ||
+                    attempt >= MaxZipDeployAttempts ||
+                    RemainingTimeoutMs(startedAt, options.TimeoutMs) <= 0)
+                {
+                    Logger.Error("App Service zip deploy timed out and the latest Kudu deployment status did not confirm success.");
+                    return false;
+                }
+
+                Logger.Warning("Retrying App Service zip deploy after timeout reconciliation did not confirm success...");
+                continue;
+            }
+
+            if (IsTransientZipDeployFailure(result) && attempt < MaxZipDeployAttempts)
+            {
+                var delay = TimeSpan.FromSeconds(attempt * 10);
+                Logger.Warning($"App Service zip deploy failed with a transient error. Retrying in {delay.TotalSeconds:0}s...");
+                await _delayAsync(delay);
+                continue;
+            }
+
+            return false;
+        }
+
+        return false;
+    }
+
+    private async Task<bool> LatestDeploymentSucceededAsync(
+        string appName,
+        string? resourceGroup,
+        string? slot,
+        DateTimeOffset startedAt)
+    {
+        var result = await ExecutorFactory().ExecuteAsync(
+            "az",
+            BuildDeploymentStatusArgs(appName, resourceGroup, slot).Build(),
+            new CommandOptions { TimeoutMs = 60_000, SuppressOutput = true });
+
+        if (!result.Success)
+        {
+            Logger.Warning("Unable to query latest Kudu deployment status after zip deploy timeout.");
+            return false;
+        }
+
+        return DeploymentStatusIndicatesSuccess(result.Output, startedAt);
+    }
+
+    private static ArgumentBuilder BuildDeploymentStatusArgs(
+        string appName,
+        string? resourceGroup,
+        string? slot)
+    {
+        return new ArgumentBuilder()
+            .Add("webapp", "log", "deployment", "show")
+            .Add("--name", appName)
+            .AddIfNotNull("--resource-group", resourceGroup)
+            .AddIfNotNull("--slot", slot);
+    }
+
+    private static int RemainingTimeoutMs(DateTimeOffset startedAt, int timeoutMs)
+    {
+        var elapsedMs = (int)(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds;
+        return Math.Max(0, timeoutMs - elapsedMs);
+    }
+
+    private static bool IsTimeout(CommandResult result) =>
+        result.Error?.Contains("timed out", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static bool IsTransientZipDeployFailure(CommandResult result)
+    {
+        var text = $"{result.Error}\n{result.Output}";
+        return Regex.IsMatch(text, @"\b5\d\d\b", RegexOptions.IgnoreCase) ||
+               text.Contains("Service Unavailable", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("connection reset", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("temporarily unavailable", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static bool DeploymentStatusIndicatesSuccess(string? output, DateTimeOffset startedAt)
+    {
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return false;
+        }
+
+        var indicatesSuccess =
+            output.Contains("Deployment successful", StringComparison.OrdinalIgnoreCase) ||
+            Regex.IsMatch(output, @"""?status""?\s*:\s*""?(?:4|success|complete|completed)""?", RegexOptions.IgnoreCase) ||
+            Regex.IsMatch(output, @"\bstatus\s*[:=]\s*(?:success|complete|completed)\b", RegexOptions.IgnoreCase);
+
+        if (!indicatesSuccess)
+        {
+            return false;
+        }
+
+        var timestamps = IsoTimestampPattern.Matches(output)
+            .Select(match => match.Value)
+            .Select(value => DateTimeOffset.TryParse(
+                value,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal,
+                out var parsed)
+                ? parsed
+                : (DateTimeOffset?)null)
+            .Where(parsed => parsed.HasValue)
+            .Select(parsed => parsed!.Value);
+
+        return !timestamps.Any() || timestamps.Any(timestamp => timestamp >= startedAt);
     }
 }

@@ -15,6 +15,7 @@
 // =============================================================================
 
 using Ando.Operations;
+using Ando.Execution;
 using Ando.Steps;
 using Ando.Tests.TestFixtures;
 
@@ -28,7 +29,7 @@ public class AppServiceOperationsTests
     private readonly MockExecutor _executor = new();
 
     private AppServiceOperations CreateAppService() =>
-        new AppServiceOperations(_registry, _logger, () => _executor);
+        new AppServiceOperations(_registry, _logger, () => _executor, _ => Task.CompletedTask);
 
     [Fact]
     public void DeployZip_RegistersStep()
@@ -98,6 +99,85 @@ public class AppServiceOperationsTests
 
         var cmd = _executor.LastCommand!;
         Assert.Contains("--async", cmd.Args);
+    }
+
+    [Fact]
+    public async Task DeployZip_UsesDefaultLongTimeout()
+    {
+        var appService = CreateAppService();
+        appService.DeployZip("my-app", "./publish.zip");
+
+        await _registry.Steps[0].Execute();
+
+        _executor.LastCommand!.Options.ShouldNotBeNull();
+        _executor.LastCommand!.Options!.TimeoutMs.ShouldBe(20 * 60 * 1000);
+    }
+
+    [Fact]
+    public async Task DeployZip_WithTimeout_UsesConfiguredTimeout()
+    {
+        var appService = CreateAppService();
+        appService.DeployZip("my-app", "./publish.zip", configure: o => o.WithTimeout(TimeSpan.FromMinutes(30)));
+
+        await _registry.Steps[0].Execute();
+
+        _executor.LastCommand!.Options.ShouldNotBeNull();
+        _executor.LastCommand!.Options!.TimeoutMs.ShouldBe((int)TimeSpan.FromMinutes(30).TotalMilliseconds);
+    }
+
+    [Fact]
+    public async Task DeployZip_RetriesTransientFailure_ThenSucceeds()
+    {
+        var appService = CreateAppService();
+        _executor.QueuedResults.Enqueue(CommandResult.Failed(1, "SCM returned 503 Service Unavailable"));
+        _executor.QueuedResults.Enqueue(CommandResult.Ok());
+
+        appService.DeployZip("my-app", "./publish.zip");
+
+        var success = await _registry.Steps[0].Execute();
+
+        success.ShouldBeTrue();
+        _executor.ExecutedCommands.Count.ShouldBe(2);
+        _executor.ExecutedCommands.All(command => command.CommandLine.Contains("config-zip")).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task DeployZip_TimeoutWithSuccessfulDeploymentStatus_ReturnsTrue()
+    {
+        var appService = CreateAppService();
+        _executor.QueuedResults.Enqueue(CommandResult.Failed(-1, "Command timed out after 1200000ms"));
+        _executor.QueuedResults.Enqueue(CommandResult.Ok("""
+            {
+              "status": 4,
+              "message": "Deployment successful",
+              "end_time": "2099-01-01T00:00:00Z"
+            }
+            """));
+
+        appService.DeployZip("my-app", "./publish.zip", "my-rg", options => options.WithDeploymentSlot("staging"));
+
+        var success = await _registry.Steps[0].Execute();
+
+        success.ShouldBeTrue();
+        _executor.ExecutedCommands.Count.ShouldBe(2);
+        _executor.ExecutedCommands[0].CommandLine.ShouldContain("config-zip");
+        _executor.ExecutedCommands[1].CommandLine.ShouldContain("log deployment show");
+        _executor.ExecutedCommands[1].GetArgValue("--resource-group").ShouldBe("my-rg");
+        _executor.ExecutedCommands[1].GetArgValue("--slot").ShouldBe("staging");
+    }
+
+    [Fact]
+    public async Task DeployZip_PersistentFailure_ReturnsFalse()
+    {
+        var appService = CreateAppService();
+        _executor.QueuedResults.Enqueue(CommandResult.Failed(1, "zip package was not found"));
+
+        appService.DeployZip("my-app", "./publish.zip");
+
+        var success = await _registry.Steps[0].Execute();
+
+        success.ShouldBeFalse();
+        _executor.ExecutedCommands.ShouldHaveSingleItem();
     }
 
     [Fact]
