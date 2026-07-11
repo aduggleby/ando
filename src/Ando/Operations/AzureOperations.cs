@@ -16,6 +16,9 @@
 // - Environment variables use standard Azure SDK naming conventions
 // - EnsureLoggedIn is a verification step, not a login step
 // - Service Principal credentials can come from env vars or explicit parameters
+// - Service principal / managed identity logins run against an isolated
+//   AZURE_CONFIG_DIR so they never read or overwrite the user's ~/.azure
+//   profile (see UseIsolatedAzureProfile)
 // =============================================================================
 
 using System.Diagnostics;
@@ -43,6 +46,76 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
     // and will never fall back to an existing CLI session or interactive login.
     private const string EnvRequireServicePrincipal = "ANDO_REQUIRE_SERVICE_PRINCIPAL";
 
+    // Environment variable the Azure CLI uses to locate its profile directory.
+    internal const string EnvAzureConfigDir = "AZURE_CONFIG_DIR";
+
+    // Isolated Azure CLI profile directory for this process, created on the
+    // first service principal / managed identity login. Static because the
+    // AZURE_CONFIG_DIR environment variable is process-wide.
+    private static readonly object ProfileLock = new();
+    private static string? _isolatedProfileDir;
+
+    /// <summary>
+    /// Switches this process — and every az invocation it spawns — to a private,
+    /// freshly created AZURE_CONFIG_DIR. Service credentials are written there
+    /// instead of the user's ~/.azure profile, so a build can never overwrite the
+    /// developer's personal az session, and no az step in this build can silently
+    /// fall back to it. Applied at registration time: as soon as a build declares
+    /// service principal or managed identity authentication, the user's session
+    /// profile becomes unreachable for the entire run. The directory is removed
+    /// on process exit (best effort) since it holds access tokens.
+    /// </summary>
+    /// <returns>The isolated profile directory path.</returns>
+    internal static string UseIsolatedAzureProfile()
+    {
+        lock (ProfileLock)
+        {
+            if (_isolatedProfileDir != null)
+            {
+                return _isolatedProfileDir;
+            }
+
+            var dir = Path.Combine(Path.GetTempPath(), $"ando-azure-profile-{Guid.NewGuid():N}");
+
+            // The profile will contain access tokens - restrict it to the current
+            // user on platforms that support Unix file modes.
+            if (OperatingSystem.IsWindows())
+            {
+                Directory.CreateDirectory(dir);
+            }
+            else
+            {
+                Directory.CreateDirectory(dir,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+
+            Environment.SetEnvironmentVariable(EnvAzureConfigDir, dir);
+
+            AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+            {
+                try { Directory.Delete(dir, recursive: true); }
+                catch { /* best effort - temp cleanup will get it eventually */ }
+            };
+
+            _isolatedProfileDir = dir;
+            return dir;
+        }
+    }
+
+    /// <summary>
+    /// Resets the isolated profile state so tests can exercise
+    /// <see cref="UseIsolatedAzureProfile"/> in isolation.
+    /// Restores AZURE_CONFIG_DIR to the given value (null clears it).
+    /// </summary>
+    internal static void ResetIsolatedProfileForTests(string? previousConfigDir = null)
+    {
+        lock (ProfileLock)
+        {
+            _isolatedProfileDir = null;
+            Environment.SetEnvironmentVariable(EnvAzureConfigDir, previousConfigDir);
+        }
+    }
+
     /// <summary>
     /// Registers a step to verify the user is logged in to Azure.
     /// Fails the build if not authenticated.
@@ -69,6 +142,10 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
     /// fails instead of falling back to an existing CLI session or interactive
     /// login. This guarantees a build always runs as the intended service
     /// principal and never as a developer's personal `az login` session.
+    ///
+    /// Service principal logins always run against an isolated AZURE_CONFIG_DIR
+    /// (see <see cref="UseIsolatedAzureProfile"/>), so they never read or
+    /// overwrite the user's ~/.azure profile.
     /// </summary>
     /// <param name="clientId">Service principal application (client) ID, or null to use AZURE_CLIENT_ID.</param>
     /// <param name="clientSecret">Service principal client secret, or null to use AZURE_CLIENT_SECRET.</param>
@@ -295,6 +372,11 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
         var resolvedClientSecret = clientSecret ?? EnvironmentHelper.GetRequired(EnvClientSecret, "Azure Client Secret");
         var resolvedTenantId = tenantId ?? EnvironmentHelper.GetRequired(EnvTenantId, "Azure Tenant ID");
 
+        // Never write service principal credentials into the user's ~/.azure
+        // profile - the whole build runs against an isolated profile instead.
+        var profileDir = UseIsolatedAzureProfile();
+        Logger.Info($"Azure: Using isolated CLI profile at {profileDir} (user's az profile is not touched)");
+
         RegisterCommand("Azure.Login.ServicePrincipal", "az",
             () => new ArgumentBuilder()
                 .Add("login", "--service-principal")
@@ -312,6 +394,11 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
     /// If null, uses system-assigned managed identity.</param>
     public void LoginWithManagedIdentity(string? clientId = null)
     {
+        // Same isolation as service principal login: keep the managed identity
+        // session out of the user's ~/.azure profile.
+        var profileDir = UseIsolatedAzureProfile();
+        Logger.Info($"Azure: Using isolated CLI profile at {profileDir} (user's az profile is not touched)");
+
         RegisterCommand("Azure.Login.ManagedIdentity", "az",
             () => new ArgumentBuilder()
                 .Add("login", "--identity")

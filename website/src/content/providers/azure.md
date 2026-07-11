@@ -32,6 +32,10 @@ Azure.EnsureAuthenticated(requireServicePrincipal: true);
 Azure.EnsureAuthenticated(clientId, clientSecret, tenantId, requireServicePrincipal: true);
 ```
 
+### Isolated CLI Profile
+
+Service principal and managed identity logins always run against an isolated, per-build `AZURE_CONFIG_DIR` created in the system temp directory. The user's `~/.azure` profile is never read or modified: an ANDO build cannot overwrite a developer's personal `az login` session, and `az` steps in the build cannot silently fall back to it. The isolated profile (which holds the service principal's access tokens) is deleted when the build process exits.
+
 ## Example
 
 Authenticate and create a resource group.
