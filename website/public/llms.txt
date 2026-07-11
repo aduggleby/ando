@@ -657,6 +657,8 @@ Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");
 - Azure.SetSubscription(subscriptionId?) - Set active subscription
 - Azure.CreateResourceGroup(name, location) - Create resource group
 
+Service principal and managed identity logins always run against an isolated, per-build AZURE_CONFIG_DIR created in the system temp directory. The user's ~/.azure profile is never read or modified, so a build cannot overwrite a developer's personal az login session and az steps cannot silently fall back to it. The isolated profile is deleted when the build process exits.
+
 ### Bicep
 - Bicep.DeployToResourceGroup(rg, template, options?) - Deploy to resource group, returns BicepDeployment
 - Bicep.DeployToSubscription(location, template, options?) - Deploy at subscription scope, returns BicepDeployment

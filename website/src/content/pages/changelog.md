@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.151
+
+**2026-07-11**
+
+- Improve Azure sign-in so service credential logins no longer affect your personal Azure CLI session
+
 ## 0.9.150
 
 **2026-07-04**

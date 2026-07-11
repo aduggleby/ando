@@ -272,7 +272,7 @@ export const operations = [
   {
     group: "Azure",
     name: "Azure.EnsureAuthenticated",
-    desc: "Authenticate to Azure using the best available method. Uses service principal credentials when provided (explicit arguments or AZURE_CLIENT_ID/SECRET/TENANT_ID), otherwise falls back to an existing CLI session or interactive login. Pass requireServicePrincipal: true (or set ANDO_REQUIRE_SERVICE_PRINCIPAL) to force service principal auth and fail instead of ever using a developer's az login session. Default behavior is unchanged (fallback allowed).",
+    desc: "Authenticate to Azure using the best available method. Uses service principal credentials when provided (explicit arguments or AZURE_CLIENT_ID/SECRET/TENANT_ID), otherwise falls back to an existing CLI session or interactive login. Pass requireServicePrincipal: true (or set ANDO_REQUIRE_SERVICE_PRINCIPAL) to force service principal auth and fail instead of ever using a developer's az login session. Default behavior is unchanged (fallback allowed). When service principal credentials are used, the login runs against an isolated, per-build AZURE_CONFIG_DIR so the user's ~/.azure profile is never read or modified.",
     examples: [
       "Azure.EnsureAuthenticated(); // Auto-detects: SP env vars, else CLI session/interactive",
       "Azure.EnsureAuthenticated(clientId, secret, tenantId); // explicit SP, no env reliance",
@@ -297,7 +297,7 @@ export const operations = [
   {
     group: "Azure",
     name: "Azure.LoginWithServicePrincipal",
-    desc: "Login with a Service Principal (for CI/CD).",
+    desc: "Login with a Service Principal (for CI/CD). Runs against an isolated, per-build AZURE_CONFIG_DIR in the system temp directory, so the user's ~/.azure profile is never read or modified; the isolated profile is deleted when the build process exits.",
     examples: [
       "Azure.LoginWithServicePrincipal(clientId, secret, tenantId);",
       "Azure.LoginWithServicePrincipal(); // Uses AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID env vars",
@@ -307,7 +307,7 @@ export const operations = [
   {
     group: "Azure",
     name: "Azure.LoginWithManagedIdentity",
-    desc: "Login with Managed Identity (for Azure-hosted environments).",
+    desc: "Login with Managed Identity (for Azure-hosted environments). Runs against an isolated, per-build AZURE_CONFIG_DIR in the system temp directory, so the user's ~/.azure profile is never read or modified; the isolated profile is deleted when the build process exits.",
     examples: [
       "Azure.LoginWithManagedIdentity(); // System-assigned",
       'Azure.LoginWithManagedIdentity("client-id"); // User-assigned',
