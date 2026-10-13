@@ -11,7 +11,12 @@
 // - Using top-level statements for simplicity
 // - Services are grouped by functionality for readability
 // - Configuration is bound using the options pattern
-// - Hangfire is configured with SQL Server storage
+// - Database and Hangfire storage are registered by AddAndoDatabase() for the
+//   provider selected by Database:Provider (SQL Server or PostgreSQL)
+// - "export"/"import" as the first argument runs the data portability CLI
+//   (DataPortability/PortabilityCli) and exits before the web host is built
+// - Optional daily rolling file log (Logging:File, off by default) is added as
+//   an extra logging provider next to the console (AddAndoFileLogging)
 // =============================================================================
 
 using System.Threading.RateLimiting;
@@ -20,6 +25,7 @@ using Ando.Server.Auth;
 using Ando.Server.BuildExecution;
 using Ando.Server.Configuration;
 using Ando.Server.Data;
+using Ando.Server.DataPortability;
 using Ando.Server.GitHub;
 using Ando.Server.Hubs;
 using Ando.Server.Infrastructure.DataProtection;
@@ -44,6 +50,15 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
+// =============================================================================
+// CLI mode: data export/import (no web host, Hangfire, or migrations)
+// =============================================================================
+
+if (PortabilityCli.IsPortabilityCommand(args))
+{
+    return await PortabilityCli.RunAsync(args);
+}
+
 
 // =============================================================================
 // Configuration
@@ -716,3 +731,4 @@ app.Run();
 /// Partial class marker to make Program accessible for integration tests.
 /// </summary>
 public partial class Program { }
+return 0;
