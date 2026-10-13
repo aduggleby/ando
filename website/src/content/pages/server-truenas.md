@@ -6,7 +6,7 @@ toc: true
 
 ## Overview
 
-This guide walks you through installing ANDO CI Server on TrueNAS SCALE using Docker Compose. ANDO connects to an existing SQL Server instance running on your TrueNAS.
+This guide walks you through installing ANDO CI Server on TrueNAS SCALE using Docker Compose. ANDO connects to an existing database running on your TrueNAS: either **SQL Server** or **PostgreSQL** (the TrueNAS app catalog ships a Postgres app). Pick one; each step below has a variant for both.
 
 ## Prerequisites
 
@@ -14,7 +14,9 @@ Before starting, ensure you have:
 
 - **TrueNAS SCALE 24.10 or later** (earlier versions used Kubernetes)
 - **Apps pool configured** — a storage pool designated for application data
-- **SQL Server** — already running as a container on TrueNAS (install from the app catalog if needed)
+- **A database**, one of:
+  - **SQL Server** — already running as a container on TrueNAS (install from the app catalog if needed)
+  - **PostgreSQL** — the **Postgres** app from the TrueNAS app catalog (a currently supported PostgreSQL version; 17 recommended)
 - **GitHub App credentials** — App ID, Client ID, Client Secret, Webhook Secret, and private key file
 - **A domain name** pointing to your TrueNAS server (for HTTPS and GitHub webhooks)
 
@@ -47,6 +49,8 @@ mkdir -p /mnt/YOUR_POOL/apps/ando/{artifacts,repos,keys,config}
 4. Upload your GitHub App private key to `/mnt/YOUR_POOL/apps/ando/config/github-app.pem`
 
 ## Step 1: Create Database and User
+
+### Option A: SQL Server
 
 Connect to your existing SQL Server and create a dedicated database and login for ANDO.
 
@@ -84,9 +88,34 @@ Type `exit` to quit sqlcmd.
 
 > **Important**: Replace `YourAndoPassword123!` with a strong password. You'll use this in the connection string below.
 
-## Step 2: Note Your SQL Server Connection
+### Option B: PostgreSQL (TrueNAS Postgres App)
 
-ANDO connects to SQL Server via TCP on the mapped port. Use your TrueNAS host IP (e.g., `192.168.1.100`) with the port your SQL Server is mapped to (typically `1433`).
+1. Navigate to **Apps** → **Discover Apps**, search for **Postgres**, and click **Install**
+2. In the app configuration set:
+   - **Database User**: `ando`
+   - **Database Password**: a strong password (letters and digits avoid escaping issues)
+   - **Database Name**: `AndoServer`
+   - **Storage**: a dataset under your apps pool for the PostgreSQL data
+3. Note the port the app publishes on the host (shown in the app's network settings; `5432` unless you changed it)
+4. Click **Install**
+
+The app creates the `ando` role as owner of `AndoServer`, which is all ANDO needs: on first start it creates its tables (EF Core migrations) and the `hangfire` schema for background jobs.
+
+If you use an existing PostgreSQL instance instead, create the role and database yourself:
+
+```sql
+CREATE ROLE ando LOGIN PASSWORD 'YourAndoPassword123';
+CREATE DATABASE "AndoServer" OWNER ando;
+```
+
+## Step 2: Note Your Database Connection
+
+ANDO connects to the database via TCP on the mapped port. Use your TrueNAS host IP (e.g., `192.168.1.100`) with the port your database is mapped to (typically `1433` for SQL Server, `5432` for PostgreSQL).
+
+| Provider   | `Database__Provider` | Connection string                                                                                                    |
+| ---------- | -------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| SQL Server | `SqlServer`          | `Server=YOUR_TRUENAS_IP,1433;Database=AndoServer;User Id=ando;Password=YOUR_ANDO_PASSWORD;TrustServerCertificate=true` |
+| PostgreSQL | `PostgreSql`         | `Host=YOUR_TRUENAS_IP;Port=5432;Database=AndoServer;Username=ando;Password=YOUR_ANDO_PASSWORD`                         |
 
 ## Step 3: Open the YAML Installation Wizard
 
@@ -115,8 +144,12 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       # TrueNAS runs Docker as root - acknowledge this security consideration
       - Build__AcknowledgeRootDockerRisk=true
-      # Update connection string with your SQL Server details
+      # Database: SQL Server (default). For PostgreSQL, use the two
+      # commented lines below instead (see Step 2).
+      - Database__Provider=SqlServer
       - ConnectionStrings__DefaultConnection=Server=YOUR_TRUENAS_IP,1433;Database=AndoServer;User Id=ando;Password=YOUR_ANDO_PASSWORD;TrustServerCertificate=true
+      # - Database__Provider=PostgreSql
+      # - ConnectionStrings__DefaultConnection=Host=YOUR_TRUENAS_IP;Port=5432;Database=AndoServer;Username=ando;Password=YOUR_ANDO_PASSWORD
       # Replace with your GitHub App credentials
       - GitHub__AppId=YOUR_APP_ID
       - GitHub__ClientId=YOUR_CLIENT_ID
@@ -156,7 +189,7 @@ services:
 | Placeholder               | Replace With                                                     |
 | ------------------------- | ---------------------------------------------------------------- |
 | `YOUR_TRUENAS_IP`         | Your TrueNAS host IP address (e.g., `192.168.1.100`)             |
-| `1433`                    | The port your SQL Server is mapped to (change if different)      |
+| `1433` / `5432`           | The port your SQL Server / PostgreSQL is mapped to               |
 | `YOUR_ANDO_PASSWORD`      | The password you set for the `ando` login in Step 1              |
 | `YOUR_POOL`               | Your TrueNAS pool name (e.g., `tank`, `data`)                    |
 | `YOUR_APP_ID`             | GitHub App numeric ID                                            |
@@ -240,9 +273,26 @@ Check that:
 ### Database Connection Failed
 
 1. Verify the TrueNAS IP and port are correct
-2. Test the connection: `nc -zv YOUR_TRUENAS_IP 1433`
-3. Verify the `ando` login was created correctly
+2. Test the connection: `nc -zv YOUR_TRUENAS_IP 1433` (SQL Server) or `nc -zv YOUR_TRUENAS_IP 5432` (PostgreSQL)
+3. Verify the `ando` login (SQL Server) or role (PostgreSQL) was created correctly
 4. Check the password matches what you set in Step 1
+5. Check that `Database__Provider` matches the database: `SqlServer` with a `Server=...` string, `PostgreSql` with a `Host=...` string. `http://YOUR_TRUENAS_IP:8080/health` reports the provider in its `database` field once the server is up.
+
+### Backups
+
+ANDO's tables live in your database, so back it up with the database's own tooling or TrueNAS snapshots of its dataset. For PostgreSQL, a logical dump works too:
+
+```bash
+docker exec <postgres-container> pg_dump -U ando -Fc AndoServer > ando-YYYYMMDD.dump
+docker exec -i <postgres-container> pg_restore -U ando -d AndoServer --clean --if-exists < ando-YYYYMMDD.dump
+```
+
+The Linux installer's backup job does not run on TrueNAS, so also back up, on their own schedule and independent of the database provider:
+
+- **`Encryption__Key`** (and the rest of the app's environment variables). Project secrets are stored AES-encrypted with this key; without it they cannot be decrypted after a restore and must be entered again.
+- **`/mnt/YOUR_POOL/apps/ando/keys`** (Data Protection keys). Without them every user is signed out after a restore.
+
+Neither is stored in the database. Keep copies from the same point in time as each database backup.
 
 ### Builds Fail with Docker Errors
 

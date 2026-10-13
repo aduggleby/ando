@@ -30,7 +30,7 @@ ANDO's `--dind` flag enables Docker-in-Docker mode, giving the build container a
 ```
 Host Machine (Docker Daemon)
 ├── ANDO Build Container (runs tests)
-├── SQL Server Container (sibling)
+├── Database Container (sibling: SQL Server or PostgreSQL)
 └── Web Server Container (sibling)
 ```
 
@@ -120,6 +120,15 @@ else
 
 The `Docker.IsAvailable()` check runs immediately (not as a registered step) and returns `true` if Docker CLI and daemon are accessible. This allows the build to gracefully skip E2E tests with a warning when Docker isn't available, rather than failing with a cryptic error.
 
+For release builds, skipping is usually wrong: fail the build instead, so nothing ships untested. ANDO's own `build.csando` does this for its `publish` profile:
+
+```csharp
+if (!Docker.IsAvailable() && publish)
+{
+    throw new Exception("Docker is not available: the publish profile requires the E2E tests. Run with 'ando --dind -p publish'.");
+}
+```
+
 ### 3. Running the Build
 
 ```bash
@@ -192,6 +201,34 @@ jobs:
           npm ci
           npx playwright install --with-deps
           npm test
+```
+
+## Running E2E Against Several Databases
+
+If your server supports more than one database, run the suite once per database with one compose file per variant. ANDO's own server does this for SQL Server and PostgreSQL:
+
+- `tests/docker-compose.test.yml` (SQL Server) and `tests/docker-compose.test.postgres.yml` (PostgreSQL), each with a private database container and the server on the same port.
+- `global-setup.ts` picks the compose file from an environment variable (`E2E_DB_PROVIDER=sqlserver|postgres`, default `sqlserver`) and, once the server is up, reads `GET /health` and fails setup unless its `database` field matches the requested provider. That catches a stale container from the other variant.
+- npm scripts carry the variable, so the build script needs no environment support:
+
+```json
+"scripts": {
+  "test": "playwright test",
+  "test:sqlserver": "E2E_DB_PROVIDER=sqlserver playwright test",
+  "test:postgres": "E2E_DB_PROVIDER=postgres playwright test"
+}
+```
+
+```csharp
+// SQL Server variant (default `npx playwright test`)
+Playwright.Test(e2eTests);
+
+// PostgreSQL variant via the npm script
+Playwright.Test(e2eTests, o =>
+{
+    o.UseNpmScript = true;
+    o.NpmScriptName = "test:postgres";
+});
 ```
 
 ## Exit Code Handling

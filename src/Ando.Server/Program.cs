@@ -28,13 +28,14 @@ using Ando.Server.Data;
 using Ando.Server.DataPortability;
 using Ando.Server.GitHub;
 using Ando.Server.Hubs;
+using Ando.Server.Infrastructure.Database;
 using Ando.Server.Infrastructure.DataProtection;
 using Ando.Server.Infrastructure.Hangfire;
+using Ando.Server.Infrastructure.Logging;
 using Ando.Server.Infrastructure.Startup;
 using Ando.Server.Jobs;
 using Ando.Server.Models;
 using Ando.Server.Services;
-using Ando.Server.Infrastructure.Database;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using Hangfire;
@@ -49,7 +50,6 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
-var builder = WebApplication.CreateBuilder(args);
 // =============================================================================
 // CLI mode: data export/import (no web host, Hangfire, or migrations)
 // =============================================================================
@@ -59,6 +59,10 @@ if (PortabilityCli.IsPortabilityCommand(args))
     return await PortabilityCli.RunAsync(args);
 }
 
+var builder = WebApplication.CreateBuilder(args);
+
+// Optional rolling file log in addition to stdout (Logging:File:Enabled).
+builder.AddAndoFileLogging();
 
 // =============================================================================
 // Configuration
@@ -507,6 +511,15 @@ if (app.Services.GetService<DataProtectionFallbackWarning>() is { } dpWarning)
         dpWarning.KeysPath);
 }
 
+// Emit a warning if file logging is enabled but its directory is not writable.
+if (app.Services.GetService<FileLoggingFallbackWarning>() is { } fileLogWarning)
+{
+    app.Logger.LogWarning(
+        fileLogWarning.Exception,
+        "File logging is enabled but the log directory is not writable (path={LogPath}). Continuing with console logging only.",
+        fileLogWarning.Path);
+}
+
 // =============================================================================
 // Startup Banner
 // =============================================================================
@@ -528,6 +541,7 @@ var banner = $"""
 """;
 Console.WriteLine(banner);
 app.Logger.LogInformation("Ando Server v{Version} starting in {Environment} environment", version, app.Environment.EnvironmentName);
+app.LogAndoDatabaseTarget();
 
 // =============================================================================
 // Middleware Pipeline
@@ -556,7 +570,6 @@ else
 var forwardedHeadersOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-app.LogAndoDatabaseTarget();
 };
 forwardedHeadersOptions.KnownProxies.Clear();
 forwardedHeadersOptions.KnownNetworks.Clear();
@@ -722,6 +735,7 @@ if (!app.Environment.IsEnvironment("Testing") && !app.Environment.IsEnvironment(
 app.MapFallbackToFile("app/index.html");
 
 app.Run();
+return 0;
 
 // =============================================================================
 // Program Class Marker (for WebApplicationFactory in tests)
@@ -731,4 +745,3 @@ app.Run();
 /// Partial class marker to make Program accessible for integration tests.
 /// </summary>
 public partial class Program { }
-return 0;

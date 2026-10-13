@@ -3,7 +3,7 @@
 ## Project Structure
 
 - `src/Ando/`: Ando CLI (.NET tool) and core libraries.
-- `src/Ando.Server/`: ASP.NET Core server (EF Core + SQL Server), FastEndpoints-based route surface (API + compatibility/infrastructure), React client in `src/Ando.Server/ClientApp/`.
+- `src/Ando.Server/`: ASP.NET Core server (EF Core on SQL Server or PostgreSQL, selected by `Database__Provider`), FastEndpoints-based route surface (API + compatibility/infrastructure), React client in `src/Ando.Server/ClientApp/`.
 - `tests/`:
   - `tests/Ando.Tests/`: unit tests for CLI/core.
   - `tests/Ando.Server.Tests/`: server tests (see `tests/Ando.Server.Tests/TESTING.md`).
@@ -14,17 +14,39 @@
 ## Build, Test, and Development Commands
 
 ```bash
-dotnet build Ando.sln
+dotnet build Ando.sln        # CLI + core only; Ando.sln does NOT include the server projects
 dotnet test
+# Server: build and test the projects explicitly
+dotnet build src/Ando.Server/Ando.Server.csproj
+dotnet build tests/Ando.Server.Tests/Ando.Server.Tests.csproj
+dotnet test tests/Ando.Server.Tests/Ando.Server.Tests.csproj --filter "Category!=Integration"  # unit + drift, no Docker
+dotnet test tests/Ando.Server.Tests/Ando.Server.Tests.csproj --filter "Category=Integration"   # Testcontainers, needs Docker, both providers
+ANDO_TEST_DB_PROVIDERS=SqlServer dotnet test tests/Ando.Server.Tests/Ando.Server.Tests.csproj   # one provider only
 docker compose up -d         # local dev SQL Server + Ando.Server
+docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d   # local dev on PostgreSQL
 docker compose logs -f
+./run-dev.sh --db sqlserver|postgres   # tmux dev session (default sqlserver)
 ```
 
 E2E (example):
 
 ```bash
 docker compose -f tests/docker-compose.test.yml up -d --build
-cd tests/Ando.Server.E2E && npm ci && npm test
+cd tests/Ando.Server.E2E && npm ci && npm test   # SQL Server
+cd tests/Ando.Server.E2E && npm run test:postgres  # PostgreSQL (tests/docker-compose.test.postgres.yml)
+```
+
+EF Core migrations (server): there are two contexts with separate migration folders,
+`SqlServerAndoDbContext` (`src/Ando.Server/Migrations/SqlServer/`) and
+`PostgreSqlAndoDbContext` (`src/Ando.Server/Migrations/PostgreSql/`). Always add migrations to
+both with `./scripts/add-migration.sh <Name>` (runs `dotnet tool restore` for the pinned dotnet-ef).
+Drift between the model and either snapshot fails the unit test `MigrationDriftTests`
+(`tests/Ando.Server.Tests/Unit/Persistence/`), so CI needs no `dotnet ef` step. After adding a
+migration, update the `LastSqlServerMigration` constant in that test. To check manually:
+
+```bash
+dotnet ef migrations has-pending-model-changes -p src/Ando.Server/Ando.Server.csproj --context SqlServerAndoDbContext
+dotnet ef migrations has-pending-model-changes -p src/Ando.Server/Ando.Server.csproj --context PostgreSqlAndoDbContext
 ```
 
 ## Ports
@@ -36,6 +58,7 @@ cd tests/Ando.Server.E2E && npm ci && npm test
 ## Coding Style & Naming
 
 - C#: follow existing conventions; nullable reference types are enabled. Use `async`/`await` end-to-end for IO.
+- Server database code must work on both SQL Server and PostgreSQL. Raw SQL in the server must be portable or provider-conditional (check `Database.ProviderName` / the configured provider).
 - Web client: TypeScript/React; keep lint clean (`src/Ando.Server/ClientApp/eslint.config.js`).
 - Website: Prettier is used (`website/package.json`).
 
@@ -44,7 +67,15 @@ cd tests/Ando.Server.E2E && npm ci && npm test
 - Prefer adding/adjusting unit tests alongside behavior changes.
 - Name tests descriptively; keep E2E flows stable and deterministic (no time-dependent assertions).
 - After any substantial or cross-cutting change, always run the Playwright E2E suite before handing off:
-  `cd tests/Ando.Server.E2E && npm test`
+  `cd tests/Ando.Server.E2E && npm test` (and `npm run test:postgres` for database-related changes)
+- Server tests: container-backed tests carry `[Trait("Category", "Integration")]`; unit tests (including
+  `MigrationDriftTests`) do not. `--filter "Category!=Integration"` needs no Docker; `--filter "Category=Integration"`
+  needs Docker. `ANDO_TEST_DB_PROVIDERS` (comma list, default `SqlServer,PostgreSql`) selects which container-backed
+  collections run; unknown values fail. Database changes must pass both.
+- `ANDO_TEST_DB_CONTAINERS=isolated` (the default when `CI` or `ANDO_HOST_ROOT` is set or the tests run inside a container) gives unique container names, random ports, and automatic cleanup;
+  the default `shared` keeps fixed names/ports and leaves containers running for inspection.
+- `build.csando` always runs the server unit tests; with Docker it also runs the integration tests and both E2E
+  variants (skipped on Ando.Server unless `-p e2e`). The `publish` profile fails if Docker is unavailable.
 
 ## Commit & Pull Request Guidelines
 
@@ -61,10 +92,8 @@ cd tests/Ando.Server.E2E && npm ci && npm test
 
 Use this generic guidance for any host running Ando Server. Do not hard-code environment-specific IPs, usernames, or SSH key paths in repository docs.
 
-Current production host details (requested override):
-- Host: `192.168.1.150`
-- User: `ando`
-- SSH key: `~/.sshkeys/id_ad_dualconsult_com`
+Host-specific details (addresses, users, key paths) are kept outside this repository, in the
+operator's private infrastructure documentation.
 
 Common management commands (run over SSH on your server):
 
@@ -159,14 +188,15 @@ dotnet test --filter "Category=Integration"
 ```
 
 ### Playwright E2E Tests
-E2E tests use docker-compose to create an isolated network where SQL Server and the server communicate privately. Only the server's web port (17110) is exposed.
+E2E tests use docker-compose to create an isolated network where the database (SQL Server by default, PostgreSQL with `E2E_DB_PROVIDER=postgres`) and the server communicate privately. Only the server's web port (17110) is exposed. Global setup fails unless `GET /health` reports the requested provider in its `database` field.
 
 ```bash
 # Install dependencies (required first time)
 cd tests/Ando.Server.E2E && npm install
 
 # Run all E2E tests (starts docker-compose automatically)
-cd tests/Ando.Server.E2E && npm test
+cd tests/Ando.Server.E2E && npm test              # SQL Server (same as npm run test:sqlserver)
+cd tests/Ando.Server.E2E && npm run test:postgres # PostgreSQL
 
 # Run with UI for debugging
 cd tests/Ando.Server.E2E && npm run test:ui
@@ -176,13 +206,19 @@ cd tests/Ando.Server.E2E && npm run test:headed
 
 # Clean up containers after tests
 cd tests && docker compose -f docker-compose.test.yml down
+cd tests && docker compose -f docker-compose.test.postgres.yml down -v
 ```
 
-### SQL Server for Integration/E2E Tests
-- **Integration tests** (.NET): Use Testcontainers to spin up SQL Server automatically
+### Databases for Integration/E2E Tests
+- **Integration tests** (.NET): Testcontainers spin up SQL Server (Testcontainers.MsSql) and PostgreSQL
+  (Testcontainers.PostgreSql, host port 17135) automatically. Both run by default; `ANDO_TEST_DB_PROVIDERS=SqlServer`
+  limits the run to one provider. In the default `shared` mode the containers `ando-server-tests-sqlserver` and
+  `ando-server-tests-postgres` are left running for reuse; isolated mode is the default when `CI` or `ANDO_HOST_ROOT` is set or the tests run inside a container, or force it with `ANDO_TEST_DB_CONTAINERS=isolated` on shared CI
+  runners instead.
 - **E2E tests** (Playwright): Use docker-compose with isolated network
-  - `ando-e2e-sqlserver`: SQL Server (no public ports, internal network only)
-  - `ando-e2e-server`: Web server (port 17110 exposed)
+  - `ando-e2e-sqlserver`: SQL Server (no public ports, internal network only) — `tests/docker-compose.test.yml`
+  - `ando-e2e-postgres`: PostgreSQL (no public ports) — `tests/docker-compose.test.postgres.yml`
+  - `ando-e2e-server`: Web server (port 17110 exposed), same name in both variants
 
 ### Port Allocation
 This project uses port range **17100-17199**. Other projects use different ranges to avoid conflicts.
@@ -193,6 +229,7 @@ Uses:
 - Shouldly for assertions
 - MockExecutor for testing without executing commands
 - Testcontainers.MsSql for SQL Server integration tests
+- Testcontainers.PostgreSql for PostgreSQL integration tests
 - Playwright for browser-based E2E tests
 
 ## Build Commands
@@ -203,6 +240,11 @@ dotnet build
 
 # Run tests
 dotnet test tests/Ando.Tests/Ando.Tests.csproj
+
+# Server (not in Ando.sln): build and test explicitly
+dotnet build src/Ando.Server/Ando.Server.csproj
+dotnet test tests/Ando.Server.Tests/Ando.Server.Tests.csproj --filter "Category!=Integration"  # no Docker
+dotnet test tests/Ando.Server.Tests/Ando.Server.Tests.csproj --filter "Category=Integration"   # Docker
 
 # Create self-contained executable
 dotnet publish src/Ando/Ando.csproj -c Release -r linux-x64 --self-contained -o dist
@@ -233,12 +275,13 @@ docker compose -f /opt/ando/docker-compose.yml ps
   - `/opt/ando/data/artifacts` - Build artifacts
   - `/opt/ando/data/repos` - Cloned repositories
   - `/opt/ando/data/keys` - Data protection keys
-  - `/opt/ando/data/sqldata` - SQL Server data
+  - `/opt/ando/data/sqldata` - SQL Server data (`--db sqlserver`)
+  - `/opt/ando/data/pgdata` - PostgreSQL data (`--db postgres`)
 
 ### Important Notes
 
 - The compose file lives at `/opt/ando/docker-compose.yml` and is the source of truth for ports, volumes, and image tags.
-- SQL Server runs in a separate container (`ando-sqlserver`).
+- The database runs in a separate container: `ando-sqlserver` (SQL Server, default) or `ando-postgres` (PostgreSQL), selected by `Database__Provider` in `/opt/ando/config/.env`.
 - The server port/proxy setup depends on the host configuration (see `/etc/caddy/Caddyfile` if using Caddy).
 
 ## Key Interfaces

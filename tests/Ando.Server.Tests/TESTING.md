@@ -17,7 +17,17 @@ tests/
 │   │   │   ├── BuildServiceTests.cs
 │   │   │   ├── EncryptionServiceTests.cs
 │   │   │   └── ProjectServiceTests.cs
+│   │   ├── Endpoints/
+│   │   │   └── SecretNameValidationEndpointTests.cs  # secret name policy at the HTTP boundary
+│   │   ├── Infrastructure/
+│   │   │   └── HangfireStorageOptionsFactoryTests.cs # production Hangfire storage options
+│   │   ├── DataPortability/                    # export/import CLI (no Docker)
+│   │   │   ├── PortabilityCliTests.cs          # argument parsing, usage, exit codes
+│   │   │   ├── PortableValueSerializerTests.cs # column value format (DateTime Z, TimeSpan "c", enums, base64)
+│   │   │   ├── PortableTablesTests.cs          # table order, identity tables, provider-neutral fingerprint
+│   │   │   └── ExportFileReaderTests.cs        # manifest, table order, "__end" marker, counts
 │   │   ├── Models/
+│   │   │   ├── ProjectSecretTests.cs
 │   │   │   ├── ProjectTests.cs
 │   │   │   ├── BuildTests.cs
 │   │   │   └── BuildArtifactTests.cs
@@ -25,11 +35,27 @@ tests/
 │   │       ├── CleanupArtifactsJobTests.cs
 │   │       └── CleanupOldBuildsJobTests.cs
 │   ├── Integration/             # Integration tests
-│   │   ├── AndoWebApplicationFactory.cs  # Test server factory
-│   │   └── WebhookIntegrationTests.cs    # Full HTTP pipeline tests
+│   │   ├── AndoWebApplicationFactory.cs        # Test server factory (provider + connection string)
+│   │   ├── WebhookIntegrationTestsBase.cs      # Full HTTP pipeline tests (shared)
+│   │   ├── WebhookIntegrationTests.cs          # _SqlServer / _PostgreSql bindings
+│   │   ├── MigrationSchemaTestsBase.cs         # Real migrations + behavioral pass (shared)
+│   │   ├── MigrationSchemaTests_*.cs           # Per-provider bindings
+│   │   ├── HangfireStorageTestsBase.cs         # Real Hangfire storage workers (shared)
+│   │   ├── HangfireStorageTests_*.cs           # Per-provider bindings
+│   │   ├── DataPortabilityTestData.cs          # Seed, snapshot/checksum, round-trip assertions
+│   │   ├── DataPortabilityTestsBase.cs         # Export/import on one provider (shared)
+│   │   ├── DataPortabilityTests_*.cs           # Per-provider bindings
+│   │   ├── DataPortabilityCrossProviderTests.cs # SQL Server <-> PostgreSQL round trips
+│   │   └── SqlServerMigrationRelocationTests.cs
 │   └── TestFixtures/
 │       ├── MockServices.cs      # Mock implementations
-│       └── TestDbContextFactory.cs
+│       ├── TestDbContextFactory.cs
+│       ├── IDatabaseFixture.cs          # Common fixture surface
+│       ├── SqlServerFixture.cs          # SQL Server container (shared mode: port 11433)
+│       ├── PostgreSqlFixture.cs         # PostgreSQL container (shared mode: port 17135)
+│       ├── CrossProviderDatabaseFixture.cs # Both providers, always isolated containers
+│       ├── DatabaseTestProviders.cs     # ANDO_TEST_DB_PROVIDERS parsing
+│       └── DatabaseTestContainerMode.cs # ANDO_TEST_DB_CONTAINERS parsing (shared | isolated)
 │
 └── Ando.Server.E2E/             # End-to-end tests (Playwright)
     ├── tests/                   # Test specs
@@ -43,7 +69,10 @@ tests/
 ### Unit Tests
 
 ```bash
-# Run all unit tests
+# Run all unit tests (no Docker needed; excludes every container-backed test)
+dotnet test tests/Ando.Server.Tests/ --filter "Category!=Integration"
+
+# Run everything (unit + container-backed integration tests)
 dotnet test tests/Ando.Server.Tests/
 
 # Run with verbose output
@@ -58,6 +87,11 @@ dotnet test tests/Ando.Server.Tests/ /p:CollectCoverage=true
 
 ### Integration Tests
 
+Every container-backed concrete test class (the `_SqlServer` / `_PostgreSql`
+classes and `SqlServerMigrationRelocationTests`) carries
+`[Trait("Category", "Integration")]` itself; xUnit does not reliably inherit
+class-level traits from the abstract bases. Unit tests carry no trait.
+
 ```bash
 # Run integration tests only
 dotnet test tests/Ando.Server.Tests/ --filter "Category=Integration"
@@ -65,6 +99,140 @@ dotnet test tests/Ando.Server.Tests/ --filter "Category=Integration"
 # Run with verbose output
 dotnet test tests/Ando.Server.Tests/ --filter "Category=Integration" --verbosity normal
 ```
+
+### Database Provider Matrix (SQL Server and PostgreSQL)
+
+The server supports SQL Server and PostgreSQL (`Database:Provider`). Every
+container-backed test exists once per provider: an abstract base class holds
+the test bodies and two thin subclasses bind it to the `SqlServer` and
+`PostgreSql` xUnit collections (e.g. `WebhookIntegrationTests_SqlServer` and
+`WebhookIntegrationTests_PostgreSql`). Docker must be running.
+
+| Provider | Fixture | Container name (shared mode) | Host port (shared mode) | Image |
+|----------|---------|----------------|-----------|-------|
+| SqlServer | `SqlServerFixture` | `ando-server-tests-sqlserver` | 11433 | `mcr.microsoft.com/mssql/server:2022-latest` |
+| PostgreSql | `PostgreSqlFixture` | `ando-server-tests-postgres` | 17135 | `postgres:17-alpine` |
+
+When the test process itself runs inside a container that shares the host's Docker daemon (for example the ANDO build container with `--dind`), both fixtures rewrite the connection string host to `host.docker.internal` with the container's actual mapped host port, because `localhost` would be the build container rather than the host that publishes the port.
+
+#### Container ownership: `ANDO_TEST_DB_CONTAINERS`
+
+| Value | Container name | Host port | After the run |
+|-------|----------------|-----------|---------------|
+| `shared` (default) | fixed (table above) | fixed (11433 / 17135) | left running for data inspection |
+| `isolated` | fixed name + `-<guid>` suffix | random free port | stopped and removed |
+
+- `shared` is for local work: each run removes any container with the fixed
+  name (`docker rm -f`) and recreates it, then leaves it running
+  (`WithCleanUp(false)`). Only one run per Docker daemon at a time; a second
+  concurrent run would remove the first run's container. Remove the containers
+  with `docker rm -f ando-server-tests-sqlserver ando-server-tests-postgres`.
+- `isolated` is for CI and any host where several runs share a Docker daemon. It is the
+  default whenever `CI` or `ANDO_HOST_ROOT` is set or the test process runs inside a container
+  (`/.dockerenv` exists), so builds run by Ando.Server use it
+  without configuration:
+  each run owns uniquely named containers on random ports, never removes a
+  container by name, and removes its own containers when the run ends
+  (explicit stop/dispose plus the Testcontainers resource reaper).
+- Any other value fails the container-backed tests with a message listing the
+  valid values.
+
+```bash
+ANDO_TEST_DB_CONTAINERS=isolated dotnet test tests/Ando.Server.Tests/Ando.Server.Tests.csproj
+```
+
+`ANDO_TEST_DB_PROVIDERS` (comma-separated, case-insensitive) selects the
+providers. The default (unset or empty) is **both**, which is what CI runs. Set
+it to one provider to shorten a local run:
+
+```bash
+# Default: both providers
+dotnet test tests/Ando.Server.Tests/Ando.Server.Tests.csproj
+
+# SQL Server only (PostgreSQL tests are reported as Skipped, not Failed)
+ANDO_TEST_DB_PROVIDERS=SqlServer dotnet test tests/Ando.Server.Tests/Ando.Server.Tests.csproj
+
+# PostgreSQL only
+ANDO_TEST_DB_PROVIDERS=PostgreSql dotnet test tests/Ando.Server.Tests/Ando.Server.Tests.csproj
+```
+
+- A deselected provider's fixture never starts its container, and its tests
+  are skipped through `[SkippableFact]` + `Skip.IfNot(...)` in the base class
+  constructor (`Xunit.SkippableFact`).
+- An unknown name (e.g. `Postgres`) fails the container-backed tests with a
+  message listing the valid values; it never silently skips a provider.
+- Container names, ports and cleanup follow `ANDO_TEST_DB_CONTAINERS` (above).
+- Each test class (or test instance) uses its own uniquely named database.
+
+#### Container-backed suites
+
+| Suite | Providers | What it proves |
+|-------|-----------|----------------|
+| `WebhookIntegrationTests_*` | both | Full HTTP webhook pipeline on a real database (EnsureCreated schema); `/health` reports `database` = provider under test |
+| `MigrationSchemaTests_*` | both | The real migration set (`Migrations/SqlServer`, `Migrations/PostgreSql`) applied with `MigrateAsync` to a fresh database, then a behavioral pass (below) |
+| `HangfireStorageTests_*` | both | Real Hangfire servers on real job storage: no double execution, recovery after a server stops |
+| `DataPortabilityTests_*` | both | `export`/`import` with source and target on the same provider: full round trip and every import refusal (below) |
+| `DataPortabilityCrossProviderTests` | both at once | SQL Server -> file -> PostgreSQL and PostgreSQL -> file -> SQL Server; skipped unless both providers are selected |
+| `SqlServerMigrationRelocationTests` | SqlServer | Existing production SQL Server databases migrate cleanly after the migrations moved to `Migrations/SqlServer` |
+| `SqlServerMigrationRelocationTests.Migrate_OnFullyMigratedBaseline_BackfillsNormalizedNameAndSwapsIndex` | SqlServer | The `AddProjectSecretNormalizedName` migration backfills existing mixed-case secrets, sets the binary `Latin1_General_100_BIN2` collation on `NormalizedName`, swaps the unique index, and rejects case variants afterwards |
+| `SqlServerMigrationRelocationTests.Migrate_WithCaseOnlyDuplicateSecrets_FailsAndRollsBackCompletely` | SqlServer | On a `Latin1_General_CS_AS` database with legacy `a_key` and `A_KEY` in one project, the migration fails with error 50001 ("duplicate secret names") and rolls back completely: no `NormalizedName` column, old `IX_ProjectSecrets_ProjectId_Name` index present, history still the five relocated migrations, rows and encrypted values intact |
+| `SqlServerMigrationRelocationTests.Migrate_TurkishCollation_*` | SqlServer | On a `Turkish_CI_AS` database: legacy `i_key` and `I_KEY` (distinct under Turkish rules) collide after normalization and the migration fails and rolls back; a single `api_key` backfills to `API_KEY` (ASCII `I`, as `ToUpperInvariant()`), not the dotted `İ` the database's own `UPPER` would produce |
+
+`MigrationSchemaTests_*` (one database per test, dropped afterwards):
+
+- no pending migrations and `HasPendingModelChanges()` is false after `MigrateAsync`
+- secret names unique per project ignoring case (`A_KEY` then `a_key` throws
+  `DbUpdateException`; the same name in another project is fine)
+- deleting a project (`ExecuteDeleteAsync`, so the database's `ON DELETE CASCADE`
+  does the work) removes its builds, log entries, artifacts and secrets
+- `DateTime` written as Local/Unspecified reads back with `Kind=Utc` and the
+  expected instant; nullable timestamps stay null
+- precision: 100 ns ticks round-trip exactly on SQL Server (`datetime2(7)`,
+  `time(7)`); PostgreSQL (`timestamptz`, `interval`) keeps microseconds
+- Identity: create user, find by email with different casing, role
+  membership, `LockoutEnd` round-trip, many users without `GitHubId`
+- column defaults (`TimeoutMinutes` 15, `DefaultBranch`, `BranchFilter`) apply
+  when omitted from an INSERT; explicit `false` for
+  `SystemSettings.AllowUserRegistration` (default `true`) is persisted
+- `ServerBuildLogger` strips `\0` from messages and step names (PostgreSQL
+  rejects NUL in text)
+- `DatabaseSeeding.SeedRolesAsync` creates the roles and is idempotent
+
+`HangfireStorageTests_*` build their storage options with the production
+`HangfireStorageOptionsFactory` and override only the timings: a 2 s
+invisibility timeout (`SlidingInvisibilityTimeout` on SQL Server,
+`InvisibilityTimeout` with `UseSlidingInvisibilityTimeout = true` on PostgreSQL)
+and a 200 ms poll interval. `Unit/Infrastructure/HangfireStorageOptionsFactoryTests`
+pins the production values (sliding invisibility on, `hangfire` schema) without
+Docker. Waits throw `TimeoutException` naming what they waited for, so a
+missing prerequisite fails the test:
+
+- two `BackgroundJobServer`s (one worker each, same queue) and a 7 s job (more
+  than three timeout intervals): the job starts exactly once and succeeds.
+  With `UseSlidingInvisibilityTimeout = false` the PostgreSQL variant fails
+  (the job is picked up a second time), so the test guards that option.
+- a running job whose server is stopped after ~1 s: the test asserts the first
+  server started the job (started = 1, completed = 0) before stopping it; the
+  job observes the shutdown token and aborts, a new server starts it a second
+  time (started = 2) and it succeeds (completed = 1). This covers the shutdown/requeue path; a hard process kill
+  that relies on lease expiry is not simulated in-process.
+- PostgreSQL only: the storage creates its tables in the `hangfire` schema.
+
+### Migration Drift Check (unit test)
+
+`Unit/Persistence/MigrationDriftTests` calls EF Core 9's
+`Database.HasPendingModelChanges()` for `SqlServerAndoDbContext` and
+`PostgreSqlAndoDbContext` with dummy connection strings (no database needed).
+It fails when the model changed without a migration for a provider, replacing a
+`dotnet ef migrations has-pending-model-changes` CI step. Fix a failure by
+adding the migration for both providers:
+
+```bash
+./scripts/add-migration.sh <MigrationName>
+```
+
+It also pins the last SQL Server migration name, so update
+`LastSqlServerMigration` in the test when adding a migration.
 
 ### E2E Tests
 
@@ -88,7 +256,7 @@ npx playwright test --ui
 
 ## Current Test Coverage
 
-### Unit Tests (288 tests) + Integration Tests (19 tests) = 307 total
+### 506 tests in total (both providers); a single-provider run reports 42 (SqlServer only) or 47 (PostgreSql only) of them as Skipped
 
 #### WebhookSignatureValidatorTests (16 tests)
 | Test | Type | Description |
@@ -317,8 +485,57 @@ Verify mock implementations work correctly for test setup.
 | `BuildArtifact_HasCorrectDefaults` | Default | Default values |
 
 
-#### WebhookIntegrationTests (19 tests)
-Full HTTP pipeline tests using `WebApplicationFactory` with in-memory database.
+#### Data export/import (DataPortability)
+
+The cross-provider tests need both containers in one test class, but a class
+belongs to one xUnit collection and the `SqlServer`/`PostgreSql` collections
+own the shared fixed-name containers. `CrossProviderDatabaseFixture` (collection
+`CrossProvider`) therefore always starts its own two containers in **isolated**
+mode (unique names, random ports, removed at the end), whatever
+`ANDO_TEST_DB_CONTAINERS` says, so it can never remove a container another
+collection is using.
+
+Round trip (`DataPortabilityTestData.AssertRoundTripAsync`, used by the
+same-provider and both cross-provider tests): migrate two fresh databases with
+`MigrateAsync`; seed the source through EF with every exported table (users with
+roles, claims, logins, tokens and a non-zero `LockoutEnd`; two projects; three
+secrets encrypted by the real `EncryptionService` with a known key; one build
+per `BuildStatus`; 2,000 log entries; artifacts; API tokens; `SystemSettings`
+with `AllowUserRegistration = false`) and delete a role, a user and a build so
+identity values have gaps; give the target the startup-seeded `Admin`/`User`
+roles, as a real freshly started instance has; export; import. Asserts:
+
+- row counts per table equal the source, the export and the import result
+- a SHA-256 over every column of every row (ordered by key; DateTime as
+  ticks + Kind, DateTimeOffset as UTC ticks + offset) equals the source after
+  applying the import rule (Queued/Running -> Cancelled, `HangfireJobId` null,
+  `ErrorMessage` "Cancelled by data import", `FinishedAt` = export time)
+- IDs preserved including gaps; every `DateTime` reads back with `Kind=Utc`;
+  `LockoutEnd` equal; explicit `false` setting kept
+- every secret decrypts to the original plaintext
+- new rows inserted afterwards get IDs above the imported maximum on both
+  providers (SQL Server identity seed after `IDENTITY_INSERT`, PostgreSQL
+  `setval` on the identity sequences)
+
+Seed timestamps are whole microseconds because PostgreSQL `timestamptz` keeps
+microseconds while SQL Server `datetime2(7)` keeps 100 ns (a real SQL Server ->
+PostgreSQL move truncates the last digit).
+
+Import refusals (`DataPortabilityTests_*`), each asserting the target still
+holds only its two startup roles afterwards:
+
+| Test | Refusal |
+|------|---------|
+| `Import_NonEmptyTarget_IsRefusedWithoutForce_AndReplacedWithForce` | second import fails naming `--force`; with `--force` all rows are replaced and the checksums are unchanged |
+| `Import_ModelFingerprintMismatch_IsRefused` | manifest line edited (fingerprint, migration); message names both migrations |
+| `Import_TruncatedFile_IsRefused` | `__end` line removed |
+| `Import_WrongEncryptionKey_RollsBackEverything` | target key differs; whole transaction rolled back |
+| `Import_InvalidRowValue_RollsBackEverything` | bad enum value in the last log entry; message names the line; rolled back |
+| `Export_ExistingFile_RequiresOverwrite` | export refuses an existing file without `--overwrite`; no `.partial` left |
+
+#### WebhookIntegrationTests_SqlServer / _PostgreSql (20 tests each)
+Full HTTP pipeline tests using `WebApplicationFactory` against a real database
+(one class per provider over `WebhookIntegrationTestsBase`, see the provider matrix above).
 | Test | Type | Description |
 |------|------|-------------|
 | `PushWebhook_CreatesBuildInDatabase` | Happy path | Full webhook flow creates build |
@@ -340,6 +557,7 @@ Full HTTP pipeline tests using `WebApplicationFactory` with in-memory database.
 | `WebhooksForDifferentProjects_CreateSeparateBuilds` | Happy path | Project isolation |
 | `PushWebhook_ReturnsJsonWithBuildId` | Response | Response format verified |
 | `PingEvent_ReturnsPong` | Happy path | GitHub ping handled |
+| `Health_ReportsProviderUnderTest` | Provider | `/health` returns `database` = provider under test |
 
 #### CleanupArtifactsJobTests (14 tests)
 Tests for the Hangfire job that cleans up expired build artifacts.
@@ -572,8 +790,8 @@ Tests should be run in CI pipeline:
 jobs:
   test:
     steps:
-      - name: Unit Tests
-        run: dotnet test tests/Ando.Server.Tests/ --filter "Category!=Integration"
+      - name: Server Tests (unit + both database providers)
+        run: dotnet test tests/Ando.Server.Tests/Ando.Server.Tests.csproj  # ANDO_TEST_DB_PROVIDERS defaults to both
 
       - name: E2E Tests
         run: |

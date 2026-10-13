@@ -60,7 +60,7 @@ Ando.Server is a cloud-native CI/CD platform built on ASP.NET Core that orchestr
 │  │  AndoDbContext (Identity + Custom Entities)              ││
 │  └─────────────────────────────────────────────────────────┘│
 │  ┌─────────────────────────────────────────────────────────┐│
-│  │                   SQL Server                             ││
+│  │        SQL Server  or  PostgreSQL (Database:Provider)    ││
 │  │  Users, Projects, Builds, Logs, Artifacts, Secrets       ││
 │  └─────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────┘
@@ -81,14 +81,30 @@ Ando.Server is a cloud-native CI/CD platform built on ASP.NET Core that orchestr
 ```
 src/Ando.Server/
 ├── Program.cs              # Application bootstrap and configuration
-├── AndoDbContext.cs        # Entity Framework database context
+├── Data/                   # EF Core contexts
+│   ├── AndoDbContext.cs            # Shared model (Identity + custom entities)
+│   ├── SqlServerAndoDbContext.cs   # SQL Server subclass (own migrations/snapshot)
+│   ├── PostgreSqlAndoDbContext.cs  # PostgreSQL subclass (own migrations/snapshot)
+│   └── Design/                     # Design-time factories for dotnet ef
+├── Migrations/
+│   ├── SqlServer/          # Ando.Server.Migrations.SqlServer
+│   └── PostgreSql/         # Ando.Server.Migrations.PostgreSql
+├── Infrastructure/Database/ # Provider switch point (EF + Hangfire storage)
+├── Infrastructure/Logging/  # Optional Serilog rolling file log (Logging:File)
+├── DataPortability/        # export/import CLI mode (move data between instances/providers)
+│   ├── PortabilityCli.cs           # "export"/"import" argument parsing and host
+│   ├── DataExportService.cs        # Streams all tables to a JSON Lines file
+│   ├── DataImportService.cs        # Loads a file in one transaction, keys preserved
+│   ├── PortableTables.cs           # Exported tables in foreign-key order
+│   ├── ModelFingerprint.cs         # Provider-neutral schema fingerprint
+│   └── ExportManifest.cs / ExportFileReader.cs / PortableValueSerializer.cs
 ├── Endpoints/              # FastEndpoints REST API
 │   ├── Auth/               # Authentication endpoints
 │   ├── Builds/             # Build management endpoints
 │   ├── Projects/           # Project CRUD endpoints
 │   ├── Admin/              # Admin-only endpoints
 │   ├── Home/               # API home/version endpoints
-│   ├── Infrastructure/     # Non-API compatibility endpoints (/health, /session, /error)
+│   ├── Infrastructure/     # Non-API compatibility endpoints (/health, /live, /ready, /session, /error)
 │   ├── Webhooks/           # GitHub webhook receiver
 │   └── Test/               # Test-only endpoints (Testing/E2E)
 ├── Contracts/              # DTOs for API requests/responses
@@ -164,13 +180,28 @@ Program.cs bootstraps the application in 8 distinct phases:
 - StorageSettings (artifacts path, retention policies)
 - BuildSettings (timeouts, Docker image, worker count)
 - EncryptionSettings (AES-256 key for secrets)
+- DatabaseSettings (Database:Provider = SqlServer | PostgreSql, default SqlServer)
 - RateLimitSettings (per-endpoint sliding window limits for webhook, API, and auth flows)
+- FileLoggingSettings (Logging:File: Enabled=false, Path=/var/log/ando, RetainedDays=90)
 ```
 
+Before configuration binding, `args[0]` of `export` or `import` switches to the data
+portability CLI (`DataPortability/PortabilityCli`), which exits without building the web host.
+Right after `WebApplication.CreateBuilder`, `AddAndoFileLogging()` adds the optional rolling
+file log (see Logging below).
+
 #### Phase 2: Database & EF Core
-- SQL Server database via connection string
+- Provider chosen by `Database:Provider` (`SqlServer` default, or `PostgreSql`); env `Database__Provider`
+- Single switch point in `Infrastructure/Database/` registers the provider-specific context
+  (`SqlServerAndoDbContext` or `PostgreSqlAndoDbContext`) and Hangfire storage
+- Connection string (`ConnectionStrings:DefaultConnection`) is parsed with the provider's own
+  builder at startup; unknown provider or unparseable string fails startup
 - AndoDbContext with ASP.NET Core Identity integration
-- EnsureCreated() for schema creation
+- EF Core migrations applied on startup (`Migrations/SqlServer/` or `Migrations/PostgreSql/`);
+  tests use `EnsureCreated()` where migrations are not under test
+- All DateTime values are stored/read as UTC (converter convention), so API timestamps
+  serialize with a trailing `Z` on both providers
+- Raw SQL must be portable or provider-conditional
 
 #### Phase 3: Data Protection
 - ASP.NET Core Data Protection API
@@ -187,7 +218,9 @@ Program.cs bootstraps the application in 8 distinct phases:
 ```
 
 #### Phase 5: Hangfire Background Jobs
-- SQL Server storage backend
+- Storage follows `Database:Provider`: Hangfire.SqlServer (schema `HangFire`) or
+  Hangfire.PostgreSql (schema `hangfire`, `UseSlidingInvisibilityTimeout = true`)
+- Testing environment uses Hangfire.InMemory with no Hangfire server
 - Two queues: "builds" (priority), "default"
 - Configurable worker count (default 2)
 
@@ -207,7 +240,7 @@ Program.cs bootstraps the application in 8 distinct phases:
 
 #### Phase 8: FastEndpoints Routing
 - FastEndpoints with `/api` route prefix
-- Route-prefix override for non-API compatibility/infrastructure routes (`/health*`, `/session`, `/error`, `/webhooks/*`)
+- Route-prefix override for non-API compatibility/infrastructure routes (`/health*`, `/live`, `/ready`, `/session`, `/error`, `/webhooks/*`)
 - Swagger documentation in dev/test environments
 - SPA fallback to `app/index.html`
 
@@ -239,7 +272,9 @@ Program.cs bootstraps the application in 8 distinct phases:
 |----------|---------|----------------|
 | `/webhooks/github` | GitHub webhook receiver | AllowAnonymous (signature validation) |
 | `/session` (GET/POST) | GitHub App setup compatibility redirect | AllowAnonymous |
-| `/health`, `/health/docker`, `/health/github`, `/error` | Health and diagnostics | AllowAnonymous |
+| `/health`, `/health/docker`, `/health/github`, `/error` | Health and diagnostics (`/health` queries the database; Docker healthcheck) | AllowAnonymous |
+| `/live` | Liveness probe, no dependencies, always 200 `{"status":"live"}` | AllowAnonymous |
+| `/ready` | Readiness probe: `Database.CanConnectAsync()`; 200 `ready` + provider, else 503 `unready` | AllowAnonymous |
 | `/api/test/*` | Test-only routes for E2E tooling | Testing/E2E only + API key |
 
 #### FastEndpoints (REST API)
@@ -439,7 +474,7 @@ SendBuildFailedEmailAsync()  // Template-rendered failure notification
 #### Hangfire Configuration
 
 ```csharp
-- SQL Server storage backend
+- Storage per provider: SQL Server (schema HangFire) or PostgreSQL (schema hangfire)
 - Two queues: "builds" (priority), "default"
 - Configurable worker count (default 2)
 - Sliding invisibility timeout: 5 minutes
@@ -787,12 +822,26 @@ public class ProjectSecret
 {
     public int Id { get; set; }
     public int ProjectId { get; set; }
-    public string Name { get; set; }
+    public string Name { get; set; }            // Display value as entered
+    public string NormalizedName { get; set; }  // ToUpperInvariant(Name); unique per (ProjectId, NormalizedName)
     public string EncryptedValue { get; set; }  // AES-256
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
 ```
+
+- **Name policy:** new or updated names must match `^[A-Za-z_][A-Za-z0-9_]*$` and be at most 100 characters,
+  enforced at the secret endpoint. Legacy names stored before the policy are kept.
+- **Case-insensitive uniqueness:** application writes and lookups use `NormalizedName` (`ToUpperInvariant`). Lookups also accept an exact `Name` match (preferred when both match) so legacy rows whose `NormalizedName` was backfilled by SQL `UPPER` stay addressable.
+  On SQL Server the column uses a binary collation, so the unique index and lookups compare exact code points
+  and never depend on the database's default (for example Turkish) collation.
+- **Upgrade (SQL Server):** the migration that adds `NormalizedName` backfills it with a collation-independent
+  `UPPER`, then fails with error 50001 (whole migration rolled back, old index intact) if two secrets in one
+  project collapse to the same normalized name. Operators delete one of them and retry. Rolling back past
+  this migration requires the pre-upgrade backup. PostgreSQL installs start from `InitialCreate` with the
+  column in place.
+- **Recovery:** values are only decryptable with `Encryption__Key`; backups must keep `config/.env` with the
+  database backup (the installer's backup job archives it for containerized and external databases).
 
 #### SystemSettings
 Global feature toggles controlled by administrators. Stored as a single row.
@@ -992,6 +1041,43 @@ public class EmailSettings
 }
 ```
 
+**FileLoggingSettings** (section `Logging:File`):
+```csharp
+public class FileLoggingSettings
+{
+    public const string SectionName = "Logging:File";
+    public bool Enabled { get; set; } = false;          // Logging__File__Enabled
+    public string Path { get; set; } = "/var/log/ando"; // Logging__File__Path (directory)
+    public int RetainedDays { get; set; } = 90;         // Logging__File__RetainedDays
+}
+```
+
+#### Logging
+
+- Console (stdout) logging is the default Microsoft.Extensions.Logging console provider and is
+  always on; `Logging:LogLevel` filters apply to every provider.
+- With `Logging:File:Enabled=true`, `Infrastructure/Logging/FileLoggingExtensions` adds Serilog
+  as one more logging provider (not `UseSerilog`, so the console output and the level filters are
+  unchanged). Sink: `Serilog.Sinks.File`, `<Path>/ando-.log` with `RollingInterval.Day`
+  (files `ando-yyyyMMdd.log`), `retainedFileCountLimit = RetainedDays`, `shared: true`, flushed
+  every 2 seconds.
+- The directory is probed (create + write) first; on failure startup logs one warning and
+  continues without the file sink.
+
+#### Data Portability (export/import)
+
+`dotnet Ando.Server.dll export --output <file>` / `import --input <file> [--force]` run before the
+web host is built and register only the DbContext and the encryption service. The export streams
+every Ando table (not Hangfire) as JSON Lines: a manifest line (format version, app version,
+source provider, last migration, model fingerprint), one line per row grouped by table in
+foreign-key order, and a closing `__end` line with row counts; it is written to `<file>.partial`
+and renamed on success. The import checks the target is migrated, has the same model fingerprint
+and is empty (unless `--force`), then in one transaction deletes existing rows, inserts with
+explicit keys (`IDENTITY_INSERT` on SQL Server, sequence reset on PostgreSQL), restores values
+that EF would have replaced by a store default (e.g. `TimeoutMinutes = 0`), verifies row counts
+and decrypts every secret. Queued/Running builds become Cancelled because the Hangfire queue is
+not exported.
+
 #### Configuration Sources
 
 **Priority (highest to lowest):**
@@ -1182,15 +1268,15 @@ ClientApp/
 │  ┌──────────────────────────▼──────────────────────────┐   │
 │  │              Docker (Rootless - ando user)           │   │
 │  │  ┌─────────────────┐  ┌───────────────────────────┐ │   │
-│  │  │  ando-server    │  │    ando-sqlserver         │ │   │
-│  │  │  Port 8080      │  │    Port 1433 (internal)   │ │   │
+│  │  │  ando-server    │  │ ando-sqlserver (1433) or  │ │   │
+│  │  │  Port 8080      │  │ ando-postgres (5432)      │ │   │
 │  │  └─────────────────┘  └───────────────────────────┘ │   │
 │  │                                                      │   │
 │  │  Volumes:                                            │   │
 │  │  - /opt/ando/data/artifacts                          │   │
 │  │  - /opt/ando/data/repos                              │   │
 │  │  - /opt/ando/data/keys                               │   │
-│  │  - /opt/ando/data/sqldata                            │   │
+│  │  - /opt/ando/data/sqldata or /opt/ando/data/pgdata   │   │
 │  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -1198,7 +1284,12 @@ ClientApp/
 **Key Points:**
 - Rootless Docker under `ando` user (UID 1000)
 - Docker socket at `/run/user/1000/docker.sock`
-- SQL Server in container (no public ports)
+- SQL Server or PostgreSQL in container (no public ports), chosen with installer `--db`;
+  or an external database with `--external-db`
+- Database data directories are owned by the host IDs that the container user maps to
+  (`start + N - 1` from the `ando` entries in `/etc/subuid` and `/etc/subgid`)
+- Daily backup job: database dump (containerized only) plus config (`Encryption__Key`) and
+  Data Protection key archives (always, including `--external-db`)
 - Web server proxied by Caddy
 
 ---
