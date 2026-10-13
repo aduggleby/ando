@@ -6,26 +6,15 @@
  */
 
 import { test as base, expect, Page, BrowserContext } from '@playwright/test';
+import { getServerBaseUrl } from '../e2e-network';
 import { TestApi, CreateUserResponse, CreateProjectResponse, CreateBuildResponse } from '../utils/test-api';
-import * as fs from 'fs';
 
 /**
- * Detect if we're running inside a Docker container.
- * The /.dockerenv file exists in Docker containers.
- */
-function isInsideContainer(): boolean {
-  return fs.existsSync('/.dockerenv');
-}
-
-/**
- * Get the appropriate base URL based on the environment.
- * - Inside container: use host.docker.internal to reach host's Docker
- * - Outside container: use localhost
+ * Base URL of the E2E server for this process: the published port on a developer
+ * machine, the server container by name inside the ANDO build container (e2e-network.ts).
  */
 function getBaseUrl(): string {
-  const port = 17110;
-  const host = isInsideContainer() ? 'host.docker.internal' : 'localhost';
-  return `http://${host}:${port}`;
+  return getServerBaseUrl();
 }
 
 // Test API key header name
@@ -90,7 +79,7 @@ export interface WorkerFixtures {
  */
 export const test = base.extend<TestFixtures, WorkerFixtures>({
   // Worker-scoped base URL
-  // Uses host.docker.internal when running inside a container (ANDO build with --dind)
+  // Reaches the server by container name inside the ANDO build container (e2e-network.ts)
   baseUrl: [async ({}, use) => {
     await use(process.env.BASE_URL || getBaseUrl());
   }, { scope: 'worker' }],

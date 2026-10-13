@@ -14,9 +14,9 @@
  * A server that omits the field, or reports a different provider, fails setup.
  *
  * Container Detection:
- * When running inside an ANDO container (Docker-in-Docker mode), we use
- * host.docker.internal to reach containers running on the host's Docker.
- * This enables E2E tests to run as part of the ANDO build process.
+ * When running inside an ANDO container (Docker-in-Docker mode), the runner
+ * attaches itself to the compose network and reaches the server by container
+ * name (e2e-network.ts). This enables E2E tests to run as part of the ANDO build.
  *
  * Important: When inside a container, we always recreate the test containers
  * to ensure a fresh state. This is because --dind mode shares the Docker
@@ -27,6 +27,7 @@ import { execSync, spawnSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import { getE2EDatabase } from './e2e-database';
+import { connectRunnerToServerNetwork, disconnectRunnerFromServerNetwork, getServerBaseUrl } from './e2e-network';
 
 const E2E_DATABASE = getE2EDatabase();
 const COMPOSE_FILE = E2E_DATABASE.composeFile;
@@ -59,13 +60,11 @@ function isDockerAvailable(): boolean {
 }
 
 /**
- * Get the server URL for health checks.
- * Uses host.docker.internal when inside a container (ANDO build).
+ * Get the server URL for health checks (see e2e-network.ts for how the
+ * server is reached inside a container).
  */
 function getServerUrl(): string {
-  const port = 17110;
-  const host = isInsideContainer() ? 'host.docker.internal' : 'localhost';
-  return `http://${host}:${port}/health`;
+  return `${getServerBaseUrl()}/health`;
 }
 
 /**
@@ -103,6 +102,7 @@ function areContainersHealthy(): boolean {
  */
 function stopContainers(): void {
   console.log('Stopping existing E2E containers...');
+  disconnectRunnerFromServerNetwork();
   try {
     execSync(`docker compose -f ${COMPOSE_FILE} down --volumes --remove-orphans`, {
       stdio: 'inherit',
@@ -149,7 +149,7 @@ async function waitForServer(): Promise<void> {
   }
 
   const hint = isInsideContainer()
-    ? 'Check that host.docker.internal resolves correctly and containers are accessible.'
+    ? 'Check that the runner is attached to the compose network and the server container is up (e2e-network.ts).'
     : `Check docker compose logs for errors: docker compose -f ${COMPOSE_FILE_DISPLAY} logs`;
   throw new Error(`Server did not become ready within ${MAX_WAIT_SECONDS} seconds at ${serverUrl}. ${hint}`);
 }
@@ -241,6 +241,7 @@ async function globalSetup(): Promise<void> {
     startContainers();
   }
 
+  connectRunnerToServerNetwork();
   await waitForServer();
   await assertServerDatabaseProvider();
 

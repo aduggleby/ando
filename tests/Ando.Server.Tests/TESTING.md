@@ -130,6 +130,16 @@ When the test process itself runs inside a container that shares the host's Dock
 - `isolated` is for CI and any host where several runs share a Docker daemon. It is the
   default whenever `CI` or `ANDO_HOST_ROOT` is set or the test process runs inside a container
   (`/.dockerenv` exists), so builds run by Ando.Server use it
+  without configuration. Inside a container, `TestcontainersEnvironment` also disables the resource
+  reaper (Ryuk), which would otherwise be contacted on `localhost` and time out before any database
+  starts, and the fixtures connect to their database containers DIRECTLY (container IP and container
+  port) over a shared Docker network instead of through the host's published port: host firewalls
+  (ufw on workstations, nftables default-drop on the prod1 VMs) block container-to-host traffic, so
+  `host.docker.internal` is not reliable. The fixtures attach their containers to the runner's own
+  network when it is not the default bridge (`docker inspect` of the runner's hostname). Set
+  `TESTCONTAINERS_RYUK_DISABLED` explicitly to override the reaper default. Isolated containers start
+  with Docker auto-remove, so they disappear as soon as they stop; only a hard-killed test process can
+  leave one running (`docker ps -a | grep ando-server-tests` shows it).
   without configuration:
   each run owns uniquely named containers on random ports, never removes a
   container by name, and removes its own containers when the run ends

@@ -214,7 +214,11 @@ cd tests && docker compose -f docker-compose.test.postgres.yml down -v
   (Testcontainers.PostgreSql, host port 17135) automatically. Both run by default; `ANDO_TEST_DB_PROVIDERS=SqlServer`
   limits the run to one provider. In the default `shared` mode the containers `ando-server-tests-sqlserver` and
   `ando-server-tests-postgres` are left running for reuse; isolated mode is the default when `CI` or `ANDO_HOST_ROOT` is set or the tests run inside a container, or force it with `ANDO_TEST_DB_CONTAINERS=isolated` on shared CI
-  runners instead.
+  runners instead. Inside a container (the ANDO build container) the tests reach their database containers
+  directly over Docker networking (container IP, shared network) and run without the resource reaper
+  (`TestFixtures/TestcontainersEnvironment.cs`); the E2E runner attaches itself to the compose network
+  (`tests/Ando.Server.E2E/e2e-network.ts`). Host firewalls block container-to-host traffic, so
+  `host.docker.internal` is not used.
 - **E2E tests** (Playwright): Use docker-compose with isolated network
   - `ando-e2e-sqlserver`: SQL Server (no public ports, internal network only) — `tests/docker-compose.test.yml`
   - `ando-e2e-postgres`: PostgreSQL (no public ports) — `tests/docker-compose.test.postgres.yml`

@@ -17,7 +17,7 @@
 //   - isolated: unique name, random host port, removed when the run ends, so
 //     concurrent runs on one Docker daemon cannot remove each other's container
 // - When the tests run inside a container, the host is rewritten to
-//   host.docker.internal with the container's actual mapped port
+//   the container's own IP and port over a shared Docker network (TestcontainersEnvironment)
 // - Implements IAsyncLifetime for proper async setup/teardown
 // - The internal constructor forces a container mode, used by
 //   CrossProviderDatabaseFixture to start private isolated containers
@@ -111,17 +111,27 @@ public class PostgreSqlFixture : IAsyncLifetime, IDatabaseFixture
         }
         else
         {
-            // Unique name and a random host port (the builder's default binding);
-            // the container is removed in DisposeAsync and by the resource reaper.
+            // Unique name and a random host port (the builder's default binding). Docker removes
+            // the container as soon as it stops (auto-remove), so no leftovers accumulate even
+            // where the resource reaper is unavailable (inside the ANDO build container).
             builder = builder
                 .WithName($"{SharedContainerName}-{Guid.NewGuid():N}")
+                .WithAutoRemove(true)
                 .WithCleanUp(true);
+        }
+
+        // Inside a container (ANDO build) the database must share the runner's network so it
+        // can be reached directly; see TestcontainersEnvironment.
+        var runnerNetwork = await TestcontainersEnvironment.GetRunnerNetworkNameAsync();
+        if (runnerNetwork != null)
+        {
+            builder = builder.WithNetwork(runnerNetwork);
         }
 
         _container = builder.Build();
         await _container.StartAsync();
-        _connectionString = RewriteHostIfInsideContainer(
-            _container.GetConnectionString(), _container.GetMappedPublicPort(ContainerPort));
+        _connectionString = WithEndpoint(_container.GetConnectionString(),
+            TestcontainersEnvironment.DirectEndpoint(_container, ContainerPort));
     }
 
     /// <summary>
@@ -165,22 +175,14 @@ public class PostgreSqlFixture : IAsyncLifetime, IDatabaseFixture
     /// </summary>
     /// <param name="databaseName">Database name to target.</param>
     /// <returns>The container connection string pointed at <paramref name="databaseName"/>.</returns>
-    // Testcontainers returns a localhost address that is only reachable from the host.
-    // When the test process itself runs inside a container that shares the host's Docker
-    // daemon (the ANDO build container with --dind), localhost is the build container, so
-    // the container's mapped host port must be reached through host.docker.internal instead.
-    // This mirrors what the E2E global setup does for the compose-based containers.
-    private static string RewriteHostIfInsideContainer(string connectionString, int mappedPort)
+    // Points the Testcontainers connection string at the endpoint the test process can reach:
+    // the mapped host port on a developer machine, the container's own IP inside a container.
+    private static string WithEndpoint(string connectionString, (string Host, int Port) endpoint)
     {
-        if (!File.Exists("/.dockerenv"))
-        {
-            return connectionString;
-        }
-
         var builder = new NpgsqlConnectionStringBuilder(connectionString)
         {
-            Host = "host.docker.internal",
-            Port = mappedPort
+            Host = endpoint.Host,
+            Port = endpoint.Port
         };
         return builder.ConnectionString;
     }

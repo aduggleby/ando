@@ -9,6 +9,7 @@
 import { execSync } from 'child_process';
 import * as path from 'path';
 import { getE2EDatabase } from './e2e-database';
+import { disconnectRunnerFromServerNetwork } from './e2e-network';
 
 const COMPOSE_FILE = getE2EDatabase().composeFile;
 
@@ -20,6 +21,7 @@ async function globalTeardown(): Promise<void> {
   if (process.env.CI || process.env.CLEANUP === '1') {
     console.log('\n=== E2E Test Teardown ===\n');
     console.log('Stopping E2E test containers...');
+    disconnectRunnerFromServerNetwork();
 
     try {
       execSync(`docker compose -f ${COMPOSE_FILE} down -v`, {

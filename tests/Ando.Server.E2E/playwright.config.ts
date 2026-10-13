@@ -1,5 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-import * as fs from 'fs';
+import { getServerBaseUrl } from './e2e-network';
 
 /**
  * Playwright configuration for Ando.Server E2E tests.
@@ -9,28 +9,16 @@ import * as fs from 'fs';
  * by default, PostgreSQL (ando-e2e-postgres) when E2E_DB_PROVIDER=postgres.
  *
  * Container Detection:
- * When running inside an ANDO container (Docker-in-Docker mode), tests
- * connect via host.docker.internal instead of localhost. This allows
- * the tests to reach containers started on the host's Docker daemon.
+ * When running inside an ANDO container (Docker-in-Docker mode), the tests
+ * reach the server container directly over the compose network (e2e-network.ts).
  */
 
 /**
- * Detect if we're running inside a Docker container.
- * The /.dockerenv file exists in Docker containers.
- */
-function isInsideContainer(): boolean {
-  return fs.existsSync('/.dockerenv');
-}
-
-/**
- * Get the appropriate base URL based on the environment.
- * - Inside container: use host.docker.internal to reach host's Docker
- * - Outside container: use localhost
+ * Base URL of the E2E server: the published port on a developer machine, the
+ * server container by name inside the ANDO build container (see e2e-network.ts).
  */
 function getBaseUrl(): string {
-  const port = 17110;
-  const host = isInsideContainer() ? 'host.docker.internal' : 'localhost';
-  return `http://${host}:${port}`;
+  return getServerBaseUrl();
 }
 
 export default defineConfig({
@@ -63,7 +51,7 @@ export default defineConfig({
   // Shared settings for all projects
   use: {
     // Base URL for the test server (project port range: 17100-17199)
-    // Uses host.docker.internal when running inside a container (ANDO build)
+    // Reaches the server by container name when running inside a container (ANDO build)
     baseURL: process.env.BASE_URL || getBaseUrl(),
 
     // Collect trace on first retry
