@@ -53,7 +53,7 @@ public class GetProjectEndpoint : EndpointWithoutRequest<GetProjectResponse>
         var project = await _projectService.GetProjectForUserAsync(projectId, userId);
         if (project == null)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
@@ -79,7 +79,7 @@ public class GetProjectEndpoint : EndpointWithoutRequest<GetProjectResponse>
             b.PullRequestNumber
         )).ToList();
 
-        await SendAsync(new GetProjectResponse(
+        await Send.OkAsync(new GetProjectResponse(
             new ProjectDetailsDto(
                 project.Id,
                 project.RepoFullName,

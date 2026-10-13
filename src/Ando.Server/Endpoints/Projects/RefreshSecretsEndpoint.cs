@@ -44,14 +44,14 @@ public class RefreshSecretsEndpoint : EndpointWithoutRequest<RefreshSecretsRespo
         var project = await _projectService.GetProjectForUserAsync(projectId, userId);
         if (project == null)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         var detectedSecrets = await _projectService.DetectAndUpdateRequiredSecretsAsync(projectId);
         var detectedProfiles = await _projectService.DetectAndUpdateProfilesAsync(projectId);
 
-        await SendAsync(new RefreshSecretsResponse(
+        await Send.OkAsync(new RefreshSecretsResponse(
             true,
             detectedSecrets,
             detectedProfiles

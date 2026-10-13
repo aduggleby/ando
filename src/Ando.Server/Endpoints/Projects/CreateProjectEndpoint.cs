@@ -61,7 +61,7 @@ public class CreateProjectEndpoint : Endpoint<CreateProjectRequest, CreateProjec
 
         if (string.IsNullOrWhiteSpace(repoFullName))
         {
-            await SendAsync(new CreateProjectResponse(
+            await Send.OkAsync(new CreateProjectResponse(
                 false,
                 Error: "Repository is required. Provide 'owner/repo' or a GitHub URL."
             ), cancellation: ct);
@@ -84,7 +84,7 @@ public class CreateProjectEndpoint : Endpoint<CreateProjectRequest, CreateProjec
         var parts = repoFullName.Split('/');
         if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
         {
-            await SendAsync(new CreateProjectResponse(
+            await Send.OkAsync(new CreateProjectResponse(
                 false,
                 Error: "Invalid repository format. Please enter as 'owner/repo' (e.g., 'octocat/hello-world')."
             ), cancellation: ct);
@@ -106,7 +106,7 @@ public class CreateProjectEndpoint : Endpoint<CreateProjectRequest, CreateProjec
             if (!string.IsNullOrWhiteSpace(appSlug))
             {
                 var installUrl = $"https://github.com/apps/{appSlug}/installations/new";
-                await SendAsync(new CreateProjectResponse(
+                await Send.OkAsync(new CreateProjectResponse(
                     false,
                     RedirectUrl: installUrl,
                     Error: $"Repository '{repoFullName}' not found or the Ando GitHub App is not installed."
@@ -114,7 +114,7 @@ public class CreateProjectEndpoint : Endpoint<CreateProjectRequest, CreateProjec
                 return;
             }
 
-            await SendAsync(new CreateProjectResponse(
+            await Send.OkAsync(new CreateProjectResponse(
                 false,
                 Error: $"Repository '{repoFullName}' not found or the Ando GitHub App is not installed."
             ), cancellation: ct);
@@ -133,14 +133,14 @@ public class CreateProjectEndpoint : Endpoint<CreateProjectRequest, CreateProjec
                 repo.DefaultBranch,
                 installationId);
 
-            await SendAsync(new CreateProjectResponse(
+            await Send.OkAsync(new CreateProjectResponse(
                 true,
                 ProjectId: project.Id
             ), cancellation: ct);
         }
         catch (InvalidOperationException ex)
         {
-            await SendAsync(new CreateProjectResponse(
+            await Send.OkAsync(new CreateProjectResponse(
                 false,
                 Error: ex.Message
             ), cancellation: ct);

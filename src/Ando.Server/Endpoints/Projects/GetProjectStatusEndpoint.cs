@@ -98,7 +98,7 @@ public class GetProjectStatusEndpoint : EndpointWithoutRequest<GetProjectsStatus
             _ => statusItems.OrderBy(p => p.RepoFullName)
         };
 
-        await SendAsync(new GetProjectsStatusResponse(
+        await Send.OkAsync(new GetProjectsStatusResponse(
             sorted.ToList(),
             sortBy,
             direction

@@ -56,14 +56,14 @@ public class ImpersonateEndpoint : EndpointWithoutRequest<ImpersonateResponse>
         var targetUser = await _userManager.FindByIdAsync(targetUserId.ToString());
         if (targetUser == null)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         // Cannot impersonate admins
         if (await _userManager.IsInRoleAsync(targetUser, UserRoles.Admin))
         {
-            await SendAsync(new ImpersonateResponse(false, "Cannot impersonate administrator accounts."), cancellation: ct);
+            await Send.OkAsync(new ImpersonateResponse(false, "Cannot impersonate administrator accounts."), cancellation: ct);
             return;
         }
 
@@ -81,7 +81,7 @@ public class ImpersonateEndpoint : EndpointWithoutRequest<ImpersonateResponse>
                 targetUserId,
                 targetUser.Email);
 
-            await SendAsync(new ImpersonateResponse(true), cancellation: ct);
+            await Send.OkAsync(new ImpersonateResponse(true), cancellation: ct);
         }
         else
         {
@@ -94,7 +94,7 @@ public class ImpersonateEndpoint : EndpointWithoutRequest<ImpersonateResponse>
                 targetUser.Email,
                 success: false);
 
-            await SendAsync(new ImpersonateResponse(false, "Failed to start impersonation."), cancellation: ct);
+            await Send.OkAsync(new ImpersonateResponse(false, "Failed to start impersonation."), cancellation: ct);
         }
     }
 }

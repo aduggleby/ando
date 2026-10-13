@@ -47,7 +47,7 @@ public class GetUserDetailsEndpoint : EndpointWithoutRequest<GetUserDetailsRespo
 
         if (user == null)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
@@ -61,7 +61,7 @@ public class GetUserDetailsEndpoint : EndpointWithoutRequest<GetUserDetailsRespo
             p.Builds.Count
         )).ToList();
 
-        await SendAsync(new GetUserDetailsResponse(
+        await Send.OkAsync(new GetUserDetailsResponse(
             new UserDetailsDto(
                 user.Id,
                 user.Email ?? "",

@@ -52,14 +52,14 @@ public class RetryBuildEndpoint : EndpointWithoutRequest<RetryBuildResponse>
 
         if (build == null)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         // Verify ownership
         if (build.Project.OwnerId != userId)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
@@ -67,7 +67,7 @@ public class RetryBuildEndpoint : EndpointWithoutRequest<RetryBuildResponse>
             build.Status != BuildStatus.Cancelled &&
             build.Status != BuildStatus.TimedOut)
         {
-            await SendAsync(new RetryBuildResponse(false, Error: "Build cannot be retried in its current state."), cancellation: ct);
+            await Send.OkAsync(new RetryBuildResponse(false, Error: "Build cannot be retried in its current state."), cancellation: ct);
             return;
         }
 
@@ -82,6 +82,6 @@ public class RetryBuildEndpoint : EndpointWithoutRequest<RetryBuildResponse>
             build.PullRequestNumber,
             build.Profile);
 
-        await SendAsync(new RetryBuildResponse(true, newBuildId), cancellation: ct);
+        await Send.OkAsync(new RetryBuildResponse(true, newBuildId), cancellation: ct);
     }
 }

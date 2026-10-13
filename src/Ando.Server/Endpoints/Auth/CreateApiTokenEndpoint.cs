@@ -32,7 +32,7 @@ public class CreateApiTokenEndpoint : Endpoint<CreateApiTokenRequest, CreateApiT
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
         if (userId <= 0)
         {
-            await SendAsync(new CreateApiTokenResponse(false, Error: "Not authenticated"), 401, ct);
+            await Send.ResponseAsync(new CreateApiTokenResponse(false, Error: "Not authenticated"), 401, ct);
             return;
         }
 
@@ -49,11 +49,11 @@ public class CreateApiTokenEndpoint : Endpoint<CreateApiTokenRequest, CreateApiT
             );
 
             // IMPORTANT: `Value` is only returned once.
-            await SendAsync(new CreateApiTokenResponse(true, dto, created.Token), cancellation: ct);
+            await Send.OkAsync(new CreateApiTokenResponse(true, dto, created.Token), cancellation: ct);
         }
         catch (Exception ex)
         {
-            await SendAsync(new CreateApiTokenResponse(false, Error: ex.Message), cancellation: ct);
+            await Send.OkAsync(new CreateApiTokenResponse(false, Error: ex.Message), cancellation: ct);
         }
     }
 }

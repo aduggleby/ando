@@ -51,14 +51,14 @@ public class GetBuildEndpoint : EndpointWithoutRequest<GetBuildResponse>
 
         if (build == null)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         // Verify ownership
         if (build.Project.OwnerId != userId)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
@@ -79,7 +79,7 @@ public class GetBuildEndpoint : EndpointWithoutRequest<GetBuildResponse>
             a.CreatedAt
         )).ToList();
 
-        await SendAsync(new GetBuildResponse(
+        await Send.OkAsync(new GetBuildResponse(
             new BuildDetailsDto(
                 build.Id,
                 build.ProjectId,

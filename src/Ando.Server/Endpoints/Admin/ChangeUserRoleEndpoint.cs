@@ -52,14 +52,14 @@ public class ChangeUserRoleEndpoint : Endpoint<ChangeUserRoleRequest, ChangeUser
 
         if (userId == currentUserId)
         {
-            await SendAsync(new ChangeUserRoleResponse(false, "You cannot change your own role."), cancellation: ct);
+            await Send.OkAsync(new ChangeUserRoleResponse(false, "You cannot change your own role."), cancellation: ct);
             return;
         }
 
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
@@ -99,6 +99,6 @@ public class ChangeUserRoleEndpoint : Endpoint<ChangeUserRoleRequest, ChangeUser
                 new Dictionary<string, object> { ["previousRole"] = "User", ["newRole"] = "Admin" });
         }
 
-        await SendAsync(new ChangeUserRoleResponse(true), cancellation: ct);
+        await Send.OkAsync(new ChangeUserRoleResponse(true), cancellation: ct);
     }
 }

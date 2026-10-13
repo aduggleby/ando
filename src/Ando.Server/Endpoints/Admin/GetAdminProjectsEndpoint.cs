@@ -96,7 +96,7 @@ public class GetAdminProjectsEndpoint : EndpointWithoutRequest<GetAdminProjectsR
             ))
             .ToList();
 
-        await SendAsync(new GetAdminProjectsResponse(
+        await Send.OkAsync(new GetAdminProjectsResponse(
             projectDtos,
             page,
             totalPages,

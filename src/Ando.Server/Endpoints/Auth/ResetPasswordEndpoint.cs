@@ -47,7 +47,7 @@ public class ResetPasswordEndpoint : Endpoint<ResetPasswordRequest, ResetPasswor
         if (user == null)
         {
             // Don't reveal that the user doesn't exist
-            await SendAsync(new ResetPasswordResponse(false, "Invalid or expired reset link."), cancellation: ct);
+            await Send.OkAsync(new ResetPasswordResponse(false, "Invalid or expired reset link."), cancellation: ct);
             return;
         }
 
@@ -55,7 +55,7 @@ public class ResetPasswordEndpoint : Endpoint<ResetPasswordRequest, ResetPasswor
         if (result.Succeeded)
         {
             _logger.LogInformation("Password reset successful for {Email}", req.Email);
-            await SendAsync(new ResetPasswordResponse(true), cancellation: ct);
+            await Send.OkAsync(new ResetPasswordResponse(true), cancellation: ct);
             return;
         }
 
@@ -69,6 +69,6 @@ public class ResetPasswordEndpoint : Endpoint<ResetPasswordRequest, ResetPasswor
             }
         }
 
-        await SendAsync(new ResetPasswordResponse(false, errorMessage), cancellation: ct);
+        await Send.OkAsync(new ResetPasswordResponse(false, errorMessage), cancellation: ct);
     }
 }

@@ -52,7 +52,7 @@ public class UnlockUserEndpoint : EndpointWithoutRequest<LockUserResponse>
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
@@ -67,6 +67,6 @@ public class UnlockUserEndpoint : EndpointWithoutRequest<LockUserResponse>
             userId,
             user.Email);
 
-        await SendAsync(new LockUserResponse(true), cancellation: ct);
+        await Send.OkAsync(new LockUserResponse(true), cancellation: ct);
     }
 }

@@ -45,21 +45,21 @@ public class VerifyEmailEndpoint : Endpoint<VerifyEmailRequest, VerifyEmailRespo
     {
         if (string.IsNullOrEmpty(req.UserId) || string.IsNullOrEmpty(req.Token))
         {
-            await SendAsync(new VerifyEmailResponse(false, "Invalid verification link."), cancellation: ct);
+            await Send.OkAsync(new VerifyEmailResponse(false, "Invalid verification link."), cancellation: ct);
             return;
         }
 
         var user = await _userManager.FindByIdAsync(req.UserId);
         if (user == null)
         {
-            await SendAsync(new VerifyEmailResponse(false, "User not found."), cancellation: ct);
+            await Send.OkAsync(new VerifyEmailResponse(false, "User not found."), cancellation: ct);
             return;
         }
 
         // Check our custom email verification token
         if (user.EmailVerificationToken != req.Token)
         {
-            await SendAsync(new VerifyEmailResponse(false, "Invalid or expired verification link."), cancellation: ct);
+            await Send.OkAsync(new VerifyEmailResponse(false, "Invalid or expired verification link."), cancellation: ct);
             return;
         }
 
@@ -71,6 +71,6 @@ public class VerifyEmailEndpoint : Endpoint<VerifyEmailRequest, VerifyEmailRespo
 
         _logger.LogInformation("Email verified for {Email}", user.Email);
 
-        await SendAsync(new VerifyEmailResponse(true, "Your email has been verified successfully!"), cancellation: ct);
+        await Send.OkAsync(new VerifyEmailResponse(true, "Your email has been verified successfully!"), cancellation: ct);
     }
 }

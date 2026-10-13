@@ -51,7 +51,7 @@ public class LoginEndpoint : Endpoint<LoginRequest, LoginResponse>
         var user = await _userManager.FindByEmailAsync(req.Email);
         if (user == null)
         {
-            await SendAsync(new LoginResponse(false, "Invalid email or password."), cancellation: ct);
+            await Send.OkAsync(new LoginResponse(false, "Invalid email or password."), cancellation: ct);
             return;
         }
 
@@ -77,7 +77,7 @@ public class LoginEndpoint : Endpoint<LoginRequest, LoginResponse>
 
             var isAdmin = await _userManager.IsInRoleAsync(user, UserRoles.Admin);
 
-            await SendAsync(new LoginResponse(
+            await Send.OkAsync(new LoginResponse(
                 true,
                 User: new UserDto(
                     user.Id,
@@ -94,13 +94,13 @@ public class LoginEndpoint : Endpoint<LoginRequest, LoginResponse>
         if (result.IsLockedOut)
         {
             _logger.LogWarning("User {Email} account locked out", req.Email);
-            await SendAsync(new LoginResponse(
+            await Send.OkAsync(new LoginResponse(
                 false,
                 "Your account has been locked due to too many failed attempts. Please try again later."
             ), cancellation: ct);
             return;
         }
 
-        await SendAsync(new LoginResponse(false, "Invalid email or password."), cancellation: ct);
+        await Send.OkAsync(new LoginResponse(false, "Invalid email or password."), cancellation: ct);
     }
 }

@@ -51,20 +51,20 @@ public class CancelBuildEndpoint : EndpointWithoutRequest<CancelBuildResponse>
 
         if (build == null)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         // Verify ownership
         if (build.Project.OwnerId != userId)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         if (build.Status != BuildStatus.Queued && build.Status != BuildStatus.Running)
         {
-            await SendAsync(new CancelBuildResponse(false, "Build cannot be cancelled in its current state."), cancellation: ct);
+            await Send.OkAsync(new CancelBuildResponse(false, "Build cannot be cancelled in its current state."), cancellation: ct);
             return;
         }
 
@@ -72,11 +72,11 @@ public class CancelBuildEndpoint : EndpointWithoutRequest<CancelBuildResponse>
 
         if (success)
         {
-            await SendAsync(new CancelBuildResponse(true), cancellation: ct);
+            await Send.OkAsync(new CancelBuildResponse(true), cancellation: ct);
         }
         else
         {
-            await SendAsync(new CancelBuildResponse(false, "Failed to cancel build."), cancellation: ct);
+            await Send.OkAsync(new CancelBuildResponse(false, "Failed to cancel build."), cancellation: ct);
         }
     }
 }

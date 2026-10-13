@@ -23,6 +23,6 @@ public class GetAppVersionEndpoint : EndpointWithoutRequest<AppVersionResponse>
     public override async Task HandleAsync(CancellationToken ct)
     {
         var version = typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown";
-        await SendAsync(new AppVersionResponse(version), cancellation: ct);
+        await Send.OkAsync(new AppVersionResponse(version), cancellation: ct);
     }
 }

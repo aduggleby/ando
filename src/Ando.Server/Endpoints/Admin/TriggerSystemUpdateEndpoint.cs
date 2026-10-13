@@ -67,7 +67,7 @@ public class TriggerSystemUpdateEndpoint : EndpointWithoutRequest<TriggerSystemU
                     ["jobId"] = jobId
                 });
 
-            await SendAsync(
+            await Send.OkAsync(
                 new TriggerSystemUpdateResponse(
                     true,
                     "Update job queued. The server will pull and restart if a new image is available.",
@@ -85,7 +85,7 @@ public class TriggerSystemUpdateEndpoint : EndpointWithoutRequest<TriggerSystemU
                 metadata: new Dictionary<string, object> { ["error"] = ex.Message },
                 success: false);
 
-            await SendAsync(
+            await Send.ResponseAsync(
                 new TriggerSystemUpdateResponse(
                     false,
                     "Failed to queue update job."),

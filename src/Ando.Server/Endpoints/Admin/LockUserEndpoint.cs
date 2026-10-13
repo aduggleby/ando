@@ -52,20 +52,20 @@ public class LockUserEndpoint : Endpoint<LockUserRequest, LockUserResponse>
 
         if (userId == currentUserId)
         {
-            await SendAsync(new LockUserResponse(false, "You cannot lock your own account."), cancellation: ct);
+            await Send.OkAsync(new LockUserResponse(false, "You cannot lock your own account."), cancellation: ct);
             return;
         }
 
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         if (!req.LockDays.HasValue || req.LockDays < 1)
         {
-            await SendAsync(new LockUserResponse(false, "Please specify lock duration."), cancellation: ct);
+            await Send.OkAsync(new LockUserResponse(false, "Please specify lock duration."), cancellation: ct);
             return;
         }
 
@@ -86,6 +86,6 @@ public class LockUserEndpoint : Endpoint<LockUserRequest, LockUserResponse>
                 ["lockoutEnd"] = lockoutEnd.ToString("O")
             });
 
-        await SendAsync(new LockUserResponse(true), cancellation: ct);
+        await Send.OkAsync(new LockUserResponse(true), cancellation: ct);
     }
 }

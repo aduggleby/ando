@@ -33,7 +33,7 @@ public class ListApiTokensEndpoint : EndpointWithoutRequest<ListApiTokensRespons
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
         if (userId <= 0)
         {
-            await SendAsync(new ListApiTokensResponse([]), 401, ct);
+            await Send.ResponseAsync(new ListApiTokensResponse([]), 401, ct);
             return;
         }
 
@@ -50,7 +50,7 @@ public class ListApiTokensEndpoint : EndpointWithoutRequest<ListApiTokensRespons
             ))
             .ToListAsync(ct);
 
-        await SendAsync(new ListApiTokensResponse(tokens), cancellation: ct);
+        await Send.OkAsync(new ListApiTokensResponse(tokens), cancellation: ct);
     }
 }
 

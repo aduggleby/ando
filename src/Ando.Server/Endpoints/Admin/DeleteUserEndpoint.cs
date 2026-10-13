@@ -60,7 +60,7 @@ public class DeleteUserEndpoint : Endpoint<DeleteUserRequest, DeleteUserResponse
 
         if (userId == currentUserId)
         {
-            await SendAsync(new DeleteUserResponse(false, "You cannot delete your own account."), cancellation: ct);
+            await Send.OkAsync(new DeleteUserResponse(false, "You cannot delete your own account."), cancellation: ct);
             return;
         }
 
@@ -71,14 +71,14 @@ public class DeleteUserEndpoint : Endpoint<DeleteUserRequest, DeleteUserResponse
 
         if (user == null)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         // Verify email confirmation
         if (req.ConfirmEmail != user.Email)
         {
-            await SendAsync(new DeleteUserResponse(false, "Email address does not match."), cancellation: ct);
+            await Send.OkAsync(new DeleteUserResponse(false, "Email address does not match."), cancellation: ct);
             return;
         }
 
@@ -109,7 +109,7 @@ public class DeleteUserEndpoint : Endpoint<DeleteUserRequest, DeleteUserResponse
                 userEmail,
                 new Dictionary<string, object> { ["projectsDeleted"] = projectCount });
 
-            await SendAsync(new DeleteUserResponse(true), cancellation: ct);
+            await Send.OkAsync(new DeleteUserResponse(true), cancellation: ct);
             return;
         }
 
@@ -122,6 +122,6 @@ public class DeleteUserEndpoint : Endpoint<DeleteUserRequest, DeleteUserResponse
             userEmail,
             success: false);
 
-        await SendAsync(new DeleteUserResponse(false, "Failed to delete user."), cancellation: ct);
+        await Send.OkAsync(new DeleteUserResponse(false, "Failed to delete user."), cancellation: ct);
     }
 }

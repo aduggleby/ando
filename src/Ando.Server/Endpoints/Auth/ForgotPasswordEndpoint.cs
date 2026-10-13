@@ -85,6 +85,6 @@ public class ForgotPasswordEndpoint : Endpoint<ForgotPasswordRequest, ForgotPass
         }
 
         // Always return success to prevent email enumeration
-        await SendAsync(new ForgotPasswordResponse(true), cancellation: ct);
+        await Send.OkAsync(new ForgotPasswordResponse(true), cancellation: ct);
     }
 }

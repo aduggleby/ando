@@ -67,13 +67,13 @@ public abstract class ApiKeyProtectedTestEndpoint<TRequest> : Endpoint<TRequest,
         var env = HttpContext.RequestServices.GetRequiredService<IWebHostEnvironment>();
         if (!TestEndpointGuard.IsTestEnvironment(env))
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(TestApiKey))
         {
-            await SendAsync(new { error = "Test API key is not configured." }, 503, ct);
+            await Send.ResponseAsync(new { error = "Test API key is not configured." }, 503, ct);
             return false;
         }
 
@@ -82,7 +82,7 @@ public abstract class ApiKeyProtectedTestEndpoint<TRequest> : Endpoint<TRequest,
             return true;
         }
 
-        await SendAsync(new { error = "Invalid API key" }, 401, ct);
+        await Send.ResponseAsync(new { error = "Invalid API key" }, 401, ct);
         return false;
     }
 }
@@ -105,13 +105,13 @@ public abstract class ApiKeyProtectedTestEndpointWithoutRequest : EndpointWithou
         var env = HttpContext.RequestServices.GetRequiredService<IWebHostEnvironment>();
         if (!TestEndpointGuard.IsTestEnvironment(env))
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(TestApiKey))
         {
-            await SendAsync(new { error = "Test API key is not configured." }, 503, ct);
+            await Send.ResponseAsync(new { error = "Test API key is not configured." }, 503, ct);
             return false;
         }
 
@@ -120,7 +120,7 @@ public abstract class ApiKeyProtectedTestEndpointWithoutRequest : EndpointWithou
             return true;
         }
 
-        await SendAsync(new { error = "Invalid API key" }, 401, ct);
+        await Send.ResponseAsync(new { error = "Invalid API key" }, 401, ct);
         return false;
     }
 }

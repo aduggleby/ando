@@ -58,7 +58,7 @@ public class TriggerBuildEndpoint : Endpoint<TriggerBuildRequest, TriggerBuildRe
         var project = await _projectService.GetProjectForUserAsync(projectId, userId);
         if (project == null)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
@@ -74,7 +74,7 @@ public class TriggerBuildEndpoint : Endpoint<TriggerBuildRequest, TriggerBuildRe
 
         if (missingSecrets.Count > 0)
         {
-            await SendAsync(new TriggerBuildResponse(
+            await Send.OkAsync(new TriggerBuildResponse(
                 false,
                 Error: $"Cannot start build: missing required secrets: {string.Join(", ", missingSecrets)}. Configure them in project settings."
             ), cancellation: ct);
@@ -110,6 +110,6 @@ public class TriggerBuildEndpoint : Endpoint<TriggerBuildRequest, TriggerBuildRe
             commitMessage,
             User.Identity?.Name);
 
-        await SendAsync(new TriggerBuildResponse(true, buildId), cancellation: ct);
+        await Send.OkAsync(new TriggerBuildResponse(true, buildId), cancellation: ct);
     }
 }

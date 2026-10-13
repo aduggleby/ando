@@ -51,14 +51,14 @@ public class GetBuildLogsEndpoint : EndpointWithoutRequest<GetBuildLogsResponse>
 
         if (build == null)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         // Verify ownership
         if (build.Project.OwnerId != userId)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
@@ -75,7 +75,7 @@ public class GetBuildLogsEndpoint : EndpointWithoutRequest<GetBuildLogsResponse>
             ))
             .ToListAsync(ct);
 
-        await SendAsync(new GetBuildLogsResponse(
+        await Send.OkAsync(new GetBuildLogsResponse(
             logs,
             build.Status.ToString(),
             build.Status != BuildStatus.Queued && build.Status != BuildStatus.Running

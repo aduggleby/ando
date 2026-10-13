@@ -56,7 +56,7 @@ public class GetMeEndpoint : EndpointWithoutRequest<GetMeResponse>
                 HttpContext.Request.Headers["X-Forwarded-For"].ToString(),
                 HttpContext.Request.Headers["X-Forwarded-Proto"].ToString());
 
-            await SendAsync(new GetMeResponse(false), cancellation: ct);
+            await Send.OkAsync(new GetMeResponse(false), cancellation: ct);
             return;
         }
 
@@ -65,7 +65,7 @@ public class GetMeEndpoint : EndpointWithoutRequest<GetMeResponse>
         {
             _logger.LogWarning("GetMe: authenticated but no NameIdentifier claim. User={User}",
                 User.Identity?.Name ?? "(unknown)");
-            await SendAsync(new GetMeResponse(false), cancellation: ct);
+            await Send.OkAsync(new GetMeResponse(false), cancellation: ct);
             return;
         }
 
@@ -74,13 +74,13 @@ public class GetMeEndpoint : EndpointWithoutRequest<GetMeResponse>
         {
             _logger.LogWarning("GetMe: authenticated but user not found in DB. UserId={UserId} User={User}",
                 userId, User.Identity?.Name ?? "(unknown)");
-            await SendAsync(new GetMeResponse(false), cancellation: ct);
+            await Send.OkAsync(new GetMeResponse(false), cancellation: ct);
             return;
         }
 
         var isAdmin = await _userManager.IsInRoleAsync(user, UserRoles.Admin);
 
-        await SendAsync(new GetMeResponse(
+        await Send.OkAsync(new GetMeResponse(
             true,
             new UserDto(
                 user.Id,

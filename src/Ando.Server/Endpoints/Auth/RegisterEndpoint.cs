@@ -70,7 +70,7 @@ public class RegisterEndpoint : Endpoint<RegisterRequest, RegisterResponse>
 
         if (!isFirstUser && !allowUserRegistration)
         {
-            await SendAsync(new RegisterResponse(false, "User registration is currently disabled."), cancellation: ct);
+            await Send.OkAsync(new RegisterResponse(false, "User registration is currently disabled."), cancellation: ct);
             return;
         }
 
@@ -103,7 +103,7 @@ public class RegisterEndpoint : Endpoint<RegisterRequest, RegisterResponse>
             // No "remember me" choice on registration; default to a persistent session.
             await _signInManager.SignInAsync(user, isPersistent: true);
 
-            await SendAsync(new RegisterResponse(
+            await Send.OkAsync(new RegisterResponse(
                 true,
                 IsFirstUser: isFirstUser,
                 User: new UserDto(
@@ -130,7 +130,7 @@ public class RegisterEndpoint : Endpoint<RegisterRequest, RegisterResponse>
             errorMessage = error.Description;
         }
 
-        await SendAsync(new RegisterResponse(false, errorMessage), cancellation: ct);
+        await Send.OkAsync(new RegisterResponse(false, errorMessage), cancellation: ct);
     }
 
     private async Task SendVerificationEmailAsync(ApplicationUser user)

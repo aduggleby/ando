@@ -42,7 +42,7 @@ public class GetSystemUpdateStatusEndpoint : EndpointWithoutRequest<SystemUpdate
         var forceRefresh = Query<bool>("refresh", isRequired: false);
         var status = await _systemUpdateService.GetStatusAsync(forceRefresh, ct);
 
-        await SendAsync(new SystemUpdateStatusResponse(
+        await Send.OkAsync(new SystemUpdateStatusResponse(
             status.Enabled,
             status.IsChecking,
             status.IsUpdateAvailable,

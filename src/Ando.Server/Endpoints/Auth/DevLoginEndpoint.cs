@@ -50,14 +50,14 @@ public class DevLoginEndpoint : EndpointWithoutRequest<LoginResponse>
     {
         if (!_environment.IsDevelopment())
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         var user = await _userManager.FindByEmailAsync(SeededDevEmail);
         if (user == null)
         {
-            await SendAsync(new LoginResponse(false, "Development user is not seeded."), cancellation: ct);
+            await Send.OkAsync(new LoginResponse(false, "Development user is not seeded."), cancellation: ct);
             return;
         }
 
@@ -68,7 +68,7 @@ public class DevLoginEndpoint : EndpointWithoutRequest<LoginResponse>
 
         var isAdmin = await _userManager.IsInRoleAsync(user, UserRoles.Admin);
 
-        await SendAsync(new LoginResponse(
+        await Send.OkAsync(new LoginResponse(
             true,
             User: new UserDto(
                 user.Id,

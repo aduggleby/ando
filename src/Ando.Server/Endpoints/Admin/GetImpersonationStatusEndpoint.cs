@@ -38,7 +38,7 @@ public class GetImpersonationStatusEndpoint : EndpointWithoutRequest<Impersonati
     {
         // The service only provides OriginalAdminId, not email
         // For now, just return the ID
-        await SendAsync(new ImpersonationStatusResponse(
+        await Send.OkAsync(new ImpersonationStatusResponse(
             _impersonationService.IsImpersonating,
             _impersonationService.OriginalAdminId,
             null // Email not available from service

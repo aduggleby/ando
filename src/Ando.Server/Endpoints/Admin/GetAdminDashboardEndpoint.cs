@@ -80,7 +80,7 @@ public class GetAdminDashboardEndpoint : EndpointWithoutRequest<AdminDashboardDt
             ))
             .ToListAsync(ct);
 
-        await SendAsync(new AdminDashboardDto(
+        await Send.OkAsync(new AdminDashboardDto(
             totalUsers,
             verifiedUsers,
             totalUsers - verifiedUsers,

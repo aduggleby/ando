@@ -43,12 +43,12 @@ public class DeleteProjectEndpoint : EndpointWithoutRequest<DeleteProjectRespons
         var project = await _projectService.GetProjectForUserAsync(projectId, userId);
         if (project == null)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         await _projectService.DeleteProjectAsync(projectId);
 
-        await SendAsync(new DeleteProjectResponse(true), cancellation: ct);
+        await Send.OkAsync(new DeleteProjectResponse(true), cancellation: ct);
     }
 }

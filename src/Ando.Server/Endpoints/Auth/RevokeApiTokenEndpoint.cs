@@ -32,14 +32,14 @@ public class RevokeApiTokenEndpoint : EndpointWithoutRequest<RevokeApiTokenRespo
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
         if (userId <= 0)
         {
-            await SendAsync(new RevokeApiTokenResponse(false), 401, ct);
+            await Send.ResponseAsync(new RevokeApiTokenResponse(false), 401, ct);
             return;
         }
 
         var tokenId = Route<int>("id");
         await _apiTokenService.RevokeAsync(userId, tokenId, ct);
 
-        await SendAsync(new RevokeApiTokenResponse(true), cancellation: ct);
+        await Send.OkAsync(new RevokeApiTokenResponse(true), cancellation: ct);
     }
 }
 

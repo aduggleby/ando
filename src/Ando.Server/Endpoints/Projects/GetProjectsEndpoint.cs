@@ -77,6 +77,6 @@ public class GetProjectsEndpoint : EndpointWithoutRequest<GetProjectsResponse>
             ));
         }
 
-        await SendAsync(new GetProjectsResponse(projectItems), cancellation: ct);
+        await Send.OkAsync(new GetProjectsResponse(projectItems), cancellation: ct);
     }
 }

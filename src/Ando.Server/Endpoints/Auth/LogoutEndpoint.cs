@@ -42,6 +42,6 @@ public class LogoutEndpoint : EndpointWithoutRequest<LogoutResponse>
     {
         await _signInManager.SignOutAsync();
         _logger.LogInformation("User logged out via API");
-        await SendAsync(new LogoutResponse(true), cancellation: ct);
+        await Send.OkAsync(new LogoutResponse(true), cancellation: ct);
     }
 }

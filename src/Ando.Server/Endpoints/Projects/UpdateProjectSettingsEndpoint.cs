@@ -44,7 +44,7 @@ public class UpdateProjectSettingsEndpoint : Endpoint<UpdateProjectSettingsReque
         var project = await _projectService.GetProjectForUserAsync(projectId, userId);
         if (project == null)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
@@ -62,6 +62,6 @@ public class UpdateProjectSettingsEndpoint : Endpoint<UpdateProjectSettingsReque
             req.NotifyOnFailure,
             effectiveNotificationEmail);
 
-        await SendAsync(new UpdateProjectSettingsResponse(true), cancellation: ct);
+        await Send.OkAsync(new UpdateProjectSettingsResponse(true), cancellation: ct);
     }
 }

@@ -43,6 +43,6 @@ public class GetDevLoginAvailabilityEndpoint : EndpointWithoutRequest<DevLoginAv
     /// <inheritdoc />
     public override async Task HandleAsync(CancellationToken ct)
     {
-        await SendAsync(new DevLoginAvailabilityResponse(_environment.IsDevelopment()), cancellation: ct);
+        await Send.OkAsync(new DevLoginAvailabilityResponse(_environment.IsDevelopment()), cancellation: ct);
     }
 }

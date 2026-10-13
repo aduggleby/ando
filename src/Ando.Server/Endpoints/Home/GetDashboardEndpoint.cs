@@ -80,7 +80,7 @@ public class GetDashboardEndpoint : EndpointWithoutRequest<GetDashboardResponse>
             .Where(b => b.Status == BuildStatus.Failed || b.Status == BuildStatus.TimedOut)
             .CountAsync(ct);
 
-        await SendAsync(new GetDashboardResponse(
+        await Send.OkAsync(new GetDashboardResponse(
             new DashboardDto(
                 recentBuilds,
                 totalProjects,

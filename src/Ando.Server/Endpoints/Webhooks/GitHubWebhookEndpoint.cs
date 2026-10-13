@@ -68,7 +68,7 @@ public class GitHubWebhookEndpoint : EndpointWithoutRequest<object>
         if (!validator.Validate(signature, Encoding.UTF8.GetBytes(body)))
         {
             _logger.LogWarning("Invalid webhook signature");
-            await SendAsync(new { error = "Invalid signature" }, 401, ct);
+            await Send.ResponseAsync(new { error = "Invalid signature" }, 401, ct);
             return;
         }
 
@@ -85,7 +85,7 @@ public class GitHubWebhookEndpoint : EndpointWithoutRequest<object>
             _ => (200, (object)new { message = $"Event '{eventType}' ignored" })
         };
 
-        await SendAsync(payload, statusCode, ct);
+        await Send.ResponseAsync(payload, statusCode, ct);
     }
 
     private async Task<(int StatusCode, object Payload)> HandlePushEventAsync(string body, CancellationToken ct)

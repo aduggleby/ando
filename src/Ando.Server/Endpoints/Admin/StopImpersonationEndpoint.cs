@@ -45,7 +45,7 @@ public class StopImpersonationEndpoint : EndpointWithoutRequest<StopImpersonatio
     {
         if (!_impersonationService.IsImpersonating)
         {
-            await SendAsync(new StopImpersonationResponse(true), cancellation: ct);
+            await Send.OkAsync(new StopImpersonationResponse(true), cancellation: ct);
             return;
         }
 
@@ -60,6 +60,6 @@ public class StopImpersonationEndpoint : EndpointWithoutRequest<StopImpersonatio
             adminId ?? 0,
             null);
 
-        await SendAsync(new StopImpersonationResponse(true), cancellation: ct);
+        await Send.OkAsync(new StopImpersonationResponse(true), cancellation: ct);
     }
 }

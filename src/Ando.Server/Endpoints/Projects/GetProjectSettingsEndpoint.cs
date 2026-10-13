@@ -44,14 +44,14 @@ public class GetProjectSettingsEndpoint : EndpointWithoutRequest<GetProjectSetti
         var project = await _projectService.GetProjectForUserAsync(projectId, userId);
         if (project == null)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         var secretNames = await _projectService.GetSecretNamesAsync(projectId);
         var missingSecrets = project.GetMissingSecretsFrom(secretNames);
 
-        await SendAsync(new GetProjectSettingsResponse(
+        await Send.OkAsync(new GetProjectSettingsResponse(
             new ProjectSettingsDto(
                 project.Id,
                 project.RepoFullName,

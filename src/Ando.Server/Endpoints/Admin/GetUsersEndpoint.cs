@@ -106,7 +106,7 @@ public class GetUsersEndpoint : EndpointWithoutRequest<GetUsersResponse>
             ));
         }
 
-        await SendAsync(new GetUsersResponse(
+        await Send.OkAsync(new GetUsersResponse(
             userItems,
             page,
             totalPages,

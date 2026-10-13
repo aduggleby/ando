@@ -59,14 +59,14 @@ public class DownloadArtifactEndpoint : EndpointWithoutRequest
 
         if (artifact == null)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         // Verify ownership
         if (artifact.Build.Project.OwnerId != userId)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
@@ -83,18 +83,18 @@ public class DownloadArtifactEndpoint : EndpointWithoutRequest
                 "Path traversal attempt detected: artifact path {ActualPath} is outside storage directory {ExpectedDir}",
                 actualPath,
                 Path.GetFullPath(_storageSettings.ArtifactsPath));
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         if (!System.IO.File.Exists(actualPath))
         {
             _logger.LogWarning("Artifact file not found: {Path}", actualPath);
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await SendFileAsync(
+        await Send.FileAsync(
             new FileInfo(actualPath),
             artifact.Name,
             cancellation: ct);

@@ -55,20 +55,20 @@ public class ResendVerificationEndpoint : EndpointWithoutRequest<ResendVerificat
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userId))
         {
-            await SendAsync(new ResendVerificationResponse(false, "Not authenticated."), cancellation: ct);
+            await Send.OkAsync(new ResendVerificationResponse(false, "Not authenticated."), cancellation: ct);
             return;
         }
 
         var user = await _userManager.FindByIdAsync(userId);
         if (user == null)
         {
-            await SendAsync(new ResendVerificationResponse(false, "User not found."), cancellation: ct);
+            await Send.OkAsync(new ResendVerificationResponse(false, "User not found."), cancellation: ct);
             return;
         }
 
         if (user.EmailVerified)
         {
-            await SendAsync(new ResendVerificationResponse(false, null, "Your email is already verified."), cancellation: ct);
+            await Send.OkAsync(new ResendVerificationResponse(false, null, "Your email is already verified."), cancellation: ct);
             return;
         }
 
@@ -76,7 +76,7 @@ public class ResendVerificationEndpoint : EndpointWithoutRequest<ResendVerificat
         if (user.EmailVerificationSentAt.HasValue &&
             DateTime.UtcNow - user.EmailVerificationSentAt.Value < TimeSpan.FromMinutes(1))
         {
-            await SendAsync(new ResendVerificationResponse(
+            await Send.OkAsync(new ResendVerificationResponse(
                 false,
                 "Please wait a minute before requesting another verification email."
             ), cancellation: ct);
@@ -105,7 +105,7 @@ public class ResendVerificationEndpoint : EndpointWithoutRequest<ResendVerificat
 
             _logger.LogInformation("Verification email resent to {Email}", user.Email);
 
-            await SendAsync(new ResendVerificationResponse(
+            await Send.OkAsync(new ResendVerificationResponse(
                 true,
                 null,
                 "Verification email sent! Please check your inbox."
@@ -114,7 +114,7 @@ public class ResendVerificationEndpoint : EndpointWithoutRequest<ResendVerificat
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to resend verification email to {Email}", user.Email);
-            await SendAsync(new ResendVerificationResponse(false, "Failed to send verification email."), cancellation: ct);
+            await Send.OkAsync(new ResendVerificationResponse(false, "Failed to send verification email."), cancellation: ct);
         }
     }
 }

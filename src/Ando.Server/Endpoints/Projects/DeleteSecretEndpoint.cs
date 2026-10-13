@@ -44,12 +44,12 @@ public class DeleteSecretEndpoint : EndpointWithoutRequest<SecretResponse>
         var project = await _projectService.GetProjectForUserAsync(projectId, userId);
         if (project == null)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         await _projectService.DeleteSecretAsync(projectId, secretName ?? "");
 
-        await SendAsync(new SecretResponse(true), cancellation: ct);
+        await Send.OkAsync(new SecretResponse(true), cancellation: ct);
     }
 }
