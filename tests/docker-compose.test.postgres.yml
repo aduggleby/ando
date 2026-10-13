@@ -1,0 +1,83 @@
+# =============================================================================
+# Docker Compose for E2E Test Infrastructure (PostgreSQL variant)
+#
+# Same shape as docker-compose.test.yml, but the server runs with
+# Database__Provider=PostgreSql against a private PostgreSQL container.
+# Only the server's web port (17110) is exposed publicly.
+#
+# The network and keys volume use distinct names (-pg suffix) so a stale
+# SQL Server variant does not collide. The server container keeps the name
+# ando-e2e-server because only one variant runs at a time.
+#
+# Usage:
+#   cd tests/Ando.Server.E2E && npm run test:postgres   # starts this file automatically
+#   docker compose -f tests/docker-compose.test.postgres.yml up -d --build
+#   docker compose -f tests/docker-compose.test.postgres.yml down -v
+# =============================================================================
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: ando-e2e-postgres
+    environment:
+      - POSTGRES_USER=ando
+      - POSTGRES_PASSWORD=Test@Password123!
+      - POSTGRES_DB=AndoServer_E2E
+    # No ports exposed - only accessible within the network
+    networks:
+      - ando-e2e-network-pg
+    healthcheck:
+      # -h localhost forces TCP so the check does not pass against the
+      # temporary socket-only server the image runs during first-time init.
+      test: ["CMD-SHELL", "pg_isready -h localhost -U ando -d AndoServer_E2E"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  server:
+    build:
+      context: ../
+      dockerfile: src/Ando.Server/Dockerfile
+    container_name: ando-e2e-server
+    environment:
+      - ASPNETCORE_ENVIRONMENT=E2E
+      - ASPNETCORE_URLS=http://+:8080
+      - Database__Provider=PostgreSql
+      # Connection string uses the service name (postgres) instead of localhost
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=AndoServer_E2E;Username=ando;Password=Test@Password123!
+      - GitHub__AppId=12345
+      - GitHub__ClientId=test-client-id
+      - GitHub__ClientSecret=test-client-secret
+      - GitHub__WebhookSecret=test-webhook-secret
+      - Encryption__Key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      - Test__ApiKey=test-api-key-for-e2e-tests
+      - Storage__ArtifactsPath=/data/artifacts
+      - Build__ReposPath=/data/repos
+    ports:
+      # Only expose the web server port (project range: 17100-17199)
+      - "17110:8080"
+    networks:
+      - ando-e2e-network-pg
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: curl -f http://localhost:8080/health || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    volumes:
+      # Mount Docker socket for build container execution
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Persist ASP.NET Core Data Protection keys so auth cookies survive container recreate/restart
+      - ando-e2e-keys-pg:/data/keys
+
+networks:
+  ando-e2e-network-pg:
+    driver: bridge
+    # Isolated network - no external connectivity except through exposed ports
+
+volumes:
+  ando-e2e-keys-pg:

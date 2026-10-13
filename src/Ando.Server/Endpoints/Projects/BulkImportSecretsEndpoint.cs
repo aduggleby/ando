@@ -4,7 +4,8 @@
 // Summary: FastEndpoint for bulk importing secrets from .env format.
 //
 // Parses KEY=value lines from the input, ignoring comments and empty lines.
-// Normalizes secret names to uppercase and validates format.
+// Normalizes secret names to uppercase and validates them with
+// ProjectSecret.IsValidName (format and 100-character limit).
 //
 // Design Decisions:
 // - Requires authentication
@@ -14,8 +15,8 @@
 // =============================================================================
 
 using System.Security.Claims;
-using System.Text.RegularExpressions;
 using Ando.Server.Contracts.Projects;
+using Ando.Server.Models;
 using Ando.Server.Services;
 using FastEndpoints;
 
@@ -46,13 +47,13 @@ public class BulkImportSecretsEndpoint : Endpoint<BulkImportSecretsRequest, Bulk
         var project = await _projectService.GetProjectForUserAsync(projectId, userId);
         if (project == null)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         if (string.IsNullOrWhiteSpace(req.Content))
         {
-            await SendAsync(new BulkImportSecretsResponse(false, 0, ["No content provided."]), cancellation: ct);
+            await Send.OkAsync(new BulkImportSecretsResponse(false, 0, ["No content provided."]), cancellation: ct);
             return;
         }
 
@@ -91,9 +92,9 @@ public class BulkImportSecretsEndpoint : Endpoint<BulkImportSecretsRequest, Bulk
             name = name.ToUpperInvariant().Replace('-', '_');
 
             // Validate secret name
-            if (!Regex.IsMatch(name, @"^[A-Z_][A-Z0-9_]*$"))
+            if (!ProjectSecret.IsValidName(name))
             {
-                errors.Add($"Invalid name: {name}");
+                errors.Add($"Invalid name: {name[..Math.Min(40, name.Length)]}");
                 continue;
             }
 
@@ -107,7 +108,7 @@ public class BulkImportSecretsEndpoint : Endpoint<BulkImportSecretsRequest, Bulk
             imported++;
         }
 
-        await SendAsync(new BulkImportSecretsResponse(
+        await Send.OkAsync(new BulkImportSecretsResponse(
             errors.Count == 0,
             imported,
             errors.Count > 0 ? errors : null

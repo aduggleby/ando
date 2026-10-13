@@ -9,9 +9,9 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace Ando.Server.Migrations
+namespace Ando.Server.Migrations.SqlServer
 {
-    [DbContext(typeof(AndoDbContext))]
+    [DbContext(typeof(SqlServerAndoDbContext))]
     [Migration("20260219140728_AddBuildGitVersionTag")]
     partial class AddBuildGitVersionTag
     {

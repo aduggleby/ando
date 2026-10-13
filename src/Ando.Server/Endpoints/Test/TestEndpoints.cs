@@ -43,11 +43,11 @@ public class TestHealthEndpoint : EndpointWithoutRequest<object>
     {
         if (!TestEndpointGuard.IsTestEnvironment(_env))
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await SendAsync(new { status = "ok", environment = _env.EnvironmentName }, cancellation: ct);
+        await Send.OkAsync(new { status = "ok", environment = _env.EnvironmentName }, cancellation: ct);
     }
 }
 
@@ -106,13 +106,13 @@ public class CreateTestUserEndpoint : ApiKeyProtectedTestEndpoint<CreateTestUser
         var result = await _userManager.CreateAsync(user, $"TestPass123!{uniqueId}");
         if (!result.Succeeded)
         {
-            await SendAsync(new { error = "Failed to create user", details = result.Errors }, 400, ct);
+            await Send.ResponseAsync(new { error = "Failed to create user", details = result.Errors }, 400, ct);
             return;
         }
 
         await _userManager.AddToRoleAsync(user, UserRoles.User);
 
-        await SendAsync(new CreateTestUserResponse
+        await Send.OkAsync(new CreateTestUserResponse
         {
             UserId = user.Id,
             GitHubId = 0,
@@ -167,12 +167,12 @@ public class LoginAsTestUserEndpoint : ApiKeyProtectedTestEndpointWithoutRequest
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null)
         {
-            await SendAsync(new { error = "User not found" }, 404, ct);
+            await Send.ResponseAsync(new { error = "User not found" }, 404, ct);
             return;
         }
 
         await _signInManager.SignInAsync(user, isPersistent: true);
-        await SendAsync(new { success = true, userId = user.Id }, cancellation: ct);
+        await Send.OkAsync(new { success = true, userId = user.Id }, cancellation: ct);
     }
 }
 
@@ -217,11 +217,11 @@ public class GetTestUserVerificationTokenEndpoint : ApiKeyProtectedTestEndpointW
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null)
         {
-            await SendAsync(new { error = "User not found" }, 404, ct);
+            await Send.ResponseAsync(new { error = "User not found" }, 404, ct);
             return;
         }
 
-        await SendAsync(new TestEmailVerificationTokenResponse
+        await Send.OkAsync(new TestEmailVerificationTokenResponse
         {
             EmailVerified = user.EmailVerified,
             Token = user.EmailVerificationToken
@@ -270,12 +270,12 @@ public class GenerateTestPasswordResetTokenEndpoint : ApiKeyProtectedTestEndpoin
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null)
         {
-            await SendAsync(new { error = "User not found" }, 404, ct);
+            await Send.ResponseAsync(new { error = "User not found" }, 404, ct);
             return;
         }
 
         var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-        await SendAsync(new TestPasswordResetTokenResponse
+        await Send.OkAsync(new TestPasswordResetTokenResponse
         {
             Token = token
         }, cancellation: ct);
@@ -321,7 +321,7 @@ public class SetTestUserRoleEndpoint : ApiKeyProtectedTestEndpoint<SetTestUserRo
 
         if (!UserRoles.AllRoles.Contains(req.Role, StringComparer.Ordinal))
         {
-            await SendAsync(new { error = "Invalid role" }, 400, ct);
+            await Send.ResponseAsync(new { error = "Invalid role" }, 400, ct);
             return;
         }
 
@@ -329,7 +329,7 @@ public class SetTestUserRoleEndpoint : ApiKeyProtectedTestEndpoint<SetTestUserRo
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null)
         {
-            await SendAsync(new { error = "User not found" }, 404, ct);
+            await Send.ResponseAsync(new { error = "User not found" }, 404, ct);
             return;
         }
 
@@ -344,11 +344,11 @@ public class SetTestUserRoleEndpoint : ApiKeyProtectedTestEndpoint<SetTestUserRo
         var addResult = await _userManager.AddToRoleAsync(user, req.Role);
         if (!addResult.Succeeded)
         {
-            await SendAsync(new { error = "Failed to set role", details = addResult.Errors }, 400, ct);
+            await Send.ResponseAsync(new { error = "Failed to set role", details = addResult.Errors }, 400, ct);
             return;
         }
 
-        await SendAsync(new { success = true, userId = user.Id, role = req.Role }, cancellation: ct);
+        await Send.OkAsync(new { success = true, userId = user.Id, role = req.Role }, cancellation: ct);
     }
 }
 
@@ -393,12 +393,12 @@ public class DeleteTestUserEndpoint : ApiKeyProtectedTestEndpointWithoutRequest
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user == null)
         {
-            await SendAsync(new { error = "User not found" }, 404, ct);
+            await Send.ResponseAsync(new { error = "User not found" }, 404, ct);
             return;
         }
 
         await _userManager.DeleteAsync(user);
-        await SendAsync(new { success = true }, cancellation: ct);
+        await Send.OkAsync(new { success = true }, cancellation: ct);
     }
 }
 
@@ -445,7 +445,7 @@ public class CreateTestProjectEndpoint : ApiKeyProtectedTestEndpoint<CreateTestP
         var user = await _userManager.FindByIdAsync(req.UserId.ToString());
         if (user == null)
         {
-            await SendAsync(new { error = "User not found" }, 404, ct);
+            await Send.ResponseAsync(new { error = "User not found" }, 404, ct);
             return;
         }
 
@@ -477,7 +477,7 @@ public class CreateTestProjectEndpoint : ApiKeyProtectedTestEndpoint<CreateTestP
         _db.Projects.Add(project);
         await _db.SaveChangesAsync(ct);
 
-        await SendAsync(new CreateTestProjectResponse
+        await Send.OkAsync(new CreateTestProjectResponse
         {
             ProjectId = project.Id,
             RepoFullName = project.RepoFullName,
@@ -530,7 +530,7 @@ public class AddTestSecretEndpoint : ApiKeyProtectedTestEndpoint<AddTestSecretRe
         var project = await _db.Projects.FindAsync([projectId], ct);
         if (project == null)
         {
-            await SendAsync(new { error = "Project not found" }, 404, ct);
+            await Send.ResponseAsync(new { error = "Project not found" }, 404, ct);
             return;
         }
 
@@ -538,6 +538,7 @@ public class AddTestSecretEndpoint : ApiKeyProtectedTestEndpoint<AddTestSecretRe
         {
             ProjectId = projectId,
             Name = req.Name,
+            NormalizedName = ProjectSecret.Normalize(req.Name),
             EncryptedValue = _encryption.Encrypt(req.Value),
             CreatedAt = DateTime.UtcNow
         };
@@ -545,7 +546,7 @@ public class AddTestSecretEndpoint : ApiKeyProtectedTestEndpoint<AddTestSecretRe
         _db.ProjectSecrets.Add(secret);
         await _db.SaveChangesAsync(ct);
 
-        await SendAsync(new { success = true, secretId = secret.Id }, cancellation: ct);
+        await Send.OkAsync(new { success = true, secretId = secret.Id }, cancellation: ct);
     }
 }
 
@@ -589,7 +590,7 @@ public class CreateTestBuildEndpoint : ApiKeyProtectedTestEndpoint<CreateTestBui
         var project = await _db.Projects.FindAsync([req.ProjectId], ct);
         if (project == null)
         {
-            await SendAsync(new { error = "Project not found" }, 404, ct);
+            await Send.ResponseAsync(new { error = "Project not found" }, 404, ct);
             return;
         }
 
@@ -616,7 +617,7 @@ public class CreateTestBuildEndpoint : ApiKeyProtectedTestEndpoint<CreateTestBui
         project.LastBuildAt = build.QueuedAt;
         await _db.SaveChangesAsync(ct);
 
-        await SendAsync(new CreateTestBuildResponse
+        await Send.OkAsync(new CreateTestBuildResponse
         {
             BuildId = build.Id,
             Status = build.Status.ToString()
@@ -665,7 +666,7 @@ public class UpdateTestBuildEndpoint : ApiKeyProtectedTestEndpoint<UpdateTestBui
         var build = await _db.Builds.FindAsync([buildId], ct);
         if (build == null)
         {
-            await SendAsync(new { error = "Build not found" }, 404, ct);
+            await Send.ResponseAsync(new { error = "Build not found" }, 404, ct);
             return;
         }
 
@@ -709,7 +710,7 @@ public class UpdateTestBuildEndpoint : ApiKeyProtectedTestEndpoint<UpdateTestBui
         }
 
         await _db.SaveChangesAsync(ct);
-        await SendAsync(new { success = true }, cancellation: ct);
+        await Send.OkAsync(new { success = true }, cancellation: ct);
     }
 }
 
@@ -757,7 +758,7 @@ public class AddTestLogEntriesEndpoint : ApiKeyProtectedTestEndpoint<AddTestLogE
         var build = await _db.Builds.FindAsync([buildId], ct);
         if (build == null)
         {
-            await SendAsync(new { error = "Build not found" }, 404, ct);
+            await Send.ResponseAsync(new { error = "Build not found" }, 404, ct);
             return;
         }
 
@@ -799,7 +800,7 @@ public class AddTestLogEntriesEndpoint : ApiKeyProtectedTestEndpoint<AddTestLogE
             await _hubContext.Clients.Group(groupName).SendAsync("LogReceived", entry, ct);
         }
 
-        await SendAsync(new { success = true, lastSequence = maxSequence }, cancellation: ct);
+        await Send.OkAsync(new { success = true, lastSequence = maxSequence }, cancellation: ct);
     }
 }
 
@@ -844,7 +845,7 @@ public class AddTestArtifactEndpoint : ApiKeyProtectedTestEndpoint<AddTestArtifa
         var build = await _db.Builds.FindAsync([buildId], ct);
         if (build == null)
         {
-            await SendAsync(new { error = "Build not found" }, 404, ct);
+            await Send.ResponseAsync(new { error = "Build not found" }, 404, ct);
             return;
         }
 
@@ -861,7 +862,7 @@ public class AddTestArtifactEndpoint : ApiKeyProtectedTestEndpoint<AddTestArtifa
         _db.BuildArtifacts.Add(artifact);
         await _db.SaveChangesAsync(ct);
 
-        await SendAsync(new { success = true, artifactId = artifact.Id }, cancellation: ct);
+        await Send.OkAsync(new { success = true, artifactId = artifact.Id }, cancellation: ct);
     }
 }
 
@@ -923,6 +924,6 @@ public class TestCleanupEndpoint : ApiKeyProtectedTestEndpoint<CleanupRequest>
             }
         }
 
-        await SendAsync(new { success = true }, cancellation: ct);
+        await Send.OkAsync(new { success = true }, cancellation: ct);
     }
 }

@@ -9,9 +9,10 @@
 
 import { test, expect } from '../fixtures/test-fixtures';
 import { spawnSync } from 'child_process';
-import * as path from 'path';
+import { getE2EDatabase } from '../e2e-database';
 
-const COMPOSE_FILE = path.resolve(__dirname, '../../docker-compose.test.yml');
+// Follows E2E_DB_PROVIDER so the restart targets the running variant.
+const COMPOSE_FILE = getE2EDatabase().composeFile;
 
 function dockerCompose(args: string[]) {
   const result = spawnSync('docker', ['compose', '-f', COMPOSE_FILE, ...args], {

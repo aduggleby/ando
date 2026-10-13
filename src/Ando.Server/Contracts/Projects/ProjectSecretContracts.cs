@@ -14,11 +14,14 @@ namespace Ando.Server.Contracts.Projects;
 public class SetSecretRequest
 {
     /// <summary>
-    /// Secret name (uppercase with underscores, e.g., MY_SECRET).
+    /// Secret name: an environment variable name matching <c>^[A-Za-z_][A-Za-z0-9_]*$</c>,
+    /// at most 100 characters (e.g., MY_SECRET). Documentation only: FastEndpoints does not
+    /// evaluate these attributes; SetSecretEndpoint enforces the rule via ProjectSecret.IsValidName.
     /// </summary>
     [Required(ErrorMessage = "Secret name is required")]
-    [RegularExpression(@"^[A-Z_][A-Z0-9_]*$",
-        ErrorMessage = "Secret name must be uppercase with underscores only (e.g., MY_SECRET)")]
+    [MaxLength(100)]
+    [RegularExpression(@"^[A-Za-z_][A-Za-z0-9_]*$",
+        ErrorMessage = "Secret name must start with a letter or underscore and contain only letters, digits, and underscores (e.g., MY_SECRET)")]
     public string Name { get; set; } = "";
 
     /// <summary>

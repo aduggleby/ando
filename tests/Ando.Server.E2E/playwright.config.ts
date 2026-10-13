@@ -5,7 +5,8 @@ import * as fs from 'fs';
  * Playwright configuration for Ando.Server E2E tests.
  *
  * Uses a test-specific base URL and ensures proper isolation between tests.
- * Requires a SQL Server container (ando-e2e-sqlserver) to be running.
+ * Global setup starts the database container: SQL Server (ando-e2e-sqlserver)
+ * by default, PostgreSQL (ando-e2e-postgres) when E2E_DB_PROVIDER=postgres.
  *
  * Container Detection:
  * When running inside an ANDO container (Docker-in-Docker mode), tests
@@ -35,7 +36,7 @@ function getBaseUrl(): string {
 export default defineConfig({
   testDir: './tests',
 
-  // Global setup starts docker-compose (SQL Server + server)
+  // Global setup starts docker-compose (database + server; see E2E_DB_PROVIDER)
   globalSetup: './global-setup.ts',
 
   // Global teardown stops containers (only in CI or with CLEANUP=1)

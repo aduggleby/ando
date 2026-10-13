@@ -64,6 +64,10 @@ public interface IProjectService
     /// <summary>
     /// Sets or updates a secret for a project.
     /// </summary>
+    /// <param name="projectId">The project.</param>
+    /// <param name="name">Secret name; must satisfy <see cref="Models.ProjectSecret.IsValidName"/>.</param>
+    /// <param name="value">The plaintext value; stored encrypted.</param>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="name"/> is not a valid secret name.</exception>
     Task SetSecretAsync(int projectId, string name, string value);
 
     /// <summary>

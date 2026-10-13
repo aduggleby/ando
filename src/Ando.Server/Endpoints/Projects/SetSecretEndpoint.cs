@@ -9,12 +9,16 @@
 // Design Decisions:
 // - Requires authentication
 // - Verifies project ownership
-// - Validates secret name format (uppercase with underscores)
+// - Validates the secret name with ProjectSecret.IsValidName (environment
+//   variable name, ASCII letters/digits/underscore, max 100 characters) before
+//   calling the service; FastEndpoints does not enforce the DTO's
+//   DataAnnotations, so the check is explicit here
 // - Upserts (creates or updates) the secret
 // =============================================================================
 
 using System.Security.Claims;
 using Ando.Server.Contracts.Projects;
+using Ando.Server.Models;
 using Ando.Server.Services;
 using FastEndpoints;
 
@@ -45,18 +49,25 @@ public class SetSecretEndpoint : Endpoint<SetSecretRequest, SecretResponse>
         var project = await _projectService.GetProjectForUserAsync(projectId, userId);
         if (project == null)
         {
-            await SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
         if (string.IsNullOrWhiteSpace(req.Name) || string.IsNullOrWhiteSpace(req.Value))
         {
-            await SendAsync(new SecretResponse(false, "Secret name and value are required."), cancellation: ct);
+            await Send.OkAsync(new SecretResponse(false, "Secret name and value are required."), cancellation: ct);
             return;
         }
 
-        await _projectService.SetSecretAsync(projectId, req.Name.Trim(), req.Value);
+        var name = req.Name.Trim();
+        if (!ProjectSecret.IsValidName(name))
+        {
+            await Send.OkAsync(new SecretResponse(false, ProjectSecret.NameRuleDescription), cancellation: ct);
+            return;
+        }
 
-        await SendAsync(new SecretResponse(true), cancellation: ct);
+        await _projectService.SetSecretAsync(projectId, name, req.Value);
+
+        await Send.OkAsync(new SecretResponse(true), cancellation: ct);
     }
 }

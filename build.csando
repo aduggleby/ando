@@ -2,24 +2,34 @@
 // build.csando - ANDO CLI Build and Release Script
 //
 // Profiles:
-// - (default): Build, test, publish executables, create NuGet package
-// - publish: Also pushes to NuGet.org, container registry, creates GitHub release with binaries, and deploys docs
+// - (default): Build and test the CLI, build Ando.Server and its test project,
+//   run server unit tests (always), run server integration tests + E2E
+//   (SQL Server and PostgreSQL) when Docker is available, publish executables,
+//   create NuGet package
+// - publish: Also pushes to NuGet.org, container registry, creates GitHub release with binaries, and deploys docs.
+//   Requires the full server integration + E2E matrix: fails if Docker is unavailable.
 // - docs: Deploy the documentation website to Cloudflare (run `ando docs` first to generate API docs)
-// - e2e: Force E2E tests to run (even on Ando.Server)
+// - e2e: Force server tests and E2E tests to run (even on Ando.Server)
 //
 // Usage:
 //   ando                 # Build and test (E2E tests run locally, skipped on server)
-//   ando -p publish      # Build, test, and push to NuGet.org + container registry + deploy docs
+//   ando --dind -p publish  # Build, test (full matrix, Docker required), push to NuGet.org + container registry + deploy docs
 //   ando docs            # Generate API docs (pre-hook) + update docs with Claude
 //   ando -p docs         # Deploy docs to Cloudflare (skips build/test)
-//   ando -p e2e          # Force E2E tests to run
+//   ando -p e2e          # Force server tests and E2E tests to run
 //   ando -p publish,e2e  # Publish profile with forced E2E tests
 //
-// E2E Tests:
-//   E2E tests use docker-compose to spin up SQL Server and web server containers.
-//   When running locally, tests run automatically. On Ando.Server, they're skipped
-//   by default (use -p e2e to override) because the server environment may not
-//   support nested container orchestration.
+// Gates:
+//   1. Always (no Docker): build Ando.Server + Ando.Server.Tests (not in Ando.sln)
+//      and run the server unit tests (`Category!=Integration`), including the EF
+//      migration drift tests for both providers.
+//   2. Docker gate: server integration tests (`Category=Integration`, Testcontainers,
+//      SQL Server and PostgreSQL; ANDO_TEST_DB_PROVIDERS defaults to both),
+//      then E2E against SQL Server (`npm test`) and PostgreSQL (`npm run test:postgres`).
+//      Runs locally by default; skipped on Ando.Server unless -p e2e (the server
+//      environment may not support nested container orchestration).
+//   3. publish profile: the Docker gate is mandatory. Without Docker the build
+//      fails instead of skipping (a release must not ship untested).
 //
 // Prerequisites:
 // - NUGET_API_KEY env var set (or enter when prompted) for publish profile
@@ -51,9 +61,11 @@ if (docs && !publish)
 var isOnServer = Env("ANDO_HOST_ROOT", required: false) != null;
 
 var project = Dotnet.Project("./src/Ando/Ando.csproj");
-// Included so `ando bump` (and therefore `ando release`) keeps the server assembly version in sync.
-// We don't build/publish the server here directly; the Docker build handles that.
+// Also referenced so `ando bump` (and therefore `ando release`) keeps the server assembly version in sync.
+// The server is built here to catch compile errors early (Ando.sln does not include it);
+// the published image is still produced by the Docker build.
 var serverProject = Dotnet.Project("./src/Ando.Server/Ando.Server.csproj");
+var serverTestProject = Dotnet.Project("./tests/Ando.Server.Tests/Ando.Server.Tests.csproj");
 var testProject = Dotnet.Project("./tests/Ando.Tests/Ando.Tests.csproj");
 
 // Get version from the project file.
@@ -75,36 +87,73 @@ Dotnet.Build(project);
 // Run .NET tests (exclude E2E - they have a separate step below)
 Dotnet.Test(testProject, o => o.Filter = "Category!=E2E");
 
+// Build the server and its test project (not part of Ando.sln).
+Dotnet.Build(serverProject);
+Dotnet.Build(serverTestProject);
+
+// Server unit tests, including the EF migration drift tests for both providers.
+// No Docker needed, so these always run.
+Dotnet.Test(serverTestProject, o => o.Filter = "Category!=Integration");
+
 // =============================================================================
-// E2E Tests (Playwright)
+// Server Tests + E2E Tests (Playwright)
 //
-// E2E tests use docker-compose to spin up SQL Server and web server containers.
+// Server integration tests (Category=Integration) use Testcontainers
+// (SQL Server, PostgreSQL), so they share the Docker gate with E2E.
+//
+// E2E tests use docker-compose to spin up a database and web server containers,
+// once per provider: SQL Server, then PostgreSQL (E2E_DB_PROVIDER=postgres via
+// the `test:postgres` npm script).
 // The tests connect via host.docker.internal when running inside an ANDO container.
 //
 // - Locally: Run automatically if Docker available (detected via absence of ANDO_HOST_ROOT)
 // - On Ando.Server: Skipped by default (use -p e2e to force)
+// - publish profile: Always required; the build fails if Docker is not available
 //
 // IMPORTANT: Run with `ando --dind` to enable Docker-in-Docker mode.
 // This gives the build container access to the host's Docker daemon.
 // =============================================================================
 var e2eTests = Directory("./tests/Ando.Server.E2E");
 
-// Check if we should run E2E tests
-var shouldRunE2E = !isOnServer || e2e;
+// Check if we should run E2E tests (mandatory for releases)
+var shouldRunE2E = !isOnServer || e2e || publish;
 
 if (shouldRunE2E)
 {
     // Check if Docker is available (requires --dind flag when running ando)
     if (!Docker.IsAvailable())
     {
-        Log.Warning("Skipping E2E tests (Docker not available - run with 'ando --dind' to enable)");
+        if (publish)
+        {
+            throw new Exception(
+                "Docker is not available: the publish profile requires the server integration tests " +
+                "and the SQL Server + PostgreSQL E2E tests. Run with 'ando --dind -p publish'.");
+        }
+
+        Log.Warning("Skipping server integration tests and E2E tests (Docker not available - run with 'ando --dind' to enable)");
     }
     else
     {
-        Log.Info("Running Playwright E2E tests...");
-
-        // Install Docker CLI (needed for docker-compose)
+        // Install Docker CLI (needed for Testcontainers and docker-compose)
         Docker.Install();
+
+        // Server integration tests (Testcontainers) against both SQL Server and
+        // PostgreSQL. ANDO_TEST_DB_PROVIDERS defaults to both providers; do not
+        // narrow it here. The fixtures default to isolated containers (unique
+        // names, random ports, cleanup) whenever the tests run inside a container
+        // or CI / ANDO_HOST_ROOT is set, so builds that share a Docker daemon are
+        // safe without extra configuration.
+        // A release must cover both providers: refuse a narrowed matrix from .env.ando.
+        var providerOverride = Env("ANDO_TEST_DB_PROVIDERS", required: false);
+        if (publish && providerOverride != null && providerOverride.Replace(" ", "") != "SqlServer,PostgreSql")
+        {
+            throw new Exception($"ANDO_TEST_DB_PROVIDERS is set to '{providerOverride}'. A publish build must run both providers; unset it or set it to 'SqlServer,PostgreSql'.");
+        }
+
+        Log.Info("Running Ando.Server integration tests (SQL Server + PostgreSQL)...");
+        Dotnet.Test(serverTestProject, o => o.Filter = "Category=Integration");
+
+        Log.Info("Running Playwright E2E tests...");
 
         // Install npm dependencies
         Npm.Ci(e2eTests);
@@ -112,14 +161,24 @@ if (shouldRunE2E)
         // Install Playwright browsers
         Playwright.Install(e2eTests);
 
-        // Run E2E tests
+        // Run E2E tests against SQL Server, then PostgreSQL. Both scripts set
+        // E2E_DB_PROVIDER explicitly so an inherited value cannot run one provider twice.
         // Exit code propagates - test failures will fail the build
-        Playwright.Test(e2eTests);
+        Playwright.Test(e2eTests, o =>
+        {
+            o.UseNpmScript = true;
+            o.NpmScriptName = "test:sqlserver";
+        });
+        Playwright.Test(e2eTests, o =>
+        {
+            o.UseNpmScript = true;
+            o.NpmScriptName = "test:postgres";
+        });
     }
 }
 else
 {
-    Log.Info("Skipping E2E tests (running on Ando.Server - use -p e2e to override)");
+    Log.Info("Skipping server integration tests and E2E tests (running on Ando.Server - use -p e2e to override)");
 }
 
 // Publish for multiple platforms

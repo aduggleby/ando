@@ -9,21 +9,65 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace Ando.Server.Migrations
+namespace Ando.Server.Migrations.SqlServer
 {
-    [DbContext(typeof(AndoDbContext))]
-    [Migration("20260130170929_InitialCreate")]
-    partial class InitialCreate
+    [DbContext(typeof(SqlServerAndoDbContext))]
+    [Migration("20261013075421_AddProjectSecretNormalizedName")]
+    partial class AddProjectSecretNormalizedName
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.0")
+                .HasAnnotation("ProductVersion", "9.0.20")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("Ando.Server.Models.ApiToken", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Prefix")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RevokedAt");
+
+                    b.HasIndex("UserId", "Prefix");
+
+                    b.ToTable("ApiTokens");
+                });
 
             modelBuilder.Entity("Ando.Server.Models.ApplicationRole", b =>
                 {
@@ -204,9 +248,16 @@ namespace Ando.Server.Migrations
                     b.Property<DateTime?>("FinishedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("GitVersionTag")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("HangfireJobId")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Profile")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("ProjectId")
                         .HasColumnType("int");
@@ -432,6 +483,12 @@ namespace Ando.Server.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
                     b.Property<int>("ProjectId")
                         .HasColumnType("int");
 
@@ -440,10 +497,28 @@ namespace Ando.Server.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProjectId", "Name")
+                    b.HasIndex("ProjectId", "NormalizedName")
                         .IsUnique();
 
                     b.ToTable("ProjectSecrets");
+                });
+
+            modelBuilder.Entity("Ando.Server.Models.SystemSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("AllowUserRegistration")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SystemSettings");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<int>", b =>
@@ -547,6 +622,17 @@ namespace Ando.Server.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AspNetUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("Ando.Server.Models.ApiToken", b =>
+                {
+                    b.HasOne("Ando.Server.Models.ApplicationUser", "User")
+                        .WithMany("ApiTokens")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Ando.Server.Models.Build", b =>
@@ -657,6 +743,8 @@ namespace Ando.Server.Migrations
 
             modelBuilder.Entity("Ando.Server.Models.ApplicationUser", b =>
                 {
+                    b.Navigation("ApiTokens");
+
                     b.Navigation("Projects");
                 });
 

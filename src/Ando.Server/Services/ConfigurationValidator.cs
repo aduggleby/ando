@@ -14,10 +14,13 @@
 // - Differentiates between production and development requirements
 // - Stores errors in a singleton for access by error middleware
 // - Validates Docker is running in rootless mode for security
+// - Validates Database:Provider and that the connection string parses with
+//   that provider's builder (shared helper with AddAndoDatabase)
 // =============================================================================
 
 using System.Diagnostics;
 using Ando.Server.Configuration;
+using Ando.Server.Infrastructure.Database;
 using Microsoft.Extensions.Options;
 
 namespace Ando.Server.Services;
@@ -75,10 +78,23 @@ public class ConfigurationValidator
         // ---------------------------------------------------------------------
         // Database Connection
         // ---------------------------------------------------------------------
-        var connectionString = configuration.GetConnectionString("DefaultConnection");
+        // The provider is read with the same helper AddAndoDatabase uses, not via
+        // IOptions binding, because the binder throws on an unknown enum name.
+        var providerValid = DatabaseConfiguration.TryReadProvider(configuration, out var provider, out var providerError);
+        if (providerError is not null)
+        {
+            _errors.Add(providerError);
+        }
+
+        var connectionString = configuration.GetConnectionString(DatabaseConfiguration.ConnectionStringName);
         if (string.IsNullOrEmpty(connectionString))
         {
             _errors.Add("ConnectionStrings:DefaultConnection is required. Set via environment variable: ConnectionStrings__DefaultConnection");
+        }
+        else if (providerValid
+                 && !DatabaseConfiguration.TryValidateConnectionString(provider, connectionString, out var connectionError))
+        {
+            _errors.Add(connectionError);
         }
 
         // ---------------------------------------------------------------------

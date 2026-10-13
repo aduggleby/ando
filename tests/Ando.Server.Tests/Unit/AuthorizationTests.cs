@@ -229,6 +229,7 @@ public class AuthorizationTests : IDisposable
         {
             ProjectId = project.Id,
             Name = "API_KEY",
+            NormalizedName = ProjectSecret.Normalize("API_KEY"),
             EncryptedValue = "encrypted-value",
             CreatedAt = DateTime.UtcNow
         };

@@ -411,8 +411,12 @@ public record SystemHealthResponse(
 /// <param name="Name">Display name of the subsystem.</param>
 /// <param name="Status">Health status (`healthy`, `warning`, `error`).</param>
 /// <param name="Message">Additional status context.</param>
+/// <param name="Key">Stable machine-readable check id (`database`, `jobStorage`, `github`).</param>
+/// <param name="Provider">Database provider (`SqlServer` or `PostgreSql`) for the `database` check; null otherwise.</param>
 public record SystemHealthCheckDto(
     string Name,
     string Status,
-    string Message
+    string Message,
+    string Key,
+    string? Provider = null
 );

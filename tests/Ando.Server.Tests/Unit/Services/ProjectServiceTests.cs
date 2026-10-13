@@ -618,6 +618,77 @@ public class ProjectServiceTests : IDisposable
         secret.ShouldBeNull();
     }
 
+    /// <summary>
+    /// Secrets created before the naming rule may have a NormalizedName that SQL UPPER
+    /// produced differently from ToUpperInvariant (for example dotless i). They must stay
+    /// deletable by their exact stored name.
+    /// </summary>
+    [Fact]
+    public async Task DeleteSecretAsync_LegacyNameWithDivergentNormalization_DeletesByExactName()
+    {
+        // Arrange: simulate a backfilled legacy row whose normalized form does not match
+        // what the application would compute for the same name.
+        var user = await CreateTestUserAsync();
+        var project = await CreateTestProjectAsync(user);
+        const string legacyName = "legacy-ı-key";
+        _db.ProjectSecrets.Add(new ProjectSecret
+        {
+            ProjectId = project.Id,
+            Name = legacyName,
+            NormalizedName = "LEGACY-I-KEY-FROM-SQL",
+            EncryptedValue = "enc",
+            CreatedAt = DateTime.UtcNow
+        });
+        await _db.SaveChangesAsync();
+        ProjectSecret.Normalize(legacyName).ShouldNotBe("LEGACY-I-KEY-FROM-SQL");
+
+        // Act
+        var result = await _service.DeleteSecretAsync(project.Id, legacyName);
+
+        // Assert
+        result.ShouldBeTrue();
+        (await _db.ProjectSecrets.CountAsync(s => s.ProjectId == project.Id)).ShouldBe(0);
+    }
+
+    /// <summary>
+    /// When both an exact-name row and a normalized-name row could match, the exact match
+    /// is the one addressed.
+    /// </summary>
+    [Fact]
+    public async Task DeleteSecretAsync_PrefersExactNameMatchOverNormalizedMatch()
+    {
+        // Arrange
+        var user = await CreateTestUserAsync();
+        var project = await CreateTestProjectAsync(user);
+        _db.ProjectSecrets.AddRange(
+            new ProjectSecret
+            {
+                ProjectId = project.Id,
+                Name = "exact_name",
+                NormalizedName = "SOMETHING_ELSE",
+                EncryptedValue = "a",
+                CreatedAt = DateTime.UtcNow
+            },
+            new ProjectSecret
+            {
+                ProjectId = project.Id,
+                Name = "other",
+                NormalizedName = ProjectSecret.Normalize("exact_name"),
+                EncryptedValue = "b",
+                CreatedAt = DateTime.UtcNow
+            });
+        await _db.SaveChangesAsync();
+
+        // Act
+        var result = await _service.DeleteSecretAsync(project.Id, "exact_name");
+
+        // Assert
+        result.ShouldBeTrue();
+        var remaining = await _db.ProjectSecrets.Where(s => s.ProjectId == project.Id).ToListAsync();
+        remaining.Count.ShouldBe(1);
+        remaining[0].Name.ShouldBe("other");
+    }
+
     [Fact]
     public async Task DeleteSecretAsync_WithNonExistentSecret_ReturnsFalse()
     {
@@ -648,6 +719,84 @@ public class ProjectServiceTests : IDisposable
         var remaining = await _service.GetSecretNamesAsync(project.Id);
         remaining.Count.ShouldBe(1);
         remaining[0].ShouldBe("DB_PASSWORD");
+    }
+
+    // -------------------------------------------------------------------------
+    // Secret Name Normalization Tests
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task SetSecretAsync_StoresNormalizedName()
+    {
+        // Arrange
+        var user = await CreateTestUserAsync();
+        var project = await CreateTestProjectAsync(user);
+
+        // Act
+        await _service.SetSecretAsync(project.Id, "nuget_key", "value");
+
+        // Assert
+        var secret = await _db.ProjectSecrets.SingleAsync(s => s.ProjectId == project.Id);
+        secret.Name.ShouldBe("nuget_key");
+        secret.NormalizedName.ShouldBe("NUGET_KEY");
+    }
+
+    [Theory]
+    [InlineData("1KEY")]
+    [InlineData("MY-SECRET")]
+    [InlineData("MY SECRET")]
+    [InlineData("ı_KEY")]
+    [InlineData("")]
+    public async Task SetSecretAsync_RejectsInvalidName(string name)
+    {
+        // Arrange
+        var user = await CreateTestUserAsync();
+        var project = await CreateTestProjectAsync(user);
+
+        // Act & Assert
+        await Should.ThrowAsync<ArgumentException>(() => _service.SetSecretAsync(project.Id, name, "value"));
+        (await _db.ProjectSecrets.CountAsync()).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task SetSecretAsync_RejectsTooLongName()
+    {
+        // Arrange
+        var user = await CreateTestUserAsync();
+        var project = await CreateTestProjectAsync(user);
+
+        // Act & Assert
+        await Should.ThrowAsync<ArgumentException>(() =>
+            _service.SetSecretAsync(project.Id, new string('A', ProjectSecret.MaxNameLength + 1), "value"));
+        await _service.SetSecretAsync(project.Id, new string('A', ProjectSecret.MaxNameLength), "value");
+        (await _db.ProjectSecrets.CountAsync()).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task SecretNames_AreCaseInsensitive_AndKeepFirstWriteCasing()
+    {
+        // Arrange
+        var user = await CreateTestUserAsync();
+        var project = await CreateTestProjectAsync(user);
+
+        // Act: second write with different casing updates the same row
+        await _service.SetSecretAsync(project.Id, "nuget_key", "first");
+        await _service.SetSecretAsync(project.Id, "NUGET_KEY", "second");
+
+        // Assert
+        var secrets = await _db.ProjectSecrets.Where(s => s.ProjectId == project.Id).ToListAsync();
+        secrets.Count.ShouldBe(1);
+        secrets[0].Name.ShouldBe("nuget_key");
+        secrets[0].UpdatedAt.ShouldNotBeNull();
+        _encryptionService.Decrypt(secrets[0].EncryptedValue).ShouldBe("second");
+        (await _service.GetSecretNamesAsync(project.Id)).ShouldBe(["nuget_key"]);
+
+        // Act: delete with a third casing
+        var deleted = await _service.DeleteSecretAsync(project.Id, "Nuget_Key");
+
+        // Assert
+        deleted.ShouldBeTrue();
+        (await _service.GetSecretNamesAsync(project.Id)).ShouldBeEmpty();
     }
 
     // -------------------------------------------------------------------------

@@ -182,7 +182,7 @@ export function AdminDashboard() {
                 <tbody>
                   {(systemHealth?.checks ?? []).map((check) => (
                     <HealthItemRow
-                      key={check.name}
+                      key={check.key}
                       label={check.name}
                       status={check.status}
                       message={check.message}

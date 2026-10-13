@@ -4,18 +4,23 @@
 #
 # Deploys Ando.Server to a remote Ubuntu server with:
 # - Rootless Docker (for security - no root container escapes)
-# - SQL Server in isolated container
+# - SQL Server or PostgreSQL in an isolated container (or an external database)
 # - Ando.Server container with Docker-in-Docker capability
 # - Caddy reverse proxy for HTTPS (installed on host)
 #
 # Usage:
 #   curl -fsSL https://andobuild.com/server-install.sh | bash -s user@server-ip
 #   curl -fsSL https://andobuild.com/server-install.sh | bash -s -- --build-local user@server-ip
-#   curl -fsSL https://andobuild.com/server-install.sh | bash -s -- --external-sql user@server-ip
+#   curl -fsSL https://andobuild.com/server-install.sh | bash -s -- --db postgres user@server-ip
+#   curl -fsSL https://andobuild.com/server-install.sh | bash -s -- --external-db user@server-ip
 #
 # Options:
-#   --build-local    Build the Docker image locally instead of pulling from ghcr.io
-#   --external-sql   Use an existing SQL Server instead of deploying one in a container
+#   --build-local              Build the Docker image locally instead of pulling from ghcr.io
+#   --db sqlserver|postgres    Database provider (default: sqlserver)
+#   --external-db [conn-str]   Use an existing database of the selected provider instead
+#                              of deploying one in a container. The connection string is
+#                              prompted for when not given on the command line.
+#   --external-sql [conn-str]  Alias for --external-db (kept for compatibility)
 #
 # =============================================================================
 
@@ -37,9 +42,16 @@ DOCKER_IMAGE_NAME="ando-server"
 DOCKER_IMAGE_TAG="latest"
 GHCR_IMAGE="ghcr.io/aduggleby/ando-server"
 SQL_SERVER_IMAGE="mcr.microsoft.com/mssql/server:2022-latest"
+# Debian-based image on purpose: its postgres user is UID 999, which the
+# rootless-Docker ownership mapping in setup_directories_remote relies on.
+POSTGRES_IMAGE="postgres:17"
 ANDO_USER="ando"
 BUILD_LOCAL="false"
+# DB_PROVIDER: sqlserver (default) or postgres. USE_EXTERNAL_SQL means "use an
+# external database of the selected provider" (name kept from --external-sql).
+DB_PROVIDER="sqlserver"
 USE_EXTERNAL_SQL="false"
+EXTERNAL_CONNECTION_STRING=""
 TEST_MODE="false"
 
 # Colors
@@ -111,6 +123,12 @@ generate_password() {
     echo "1Aa"  # Ensure SQL Server complexity requirements
 }
 
+# PostgreSQL has no complexity rules; use hex so the password is safe inside
+# connection strings and docker compose .env interpolation.
+generate_postgres_password() {
+    openssl rand -hex 16
+}
+
 generate_encryption_key() {
     openssl rand -base64 32
 }
@@ -126,9 +144,32 @@ validate_args() {
                 BUILD_LOCAL="true"
                 shift
                 ;;
-            --external-sql)
+            --db)
+                if [[ $# -lt 2 ]]; then
+                    echo "--db requires a value: sqlserver or postgres"
+                    exit 1
+                fi
+                DB_PROVIDER="$2"
+                shift 2
+                ;;
+            --db=*)
+                DB_PROVIDER="${1#--db=}"
+                shift
+                ;;
+            --external-db=*|--external-sql=*)
+                USE_EXTERNAL_SQL="true"
+                EXTERNAL_CONNECTION_STRING="${1#*=}"
+                shift
+                ;;
+            --external-db|--external-sql)
                 USE_EXTERNAL_SQL="true"
                 shift
+                # Optional value: connection strings always contain '=', while the
+                # positional user@host argument never does.
+                if [[ $# -gt 0 && "$1" != -* && "$1" == *=* ]]; then
+                    EXTERNAL_CONNECTION_STRING="$1"
+                    shift
+                fi
                 ;;
             --test)
                 TEST_MODE="true"
@@ -148,16 +189,39 @@ validate_args() {
         echo "Usage: $0 [OPTIONS] <user@server-ip> [ssh-key-path]"
         echo ""
         echo "Options:"
-        echo "  --build-local    Build image locally instead of pulling from ghcr.io"
-        echo "  --external-sql   Use an existing SQL Server instead of deploying a container"
+        echo "  --build-local              Build image locally instead of pulling from ghcr.io"
+        echo "  --db sqlserver|postgres    Database provider (default: sqlserver)"
+        echo "  --external-db [conn-str]   Use an existing database instead of deploying a container"
+        echo "  --external-sql [conn-str]  Alias for --external-db"
         echo ""
         echo "Example:"
         echo "  $0 root@138.199.223.171"
         echo "  $0 root@138.199.223.171 ~/.ssh/id_claude"
         echo "  $0 --build-local root@138.199.223.171"
-        echo "  $0 --external-sql root@138.199.223.171"
+        echo "  $0 --db postgres root@138.199.223.171"
+        echo "  $0 --external-db root@138.199.223.171"
+        echo "  $0 --db postgres --external-db 'Host=db.example.com;Database=AndoServer;Username=ando;Password=...;SSL Mode=VerifyFull' root@138.199.223.171"
         exit 1
     fi
+
+    case "$DB_PROVIDER" in
+        sqlserver|SqlServer)
+            DB_PROVIDER="sqlserver"
+            DATABASE_PROVIDER_SETTING="SqlServer"
+            DB_SERVICE="ando-sqlserver"
+            DB_LABEL="SQL Server"
+            ;;
+        postgres|postgresql|PostgreSql)
+            DB_PROVIDER="postgres"
+            DATABASE_PROVIDER_SETTING="PostgreSql"
+            DB_SERVICE="ando-postgres"
+            DB_LABEL="PostgreSQL"
+            ;;
+        *)
+            echo "Unknown --db value: $DB_PROVIDER (expected sqlserver or postgres)"
+            exit 1
+            ;;
+    esac
 
     REMOTE_HOST="$1"
     SSH_KEY="${2:-}"
@@ -240,7 +304,15 @@ gather_configuration() {
         DOMAIN_NAME="test.andobuild.com"
         ADMIN_EMAIL="admin@test.andobuild.com"
         SA_PASSWORD="TestPassword123!Aa"
+        POSTGRES_PASSWORD="TestPassword123Aa"
         DATABASE_NAME="AndoServer"
+        if [[ "$USE_EXTERNAL_SQL" == "true" ]]; then
+            CONNECTION_STRING="$EXTERNAL_CONNECTION_STRING"
+            if [[ -z "$CONNECTION_STRING" ]]; then
+                log_error "--test with --external-db requires the connection string on the command line"
+                exit 1
+            fi
+        fi
         GITHUB_APP_ID="12345"
         GITHUB_APP_NAME="test-app"
         GITHUB_CLIENT_ID="Iv1.test123"
@@ -269,7 +341,7 @@ TestKeyForTestingPurposesOnlyDoNotUseInProduction1234567890abcdef
     # --- Network Configuration ---
     echo ""
     echo -e "${CYAN}=== Network Configuration ===${NC}"
-    if confirm "Use isolated Docker network? (SQL Server not exposed to host)"; then
+    if confirm "Use isolated Docker network? ($DB_LABEL not exposed to host)"; then
         USE_ISOLATED_NETWORK="true"
         NETWORK_NAME="ando-network"
     else
@@ -283,18 +355,30 @@ TestKeyForTestingPurposesOnlyDoNotUseInProduction1234567890abcdef
     prompt_required "Domain name (e.g., ando.example.com)" DOMAIN_NAME
     prompt_with_default "Admin email (for Let's Encrypt)" "admin@${DOMAIN_NAME#*.}" ADMIN_EMAIL
 
-    # --- SQL Server Configuration ---
+    # --- Database Configuration ---
     echo ""
-    echo -e "${CYAN}=== SQL Server Configuration ===${NC}"
+    echo -e "${CYAN}=== Database Configuration ($DB_LABEL) ===${NC}"
     if [[ "$USE_EXTERNAL_SQL" == "true" ]]; then
-        echo "Using external SQL Server (no container will be deployed)"
-        prompt_required "SQL Server connection string" CONNECTION_STRING
+        echo "Using external $DB_LABEL (no container will be deployed)"
+        if [[ -n "$EXTERNAL_CONNECTION_STRING" ]]; then
+            CONNECTION_STRING="$EXTERNAL_CONNECTION_STRING"
+            echo "Using the connection string given on the command line"
+        else
+            prompt_required "$DB_LABEL connection string" CONNECTION_STRING
+        fi
         SA_PASSWORD=""
+        POSTGRES_PASSWORD=""
         DATABASE_NAME=""
+    elif [[ "$DB_PROVIDER" == "postgres" ]]; then
+        local default_pg_password=$(generate_postgres_password)
+        prompt_with_default "PostgreSQL password for user 'ando'" "$default_pg_password" POSTGRES_PASSWORD true
+        prompt_with_default "Database name" "AndoServer" DATABASE_NAME
+        SA_PASSWORD=""
     else
         local default_sa_password=$(generate_password)
         prompt_with_default "SQL Server SA password" "$default_sa_password" SA_PASSWORD true
         prompt_with_default "Database name" "AndoServer" DATABASE_NAME
+        POSTGRES_PASSWORD=""
     fi
 
     # --- GitHub Configuration ---
@@ -413,7 +497,8 @@ TestKeyForTestingPurposesOnlyDoNotUseInProduction1234567890abcdef
     echo "  Install dir:     $INSTALL_DIR"
     echo "  Domain:          $DOMAIN_NAME"
     echo "  Isolated network: $USE_ISOLATED_NETWORK"
-    echo "  Database:        $DATABASE_NAME"
+    echo "  DB provider:     $DB_LABEL ($([[ "$USE_EXTERNAL_SQL" == "true" ]] && echo external || echo container))"
+    echo "  Database:        ${DATABASE_NAME:-(from connection string)}"
     echo "  GitHub App:      $GITHUB_APP_NAME (ID: $GITHUB_APP_ID)"
     echo "  Email provider:  $EMAIL_PROVIDER"
     echo ""
@@ -635,15 +720,54 @@ setup_directories_remote() {
     ssh $SSH_OPTS "$REMOTE_HOST" bash << EOF
 set -euo pipefail
 
-mkdir -p "$INSTALL_DIR"/{config,data/{artifacts,repos,sqldata},logs}
+mkdir -p "$INSTALL_DIR"/{config,data/{artifacts,repos},logs}
 chmod 700 "$INSTALL_DIR/config"
 
 # Set ownership to ando user
 chown -R $ANDO_USER:$ANDO_USER "$INSTALL_DIR"
 
-# SQL Server runs as mssql user (UID 10001 inside container)
-# With rootless Docker, this maps to UID 110000 on host (100000 + 10001 - 1)
-chown -R 110000:110000 "$INSTALL_DIR/data/sqldata"
+# Rootless Docker maps container UID/GID N (N >= 1) to host ID "start + N - 1",
+# where start is the first ID of the $ANDO_USER range in /etc/subuid (UIDs) or
+# /etc/subgid (GIDs). Pre-existing ranges need not start at 100000 and UID and
+# GID ranges may differ, so both are read from the actual entries.
+subid_host_id() {
+    local file="\$1" container_id="\$2" entry start count
+    entry=\$(grep -E "^($ANDO_USER|$ANDO_UID):" "\$file" | head -1 || true)
+    if [[ -z "\$entry" ]]; then
+        echo "ERROR: no $ANDO_USER entry in \$file; rootless Docker cannot map container IDs" >&2
+        return 1
+    fi
+    start=\$(echo "\$entry" | cut -d: -f2)
+    count=\$(echo "\$entry" | cut -d: -f3)
+    if ! [[ "\$start" =~ ^[0-9]+\$ && "\$count" =~ ^[0-9]+\$ ]]; then
+        echo "ERROR: malformed entry in \$file: \$entry" >&2
+        return 1
+    fi
+    if (( count < container_id )); then
+        echo "ERROR: \$file range for $ANDO_USER has \$count IDs; container ID \$container_id needs at least \$container_id" >&2
+        return 1
+    fi
+    echo \$((start + container_id - 1))
+}
+
+if [[ "$USE_EXTERNAL_SQL" == "true" ]]; then
+    echo "External database: no database data directory needed"
+elif [[ "$DB_PROVIDER" == "postgres" ]]; then
+    # PostgreSQL (Debian image) runs as postgres (UID/GID 999 inside the container)
+    DB_HOST_UID=\$(subid_host_id /etc/subuid 999)
+    DB_HOST_GID=\$(subid_host_id /etc/subgid 999)
+    mkdir -p "$INSTALL_DIR/data/pgdata"
+    chown -R "\$DB_HOST_UID:\$DB_HOST_GID" "$INSTALL_DIR/data/pgdata"
+    chmod 700 "$INSTALL_DIR/data/pgdata"
+    echo "pgdata owned by host \$DB_HOST_UID:\$DB_HOST_GID (container postgres 999:999)"
+else
+    # SQL Server runs as mssql (UID 10001 inside the container)
+    DB_HOST_UID=\$(subid_host_id /etc/subuid 10001)
+    DB_HOST_GID=\$(subid_host_id /etc/subgid 10001)
+    mkdir -p "$INSTALL_DIR/data/sqldata"
+    chown -R "\$DB_HOST_UID:\$DB_HOST_GID" "$INSTALL_DIR/data/sqldata"
+    echo "sqldata owned by host \$DB_HOST_UID:\$DB_HOST_GID (container mssql 10001)"
+fi
 
 echo "Directories created at $INSTALL_DIR"
 ls -la "$INSTALL_DIR"
@@ -723,8 +847,11 @@ generate_env_file() {
     log_step "Generating .env file"
 
     # Build connection string based on configuration
-    # If using external SQL, CONNECTION_STRING is already set from gather_configuration
-    if [[ "$USE_EXTERNAL_SQL" != "true" ]]; then
+    # If using an external database, CONNECTION_STRING is already set from gather_configuration
+    if [[ "$USE_EXTERNAL_SQL" != "true" && "$DB_PROVIDER" == "postgres" ]]; then
+        # The service name resolves on both the isolated and the default compose network
+        CONNECTION_STRING="Host=ando-postgres;Database=$DATABASE_NAME;Username=ando;Password=$POSTGRES_PASSWORD"
+    elif [[ "$USE_EXTERNAL_SQL" != "true" ]]; then
         if [[ "$USE_ISOLATED_NETWORK" == "true" ]]; then
             CONNECTION_STRING="Server=ando-sqlserver;Database=$DATABASE_NAME;User Id=sa;Password=$SA_PASSWORD;TrustServerCertificate=true"
         else
@@ -776,6 +903,8 @@ ASPNETCORE_ENVIRONMENT=Production
 ASPNETCORE_URLS=http://+:8080
 
 # --- Database ---
+# Provider: SqlServer or PostgreSql. The connection string must match it.
+Database__Provider=$DATABASE_PROVIDER_SETTING
 ConnectionStrings__DefaultConnection=$CONNECTION_STRING
 
 # --- GitHub App ---
@@ -807,8 +936,15 @@ $email_env
 ANDO_UID=$ANDO_UID
 "
 
-    # Add SQL Server password only if using containerized SQL
-    if [[ "$USE_EXTERNAL_SQL" != "true" ]]; then
+    # Add database container credentials only if using a containerized database
+    if [[ "$USE_EXTERNAL_SQL" != "true" && "$DB_PROVIDER" == "postgres" ]]; then
+        env_content+="
+# --- PostgreSQL (for docker-compose) ---
+POSTGRES_USER=ando
+POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+POSTGRES_DB=$DATABASE_NAME
+"
+    elif [[ "$USE_EXTERNAL_SQL" != "true" ]]; then
         env_content+="
 # --- SQL Server (for docker-compose) ---
 MSSQL_SA_PASSWORD=$SA_PASSWORD
@@ -873,6 +1009,10 @@ networks:
         server_network="
     networks:
       - $NETWORK_NAME"
+    elif [[ "$USE_EXTERNAL_SQL" != "true" && "$DB_PROVIDER" == "postgres" ]]; then
+        sql_ports="
+    ports:
+      - \"5432:5432\""
     elif [[ "$USE_EXTERNAL_SQL" != "true" ]]; then
         sql_ports="
     ports:
@@ -882,10 +1022,36 @@ networks:
     # Docker socket path for rootless Docker
     DOCKER_SOCKET="/run/user/$ANDO_UID/docker.sock"
 
-    # SQL Server service (only if not using external SQL)
+    # Database service (only if not using an external database)
     local sql_service=""
     local depends_on=""
-    if [[ "$USE_EXTERNAL_SQL" != "true" ]]; then
+    if [[ "$USE_EXTERNAL_SQL" != "true" && "$DB_PROVIDER" == "postgres" ]]; then
+        sql_service="  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  ando-postgres:
+    image: $POSTGRES_IMAGE
+    container_name: ando-postgres
+    environment:
+      - POSTGRES_USER=\${POSTGRES_USER}
+      - POSTGRES_PASSWORD=\${POSTGRES_PASSWORD}
+      - POSTGRES_DB=\${POSTGRES_DB}
+    volumes:
+      - $INSTALL_DIR/data/pgdata:/var/lib/postgresql/data$sql_ports
+    healthcheck:
+      test: [\"CMD-SHELL\", \"pg_isready -h localhost -U ando -d $DATABASE_NAME\"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped$sql_network
+
+"
+        depends_on="
+    depends_on:
+      ando-postgres:
+        condition: service_healthy"
+    elif [[ "$USE_EXTERNAL_SQL" != "true" ]]; then
         sql_service="  # ---------------------------------------------------------------------------
   # SQL Server Database
   # ---------------------------------------------------------------------------
@@ -976,7 +1142,7 @@ export DOCKER_HOST=unix:///run/user/$ANDO_UID/docker.sock
 cd $INSTALL_DIR
 
 # Start Ando.Server
-echo 'Starting Ando.Server (using external SQL Server)...'
+echo 'Starting Ando.Server (using external $DB_LABEL)...'
 docker compose up -d ando-server
 
 # Wait for Ando.Server to be healthy
@@ -1000,7 +1166,12 @@ systemctl restart caddy
 systemctl status caddy --no-pager || true
 EOF
     else
-        # Containerized SQL Server
+        # Containerized database (SQL Server or PostgreSQL)
+        local db_image="$SQL_SERVER_IMAGE"
+        if [[ "$DB_PROVIDER" == "postgres" ]]; then
+            db_image="$POSTGRES_IMAGE"
+        fi
+
         ssh $SSH_OPTS "$REMOTE_HOST" bash << EOF
 set -euo pipefail
 
@@ -1009,19 +1180,19 @@ runuser -l $ANDO_USER -c "
 export DOCKER_HOST=unix:///run/user/$ANDO_UID/docker.sock
 cd $INSTALL_DIR
 
-# Pull SQL Server image
-echo 'Pulling SQL Server image...'
-docker pull $SQL_SERVER_IMAGE
+# Pull database image
+echo 'Pulling $DB_LABEL image...'
+docker pull $db_image
 
-# Start SQL Server first
-echo 'Starting SQL Server...'
-docker compose up -d ando-sqlserver
+# Start the database first
+echo 'Starting $DB_LABEL...'
+docker compose up -d $DB_SERVICE
 
-# Wait for SQL Server to be healthy
-echo 'Waiting for SQL Server to be healthy (up to 90 seconds)...'
+# Wait for the database to be healthy
+echo 'Waiting for $DB_LABEL to be healthy (up to 90 seconds)...'
 for i in {1..18}; do
-    if docker compose ps ando-sqlserver 2>/dev/null | grep -q 'healthy'; then
-        echo 'SQL Server is healthy'
+    if docker compose ps $DB_SERVICE 2>/dev/null | grep -q 'healthy'; then
+        echo '$DB_LABEL is healthy'
         break
     fi
     echo \"  Waiting... (\\\$i/18)\"
@@ -1061,13 +1232,14 @@ EOF
 # Setup Automated Backups
 # -----------------------------------------------------------------------------
 setup_automated_backups() {
-    # Skip if using external SQL
+    # With an external database the job still backs up config/ (.env with
+    # Encryption__Key, github-app.pem) and the Data Protection keys; only the
+    # database dump is skipped (the external database has its own backups).
     if [[ "$USE_EXTERNAL_SQL" == "true" ]]; then
-        log_step "Skipping automated backups (external SQL Server)"
-        return
+        log_step "Setting up automated backups (configuration and keys only; external $DB_LABEL is not dumped)"
+    else
+        log_step "Setting up automated backups"
     fi
-
-    log_step "Setting up automated backups"
 
     ANDO_UID=$(ssh $SSH_OPTS "$REMOTE_HOST" "id -u $ANDO_USER")
 
@@ -1077,8 +1249,12 @@ set -euo pipefail
 # Create directories
 mkdir -p "$INSTALL_DIR/scripts"
 mkdir -p "$INSTALL_DIR/backups"
-mkdir -p "$INSTALL_DIR/data/sqldata/backup"
-chown -R $ANDO_USER:$ANDO_USER "$INSTALL_DIR/scripts" "$INSTALL_DIR/backups" "$INSTALL_DIR/data/sqldata/backup"
+chown -R $ANDO_USER:$ANDO_USER "$INSTALL_DIR/scripts" "$INSTALL_DIR/backups"
+if [[ "$USE_EXTERNAL_SQL" != "true" && "$DB_PROVIDER" == "sqlserver" ]]; then
+    # SQL Server writes .bak files inside its volume; the script copies them out
+    mkdir -p "$INSTALL_DIR/data/sqldata/backup"
+    chown -R $ANDO_USER:$ANDO_USER "$INSTALL_DIR/data/sqldata/backup"
+fi
 
 # Write backup script
 cat > "$INSTALL_DIR/scripts/backup.sh" << 'SCRIPT_EOF'
@@ -1091,23 +1267,35 @@ cat > "$INSTALL_DIR/scripts/backup.sh" << 'SCRIPT_EOF'
 # - Monthly backups (1st of month): kept for 12 months
 #
 # Backs up:
-# - SQL Server database
-# - Configuration files (config/, docker-compose.yml)
-# - Data protection keys (data/keys/)
-# - Caddy configuration
+# - Database: SQL Server (BACKUP DATABASE -> .bak) or
+#   PostgreSQL (pg_dump --format=custom -> .dump).
+#   Skipped for an external database (EXTERNAL_DB=true): back that database up
+#   with its own tooling (managed-service backups, pg_dump, BACKUP DATABASE).
+# - Configuration files (config/ incl. .env and github-app.pem,
+#   docker-compose.yml, Caddyfile) -> -config.tar.gz
+# - Data protection keys (data/keys/) -> -keys.tar.gz
+#
+# Project secrets in the database are AES-encrypted with Encryption__Key from
+# config/.env. Keep the -config archive with every database backup: without
+# that key the secrets cannot be decrypted. The config and keys archives do not
+# depend on the database provider.
+#
+# Restore (PostgreSQL):
+#   docker exec -i ando-postgres pg_restore -U ando -d <db> --clean --if-exists < file.dump
+# Restore (SQL Server): see https://andobuild.com/server (Backup and Restore)
 # =============================================================================
 set -euo pipefail
 
 INSTALL_DIR="@@INSTALL_DIR@@"
 BACKUP_DIR="\$INSTALL_DIR/backups"
 DOCKER_HOST="unix:///run/user/@@ANDO_UID@@/docker.sock"
+DB_PROVIDER="@@DB_PROVIDER@@"
+EXTERNAL_DB="@@EXTERNAL_DB@@"
+DATABASE_NAME="@@DATABASE_NAME@@"
 DATE=\$(date +%Y%m%d)
 DAY_OF_MONTH=\$(date +%d)
 
 export DOCKER_HOST
-
-# Load SA password from env file
-source "\$INSTALL_DIR/config/.env"
 
 # Create backup directory if needed
 mkdir -p "\$BACKUP_DIR"
@@ -1121,12 +1309,27 @@ fi
 
 echo "[\$(date '+%Y-%m-%d %H:%M:%S')] Starting backup: \$BACKUP_PREFIX"
 
-# 1. SQL Server database backup
-echo "  Backing up database..."
-docker exec ando-sqlserver /opt/mssql-tools18/bin/sqlcmd \\
-    -S localhost -U sa -P "\$MSSQL_SA_PASSWORD" -C \\
-    -Q "BACKUP DATABASE AndoServer TO DISK = '/var/opt/mssql/backup/\$BACKUP_PREFIX.bak' WITH FORMAT, INIT"
-cp "\$INSTALL_DIR/data/sqldata/backup/\$BACKUP_PREFIX.bak" "\$BACKUP_DIR/"
+# 1. Database backup
+if [[ "\$EXTERNAL_DB" == "true" ]]; then
+    # External database: not backed up by this script. Back it up with its own
+    # tooling; restoring it needs the Encryption__Key in the -config archive.
+    echo "  Skipping database backup (external database - use its own backup tooling)"
+elif [[ "\$DB_PROVIDER" == "postgres" ]]; then
+    # pg_dump runs inside the database container (local socket, no password
+    # needed); custom format is compressed and restorable with pg_restore.
+    echo "  Backing up database (pg_dump)..."
+    docker exec ando-postgres pg_dump -U ando -Fc "\$DATABASE_NAME" > "\$BACKUP_DIR/\$BACKUP_PREFIX.dump.partial"
+    mv "\$BACKUP_DIR/\$BACKUP_PREFIX.dump.partial" "\$BACKUP_DIR/\$BACKUP_PREFIX.dump"
+else
+    # Read only the SA password; sourcing the whole .env would execute values
+    # that contain spaces or semicolons (connection string, email names).
+    MSSQL_SA_PASSWORD=\$(grep -m1 '^MSSQL_SA_PASSWORD=' "\$INSTALL_DIR/config/.env" | cut -d= -f2-)
+    echo "  Backing up database..."
+    docker exec ando-sqlserver /opt/mssql-tools18/bin/sqlcmd \\
+        -S localhost -U sa -P "\$MSSQL_SA_PASSWORD" -C \\
+        -Q "BACKUP DATABASE [\$DATABASE_NAME] TO DISK = '/var/opt/mssql/backup/\$BACKUP_PREFIX.bak' WITH FORMAT, INIT"
+    cp "\$INSTALL_DIR/data/sqldata/backup/\$BACKUP_PREFIX.bak" "\$BACKUP_DIR/"
+fi
 
 # 2. Configuration files backup (config dir + docker-compose.yml + Caddyfile)
 echo "  Backing up configuration..."
@@ -1151,7 +1354,9 @@ find "\$BACKUP_DIR" -name "ando-daily-*" -mtime +7 -delete 2>/dev/null || true
 find "\$BACKUP_DIR" -name "ando-monthly-*" -mtime +365 -delete 2>/dev/null || true
 
 # Clean up backup files in SQL Server volume (keep only latest)
-find "\$INSTALL_DIR/data/sqldata/backup" -name "*.bak" -mtime +1 -delete 2>/dev/null || true
+if [[ -d "\$INSTALL_DIR/data/sqldata/backup" ]]; then
+    find "\$INSTALL_DIR/data/sqldata/backup" -name "*.bak" -mtime +1 -delete 2>/dev/null || true
+fi
 
 echo "[\$(date '+%Y-%m-%d %H:%M:%S')] Backup completed: \$BACKUP_PREFIX"
 
@@ -1163,13 +1368,16 @@ SCRIPT_EOF
 # Replace placeholders in backup script
 sed -i "s|@@INSTALL_DIR@@|$INSTALL_DIR|g" "$INSTALL_DIR/scripts/backup.sh"
 sed -i "s|@@ANDO_UID@@|$ANDO_UID|g" "$INSTALL_DIR/scripts/backup.sh"
+sed -i "s|@@DB_PROVIDER@@|$DB_PROVIDER|g" "$INSTALL_DIR/scripts/backup.sh"
+sed -i "s|@@EXTERNAL_DB@@|$USE_EXTERNAL_SQL|g" "$INSTALL_DIR/scripts/backup.sh"
+sed -i "s|@@DATABASE_NAME@@|$DATABASE_NAME|g" "$INSTALL_DIR/scripts/backup.sh"
 
 chmod +x "$INSTALL_DIR/scripts/backup.sh"
 chown $ANDO_USER:$ANDO_USER "$INSTALL_DIR/scripts/backup.sh"
 
 # Setup cron job to run daily at 2 AM as ando user
 cat > /etc/cron.d/ando-backup << CRON_EOF
-# Ando Server automated database backup
+# Ando Server automated backup (database unless external, config, keys)
 # Runs daily at 2 AM
 0 2 * * * $ANDO_USER $INSTALL_DIR/scripts/backup.sh >> /var/log/ando-backup.log 2>&1
 CRON_EOF
@@ -1301,22 +1509,37 @@ print_summary() {
     echo "  Install Path:     $INSTALL_DIR"
     echo "  Config:           $INSTALL_DIR/config/.env"
     echo "  Docker Mode:      Rootless (user: $ANDO_USER)"
+    echo "  Database:         $DB_LABEL (Database__Provider=$DATABASE_PROVIDER_SETTING)"
     echo ""
     echo "Docker Containers (rootless):"
     echo "  - ando-server     (Ando Server)"
-    echo "  - ando-sqlserver  (SQL Server 2022)"
+    if [[ "$USE_EXTERNAL_SQL" == "true" ]]; then
+        echo "  (external $DB_LABEL, no database container)"
+    elif [[ "$DB_PROVIDER" == "postgres" ]]; then
+        echo "  - ando-postgres   (PostgreSQL 17)"
+    else
+        echo "  - ando-sqlserver  (SQL Server 2022)"
+    fi
     echo ""
     echo "System Services:"
     echo "  - caddy           (Reverse proxy on host)"
     echo ""
-    if [[ "$USE_EXTERNAL_SQL" != "true" ]]; then
-        echo "Automated Backups:"
-        echo "  Schedule:         Daily at 2 AM"
-        echo "  Location:         $INSTALL_DIR/backups/"
-        echo "  Retention:        7 daily + 12 monthly"
-        echo "  Log:              /var/log/ando-backup.log"
-        echo ""
+    echo "Automated Backups:"
+    echo "  Schedule:         Daily at 2 AM"
+    echo "  Location:         $INSTALL_DIR/backups/"
+    echo "  Retention:        7 daily + 12 monthly"
+    echo "  Log:              /var/log/ando-backup.log"
+    echo "  Config/keys:      ando-*-config.tar.gz (.env incl. Encryption__Key, github-app.pem), ando-*-keys.tar.gz"
+    if [[ "$USE_EXTERNAL_SQL" == "true" ]]; then
+        echo "  Database:         NOT backed up (external $DB_LABEL) - use its own backup tooling"
+    elif [[ "$DB_PROVIDER" == "postgres" ]]; then
+        echo "  Database dumps:   ando-*.dump (pg_dump custom format)"
+        echo "  Restore:          docker exec -i ando-postgres pg_restore -U ando -d $DATABASE_NAME --clean --if-exists < FILE.dump"
+    else
+        echo "  Database backups: ando-*.bak (SQL Server BACKUP DATABASE)"
     fi
+    echo -e "  ${YELLOW}Keep the config archive with every database backup: project secrets cannot be decrypted without Encryption__Key.${NC}"
+    echo ""
     echo "Management Scripts (run on server):"
     echo "  sudo -u $ANDO_USER $INSTALL_DIR/scripts/status.sh   # View container status"
     echo "  sudo -u $ANDO_USER $INSTALL_DIR/scripts/logs.sh     # View logs (Ctrl+C to exit)"

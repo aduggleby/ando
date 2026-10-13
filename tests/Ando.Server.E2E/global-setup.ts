@@ -2,10 +2,16 @@
  * Global Setup for Playwright E2E Tests
  *
  * Uses docker-compose to start an isolated test environment with:
- * - SQL Server container (private network, no exposed ports)
+ * - A database container (private network, no exposed ports):
+ *   SQL Server by default, PostgreSQL when E2E_DB_PROVIDER=postgres
  * - Ando.Server container (exposes port 17110 only)
  *
  * The containers communicate over a private Docker network.
+ *
+ * Provider check:
+ * After the server is ready, setup reads GET /health and requires its
+ * `database` field to match the requested provider (SqlServer / PostgreSql).
+ * A server that omits the field, or reports a different provider, fails setup.
  *
  * Container Detection:
  * When running inside an ANDO container (Docker-in-Docker mode), we use
@@ -20,8 +26,11 @@
 import { execSync, spawnSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
+import { getE2EDatabase } from './e2e-database';
 
-const COMPOSE_FILE = path.resolve(__dirname, '../docker-compose.test.yml');
+const E2E_DATABASE = getE2EDatabase();
+const COMPOSE_FILE = E2E_DATABASE.composeFile;
+const COMPOSE_FILE_DISPLAY = path.relative(path.resolve(__dirname, '../..'), COMPOSE_FILE);
 const MAX_WAIT_SECONDS = 60;
 
 /**
@@ -77,11 +86,11 @@ function areContainersHealthy(): boolean {
       .filter(line => line)
       .map(line => JSON.parse(line));
 
-    const sqlserver = containers.find((c: any) => c.Service === 'sqlserver');
+    const database = containers.find((c: any) => c.Service === E2E_DATABASE.databaseService);
     const server = containers.find((c: any) => c.Service === 'server');
 
     return (
-      sqlserver?.Health === 'healthy' &&
+      database?.Health === 'healthy' &&
       server?.Health === 'healthy'
     );
   } catch {
@@ -141,8 +150,44 @@ async function waitForServer(): Promise<void> {
 
   const hint = isInsideContainer()
     ? 'Check that host.docker.internal resolves correctly and containers are accessible.'
-    : 'Check docker compose logs for errors: docker compose -f tests/docker-compose.test.yml logs';
+    : `Check docker compose logs for errors: docker compose -f ${COMPOSE_FILE_DISPLAY} logs`;
   throw new Error(`Server did not become ready within ${MAX_WAIT_SECONDS} seconds at ${serverUrl}. ${hint}`);
+}
+
+/**
+ * Verify the running server uses the requested database provider.
+ * GET /health reports `database` as "SqlServer" or "PostgreSql". A missing
+ * field fails too, so a server build without provider reporting cannot pass.
+ */
+async function assertServerDatabaseProvider(): Promise<void> {
+  const serverUrl = getServerUrl();
+  const expected = E2E_DATABASE.expectedHealthDatabase;
+
+  const response = await fetch(serverUrl);
+  if (!response.ok) {
+    throw new Error(`Health check at ${serverUrl} returned ${response.status} while verifying the database provider.`);
+  }
+
+  const body: unknown = await response.json();
+  const actual =
+    typeof body === 'object' && body !== null ? (body as Record<string, unknown>).database : undefined;
+
+  if (typeof actual !== 'string' || actual.length === 0) {
+    throw new Error(
+      `Health response from ${serverUrl} has no "database" field (got: ${JSON.stringify(body)}). ` +
+      `Expected "${expected}" for E2E_DB_PROVIDER=${E2E_DATABASE.provider}. ` +
+      'The server image is likely stale or predates provider reporting; rebuild it.'
+    );
+  }
+
+  if (actual !== expected) {
+    throw new Error(
+      `E2E_DB_PROVIDER=${E2E_DATABASE.provider} requested "${expected}", but the server reports "${actual}". ` +
+      `Check Database__Provider in ${COMPOSE_FILE_DISPLAY} and that a stale container from the other variant is not running.`
+    );
+  }
+
+  console.log(`Server database provider verified: ${actual}`);
 }
 
 /**
@@ -150,6 +195,7 @@ async function waitForServer(): Promise<void> {
  */
 async function globalSetup(): Promise<void> {
   console.log('\n=== E2E Test Setup ===\n');
+  console.log(`Database provider: ${E2E_DATABASE.provider} (${COMPOSE_FILE_DISPLAY})`);
 
   const inContainer = isInsideContainer();
   const dockerAvailable = isDockerAvailable();
@@ -196,6 +242,7 @@ async function globalSetup(): Promise<void> {
   }
 
   await waitForServer();
+  await assertServerDatabaseProvider();
 
   console.log('\n=== Setup Complete ===\n');
 }

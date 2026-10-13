@@ -2,18 +2,19 @@
 
 #nullable disable
 
-namespace Ando.Server.Migrations
+namespace Ando.Server.Migrations.SqlServer
 {
     /// <inheritdoc />
-    public partial class AddBuildProfile : Migration
+    public partial class AddBuildGitVersionTag : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<string>(
-                name: "Profile",
+                name: "GitVersionTag",
                 table: "Builds",
-                type: "nvarchar(max)",
+                type: "nvarchar(100)",
+                maxLength: 100,
                 nullable: true);
         }
 
@@ -21,7 +22,7 @@ namespace Ando.Server.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
-                name: "Profile",
+                name: "GitVersionTag",
                 table: "Builds");
         }
     }

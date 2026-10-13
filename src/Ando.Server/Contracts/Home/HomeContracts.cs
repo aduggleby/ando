@@ -69,9 +69,11 @@ public record GetDashboardResponse(
 /// </summary>
 /// <param name="Status">Health status (Healthy, Degraded, Unhealthy).</param>
 /// <param name="Timestamp">When the check was performed.</param>
+/// <param name="Database">Configured database provider (SqlServer or PostgreSql).</param>
 public record HealthResponse(
     string Status,
-    DateTime Timestamp
+    DateTime Timestamp,
+    string Database
 );
 
 /// <summary>

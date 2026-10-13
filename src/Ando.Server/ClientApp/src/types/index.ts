@@ -329,9 +329,13 @@ export interface TriggerSystemUpdateResponse {
 }
 
 export interface SystemHealthCheckDto {
+  /** Stable identifier: 'database', 'jobStorage', or 'github'. */
+  key: string;
   name: string;
   status: 'healthy' | 'warning' | 'error';
   message: string;
+  /** Database provider name for the database check ('SqlServer' or 'PostgreSql'); null for other checks. */
+  provider: string | null;
 }
 
 export interface SystemHealthResponse {

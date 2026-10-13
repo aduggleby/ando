@@ -1,0 +1,69 @@
+# =============================================================================
+# docker-compose.postgres.yml
+#
+# Override for running the local development environment on PostgreSQL
+# instead of SQL Server. Apply it on top of docker-compose.yml:
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d
+#   docker compose -f docker-compose.yml -f docker-compose.postgres.yml logs -f
+#   docker compose -f docker-compose.yml -f docker-compose.postgres.yml down
+#   docker compose -f docker-compose.yml -f docker-compose.postgres.yml down -v
+#
+# What this override changes:
+# - Adds a `postgres` service (host port 17134) and the `pgdata` volume.
+# - Switches ando-server to Database__Provider=PostgreSql and a Npgsql
+#   connection string (environment entries merge by key, so these replace the
+#   SQL Server values from docker-compose.yml).
+# - Replaces ando-server's depends_on (`!override`) so it waits only for
+#   postgres, never for sqlserver.
+# - Moves the sqlserver service behind the `sqlserver` profile so it does not
+#   start by default. Start it explicitly with `--profile sqlserver` if needed.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Ando Server (PostgreSQL settings)
+  # ---------------------------------------------------------------------------
+  ando-server:
+    environment:
+      - Database__Provider=PostgreSql
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=AndoServer;Username=ando;Password=YourPassword123!
+    depends_on: !override
+      postgres:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # SQL Server is not needed when running on PostgreSQL
+  # ---------------------------------------------------------------------------
+  sqlserver:
+    profiles:
+      - sqlserver
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=ando
+      - POSTGRES_PASSWORD=YourPassword123!
+      - POSTGRES_DB=AndoServer
+    ports:
+      - "17134:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # -h localhost forces TCP so the check does not pass against the
+      # temporary socket-only server the image runs during first-time init.
+      test: ["CMD-SHELL", "pg_isready -h localhost -U ando -d AndoServer"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  # PostgreSQL data
+  pgdata:
+    driver: local

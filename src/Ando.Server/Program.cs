@@ -28,12 +28,12 @@ using Ando.Server.Infrastructure.Startup;
 using Ando.Server.Jobs;
 using Ando.Server.Models;
 using Ando.Server.Services;
+using Ando.Server.Infrastructure.Database;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using Hangfire;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
-using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
@@ -69,22 +69,10 @@ builder.Services.Configure<SelfUpdateSettings>(
     builder.Configuration.GetSection(SelfUpdateSettings.SectionName));
 
 // =============================================================================
-// Database
+// Database and Hangfire (provider selected by Database:Provider)
 // =============================================================================
 
-// In Testing environment, WebApplicationFactory configures the DbContext
-// Skip validation here to allow test-specific database configuration
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-if (string.IsNullOrEmpty(connectionString) && !builder.Environment.IsEnvironment("Testing"))
-{
-    throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
-}
-
-if (!string.IsNullOrEmpty(connectionString))
-{
-    builder.Services.AddDbContext<AndoDbContext>(options =>
-        options.UseSqlServer(connectionString));
-}
+builder.AddAndoDatabase();
 
 // =============================================================================
 // Data Protection (persist keys across container restarts)
@@ -206,43 +194,6 @@ builder.Services.AddAuthentication(options =>
     .AddScheme<AuthenticationSchemeOptions, ApiTokenAuthenticationHandler>(
         ApiTokenAuthentication.Scheme,
         _ => { });
-
-// =============================================================================
-// Hangfire (Background Jobs)
-// Skip in E2E environment - E2E tests don't need background job processing
-// =============================================================================
-
-if (!builder.Environment.IsEnvironment("E2E"))
-{
-    builder.Services.AddHangfire(config => config
-        .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
-        .UseSimpleAssemblyNameTypeSerializer()
-        .UseRecommendedSerializerSettings()
-        .UseSqlServerStorage(connectionString, new SqlServerStorageOptions
-        {
-            CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
-            SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
-            QueuePollInterval = TimeSpan.Zero,
-            UseRecommendedIsolationLevel = true,
-            DisableGlobalLocks = true
-        }));
-
-    var buildSettings = builder.Configuration
-        .GetSection(BuildSettings.SectionName)
-        .Get<BuildSettings>() ?? new BuildSettings();
-
-    builder.Services.AddHangfireServer(options =>
-    {
-        options.WorkerCount = buildSettings.WorkerCount;
-        options.Queues = ["builds", "default"];
-    });
-}
-else
-{
-    // E2E environment: provide stub Hangfire services (BuildService depends on IBackgroundJobClient)
-    builder.Services.AddSingleton<IBackgroundJobClient, NoOpBackgroundJobClient>();
-    builder.Services.AddSingleton<IRecurringJobManager, NoOpRecurringJobManager>();
-}
 
 // =============================================================================
 // SignalR (Real-time)
@@ -590,6 +541,7 @@ else
 var forwardedHeadersOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+app.LogAndoDatabaseTarget();
 };
 forwardedHeadersOptions.KnownProxies.Clear();
 forwardedHeadersOptions.KnownNetworks.Clear();

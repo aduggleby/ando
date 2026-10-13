@@ -4,6 +4,8 @@
 # Creates an isolated network where SQL Server and Ando.Server communicate
 # privately. Only the server's web port (17110) is exposed publicly.
 #
+# PostgreSQL variant: docker-compose.test.postgres.yml (npm run test:postgres).
+#
 # Usage:
 #   docker compose -f tests/docker-compose.test.yml up -d --build
 #   npm test (from tests/Ando.Server.E2E)
@@ -37,6 +39,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=E2E
       - ASPNETCORE_URLS=http://+:8080
+      - Database__Provider=SqlServer
       # Connection string uses container name (sqlserver) instead of localhost
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=AndoServer_E2E;User Id=sa;Password=Test@Password123!;TrustServerCertificate=True
       - GitHub__AppId=12345

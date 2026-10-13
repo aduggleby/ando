@@ -9,9 +9,9 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace Ando.Server.Migrations
+namespace Ando.Server.Migrations.SqlServer
 {
-    [DbContext(typeof(AndoDbContext))]
+    [DbContext(typeof(SqlServerAndoDbContext))]
     [Migration("20260207144359_AddBuildProfile")]
     partial class AddBuildProfile
     {

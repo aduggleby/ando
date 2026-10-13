@@ -8,12 +8,16 @@
 // Design Decisions:
 // - Returns 200 only when the API can execute a database query
 // - No authentication required
+// - Reports the configured database provider so deployments and the E2E
+//   global setup can verify which provider the server actually runs on
 // =============================================================================
 
+using Ando.Server.Configuration;
 using Ando.Server.Contracts.Home;
 using Ando.Server.Data;
 using FastEndpoints;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Ando.Server.Endpoints.Home;
 
@@ -23,14 +27,17 @@ namespace Ando.Server.Endpoints.Home;
 public class HealthEndpoint : EndpointWithoutRequest<HealthResponse>
 {
     private readonly AndoDbContext _db;
+    private readonly string _databaseProvider;
 
     /// <summary>
     /// Initializes endpoint dependencies.
     /// </summary>
     /// <param name="db">Application database context.</param>
-    public HealthEndpoint(AndoDbContext db)
+    /// <param name="databaseSettings">Database settings; defaults to SqlServer when unbound.</param>
+    public HealthEndpoint(AndoDbContext db, IOptions<DatabaseSettings> databaseSettings)
     {
         _db = db;
+        _databaseProvider = databaseSettings.Value.Provider.ToString();
     }
 
     public override void Configure()
@@ -46,17 +53,17 @@ public class HealthEndpoint : EndpointWithoutRequest<HealthResponse>
             var canConnect = await _db.Database.CanConnectAsync(ct);
             if (!canConnect)
             {
-                await SendAsync(new HealthResponse("unhealthy", DateTime.UtcNow), 503, ct);
+                await Send.ResponseAsync(new HealthResponse("unhealthy", DateTime.UtcNow, _databaseProvider), 503, ct);
                 return;
             }
 
             // Run a tiny query to validate command execution, not just TCP reachability.
             await _db.Projects.AsNoTracking().Select(p => p.Id).FirstOrDefaultAsync(ct);
-            await SendAsync(new HealthResponse("healthy", DateTime.UtcNow), cancellation: ct);
+            await Send.OkAsync(new HealthResponse("healthy", DateTime.UtcNow, _databaseProvider), cancellation: ct);
         }
         catch
         {
-            await SendAsync(new HealthResponse("unhealthy", DateTime.UtcNow), 503, ct);
+            await Send.ResponseAsync(new HealthResponse("unhealthy", DateTime.UtcNow, _databaseProvider), 503, ct);
         }
     }
 }

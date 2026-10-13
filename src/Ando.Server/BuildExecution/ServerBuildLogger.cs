@@ -11,6 +11,8 @@
 // - Broadcasts via SignalR for real-time UI updates
 // - Uses sequence numbers for ordering
 // - Thread-safe via lock around DbContext (DbContext is not thread-safe)
+// - Message and step name pass through LogTextSanitizer (NUL stripping,
+//   message truncation) because PostgreSQL text columns reject '\0'
 // =============================================================================
 
 using Ando.Logging;
@@ -151,8 +153,8 @@ public class ServerBuildLogger : IBuildLogger
             BuildId = _buildId,
             Sequence = Interlocked.Increment(ref _sequence),
             Type = type,
-            Message = message.Length > 4000 ? message[..4000] : message,
-            StepName = stepName,
+            Message = LogTextSanitizer.SanitizeMessage(message),
+            StepName = LogTextSanitizer.SanitizeStepName(stepName),
             Timestamp = DateTime.UtcNow
         };
 

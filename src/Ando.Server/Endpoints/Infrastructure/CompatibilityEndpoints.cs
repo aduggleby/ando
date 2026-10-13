@@ -8,24 +8,35 @@
 // =============================================================================
 
 using System.Diagnostics;
+using Ando.Server.Configuration;
 using Ando.Server.Data;
 using Ando.Server.GitHub;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Ando.Server.Endpoints.Infrastructure;
 
 /// <summary>
 /// GET /health - Health check endpoint for container/platform probes.
+/// Also reports the configured database provider (<c>database</c>), which the
+/// E2E global setup uses to verify the server runs on the requested provider.
 /// </summary>
 public class RootHealthEndpoint : EndpointWithoutRequest<object>
 {
     private readonly AndoDbContext _db;
+    private readonly string _databaseProvider;
 
-    public RootHealthEndpoint(AndoDbContext db)
+    /// <summary>
+    /// Initializes endpoint dependencies.
+    /// </summary>
+    /// <param name="db">Application database context.</param>
+    /// <param name="databaseSettings">Database settings; defaults to SqlServer when unbound.</param>
+    public RootHealthEndpoint(AndoDbContext db, IOptions<DatabaseSettings> databaseSettings)
     {
         _db = db;
+        _databaseProvider = databaseSettings.Value.Provider.ToString();
     }
 
     public override void Configure()
@@ -42,25 +53,27 @@ public class RootHealthEndpoint : EndpointWithoutRequest<object>
             var canConnect = await _db.Database.CanConnectAsync(ct);
             if (!canConnect)
             {
-                await SendAsync(new
+                await Send.ResponseAsync(new
                 {
                     status = "unhealthy",
                     error = "Cannot connect to database",
-                    timestamp = DateTime.UtcNow
+                    timestamp = DateTime.UtcNow,
+                    database = _databaseProvider
                 }, 503, ct);
                 return;
             }
 
             await _db.Projects.AsNoTracking().Select(p => p.Id).FirstOrDefaultAsync(ct);
-            await SendAsync(new { status = "healthy", timestamp = DateTime.UtcNow }, cancellation: ct);
+            await Send.OkAsync(new { status = "healthy", timestamp = DateTime.UtcNow, database = _databaseProvider }, cancellation: ct);
         }
         catch (Exception ex)
         {
-            await SendAsync(new
+            await Send.ResponseAsync(new
             {
                 status = "unhealthy",
                 error = ex.Message,
-                timestamp = DateTime.UtcNow
+                timestamp = DateTime.UtcNow,
+                database = _databaseProvider
             }, 503, ct);
         }
     }
@@ -97,7 +110,7 @@ public class DockerHealthEndpoint : EndpointWithoutRequest<object>
             using var process = Process.Start(startInfo);
             if (process == null)
             {
-                await SendAsync(new
+                await Send.ResponseAsync(new
                 {
                     status = "unhealthy",
                     error = "Failed to start docker process",
@@ -116,7 +129,7 @@ public class DockerHealthEndpoint : EndpointWithoutRequest<object>
 
             if (process.ExitCode != 0)
             {
-                await SendAsync(new
+                await Send.ResponseAsync(new
                 {
                     status = "unhealthy",
                     error = $"Docker command failed with exit code {process.ExitCode}",
@@ -130,7 +143,7 @@ public class DockerHealthEndpoint : EndpointWithoutRequest<object>
 
             if (success)
             {
-                await SendAsync(new
+                await Send.OkAsync(new
                 {
                     status = "healthy",
                     message = "Docker-in-Docker is working correctly",
@@ -139,7 +152,7 @@ public class DockerHealthEndpoint : EndpointWithoutRequest<object>
                 return;
             }
 
-            await SendAsync(new
+            await Send.ResponseAsync(new
             {
                 status = "unhealthy",
                 error = "Unexpected output from hello-world container",
@@ -149,7 +162,7 @@ public class DockerHealthEndpoint : EndpointWithoutRequest<object>
         }
         catch (Exception ex)
         {
-            await SendAsync(new
+            await Send.ResponseAsync(new
             {
                 status = "unhealthy",
                 error = ex.Message,
@@ -187,7 +200,7 @@ public class GitHubHealthEndpoint : EndpointWithoutRequest<object>
             var slug = await _gitHubService.GetAppSlugAsync();
             if (string.IsNullOrWhiteSpace(slug))
             {
-                await SendAsync(new
+                await Send.ResponseAsync(new
                 {
                     status = "unhealthy",
                     error = "GitHub App authentication failed",
@@ -198,7 +211,7 @@ public class GitHubHealthEndpoint : EndpointWithoutRequest<object>
 
             if (string.IsNullOrWhiteSpace(repo))
             {
-                await SendAsync(new
+                await Send.OkAsync(new
                 {
                     status = "healthy",
                     message = $"GitHub App authentication is valid ({slug}). Provide ?repo=owner/repo to test specific repository access.",
@@ -211,7 +224,7 @@ public class GitHubHealthEndpoint : EndpointWithoutRequest<object>
 
             if (result == null)
             {
-                await SendAsync(new
+                await Send.ResponseAsync(new
                 {
                     status = "not_found",
                     error = $"Repository '{repo}' not found or GitHub App is not installed on it",
@@ -222,7 +235,7 @@ public class GitHubHealthEndpoint : EndpointWithoutRequest<object>
 
             var (installationId, repository) = result.Value;
 
-            await SendAsync(new
+            await Send.OkAsync(new
             {
                 status = "healthy",
                 message = "GitHub App can access the repository",
@@ -239,7 +252,7 @@ public class GitHubHealthEndpoint : EndpointWithoutRequest<object>
         }
         catch (Exception ex)
         {
-            await SendAsync(new
+            await Send.ResponseAsync(new
             {
                 status = "unhealthy",
                 error = ex.Message,
@@ -263,7 +276,7 @@ public class ErrorEndpoint : EndpointWithoutRequest
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        await SendResultAsync(TypedResults.Problem(
+        await Send.ResultAsync(TypedResults.Problem(
             title: "An unexpected error occurred.",
             statusCode: StatusCodes.Status500InternalServerError));
     }
@@ -284,7 +297,7 @@ public class SessionGetEndpoint : EndpointWithoutRequest
     public override async Task HandleAsync(CancellationToken ct)
     {
         var qs = HttpContext.Request.QueryString.Value ?? string.Empty;
-        await SendRedirectAsync("/projects/create" + qs, false, false);
+        await Send.RedirectAsync("/projects/create" + qs, false, false);
     }
 }
 
@@ -303,6 +316,6 @@ public class SessionPostEndpoint : EndpointWithoutRequest
     public override async Task HandleAsync(CancellationToken ct)
     {
         var qs = HttpContext.Request.QueryString.Value ?? string.Empty;
-        await SendRedirectAsync("/projects/create" + qs, false, false);
+        await Send.RedirectAsync("/projects/create" + qs, false, false);
     }
 }

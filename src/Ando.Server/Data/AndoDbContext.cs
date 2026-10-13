@@ -8,12 +8,26 @@
 // indexes, and constraints via Fluent API.
 //
 // Design Decisions:
-// - Using SQL Server for production (Hangfire also uses SQL Server)
+// - Single model shared by SQL Server and PostgreSQL; provider-specific
+//   subclasses (SqlServerAndoDbContext, PostgreSqlAndoDbContext) exist only so
+//   each provider gets its own migration set
 // - Indexes on frequently queried columns (GitHubId, RepoFullName, Status)
 // - Cascade delete from Project to Builds/Secrets for cleanup
 // - BuildLogEntry uses long Id to support high volume
+// - Provider-specific configuration is limited to what cannot be expressed
+//   portably (the filtered GitHubId index and the binary
+//   NormalizedName collation on SQL Server); everything else is
+//   shared so both migration sets describe the same model
+// - Every DateTime/DateTime? goes through UtcDateTimeConverter so values read
+//   from either provider have Kind=Utc
+// - Secret names are unique per project by NormalizedName (uppercase invariant)
+//   so uniqueness and lookups behave the same under case-insensitive SQL Server
+//   collations and case-sensitive PostgreSQL; on SQL Server NormalizedName uses
+//   the binary collation Latin1_General_100_BIN2 so the database never applies
+//   its own (possibly culture-specific) case rules to it
 // =============================================================================
 
+using Ando.Server.Data.Conventions;
 using Ando.Server.Models;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -26,7 +40,22 @@ namespace Ando.Server.Data;
 /// </summary>
 public class AndoDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, int>
 {
+    /// <summary>
+    /// Creates a context with options typed to the base context.
+    /// Used by unit tests (InMemory) and tooling that works with the shared model directly.
+    /// </summary>
+    /// <param name="options">Options configured for <see cref="AndoDbContext"/>.</param>
     public AndoDbContext(DbContextOptions<AndoDbContext> options) : base(options)
+    {
+    }
+
+    /// <summary>
+    /// Creates a context with untyped options so provider-specific subclasses
+    /// (<see cref="SqlServerAndoDbContext"/>, <see cref="PostgreSqlAndoDbContext"/>)
+    /// can pass options typed to themselves.
+    /// </summary>
+    /// <param name="options">Options configured for the concrete context type.</param>
+    protected AndoDbContext(DbContextOptions options) : base(options)
     {
     }
 
@@ -39,6 +68,23 @@ public class AndoDbContext : IdentityDbContext<ApplicationUser, ApplicationRole,
     public DbSet<ApiToken> ApiTokens => Set<ApiToken>();
     public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
 
+    /// <summary>
+    /// Applies model-wide conventions: every <see cref="DateTime"/> and nullable
+    /// <see cref="DateTime"/> property is stored as UTC and read back with Kind=Utc.
+    /// </summary>
+    /// <param name="configurationBuilder">The convention configuration builder.</param>
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        base.ConfigureConventions(configurationBuilder);
+
+        configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+        configurationBuilder.Properties<DateTime?>().HaveConversion<UtcDateTimeConverter>();
+    }
+
+    /// <summary>
+    /// Configures entities, relationships, and indexes for the shared model.
+    /// </summary>
+    /// <param name="modelBuilder">The model builder.</param>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -56,7 +102,7 @@ public class AndoDbContext : IdentityDbContext<ApplicationUser, ApplicationRole,
     // -------------------------------------------------------------------------
     // ApplicationUser Configuration (extends Identity user)
     // -------------------------------------------------------------------------
-    private static void ConfigureUser(ModelBuilder modelBuilder)
+    private void ConfigureUser(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<ApplicationUser>(entity =>
         {
@@ -78,10 +124,16 @@ public class AndoDbContext : IdentityDbContext<ApplicationUser, ApplicationRole,
             entity.Property(e => e.GitHubAccessToken)
                 .HasMaxLength(500);
 
-            // Index on GitHub ID for lookups (when connected)
-            entity.HasIndex(e => e.GitHubId)
-                .IsUnique()
-                .HasFilter("[GitHubId] IS NOT NULL");
+            // Index on GitHub ID for lookups (when connected). SQL Server unique
+            // indexes treat NULLs as equal, so the filter is needed there to allow
+            // many users without GitHub. PostgreSQL (and InMemory) unique indexes
+            // already allow multiple NULLs, and the bracketed filter is T-SQL only.
+            var gitHubIdIndex = entity.HasIndex(e => e.GitHubId)
+                .IsUnique();
+            if (Database.IsSqlServer())
+            {
+                gitHubIdIndex.HasFilter("[GitHubId] IS NOT NULL");
+            }
 
             // Relationship to projects
             entity.HasMany(e => e.Projects)
@@ -185,7 +237,7 @@ public class AndoDbContext : IdentityDbContext<ApplicationUser, ApplicationRole,
     // -------------------------------------------------------------------------
     // ProjectSecret Configuration
     // -------------------------------------------------------------------------
-    private static void ConfigureProjectSecret(ModelBuilder modelBuilder)
+    private void ConfigureProjectSecret(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<ProjectSecret>(entity =>
         {
@@ -195,12 +247,28 @@ public class AndoDbContext : IdentityDbContext<ApplicationUser, ApplicationRole,
                 .IsRequired()
                 .HasMaxLength(100);
 
+            var normalizedName = entity.Property(e => e.NormalizedName)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            // SQL Server compares strings with the column collation, which is
+            // case-insensitive (and possibly culture-specific, e.g. Turkish) by
+            // default. A binary collation makes the unique index and lookups
+            // compare code points exactly like C# ordinal comparison of the
+            // already-normalized value. PostgreSQL's default comparison is
+            // already bytewise.
+            if (Database.IsSqlServer())
+            {
+                normalizedName.UseCollation("Latin1_General_100_BIN2");
+            }
+
             entity.Property(e => e.EncryptedValue)
                 .IsRequired()
                 .HasMaxLength(2000);
 
-            // Unique constraint: one secret per name per project
-            entity.HasIndex(e => new { e.ProjectId, e.Name })
+            // Unique constraint: one secret per name per project, compared
+            // case-insensitively via NormalizedName on every provider.
+            entity.HasIndex(e => new { e.ProjectId, e.NormalizedName })
                 .IsUnique();
         });
     }

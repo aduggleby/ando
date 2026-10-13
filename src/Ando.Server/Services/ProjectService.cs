@@ -10,6 +10,11 @@
 // - Secrets are encrypted using IEncryptionService
 // - Deletion cascades to builds and secrets via EF configuration
 // - Branch filter stored as comma-separated string
+// - Secret lookups compare ProjectSecret.NormalizedName so names are
+//   case-insensitive on every provider; Name keeps the casing of the first write
+// - SetSecretAsync rejects names that violate ProjectSecret.IsValidName
+//   (defense in depth behind the endpoint validation); deletes still accept
+//   legacy names so pre-existing rows can be removed
 // =============================================================================
 
 using Ando.Server.Data;
@@ -169,8 +174,21 @@ public class ProjectService : IProjectService
     /// <inheritdoc />
     public async Task SetSecretAsync(int projectId, string name, string value)
     {
+        // Defense in depth: endpoints validate first, but the service is the
+        // last point before storage, and the SQL Server backfill relies on it.
+        if (!ProjectSecret.IsValidName(name))
+        {
+            throw new ArgumentException(ProjectSecret.NameRuleDescription, nameof(name));
+        }
+
+        var normalizedName = ProjectSecret.Normalize(name);
         var secret = await _db.ProjectSecrets
-            .FirstOrDefaultAsync(s => s.ProjectId == projectId && s.Name == name);
+            // Match on the normalized name, but also on the exact stored name so secrets
+            // created before the naming rule (whose NormalizedName was backfilled by SQL
+            // UPPER rather than ToUpperInvariant) stay addressable. An exact match wins.
+            .Where(s => s.ProjectId == projectId && (s.NormalizedName == normalizedName || s.Name == name))
+            .OrderByDescending(s => s.Name == name)
+            .FirstOrDefaultAsync();
 
         var encryptedValue = _encryption.Encrypt(value);
 
@@ -180,6 +198,7 @@ public class ProjectService : IProjectService
             {
                 ProjectId = projectId,
                 Name = name,
+                NormalizedName = normalizedName,
                 EncryptedValue = encryptedValue,
                 CreatedAt = DateTime.UtcNow
             };
@@ -199,8 +218,14 @@ public class ProjectService : IProjectService
     /// <inheritdoc />
     public async Task<bool> DeleteSecretAsync(int projectId, string name)
     {
+        var normalizedName = ProjectSecret.Normalize(name);
         var secret = await _db.ProjectSecrets
-            .FirstOrDefaultAsync(s => s.ProjectId == projectId && s.Name == name);
+            // Match on the normalized name, but also on the exact stored name so secrets
+            // created before the naming rule (whose NormalizedName was backfilled by SQL
+            // UPPER rather than ToUpperInvariant) stay addressable. An exact match wins.
+            .Where(s => s.ProjectId == projectId && (s.NormalizedName == normalizedName || s.Name == name))
+            .OrderByDescending(s => s.Name == name)
+            .FirstOrDefaultAsync();
 
         if (secret == null)
         {

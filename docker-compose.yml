@@ -4,11 +4,15 @@
 # Local development environment for Ando.Server.
 # Includes SQL Server for database and volume mounts for Docker-in-Docker.
 #
-# Usage:
+# Usage (SQL Server, default):
 #   docker compose up -d          # Start all services
 #   docker compose logs -f        # Follow logs
 #   docker compose down           # Stop all services
 #   docker compose down -v        # Stop and remove volumes
+#
+# Usage (PostgreSQL): apply the override file on top of this one.
+#   docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d
+#   docker compose -f docker-compose.yml -f docker-compose.postgres.yml down
 # =============================================================================
 
 services:
@@ -23,6 +27,9 @@ services:
       - "17100:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      # Database provider: SqlServer (default) or PostgreSql.
+      # docker-compose.postgres.yml overrides this and the connection string.
+      - Database__Provider=SqlServer
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=AndoServer;User Id=sa;Password=YourPassword123!;TrustServerCertificate=true
       # Override these with your actual GitHub App credentials
       - GitHub__AppId=${GITHUB_APP_ID:-}

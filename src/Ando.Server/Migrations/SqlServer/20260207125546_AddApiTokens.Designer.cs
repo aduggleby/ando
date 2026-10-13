@@ -9,11 +9,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace Ando.Server.Migrations
+namespace Ando.Server.Migrations.SqlServer
 {
-    [DbContext(typeof(AndoDbContext))]
-    [Migration("20260219082855_AddSystemSettings")]
-    partial class AddSystemSettings
+    [DbContext(typeof(SqlServerAndoDbContext))]
+    [Migration("20260207125546_AddApiTokens")]
+    partial class AddApiTokens
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -252,9 +252,6 @@ namespace Ando.Server.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("Profile")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<int>("ProjectId")
                         .HasColumnType("int");
 
@@ -491,24 +488,6 @@ namespace Ando.Server.Migrations
                         .IsUnique();
 
                     b.ToTable("ProjectSecrets");
-                });
-
-            modelBuilder.Entity("Ando.Server.Models.SystemSettings", b =>
-                {
-                    b.Property<int>("Id")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("AllowUserRegistration")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(true);
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("SystemSettings");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<int>", b =>

@@ -3,12 +3,14 @@
  *
  * Stops and removes the docker-compose containers after tests complete.
  * By default, containers are left running for debugging. Set CLEANUP=1 to remove.
+ * The compose file follows E2E_DB_PROVIDER (sqlserver default, postgres).
  */
 
 import { execSync } from 'child_process';
 import * as path from 'path';
+import { getE2EDatabase } from './e2e-database';
 
-const COMPOSE_FILE = path.resolve(__dirname, '../docker-compose.test.yml');
+const COMPOSE_FILE = getE2EDatabase().composeFile;
 
 /**
  * Global teardown function called by Playwright.

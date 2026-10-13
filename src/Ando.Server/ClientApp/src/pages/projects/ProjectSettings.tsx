@@ -41,7 +41,13 @@ export function ProjectSettings() {
   const setSecretMutation = useMutation({
     mutationFn: ({ name, value }: { name: string; value: string }) =>
       setSecret(Number(id), name, value),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      // The endpoint answers 200 with success=false for rejected names (for example
+      // characters outside the environment-variable name rule), so check the flag.
+      if (!result.success) {
+        setError(result.error ?? 'Failed to save secret');
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ['project-settings', id] });
       setNewSecretName('');
       setNewSecretValue('');
