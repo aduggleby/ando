@@ -3,6 +3,15 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.152
+
+**2026-10-13**
+
+- Add PostgreSQL as a database option for Ando Server, alongside SQL Server
+- Add a command to export and import server data, for moving an installation to a new host or database
+- Add health check endpoints and optional log files for Ando Server
+- Update dependencies and improve test reliability
+
 ## 0.9.151
 
 **2026-07-11**

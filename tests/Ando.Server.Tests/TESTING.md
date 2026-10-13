@@ -113,7 +113,7 @@ the test bodies and two thin subclasses bind it to the `SqlServer` and
 | SqlServer | `SqlServerFixture` | `ando-server-tests-sqlserver` | 11433 | `mcr.microsoft.com/mssql/server:2022-latest` |
 | PostgreSql | `PostgreSqlFixture` | `ando-server-tests-postgres` | 17135 | `postgres:17-alpine` |
 
-When the test process itself runs inside a container that shares the host's Docker daemon (for example the ANDO build container with `--dind`), both fixtures rewrite the connection string host to `host.docker.internal` with the container's actual mapped host port, because `localhost` would be the build container rather than the host that publishes the port.
+When the test process itself runs inside a container that shares the host's Docker daemon (for example the ANDO build container with `--dind`), both fixtures connect to the database container directly (its IP address and container port) over a Docker network shared with the test runner, instead of through a published host port: `localhost` would be the build container rather than the host, and host firewalls block container-to-host traffic, so `host.docker.internal` is not reliable either. `TestcontainersEnvironment` sets this up; see the `isolated` mode below.
 
 #### Container ownership: `ANDO_TEST_DB_CONTAINERS`
 
@@ -130,7 +130,11 @@ When the test process itself runs inside a container that shares the host's Dock
 - `isolated` is for CI and any host where several runs share a Docker daemon. It is the
   default whenever `CI` or `ANDO_HOST_ROOT` is set or the test process runs inside a container
   (`/.dockerenv` exists), so builds run by Ando.Server use it
-  without configuration. Inside a container, `TestcontainersEnvironment` also disables the resource
+  without configuration:
+  each run owns uniquely named containers on random ports, never removes a
+  container by name, and removes its own containers when the run ends
+  (explicit stop/dispose plus, outside containers, the Testcontainers resource reaper).
+  Inside a container, `TestcontainersEnvironment` also disables the resource
   reaper (Ryuk), which would otherwise be contacted on `localhost` and time out before any database
   starts, and the fixtures connect to their database containers DIRECTLY (container IP and container
   port) over a shared Docker network instead of through the host's published port: host firewalls
@@ -140,10 +144,6 @@ When the test process itself runs inside a container that shares the host's Dock
   `TESTCONTAINERS_RYUK_DISABLED` explicitly to override the reaper default. Isolated containers start
   with Docker auto-remove, so they disappear as soon as they stop; only a hard-killed test process can
   leave one running (`docker ps -a | grep ando-server-tests` shows it).
-  without configuration:
-  each run owns uniquely named containers on random ports, never removes a
-  container by name, and removes its own containers when the run ends
-  (explicit stop/dispose plus the Testcontainers resource reaper).
 - Any other value fails the container-backed tests with a message listing the
   valid values.
 
