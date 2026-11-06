@@ -83,4 +83,28 @@ public class HttpOperationsTests
 
         Assert.False(result);
     }
+
+    [Fact]
+    public async Task Get_Timeout_FailsStepWithTimedOutError()
+    {
+        // A server that accepts connections but never answers.
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        try
+        {
+            var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+            var http = CreateHttp();
+            http.GetTimeout = TimeSpan.FromMilliseconds(200);
+            http.Get($"http://127.0.0.1:{port}/slow");
+
+            var result = await _registry.Steps[0].Execute();
+
+            Assert.False(result);
+            Assert.Contains(_logger.ErrorMessages, m => m.Contains("timed out"));
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
 }

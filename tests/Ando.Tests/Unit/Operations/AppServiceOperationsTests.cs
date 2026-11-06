@@ -110,7 +110,8 @@ public class AppServiceOperationsTests
         await _registry.Steps[0].Execute();
 
         _executor.LastCommand!.Options.ShouldNotBeNull();
-        _executor.LastCommand!.Options!.TimeoutMs.ShouldBe(20 * 60 * 1000);
+        // The remaining budget is passed, so a few milliseconds may already be used.
+        _executor.LastCommand!.Options!.TimeoutMs.ShouldBeInRange(20 * 60 * 1000 - 5_000, 20 * 60 * 1000);
     }
 
     [Fact]

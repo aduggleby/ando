@@ -37,6 +37,25 @@ public class ContainerExecutor : CommandExecutorBase
     private readonly string _containerWorkDir;
     private readonly string _containerRootPath;
     private string? _hostRootPath;
+    private bool _azureCliEnsured;
+
+    /// <summary>
+    /// Environment variables passed to every command run in the container, for
+    /// example the run's private AZURE_CONFIG_DIR. Per-command values win.
+    /// </summary>
+    public Dictionary<string, string> DefaultEnvironment { get; } = new();
+
+    // Installs the Azure CLI in Debian/Ubuntu images that don't have it.
+    internal const string AzureCliInstallScript =
+        "set -eu; " +
+        "command -v az >/dev/null 2>&1 && exit 0; " +
+        "if ! command -v apt-get >/dev/null 2>&1; then " +
+        "echo 'The Azure CLI is not in the build image, and ANDO can only install it on Debian or Ubuntu images. Use an image that includes az.' >&2; exit 1; fi; " +
+        "export DEBIAN_FRONTEND=noninteractive; " +
+        "command -v curl >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq curl ca-certificates); " +
+        "curl -fsSL https://aka.ms/InstallAzureCLIDeb -o /tmp/ando-az-install.sh; " +
+        "bash /tmp/ando-az-install.sh; rm -f /tmp/ando-az-install.sh; " +
+        "command -v az >/dev/null 2>&1 || { echo 'The Azure CLI was not installed.' >&2; exit 1; }";
 
     /// <summary>
     /// Creates a new ContainerExecutor.
@@ -62,6 +81,53 @@ public class ContainerExecutor : CommandExecutorBase
         _hostRootPath = Path.GetFullPath(hostRootPath);
     }
 
+    /// <summary>
+    /// Installs the Azure CLI in the container before the first az command when
+    /// the image doesn't include it.
+    /// </summary>
+    protected override async Task<CommandResult?> PrepareCommandAsync(string command, CommandOptions options)
+    {
+        if (command != "az" || _azureCliEnsured)
+        {
+            return null;
+        }
+
+        var check = await ExecuteAsync("sh", ["-c", "command -v az"],
+            new CommandOptions { SuppressOutput = true, TimeoutMs = 30_000 });
+        if (!check.Success)
+        {
+            Logger.Info("Azure CLI not found in the build container. Installing it...");
+            var install = await ExecuteAsync("sh", ["-c", AzureCliInstallScript],
+                new CommandOptions { TimeoutMs = 15 * 60 * 1000 });
+            if (!install.Success)
+            {
+                return CommandResult.Failed(install.ExitCode,
+                    "Could not install the Azure CLI in the build container. " + (install.Error ?? ""));
+            }
+        }
+
+        _azureCliEnsured = true;
+        return null;
+    }
+
+    /// <summary>
+    /// Killing `docker exec` leaves the command running in the container. Steps
+    /// run one at a time, so stop every process except the container's PID 1
+    /// before the build continues (e.g. into rollback steps).
+    /// </summary>
+    protected override async Task OnCommandTimedOutAsync()
+    {
+        Logger.Warning("Stopping the timed-out command inside the build container...");
+        var runner = new ProcessRunner(Logger);
+        await runner.ExecuteAsync("docker",
+            ["exec", _containerId, "sh", "-c", StopAllCommandsScript],
+            new CommandOptions { SuppressOutput = true, TimeoutMs = 60_000 });
+    }
+
+    /// <summary>Stops every process in the container except PID 1 (and itself).</summary>
+    internal const string StopAllCommandsScript =
+        "kill -TERM -1 2>/dev/null; sleep 2; kill -KILL -1 2>/dev/null; true";
+
     protected override ProcessStartInfo PrepareProcessStartInfo(string command, string[] args, CommandOptions options)
     {
         // Build the 'docker exec' command with appropriate flags.
@@ -78,12 +144,21 @@ public class ContainerExecutor : CommandExecutorBase
             dockerArgs.AddRange(["-e", $"{key}={value}"]);
         }
 
+        // Run-wide container environment (e.g. AZURE_CONFIG_DIR).
+        foreach (var (key, value) in DefaultEnvironment)
+        {
+            if (!options.Environment.ContainsKey(key))
+            {
+                dockerArgs.AddRange(["-e", $"{key}={value}"]);
+            }
+        }
+
         // Forward environment variables that ANDO explicitly loaded from env files.
         // This keeps containerized subprocesses consistent with the build script's
         // host-side environment without inheriting the full host environment.
         foreach (var (key, value) in LoadedEnvironmentVariables.GetTrackedVariables())
         {
-            if (!options.Environment.ContainsKey(key))
+            if (!options.Environment.ContainsKey(key) && !DefaultEnvironment.ContainsKey(key))
             {
                 dockerArgs.AddRange(["-e", $"{key}={value}"]);
             }

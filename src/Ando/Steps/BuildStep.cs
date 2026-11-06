@@ -72,4 +72,53 @@ public class BuildStep(string Name, Func<Task<bool>> Execute, string? Context = 
     /// Message for log steps.
     /// </summary>
     public string? LogMessage { get; init; }
+
+    /// <summary>
+    /// For composite steps (blocks, finally scopes, deferred bodies): runs the
+    /// nested steps through the workflow runner instead of <see cref="Execute"/>.
+    /// The runner runs nested steps with the same logging, recording and
+    /// cancellation handling as top-level steps.
+    /// </summary>
+    public Func<IStepRunner, Task<bool>>? ExecuteWithRunner { get; init; }
+
+    /// <summary>
+    /// Statically known nested scopes of a composite step, used by pre-flight
+    /// checks that scan every step (see StepRegistry.AllSteps).
+    /// </summary>
+    public IReadOnlyList<StepScope> ChildScopes { get; init; } = [];
+
+    /// <summary>Whether this is a composite step that runs nested steps.</summary>
+    public bool IsComposite => ExecuteWithRunner != null;
+}
+
+/// <summary>
+/// Runs nested steps for composite steps (see <see cref="BuildStep.ExecuteWithRunner"/>).
+/// Implemented by WorkflowRunner.
+/// </summary>
+public interface IStepRunner
+{
+    /// <summary>
+    /// Runs the scope's steps (stopping at the first failure). If one failed or
+    /// the run was cancelled, runs <paramref name="onFailure"/> scopes as cleanup.
+    /// Then runs the scope's finally steps (every one of them, last registered
+    /// first, even after a failure or cancellation). Returns true only when the
+    /// scope's steps and finally steps all succeeded; on-failure steps never turn
+    /// a failure into success.
+    /// </summary>
+    Task<bool> RunScopeAsync(StepScope scope, IReadOnlyList<StepScope>? onFailure = null);
+
+    /// <summary>
+    /// Runs a scope that must run even after a failure or cancellation (finally
+    /// and on-failure steps): cancellation is ignored for everything inside it.
+    /// When <paramref name="continueOnFailure"/> is true, a failing step does not
+    /// stop the remaining steps of this scope.
+    /// </summary>
+    Task<bool> RunCleanupScopeAsync(StepScope scope, bool continueOnFailure);
+
+    /// <summary>
+    /// Runs the steps a deferred body (Ando.Defer, Ando.When) registered at
+    /// execution time. Finally steps it registered move to the scope that is
+    /// running it, so they run when the enclosing block (or the run) ends.
+    /// </summary>
+    Task<bool> RunDeferredAsync(StepScope deferred);
 }

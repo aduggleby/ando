@@ -16,9 +16,9 @@
 // - Environment variables use standard Azure SDK naming conventions
 // - EnsureLoggedIn is a verification step, not a login step
 // - Service Principal credentials can come from env vars or explicit parameters
-// - Service principal / managed identity logins run against an isolated
-//   AZURE_CONFIG_DIR so they never read or overwrite the user's ~/.azure
-//   profile (see UseIsolatedAzureProfile)
+// - Service principal / managed identity logins run in the build container
+//   against its per-run AZURE_CONFIG_DIR (set by the CLI), so they never read
+//   or overwrite the user's ~/.azure profile
 // =============================================================================
 
 using System.Diagnostics;
@@ -49,73 +49,6 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
     // Environment variable the Azure CLI uses to locate its profile directory.
     internal const string EnvAzureConfigDir = "AZURE_CONFIG_DIR";
 
-    // Isolated Azure CLI profile directory for this process, created on the
-    // first service principal / managed identity login. Static because the
-    // AZURE_CONFIG_DIR environment variable is process-wide.
-    private static readonly object ProfileLock = new();
-    private static string? _isolatedProfileDir;
-
-    /// <summary>
-    /// Switches this process — and every az invocation it spawns — to a private,
-    /// freshly created AZURE_CONFIG_DIR. Service credentials are written there
-    /// instead of the user's ~/.azure profile, so a build can never overwrite the
-    /// developer's personal az session, and no az step in this build can silently
-    /// fall back to it. Applied at registration time: as soon as a build declares
-    /// service principal or managed identity authentication, the user's session
-    /// profile becomes unreachable for the entire run. The directory is removed
-    /// on process exit (best effort) since it holds access tokens.
-    /// </summary>
-    /// <returns>The isolated profile directory path.</returns>
-    internal static string UseIsolatedAzureProfile()
-    {
-        lock (ProfileLock)
-        {
-            if (_isolatedProfileDir != null)
-            {
-                return _isolatedProfileDir;
-            }
-
-            var dir = Path.Combine(Path.GetTempPath(), $"ando-azure-profile-{Guid.NewGuid():N}");
-
-            // The profile will contain access tokens - restrict it to the current
-            // user on platforms that support Unix file modes.
-            if (OperatingSystem.IsWindows())
-            {
-                Directory.CreateDirectory(dir);
-            }
-            else
-            {
-                Directory.CreateDirectory(dir,
-                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-            }
-
-            Environment.SetEnvironmentVariable(EnvAzureConfigDir, dir);
-
-            AppDomain.CurrentDomain.ProcessExit += (_, _) =>
-            {
-                try { Directory.Delete(dir, recursive: true); }
-                catch { /* best effort - temp cleanup will get it eventually */ }
-            };
-
-            _isolatedProfileDir = dir;
-            return dir;
-        }
-    }
-
-    /// <summary>
-    /// Resets the isolated profile state so tests can exercise
-    /// <see cref="UseIsolatedAzureProfile"/> in isolation.
-    /// Restores AZURE_CONFIG_DIR to the given value (null clears it).
-    /// </summary>
-    internal static void ResetIsolatedProfileForTests(string? previousConfigDir = null)
-    {
-        lock (ProfileLock)
-        {
-            _isolatedProfileDir = null;
-            Environment.SetEnvironmentVariable(EnvAzureConfigDir, previousConfigDir);
-        }
-    }
-
     /// <summary>
     /// Registers a step to verify the user is logged in to Azure.
     /// Fails the build if not authenticated.
@@ -143,9 +76,8 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
     /// login. This guarantees a build always runs as the intended service
     /// principal and never as a developer's personal `az login` session.
     ///
-    /// Service principal logins always run against an isolated AZURE_CONFIG_DIR
-    /// (see <see cref="UseIsolatedAzureProfile"/>), so they never read or
-    /// overwrite the user's ~/.azure profile.
+    /// Service principal logins run against the container's per-run
+    /// AZURE_CONFIG_DIR, so they never read or overwrite the user's ~/.azure profile.
     /// </summary>
     /// <param name="clientId">Service principal application (client) ID, or null to use AZURE_CLIENT_ID.</param>
     /// <param name="clientSecret">Service principal client secret, or null to use AZURE_CLIENT_SECRET.</param>
@@ -172,6 +104,7 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
         {
             // Service principal credentials found - use them.
             Logger.Info("Azure: Using service principal authentication");
+            SecretValues.Add(resolvedClientSecret);
             LoginWithServicePrincipal(resolvedClientId, resolvedClientSecret, resolvedTenantId);
             return;
         }
@@ -187,45 +120,12 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
                 + "Refusing to fall back to an existing 'az login' session or interactive login.");
         }
 
-        // No service principal credentials - check if Azure CLI is available.
-        if (!IsAzureCliAvailable())
-        {
-            // Azure CLI not installed - prompt user to install.
-            Logger.Warning("Azure CLI is not installed.");
-            Logger.Info(GetAzureCliInstallInstructions());
-
-            Console.Write("\nWould you like to install Azure CLI now? (y/N): ");
-            var response = Console.ReadLine()?.Trim().ToLowerInvariant();
-
-            if (response == "y" || response == "yes")
-            {
-                InstallAzureCli();
-                // After installation, we need to run az login.
-                Logger.Info("Azure CLI installed. Running interactive login...");
-                RegisterInteractiveLogin();
-            }
-            else
-            {
-                throw new InvalidOperationException(
-                    "Azure CLI is required for authentication. Please install it and run 'az login', " +
-                    "or set AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, and AZURE_TENANT_ID environment variables.");
-            }
-            return;
-        }
-
-        // Azure CLI is available - check if already logged in.
-        if (IsLoggedIn())
-        {
-            Logger.Info("Azure: Using existing CLI session");
-            // Just verify the session is valid.
-            EnsureLoggedIn();
-        }
-        else
-        {
-            // Not logged in - run interactive login.
-            Logger.Info("Azure: Running interactive login...");
-            RegisterInteractiveLogin();
-        }
+        // No service principal credentials: use the build container's az session,
+        // or log in with a device code. Runs at execution time inside the build
+        // container, which has its own per-run Azure CLI profile, so this never
+        // reads or writes the host's ~/.azure.
+        Logger.Info("Azure: No service principal credentials; the build will log in interactively (device code)");
+        RegisterInteractiveLogin();
     }
 
     // Treats "1", "true", "yes", "on" (case-insensitive) as true; everything else false.
@@ -236,115 +136,42 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
     }
 
     /// <summary>
-    /// Checks if the user is currently logged in to Azure CLI.
-    /// </summary>
-    private static bool IsLoggedIn()
-    {
-        try
-        {
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = "az",
-                Arguments = "account show --output none",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            };
-
-            using var process = Process.Start(startInfo);
-            if (process == null) return false;
-
-            process.WaitForExit(10000);
-            return process.ExitCode == 0;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Registers a step to run interactive Azure login.
+    /// Registers a step that reuses an existing az session in the build
+    /// environment or runs `az login --use-device-code`.
     /// </summary>
     private void RegisterInteractiveLogin()
     {
-        RegisterCommand("Azure.Login.Interactive", "az",
-            () => new ArgumentBuilder()
-                .Add("login")
-                .Add("--output", "none"));
+        Registry.Register("Azure.Login.Interactive", async () =>
+        {
+            var executor = ExecutorFactory();
+            var existing = await executor.ExecuteAsync("az", ["account", "show", "--output", "none"],
+                new CommandOptions { SuppressOutput = true, TimeoutMs = 60_000 });
+            if (existing.Success)
+            {
+                Logger.Info("    Using the existing Azure CLI session");
+                return true;
+            }
+
+            var login = await executor.ExecuteAsync("az", ["login", "--use-device-code", "--output", "none"],
+                new CommandOptions { Interactive = true, TimeoutMs = 15 * 60 * 1000 });
+            return login.Success;
+        });
     }
 
     /// <summary>
-    /// Installs Azure CLI using the appropriate method for the current platform.
+    /// Registers a step that runs `az` with <paramref name="args"/> as the build's
+    /// authenticated identity, in the build container. Its stdout is available
+    /// to later steps; add "--output", "json" or "--query", "...", "-o", "tsv" as needed.
+    /// Usage: var show = Azure.Cli("webapp", "show", "-g", rg, "-n", app, "--slot", "release");
+    ///        Ando.When(() => show.Json("siteConfig.ipSecurityRestrictionsDefaultAction") == "Deny", ...);
     /// </summary>
-    private void InstallAzureCli()
-    {
-        Logger.Info("Installing Azure CLI...");
+    public CommandStep Cli(params string[] args) =>
+        ShellCommandOperations.RegisterCommandStep(Registry, Logger, ExecutorFactory,
+            "Azure.Cli", "az", args, string.Join(' ', args.TakeWhile(a => !a.StartsWith('-')).Take(3)));
 
-        ProcessStartInfo startInfo;
-
-        if (OperatingSystem.IsMacOS())
-        {
-            startInfo = new ProcessStartInfo
-            {
-                FileName = "brew",
-                Arguments = "install azure-cli",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
-        }
-        else if (OperatingSystem.IsLinux())
-        {
-            startInfo = new ProcessStartInfo
-            {
-                FileName = "bash",
-                Arguments = "-c \"curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash\"",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
-        }
-        else if (OperatingSystem.IsWindows())
-        {
-            startInfo = new ProcessStartInfo
-            {
-                FileName = "winget",
-                Arguments = "install Microsoft.AzureCLI --accept-source-agreements --accept-package-agreements",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
-        }
-        else
-        {
-            throw new InvalidOperationException(
-                "Automatic installation is not supported on this platform. " +
-                "Please visit: https://docs.microsoft.com/cli/azure/install-azure-cli");
-        }
-
-        using var process = Process.Start(startInfo);
-        if (process == null)
-        {
-            throw new InvalidOperationException("Failed to start Azure CLI installation process.");
-        }
-
-        // Stream output to console.
-        process.OutputDataReceived += (_, e) => { if (e.Data != null) Logger.Info(e.Data); };
-        process.ErrorDataReceived += (_, e) => { if (e.Data != null) Logger.Warning(e.Data); };
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-
-        process.WaitForExit();
-
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException($"Azure CLI installation failed with exit code {process.ExitCode}.");
-        }
-
-        Logger.Info("Azure CLI installed successfully.");
-    }
+    /// <summary>Azure virtual machine operations (run-command).</summary>
+    public AzureVmOperations Vm => _vm ??= new AzureVmOperations(Registry, Logger, ExecutorFactory);
+    private AzureVmOperations? _vm;
 
     /// <summary>
     /// Registers a step to display current Azure account information.
@@ -371,11 +198,11 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
         var resolvedClientId = clientId ?? EnvironmentHelper.GetRequired(EnvClientId, "Azure Client ID");
         var resolvedClientSecret = clientSecret ?? EnvironmentHelper.GetRequired(EnvClientSecret, "Azure Client Secret");
         var resolvedTenantId = tenantId ?? EnvironmentHelper.GetRequired(EnvTenantId, "Azure Tenant ID");
+        SecretValues.Add(resolvedClientSecret);
 
-        // Never write service principal credentials into the user's ~/.azure
-        // profile - the whole build runs against an isolated profile instead.
-        var profileDir = UseIsolatedAzureProfile();
-        Logger.Info($"Azure: Using isolated CLI profile at {profileDir} (user's az profile is not touched)");
+        // The login runs in the build container, which has its own per-run
+        // AZURE_CONFIG_DIR (set by the CLI), so ~/.azure is never touched.
+        Logger.Info("Azure: Logging in with a private per-run Azure CLI profile (your ~/.azure is not used)");
 
         RegisterCommand("Azure.Login.ServicePrincipal", "az",
             () => new ArgumentBuilder()
@@ -394,10 +221,9 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
     /// If null, uses system-assigned managed identity.</param>
     public void LoginWithManagedIdentity(string? clientId = null)
     {
-        // Same isolation as service principal login: keep the managed identity
-        // session out of the user's ~/.azure profile.
-        var profileDir = UseIsolatedAzureProfile();
-        Logger.Info($"Azure: Using isolated CLI profile at {profileDir} (user's az profile is not touched)");
+        // The login runs in the build container, which has its own per-run
+        // AZURE_CONFIG_DIR (set by the CLI), so ~/.azure is never touched.
+        Logger.Info("Azure: Logging in with a private per-run Azure CLI profile (your ~/.azure is not used)");
 
         RegisterCommand("Azure.Login.ManagedIdentity", "az",
             () => new ArgumentBuilder()
@@ -466,26 +292,5 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
         {
             return false;
         }
-    }
-
-    /// <summary>
-    /// Gets OS-specific installation instructions for Azure CLI.
-    /// </summary>
-    /// <returns>Installation command or URL for the current platform.</returns>
-    public static string GetAzureCliInstallInstructions()
-    {
-        if (OperatingSystem.IsMacOS())
-        {
-            return "  macOS:   brew install azure-cli";
-        }
-        if (OperatingSystem.IsLinux())
-        {
-            return "  Linux:   curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash";
-        }
-        if (OperatingSystem.IsWindows())
-        {
-            return "  Windows: winget install Microsoft.AzureCLI";
-        }
-        return "  Visit: https://docs.microsoft.com/cli/azure/install-azure-cli";
     }
 }

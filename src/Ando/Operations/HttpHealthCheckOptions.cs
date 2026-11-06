@@ -78,4 +78,49 @@ public class HttpHealthCheckOptions
         RequestTimeoutSeconds = seconds;
         return this;
     }
+
+    /// <summary>Successful checks in a row needed to pass. Default 1.</summary>
+    public int RequiredConsecutiveSuccesses { get; private set; } = 1;
+
+    /// <summary>Minimum seconds between two counted successful checks. Default 0.</summary>
+    public int MinimumGapSeconds { get; private set; }
+
+    /// <summary>JSON values the response body must contain (dotted path -> expected string).</summary>
+    public IReadOnlyList<KeyValuePair<string, string>> ExpectedJson => _expectedJson;
+    private readonly List<KeyValuePair<string, string>> _expectedJson = [];
+
+    /// <summary>
+    /// Requires this many successful checks in a row (a failure resets the count).
+    /// With several URLs, one check means every URL passed.
+    /// </summary>
+    public HttpHealthCheckOptions ConsecutiveSuccesses(int count)
+    {
+        if (count < 1) throw new ArgumentOutOfRangeException(nameof(count), "Must be at least 1.");
+        RequiredConsecutiveSuccesses = count;
+        return this;
+    }
+
+    /// <summary>
+    /// Waits at least this long between counted successful checks, so
+    /// ConsecutiveSuccesses(3).MinGapSeconds(11) means three passing checks spread
+    /// over at least 22 seconds.
+    /// </summary>
+    public HttpHealthCheckOptions MinGapSeconds(int seconds)
+    {
+        if (seconds < 0) throw new ArgumentOutOfRangeException(nameof(seconds));
+        MinimumGapSeconds = seconds;
+        return this;
+    }
+
+    /// <summary>
+    /// Requires the response body to be JSON with <paramref name="expected"/> at
+    /// <paramref name="path"/> (dotted path, e.g. "version" or "build.commit").
+    /// Numbers and booleans compare by their JSON text. Applies to every URL of
+    /// this call; use a separate call for URLs that don't return the value.
+    /// </summary>
+    public HttpHealthCheckOptions ExpectJson(string path, string expected)
+    {
+        _expectedJson.Add(new KeyValuePair<string, string>(path, expected));
+        return this;
+    }
 }

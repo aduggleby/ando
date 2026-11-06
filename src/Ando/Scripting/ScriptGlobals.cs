@@ -157,6 +157,18 @@ public class ScriptGlobals
     public DocfxOperations Docfx { get; }
 
     /// <summary>
+    /// Generic command steps that run in the build container.
+    /// Usage: var r = Shell.Run("zip", "-qr", "app.zip", ".").InDirectory("artifacts/web");
+    /// Usage: Shell.Bash("source scripts/gates.sh && check_build artifacts/web");
+    /// </summary>
+    public ShellCommandOperations Shell { get; }
+
+    /// <summary>
+    /// Bun installation. Usage: Bun.Install("1.2.23");
+    /// </summary>
+    public BunOperations Bun { get; }
+
+    /// <summary>
     /// Legacy .NET SDK installation operations.
     /// Use Dotnet.SdkInstall() instead for new scripts.
     /// Usage: DotnetSdk.Install() or DotnetSdk.Install("9.0")
@@ -227,6 +239,8 @@ public class ScriptGlobals
         Docker = buildContext.Operations.Docker;
         Playwright = buildContext.Operations.Playwright;
         Docfx = buildContext.Operations.Docfx;
+        Shell = buildContext.Operations.Shell;
+        Bun = buildContext.Operations.Bun;
         _profileRegistry = buildContext.ProfileRegistry;
 
         // Legacy backward compatibility.

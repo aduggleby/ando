@@ -246,29 +246,6 @@ public class AzureOperationsTests
     }
 
     [Fact]
-    public void GetAzureCliInstallInstructions_ReturnsNonEmptyString()
-    {
-        var instructions = AzureOperations.GetAzureCliInstallInstructions();
-
-        Assert.NotNull(instructions);
-        Assert.NotEmpty(instructions);
-    }
-
-    [Fact]
-    public void GetAzureCliInstallInstructions_ContainsInstallCommand()
-    {
-        var instructions = AzureOperations.GetAzureCliInstallInstructions();
-
-        // Should contain either a package manager command or a URL
-        var containsInstallInfo = instructions.Contains("brew") ||
-                                   instructions.Contains("curl") ||
-                                   instructions.Contains("winget") ||
-                                   instructions.Contains("microsoft.com");
-
-        Assert.True(containsInstallInfo, $"Expected install instructions, got: {instructions}");
-    }
-
-    [Fact]
     public void EnsureAuthenticated_WithExplicitCredentials_RegistersServicePrincipalLogin()
     {
         var azure = CreateAzure();
@@ -278,90 +255,6 @@ public class AzureOperationsTests
         // Explicit credentials always use the service principal path (no fallback).
         Assert.Single(_registry.Steps);
         Assert.Equal("Azure.Login.ServicePrincipal", _registry.Steps[0].Name);
-    }
-
-    [Fact]
-    public void LoginWithServicePrincipal_UsesIsolatedAzureProfile()
-    {
-        var previousConfigDir = Environment.GetEnvironmentVariable(AzureOperations.EnvAzureConfigDir);
-        AzureOperations.ResetIsolatedProfileForTests(previousConfigDir: null);
-
-        try
-        {
-            var azure = CreateAzure();
-            azure.LoginWithServicePrincipal("client-id", "client-secret", "tenant-id");
-
-            var configDir = Environment.GetEnvironmentVariable(AzureOperations.EnvAzureConfigDir);
-            Assert.NotNull(configDir);
-            Assert.True(Directory.Exists(configDir));
-
-            // Must be Ando's own profile, never the user's ~/.azure default.
-            var userProfile = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".azure");
-            Assert.NotEqual(userProfile, configDir);
-            Assert.Contains("ando-azure-profile-", configDir);
-        }
-        finally
-        {
-            CleanUpIsolatedProfile(previousConfigDir);
-        }
-    }
-
-    [Fact]
-    public void LoginWithManagedIdentity_UsesIsolatedAzureProfile()
-    {
-        var previousConfigDir = Environment.GetEnvironmentVariable(AzureOperations.EnvAzureConfigDir);
-        AzureOperations.ResetIsolatedProfileForTests(previousConfigDir: null);
-
-        try
-        {
-            var azure = CreateAzure();
-            azure.LoginWithManagedIdentity();
-
-            var configDir = Environment.GetEnvironmentVariable(AzureOperations.EnvAzureConfigDir);
-            Assert.NotNull(configDir);
-            Assert.True(Directory.Exists(configDir));
-            Assert.Contains("ando-azure-profile-", configDir);
-        }
-        finally
-        {
-            CleanUpIsolatedProfile(previousConfigDir);
-        }
-    }
-
-    [Fact]
-    public void UseIsolatedAzureProfile_ReturnsSameDirectoryWithinProcess()
-    {
-        var previousConfigDir = Environment.GetEnvironmentVariable(AzureOperations.EnvAzureConfigDir);
-        AzureOperations.ResetIsolatedProfileForTests(previousConfigDir: null);
-
-        try
-        {
-            var first = AzureOperations.UseIsolatedAzureProfile();
-            var second = AzureOperations.UseIsolatedAzureProfile();
-
-            // One isolated profile per build process: login and all subsequent
-            // az steps must share it.
-            Assert.Equal(first, second);
-            Assert.Equal(first, Environment.GetEnvironmentVariable(AzureOperations.EnvAzureConfigDir));
-        }
-        finally
-        {
-            CleanUpIsolatedProfile(previousConfigDir);
-        }
-    }
-
-    // Removes the isolated profile directory created during a test and restores
-    // the process-wide AZURE_CONFIG_DIR to its pre-test value.
-    private static void CleanUpIsolatedProfile(string? previousConfigDir)
-    {
-        var configDir = Environment.GetEnvironmentVariable(AzureOperations.EnvAzureConfigDir);
-        if (configDir != null && configDir.Contains("ando-azure-profile-") && Directory.Exists(configDir))
-        {
-            try { Directory.Delete(configDir, recursive: true); } catch { /* best effort */ }
-        }
-
-        AzureOperations.ResetIsolatedProfileForTests(previousConfigDir);
     }
 
     [Fact]

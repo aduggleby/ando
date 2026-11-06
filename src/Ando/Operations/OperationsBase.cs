@@ -73,6 +73,9 @@ public abstract class OperationsBase
         string? workingDirectory,
         Dictionary<string, string>? environment)
     {
+        // Ando.CommandTimeout applies to command steps registered after it.
+        var timeoutMs = Registry.DefaultCommandTimeoutMs;
+
         Registry.Register(stepName, async () =>
         {
             // Run ensurer first if provided (auto-install SDK/runtime if needed).
@@ -84,6 +87,10 @@ public abstract class OperationsBase
             // Get arguments (evaluated at execution time, not registration time).
             var args = getArgs();
             var options = BuildCommandOptions(workingDirectory, environment);
+            if (timeoutMs != null)
+            {
+                options.TimeoutMs = timeoutMs.Value;
+            }
             var result = await ExecutorFactory().ExecuteAsync(command, args, options);
             if (!result.Success && IsTimeout(result))
             {

@@ -99,6 +99,12 @@ public class BuildOperations
     /// <summary>DocFX operations for generating API documentation.</summary>
     public DocfxOperations Docfx { get; }
 
+    /// <summary>Generic command steps (Shell.Run, Shell.Bash).</summary>
+    public ShellCommandOperations Shell { get; }
+
+    /// <summary>Bun installation operations.</summary>
+    public BunOperations Bun { get; }
+
     /// <summary>Legacy .NET SDK installation operations. Use Dotnet.SdkInstall() instead.</summary>
     [Obsolete("Use Dotnet.SdkInstall() instead.")]
     public DotnetSdkOperations DotnetSdk { get; }
@@ -142,15 +148,17 @@ public class BuildOperations
         NpmGlobal = new NpmInstallOperations(registry, logger, executorFactory, nodeEnsurer);
         Log = new LogOperations(registry);
         Nuget = new NugetOperations(registry, logger, executorFactory);
-        Ando = new AndoOperations(registry, logger, containerToHostPath, buildOptions, Artifacts, profileRegistry);
+        Ando = new AndoOperations(registry, logger, containerToHostPath, buildOptions, Artifacts, profileRegistry, executorFactory);
 
         // Initialize Git, GitHub, Docker, Playwright, and Docfx operations.
         var gitHubAuthHelper = new GitHubAuthHelper(logger);
-        Git = new GitOperations(registry, logger, executorFactory);
+        Git = new GitOperations(registry, logger, executorFactory, buildOptions.Session);
         GitHub = new GitHubOperations(registry, logger, executorFactory, gitHubAuthHelper);
         Docker = new DockerOperations(registry, logger, executorFactory, gitHubAuthHelper);
         Playwright = new PlaywrightOperations(registry, logger, executorFactory, nodeEnsurer);
         Docfx = new DocfxOperations(registry, logger, executorFactory);
+        Shell = new ShellCommandOperations(registry, logger, executorFactory);
+        Bun = new BunOperations(registry, logger, executorFactory);
 
         // Legacy backward compatibility wrapper.
 #pragma warning disable CS0618 // Suppress obsolete warning for internal initialization

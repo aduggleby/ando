@@ -81,6 +81,12 @@ public class ScriptHost(IBuildLogger logger)
     /// <param name="scriptPath">Path to the build.csando file.</param>
     /// <param name="rootPath">Project root directory.</param>
     /// <returns>BuildContext with registered steps ready for execution.</returns>
+    /// <summary>
+    /// Called with the new build context before the script is evaluated, so the
+    /// CLI can set per-run state (invocation directory, --yes, --ref).
+    /// </summary>
+    public Action<BuildContext>? ConfigureContext { get; set; }
+
     public async Task<BuildContext> LoadScriptAsync(string scriptPath, string rootPath)
     {
         if (!File.Exists(scriptPath))
@@ -93,6 +99,7 @@ public class ScriptHost(IBuildLogger logger)
 
         // Set active profiles before script execution so DefineProfile can check state.
         context.ProfileRegistry.SetActiveProfiles(_activeProfiles);
+        ConfigureContext?.Invoke(context);
 
         // ScriptGlobals exposes ANDO API as global variables in the script.
         var globals = new ScriptGlobals(context);

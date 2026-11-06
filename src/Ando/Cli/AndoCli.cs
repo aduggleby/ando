@@ -107,16 +107,27 @@ public class AndoCli : IDisposable
 
         if (pressCount == 1)
         {
+            // Commands started from now on (cleanup) ignore further Ctrl+C presses.
+            CommandExecutorBase.ShieldNewProcessesFromCtrlC = true;
+
             if (!_cts.IsCancellationRequested)
             {
                 _cts.Cancel();
             }
 
-            _logger.Warning("Cancellation requested. Stopping after current step...");
+            _logger.Warning("Cancellation requested. Stopping the running step, then running on-failure and finally steps...");
             return false;
         }
 
-        _logger.Error("Second Ctrl+C detected. Forcing immediate exit.");
+        if (pressCount == 2)
+        {
+            // Finally and on-failure steps may be running (remove access rules,
+            // stop slots). Don't abandon them on the first repeat press.
+            _logger.Warning("Cleanup (on-failure and finally steps) is running and is not interrupted by Ctrl+C. Press Ctrl+C again to exit immediately and skip the remaining cleanup.");
+            return false;
+        }
+
+        _logger.Error("Third Ctrl+C detected. Forcing immediate exit (cleanup skipped).");
         return true;
     }
 
@@ -302,6 +313,20 @@ public class AndoCli : IDisposable
                 return 2;
             }
 
+            // The directory ANDO was invoked for (where the build script lives).
+            // With --ref the build itself runs from a temporary worktree, but env
+            // files, host files, artifacts and run records still use this directory.
+            var invocationRoot = Path.GetDirectoryName(scriptPath) ?? Environment.CurrentDirectory;
+            var invocationScriptPath = scriptPath;
+
+            var gitRef = GetFlagValue("--ref");
+            if (gitRef != null)
+            {
+                _refWorktree = await RefWorktree.CreateAsync(scriptPath, gitRef, _logger);
+                scriptPath = _refWorktree.ScriptPath;
+                _logger.Info($"Ref: {gitRef} ({_refWorktree.Commit[..12]}), building from a clean checkout");
+            }
+
             // Get the default host path for configuration checks.
             // The actual hostRootPath is calculated after DIND check (Step 2c).
             var defaultHostRoot = Path.GetDirectoryName(scriptPath) ?? Environment.CurrentDirectory;
@@ -312,13 +337,17 @@ public class AndoCli : IDisposable
 
             // Check that .env.ando is gitignored if it exists.
             // This prevents accidental commits of sensitive environment files.
-            if (!CheckEnvAndoGitIgnoreStatus(defaultHostRoot))
+            if (!CheckEnvAndoGitIgnoreStatus(invocationRoot))
             {
                 return 6; // Exit code for gitignore check failure
             }
 
             // Check for .env file and offer to load it.
-            await PromptToLoadEnvFileAsync(defaultHostRoot);
+            await PromptToLoadEnvFileAsync(invocationRoot);
+
+            // Never print secret environment values (service principal secrets,
+            // tokens, passwords) in console output, the build log or run records.
+            SecretValues.AddFromEnvironment();
 
             // Step 2: Load and compile the build script using Roslyn.
             // We load first to read Options.Image before creating the container.
@@ -332,7 +361,31 @@ public class AndoCli : IDisposable
             var profiles = GetProfiles();
             scriptHost.SetActiveProfiles(profiles);
 
-            var context = await scriptHost.LoadScriptAsync(scriptPath, containerRootPath);
+            scriptHost.ConfigureContext = ctx =>
+            {
+                ctx.Options.Session.InvocationRoot = invocationRoot;
+                ctx.Options.Session.SourceRoot = defaultHostRoot;
+                ctx.Options.Session.AssumeYes = HasFlag("--yes");
+                ctx.Options.Session.Ref = _refWorktree?.Commit;
+            };
+
+            // With --ref, evaluate the script inside the worktree so relative file
+            // reads see the commit being built.
+            var previousDirectory = Environment.CurrentDirectory;
+            if (_refWorktree != null)
+            {
+                Directory.SetCurrentDirectory(defaultHostRoot);
+            }
+
+            BuildContext context;
+            try
+            {
+                context = await scriptHost.LoadScriptAsync(scriptPath, containerRootPath);
+            }
+            finally
+            {
+                Directory.SetCurrentDirectory(previousDirectory);
+            }
 
             // Validate profiles after script loading.
             // This ensures all requested profiles were defined in the script.
@@ -425,7 +478,10 @@ public class AndoCli : IDisposable
 
             // Configure the Docker container for this project.
             // Container name includes MD5 hash of build script for uniqueness.
-            var containerName = GetContainerName(hostRootPath, scriptPath);
+            // Name the container after the invoking project, so --ref runs reuse it.
+            var containerName = GetContainerName(
+                _refWorktree != null ? invocationRoot : hostRootPath,
+                _refWorktree != null ? invocationScriptPath : scriptPath);
             _logger.Info($"Container: {containerName}");
 
             // In DinD mode, ProjectRoot is the HOST path (for Docker volume mounts)
@@ -470,12 +526,40 @@ public class AndoCli : IDisposable
             containerExecutor.SetHostRootPath(hostRootPath);  // Enable host-to-container path translation
             context.SetExecutor(containerExecutor);
             context.SetDockerManager(dockerManager, container.Id, hostRootPath);
+            context.Options.Session.DockerManager = dockerManager;
+            context.Options.Session.ContainerId = container.Id;
+
+            // Every run gets a private Azure CLI profile inside the container, so
+            // az logins never persist in a warm container or leak between runs.
+            // Removed when the run ends; leftovers of killed runs (older than 12 h) now.
+            _azureConfigDir = $"/tmp/ando-azure-{Guid.NewGuid():N}";
+            _containerIdForCleanup = container.Id;
+            await RunInContainerQuietAsync(container.Id,
+                $"find /tmp -maxdepth 1 -name 'ando-azure-*' -mmin +720 -exec rm -rf {{}} + ; mkdir -m 700 -p {_azureConfigDir}");
+            containerExecutor.DefaultEnvironment[Ando.Operations.AzureOperations.EnvAzureConfigDir] = _azureConfigDir;
 
             // Step 4: Execute the workflow.
             // The WorkflowRunner processes all registered steps in order.
             // Pass cancellation token for graceful shutdown on Ctrl+C.
-            var runner = new WorkflowRunner(context.StepRegistry, _logger);
+            // This process owns the console: cleanup commands may be shielded from Ctrl+C.
+            CommandExecutorBase.CtrlCShieldEnabled = true;
+
+            var runner = new WorkflowRunner(context.StepRegistry, _logger)
+            {
+                // After Ctrl+C, stop what the interrupted step left running in the
+                // container (every process except the container's PID 1).
+                StopRunningCommandsAsync = async () =>
+                {
+                    _logger.Warning("Stopping commands still running in the build container...");
+                    await RunInContainerQuietAsync(container.Id, ContainerExecutor.StopAllCommandsScript);
+                }
+            };
+            var startedAt = DateTimeOffset.UtcNow;
             var result = await runner.RunAsync(context.Options, scriptPath, _cts.Token);
+
+            // Step 4b: Write the run record (.ando/runs/<time>.json).
+            RunRecordWriter.TryWrite(invocationRoot, invocationScriptPath, profiles, context.Options.Session,
+                result, startedAt, Version, _logger);
 
             // Step 5: Copy artifacts from container to host.
             // This copies any files registered via Artifacts.CopyToHost().
@@ -523,6 +607,49 @@ public class AndoCli : IDisposable
             }
             return 5;
         }
+        finally
+        {
+            await CleanupRunAsync();
+        }
+    }
+
+    // Per-run resources removed when the run ends.
+    private RefWorktree? _refWorktree;
+    private string? _azureConfigDir;
+    private string? _containerIdForCleanup;
+
+    // Removes the run's Azure CLI profile from the container and the --ref worktree.
+    private async Task CleanupRunAsync()
+    {
+        if (_azureConfigDir != null && _containerIdForCleanup != null)
+        {
+            await RunInContainerQuietAsync(_containerIdForCleanup, $"rm -rf {_azureConfigDir}");
+            _azureConfigDir = null;
+        }
+
+        if (_refWorktree != null)
+        {
+            await _refWorktree.DisposeAsync();
+            _refWorktree = null;
+        }
+    }
+
+    private async Task RunInContainerQuietAsync(string containerId, string script)
+    {
+        var runner = new ProcessRunner(_logger);
+        var result = await runner.ExecuteAsync("docker", ["exec", containerId, "sh", "-c", script],
+            new CommandOptions { SuppressOutput = true, TimeoutMs = 60_000 });
+        if (!result.Success)
+        {
+            _logger.Debug($"Container command failed: {script}: {result.Error}");
+        }
+    }
+
+    // Returns the value after a flag (e.g. --ref v1.2.3), or null.
+    private string? GetFlagValue(string flag)
+    {
+        var index = Array.IndexOf(_args, flag);
+        return index >= 0 && index + 1 < _args.Length ? _args[index + 1] : null;
     }
 
     // Handles the 'verify' command which checks the build script for errors
@@ -815,6 +942,8 @@ public class AndoCli : IDisposable
         Console.WriteLine("  --cold              Always create fresh container (ignore warm container)");
         Console.WriteLine("  --image <image>     Use custom Docker image instead of default/script-defined");
         Console.WriteLine("  --dind              Mount Docker socket for Docker-in-Docker operations");
+        Console.WriteLine("  --ref <commit|tag>  Build that commit from a clean temporary checkout, not the working tree");
+        Console.WriteLine("  --yes               Accept every Ando.Confirm prompt (for non-interactive runs)");
         Console.WriteLine();
         Console.WriteLine("Release Options:");
         Console.WriteLine("  patch               Bump patch version (default): 1.0.0 -> 1.0.1");
@@ -1108,6 +1237,12 @@ public class AndoCli : IDisposable
         // loaded directly by ANDO during this invocation.
         LoadedEnvironmentVariables.Track(envVars.Keys);
 
+        // Register secret values for redaction before anything is logged.
+        foreach (var (key, value) in envVars)
+        {
+            if (SecretValues.IsSecretName(key)) SecretValues.Add(value);
+        }
+
         // Check if any variables are already set - if all are set, skip prompting.
         var unsetVars = envVars.Where(kv => Environment.GetEnvironmentVariable(kv.Key) == null).ToList();
         if (unsetVars.Count == 0)
@@ -1135,10 +1270,7 @@ public class AndoCli : IDisposable
             foreach (var (key, value) in unsetVars)
             {
                 // Mask sensitive values (tokens, secrets, passwords, keys).
-                var isSensitive = key.Contains("TOKEN", StringComparison.OrdinalIgnoreCase) ||
-                                  key.Contains("SECRET", StringComparison.OrdinalIgnoreCase) ||
-                                  key.Contains("PASSWORD", StringComparison.OrdinalIgnoreCase) ||
-                                  key.Contains("KEY", StringComparison.OrdinalIgnoreCase);
+                var isSensitive = SecretValues.IsSecretName(key);
                 var displayValue = isSensitive ? "********" : value;
                 _logger.Info($"  {key}={displayValue}");
             }

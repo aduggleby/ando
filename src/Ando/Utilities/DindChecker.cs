@@ -182,7 +182,7 @@ public class DindChecker
     {
         var operations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var step in registry.Steps)
+        foreach (var step in registry is StepRegistry full ? full.AllSteps : registry.Steps)
         {
             if (DindRequiredOperations.Contains(step.Name))
             {

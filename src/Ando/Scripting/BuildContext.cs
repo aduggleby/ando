@@ -199,7 +199,12 @@ public class BuildContext
 
         // Use the host root path for copying artifacts back to the host filesystem.
         // Copy both regular artifacts and zipped artifacts.
-        await Artifacts.CopyToHostAsync(_containerId, _hostRootPath, Logger);
-        await Artifacts.CopyZippedToHostAsync(_containerId, _hostRootPath, Logger);
+        // With --ref the sources come from a temporary worktree; artifacts still
+        // belong in the project ANDO was run from.
+        var artifactsRoot = Options.Session.Ref != null && Options.Session.InvocationRoot != null
+            ? Options.Session.InvocationRoot
+            : _hostRootPath;
+        await Artifacts.CopyToHostAsync(_containerId, artifactsRoot, Logger);
+        await Artifacts.CopyZippedToHostAsync(_containerId, artifactsRoot, Logger);
     }
 }

@@ -188,19 +188,146 @@ public class AppServiceOperations(
     }
 
     /// <summary>
-    /// Registers a step to show app service information.
+    /// Registers a step that reads the app's (or slot's) `az webapp show` JSON.
+    /// Read fields at execution time with Json(), e.g. show.Json("state").
     /// </summary>
     /// <param name="appName">Name of the Azure App Service.</param>
     /// <param name="resourceGroup">Optional resource group name.</param>
-    public void Show(string appName, string? resourceGroup = null)
+    /// <param name="slot">Optional slot name. If null, shows the production slot.</param>
+    public CommandStep Show(string appName, string? resourceGroup = null, string? slot = null) =>
+        AzStep("AppService.Show", appName,
+            new ArgumentBuilder()
+                .Add("webapp", "show", "--name", appName)
+                .AddIfNotNull("--resource-group", resourceGroup)
+                .AddIfNotNull("--slot", slot)
+                .Add("--output", "json"))
+            .Quiet();
+
+    /// <summary>
+    /// Registers a step that reads the app's (or slot's) default host name, e.g.
+    /// "myapp-release.azurewebsites.net".
+    /// Usage: var host = AppService.GetHostName(app, rg, "release");
+    ///        Http.WaitForHealthy(() => $"https://{host.Value}/healthz");
+    /// </summary>
+    public CommandStep GetHostName(string appName, string? resourceGroup = null, string? slot = null) =>
+        AzStep("AppService.GetHostName", appName,
+            new ArgumentBuilder()
+                .Add("webapp", "show", "--name", appName)
+                .AddIfNotNull("--resource-group", resourceGroup)
+                .AddIfNotNull("--slot", slot)
+                .Add("--query", "defaultHostName", "--output", "tsv"));
+
+    /// <summary>
+    /// Registers a step that reads the app's (or slot's) access restrictions
+    /// (`az webapp config access-restriction show`).
+    /// Usage: var rules = AppService.AccessRestrictions(app, rg, "release");
+    ///        Ando.When(() => rules.Json("ipSecurityRestrictionsDefaultAction") == "Deny", ...);
+    /// </summary>
+    public CommandStep AccessRestrictions(string appName, string? resourceGroup = null, string? slot = null) =>
+        AzStep("AppService.AccessRestrictions", appName,
+            new ArgumentBuilder()
+                .Add("webapp", "config", "access-restriction", "show", "--name", appName)
+                .AddIfNotNull("--resource-group", resourceGroup)
+                .AddIfNotNull("--slot", slot)
+                .Add("--output", "json"))
+            .Quiet();
+
+    /// <summary>
+    /// Adds an Allow access rule for one IPv4 address to the app (or slot) and
+    /// removes it again when the enclosing block (or the run) ends, whatever
+    /// happened: the removal is registered as a finally step, followed by a
+    /// check that the rule is gone. Any existing rule with the same name is
+    /// replaced. Without <paramref name="ip"/>, uses this machine's public IPv4.
+    /// Usage: AppService.TemporaryAccessRule(app, rg, "release", "deploy-gate");
+    /// </summary>
+    /// <param name="appName">Name of the Azure App Service.</param>
+    /// <param name="resourceGroup">Resource group name.</param>
+    /// <param name="slot">Slot name, or null for the production slot.</param>
+    /// <param name="ruleName">Rule name (default "ando-deploy").</param>
+    /// <param name="ip">IPv4 address or CIDR; null looks up this machine's public IPv4.</param>
+    /// <param name="priority">Rule priority (default 50; lower runs first).</param>
+    public void TemporaryAccessRule(string appName, string resourceGroup, string? slot = null,
+        string ruleName = "ando-deploy", string? ip = null, int priority = 50)
     {
-        RegisterCommand("AppService.Show", "az",
-            () => new ArgumentBuilder()
-                .Add("webapp", "show")
-                .Add("--name", appName)
-                .AddIfNotNull("--resource-group", resourceGroup),
-            appName);
+        var target = slot != null ? $"{appName}/{slot}" : appName;
+
+        // Only remove the rule in cleanup when this run tried to add it, so a
+        // failure before this step never deletes someone else's rule.
+        var attempted = false;
+
+        ArgumentBuilder Base(string action) => new ArgumentBuilder()
+            .Add("webapp", "config", "access-restriction", action)
+            .Add("--name", appName, "--resource-group", resourceGroup)
+            .AddIfNotNull("--slot", slot);
+
+        Registry.Register("AppService.TemporaryAccessRule", async () =>
+        {
+            var address = ip ?? await HttpOperations.LookUpPublicIpV4Async(Logger);
+            if (address == null)
+            {
+                return false;
+            }
+            if (!address.Contains('/'))
+            {
+                address += "/32";
+            }
+
+            var executor = ExecutorFactory();
+            attempted = true;
+            // Replace a leftover rule with the same name (ignore "not found").
+            await executor.ExecuteAsync("az", Base("remove").Add("--rule-name", ruleName, "--output", "none").Build(),
+                new CommandOptions { SuppressOutput = true });
+
+            var added = await executor.ExecuteAsync("az", Base("add")
+                .Add("--rule-name", ruleName, "--priority", priority.ToString())
+                .Add("--action", "Allow", "--ip-address", address, "--output", "none").Build());
+            if (added.Success)
+            {
+                Logger.Info($"    Allowed {address} on {target} (rule {ruleName}); it is removed when the block ends.");
+            }
+            return added.Success;
+        }, $"{target} {ruleName}");
+
+        // Always remove the rule and verify it is gone, at the end of the enclosing block.
+        Registry.RegisterFinally(AndoOperations.CreateFinallyStep(Registry, () =>
+        {
+            Registry.Register("AppService.RemoveAccessRule", async () =>
+            {
+                if (!attempted)
+                {
+                    Logger.Info($"    Rule {ruleName} was never added to {target}; nothing to remove.");
+                    return true;
+                }
+
+                var executor = ExecutorFactory();
+                await executor.ExecuteAsync("az", Base("remove").Add("--rule-name", ruleName, "--output", "none").Build(),
+                    new CommandOptions { SuppressOutput = true });
+
+                var remaining = await executor.ExecuteAsync("az", Base("show")
+                    .Add("--query", "ipSecurityRestrictions[].name", "--output", "tsv").Build(),
+                    new CommandOptions { SuppressOutput = true });
+                if (!remaining.Success)
+                {
+                    Logger.Error($"    Could not verify that rule {ruleName} is gone from {target}: {remaining.Error ?? remaining.Output}");
+                    return false;
+                }
+
+                var names = (remaining.Output ?? "").Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                if (names.Contains(ruleName))
+                {
+                    Logger.Error($"    Access rule {ruleName} is still on {target}. Remove it: az webapp config access-restriction remove " +
+                                 $"-g {resourceGroup} -n {appName}{(slot != null ? $" --slot {slot}" : "")} --rule-name {ruleName}");
+                    return false;
+                }
+
+                Logger.Info($"    Removed access rule {ruleName} from {target}.");
+                return true;
+            }, $"{target} {ruleName}");
+        }));
     }
+
+    private CommandStep AzStep(string stepName, string context, ArgumentBuilder args) =>
+        ShellCommandOperations.RegisterCommandStep(Registry, Logger, ExecutorFactory, stepName, "az", args.Build(), context);
 
     /// <summary>
     /// Registers a step to list deployment slots for an app service.

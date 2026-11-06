@@ -30,10 +30,18 @@ public abstract class CommandExecutorBase : ICommandExecutor
     {
         options ??= new CommandOptions();
 
+        // Let the executor prepare the environment (e.g. install a missing tool).
+        var prepared = await PrepareCommandAsync(command, options);
+        if (prepared != null)
+        {
+            return prepared;
+        }
+
         // Log the command before execution for debugging visibility.
         LogCommand(command, args, options);
 
         var startInfo = PrepareProcessStartInfo(command, args, options);
+        ShieldFromCtrlC(startInfo);
 
         // Interactive mode: let the process inherit console streams for user input.
         // Non-interactive mode: redirect streams for logging and output capture.
@@ -75,6 +83,7 @@ public abstract class CommandExecutorBase : ICommandExecutor
                 if (!process.HasExited)
                 {
                     process.Kill(entireProcessTree: true);
+                    await OnCommandTimedOutAsync();
                     return CommandResult.Failed(-1, $"Command timed out after {options.TimeoutMs}ms");
                 }
             }
@@ -165,6 +174,7 @@ public abstract class CommandExecutorBase : ICommandExecutor
                 {
                     // Kill entire process tree to prevent orphaned child processes.
                     process.Kill(entireProcessTree: true);
+                    await OnCommandTimedOutAsync();
 
                     // Wait briefly for any buffered output to be captured before returning.
                     await Task.Delay(100);
@@ -212,6 +222,58 @@ public abstract class CommandExecutorBase : ICommandExecutor
     /// Prepares the ProcessStartInfo for command execution.
     /// Subclasses override this to customize the command setup (e.g., wrapping in docker exec).
     /// </summary>
+    /// <summary>
+    /// Set after the first Ctrl+C. From then on, commands start in their own
+    /// session (via setsid on Linux), so further Ctrl+C presses, which the
+    /// terminal sends to the whole foreground process group, don't interrupt
+    /// the on-failure and finally steps that are cleaning up.
+    /// </summary>
+    public static volatile bool ShieldNewProcessesFromCtrlC;
+
+    /// <summary>
+    /// Whether this process owns the console and may shield commands at all.
+    /// Set by the CLI for `ando run`; off for library and test use.
+    /// </summary>
+    public static volatile bool CtrlCShieldEnabled;
+
+    private static readonly string? SetsidPath =
+        OperatingSystem.IsLinux()
+            ? new[] { "/usr/bin/setsid", "/bin/setsid" }.FirstOrDefault(File.Exists)
+            : null;
+
+    private static void ShieldFromCtrlC(ProcessStartInfo startInfo)
+    {
+        if (!CtrlCShieldEnabled || !ShieldNewProcessesFromCtrlC || SetsidPath == null)
+        {
+            return;
+        }
+
+        var arguments = startInfo.ArgumentList.ToList();
+        var fileName = startInfo.FileName;
+        startInfo.ArgumentList.Clear();
+        startInfo.FileName = SetsidPath;
+        startInfo.ArgumentList.Add("--wait");
+        startInfo.ArgumentList.Add(fileName);
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+    }
+
+    /// <summary>
+    /// Called before each command. Returns a failed result to stop the command,
+    /// or null to run it. The default does nothing.
+    /// </summary>
+    protected virtual Task<CommandResult?> PrepareCommandAsync(string command, CommandOptions options) =>
+        Task.FromResult<CommandResult?>(null);
+
+    /// <summary>
+    /// Called after a command was killed for exceeding its timeout. Killing the
+    /// local process is enough on the host; executors that start the real work
+    /// elsewhere (docker exec) stop it there too.
+    /// </summary>
+    protected virtual Task OnCommandTimedOutAsync() => Task.CompletedTask;
+
     protected abstract ProcessStartInfo PrepareProcessStartInfo(string command, string[] args, CommandOptions options);
 
     public abstract bool IsAvailable(string command);

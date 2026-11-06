@@ -37,6 +37,11 @@ public class BuildOptions
     public string? Image { get; private set; }
 
     /// <summary>
+    /// Per-run state (invocation directory, --yes, container, reports).
+    /// </summary>
+    public RunSession Session { get; } = new();
+
+    /// <summary>
     /// Sets the Docker image to use for the build.
     /// Called by AndoOperations.UseImage().
     /// </summary>

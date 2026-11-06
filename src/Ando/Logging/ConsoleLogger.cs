@@ -110,9 +110,9 @@ public class ConsoleLogger : IBuildLogger, IDisposable
     /// </summary>
     private string RedactSecrets(string message)
     {
-        if (_secretValues.Count == 0) return message;
+        var result = SecretValues.Redact(message);
+        if (_secretValues.Count == 0) return result;
 
-        var result = message;
         foreach (var secret in _secretValues.Where(s => s.Length >= 4)) // Only redact secrets 4+ chars
         {
             result = result.Replace(secret, "[REDACTED]");
@@ -135,6 +135,8 @@ public class ConsoleLogger : IBuildLogger, IDisposable
 
     public void StepStarted(string stepName, string? context = null)
     {
+        stepName = RedactSecrets(stepName);
+        context = context == null ? null : RedactSecrets(context);
         _currentStep++;
         var stepCounter = _totalSteps > 0 ? $"[{_currentStep}/{_totalSteps}] " : "";
         var contextPart = context != null ? $" ({context})" : "";
@@ -150,6 +152,8 @@ public class ConsoleLogger : IBuildLogger, IDisposable
 
     public void StepCompleted(string stepName, TimeSpan duration, string? context = null)
     {
+        stepName = RedactSecrets(stepName);
+        context = context == null ? null : RedactSecrets(context);
         var contextPart = context != null ? $" ({context})" : "";
 
         LogToFile($"✔ {stepName}{contextPart}  {FormatDuration(duration)}");
@@ -161,6 +165,8 @@ public class ConsoleLogger : IBuildLogger, IDisposable
 
     public void StepFailed(string stepName, TimeSpan duration, string? message = null)
     {
+        stepName = RedactSecrets(stepName);
+        message = message == null ? null : RedactSecrets(message);
         LogToFile($"✖ {stepName}  {FormatDuration(duration)}");
         if (message != null)
         {

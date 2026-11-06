@@ -23,6 +23,7 @@
 using Ando.Execution;
 using Ando.Logging;
 using Ando.Steps;
+using Ando.Workflow;
 
 namespace Ando.Operations;
 
@@ -36,14 +37,32 @@ public class GitOperations : OperationsBase
     // Host executor for git commands - git must run on host where .git directory exists.
     private readonly ICommandExecutor _hostExecutor;
 
+    // Per-run state; SourceRoot is where git runs (the --ref worktree or the project).
+    private readonly RunSession? _session;
+
     public GitOperations(
         StepRegistry registry,
         IBuildLogger logger,
-        Func<ICommandExecutor> executorFactory)
+        Func<ICommandExecutor> executorFactory,
+        RunSession? session = null)
         : base(registry, logger, executorFactory)
     {
         // Always use ProcessRunner for git - it runs on host, not in container.
-        _hostExecutor = new Execution.ProcessRunner(logger);
+        _hostExecutor = new HostGitExecutor(new Execution.ProcessRunner(logger), () => _session?.SourceRoot);
+        _session = session;
+    }
+
+    // Runs git on the host in the source root (the --ref worktree when set).
+    private sealed class HostGitExecutor(ICommandExecutor inner, Func<string?> sourceRoot) : ICommandExecutor
+    {
+        public Task<CommandResult> ExecuteAsync(string command, string[] args, CommandOptions? options = null)
+        {
+            options ??= new CommandOptions();
+            options.WorkingDirectory ??= sourceRoot();
+            return inner.ExecuteAsync(command, args, options);
+        }
+
+        public bool IsAvailable(string command) => inner.IsAvailable(command);
     }
 
     // Registers a git command that runs on the host (not in container).
@@ -55,6 +74,118 @@ public class GitOperations : OperationsBase
             var result = await _hostExecutor.ExecuteAsync("git", args);
             return result.Success;
         }, context);
+    }
+
+    // =========================================================================
+    // Evaluation-time git queries. These run on the host while the script is
+    // evaluated, so their values can be used directly in the script.
+    // =========================================================================
+
+    /// <summary>
+    /// Full SHA of the commit being built (HEAD, or the commit given with --ref).
+    /// Usage: var commit = Git.Commit;
+    /// </summary>
+    public string Commit => _commit ??= RunGit("rev-parse", "HEAD");
+    private string? _commit;
+
+    /// <summary>
+    /// Short SHA (7+ characters) of the commit being built.
+    /// Usage: Log.Info($"Building {Git.ShortCommit}");
+    /// </summary>
+    public string ShortCommit => _shortCommit ??= RunGit("rev-parse", "--short", "HEAD");
+    private string? _shortCommit;
+
+    /// <summary>
+    /// Fails the build before any step runs when tracked files are modified,
+    /// staged or deleted, or untracked files that are not ignored exist, under
+    /// <paramref name="paths"/> (or anywhere in the repository when none are given).
+    /// ANDO's own build.csando.log and .ando/ are ignored.
+    /// With --ref the build uses a clean checkout, so this always passes.
+    /// Usage: Git.RequireClean("src", "web", "infra", "Directory.Build.props");
+    /// </summary>
+    public void RequireClean(params string[] paths)
+    {
+        // ANDO's own files (the build log it creates in the working directory
+        // before evaluation, and .ando/) never count as uncommitted changes.
+        var args = new List<string> { "status", "--porcelain", "--untracked-files=all", "--" };
+        args.AddRange(paths.Length > 0 ? paths : [":/"]);
+        args.AddRange([":(exclude)build.csando.log", ":(exclude).ando"]);
+
+        var status = RunGit([.. args]);
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            Logger.Info(paths.Length > 0
+                ? $"Git: working tree is clean ({string.Join(", ", paths)})"
+                : "Git: working tree is clean");
+            return;
+        }
+
+        var lines = status.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var shown = string.Join("\n", lines.Take(20).Select(l => $"  {l}"));
+        var more = lines.Length > 20 ? $"\n  ... and {lines.Length - 20} more" : "";
+        throw new InvalidOperationException(
+            $"The working tree has uncommitted changes{(paths.Length > 0 ? $" under {string.Join(", ", paths)}" : "")}:\n" +
+            $"{shown}{more}\nCommit or stash them, or build a commit with `ando run --ref <commit>`.");
+    }
+
+    /// <summary>
+    /// Whether any file under <paramref name="paths"/> differs between
+    /// <paramref name="sinceRef"/> and the commit being built (committed changes
+    /// only). With no paths, checks the whole repository.
+    /// Usage: if (Git.ChangedSince(Git.LastTag("v*"), "src/Worker", "services/signing")) { ... }
+    /// </summary>
+    public bool ChangedSince(string sinceRef, params string[] paths)
+    {
+        var args = new List<string> { "diff", "--name-only", $"{sinceRef}..HEAD" };
+        if (paths.Length > 0)
+        {
+            args.Add("--");
+            args.AddRange(paths);
+        }
+        return !string.IsNullOrWhiteSpace(RunGit([.. args]));
+    }
+
+    /// <summary>
+    /// The most recent tag reachable from the commit being built that matches
+    /// <paramref name="pattern"/> (glob, e.g. "v*"), or null when there is none.
+    /// Usage: var last = Git.LastTag("v*");
+    /// </summary>
+    public string? LastTag(string pattern = "*")
+    {
+        var (exitCode, output, _) = RunGitRaw("describe", "--tags", "--abbrev=0", "--match", pattern, "HEAD");
+        return exitCode == 0 && !string.IsNullOrWhiteSpace(output) ? output : null;
+    }
+
+    private string RunGit(params string[] args)
+    {
+        var (exitCode, output, error) = RunGitRaw(args);
+        if (exitCode != 0)
+        {
+            throw new InvalidOperationException($"git {string.Join(' ', args)} failed: {error}".Trim());
+        }
+        return output;
+    }
+
+    private (int ExitCode, string Output, string Error) RunGitRaw(params string[] args)
+    {
+        var startInfo = new System.Diagnostics.ProcessStartInfo("git")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            WorkingDirectory = _session?.SourceRoot ?? Environment.CurrentDirectory
+        };
+        foreach (var arg in args)
+        {
+            startInfo.ArgumentList.Add(arg);
+        }
+
+        using var process = System.Diagnostics.Process.Start(startInfo)
+            ?? throw new InvalidOperationException("Could not start git.");
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        process.WaitForExit();
+        return (process.ExitCode, stdout.Result.Trim(), stderr.Result.Trim());
     }
 
     /// <summary>

@@ -33,6 +33,18 @@ public class StepResult
     /// <summary>Time taken to execute the step.</summary>
     public TimeSpan Duration { get; init; }
 
+    /// <summary>When the step started (UTC).</summary>
+    public DateTimeOffset StartedAt { get; init; }
+
+    /// <summary>When the step ended (UTC).</summary>
+    public DateTimeOffset EndedAt { get; init; }
+
+    /// <summary>Nesting depth: 0 for top-level steps, 1+ inside blocks.</summary>
+    public int Depth { get; init; }
+
+    /// <summary>Whether the step ran as cleanup (finally or on-failure).</summary>
+    public bool Cleanup { get; init; }
+
     /// <summary>Error message if the step failed, null on success.</summary>
     public string? ErrorMessage { get; init; }
 

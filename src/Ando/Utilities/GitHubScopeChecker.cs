@@ -118,7 +118,7 @@ public class GitHubScopeChecker
     {
         var scopes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var step in registry.Steps)
+        foreach (var step in registry is StepRegistry full ? full.AllSteps : registry.Steps)
         {
             if (OperationScopes.TryGetValue(step.Name, out var stepScopes))
             {

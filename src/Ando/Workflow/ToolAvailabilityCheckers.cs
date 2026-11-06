@@ -4,7 +4,6 @@
 // Summary: Implementations of IToolAvailabilityChecker for various tools.
 //
 // This file contains concrete checker implementations for common build tools:
-// - AzureCliChecker: For Azure CLI (az) and Bicep operations
 // - CloudflareChecker: For Cloudflare wrangler operations
 // - FunctionsChecker: For Azure Functions Core Tools
 //
@@ -25,11 +24,6 @@ namespace Ando.Workflow;
 /// </summary>
 public static class ToolRequirements
 {
-    /// <summary>
-    /// Step prefixes that require Azure CLI.
-    /// </summary>
-    public static readonly string[] AzureCliPrefixes = ["Azure.", "Bicep."];
-
     /// <summary>
     /// Step names that require Cloudflare wrangler.
     /// Cloudflare.EnsureAuthenticated is intentionally absent because it validates
@@ -61,21 +55,6 @@ public static class ToolRequirements
     /// </summary>
     public static bool MatchesStepNames(string stepName, string[] stepNames) =>
         stepNames.Any(name => stepName.Equals(name, StringComparison.OrdinalIgnoreCase));
-}
-
-/// <summary>
-/// Checks availability of Azure CLI for Azure and Bicep operations.
-/// </summary>
-public class AzureCliChecker : IToolAvailabilityChecker
-{
-    public bool CanCheck(string stepName) =>
-        ToolRequirements.MatchesPrefixes(stepName, ToolRequirements.AzureCliPrefixes);
-
-    public bool IsAvailable() => AzureOperations.IsAzureCliAvailable();
-
-    public string GetInstallInstructions() => AzureOperations.GetAzureCliInstallInstructions();
-
-    public string GetDocumentationUrl() => "https://docs.microsoft.com/cli/azure/install-azure-cli";
 }
 
 /// <summary>
@@ -116,7 +95,6 @@ public static class ToolAvailabilityRegistry
 {
     private static readonly List<IToolAvailabilityChecker> _checkers =
     [
-        new AzureCliChecker(),
         new CloudflareChecker(),
         new FunctionsChecker()
     ];

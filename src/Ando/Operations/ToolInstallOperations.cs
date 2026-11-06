@@ -98,3 +98,44 @@ public class NpmInstallOperations(
             version);
     }
 }
+
+/// <summary>
+/// Operations for installing Bun in the build container.
+/// </summary>
+public class BunOperations(
+    StepRegistry registry,
+    IBuildLogger logger,
+    Func<ICommandExecutor> executorFactory)
+    : OperationsBase(registry, logger, executorFactory)
+{
+    /// <summary>
+    /// Installs Bun into /usr/local/bin, so later steps (including MSBuild targets
+    /// run by Dotnet.Publish) find bun on PATH. Skips the download when the
+    /// container already has that version. Needs a Debian or Ubuntu image.
+    /// Usage: Bun.Install("1.2.23");
+    /// </summary>
+    /// <param name="version">Exact Bun version, for example "1.2.23", or "latest".</param>
+    public void Install(string version = "latest")
+    {
+        var tag = version == "latest" ? "" : $"bun-v{version.TrimStart('v')}";
+        var check = version == "latest"
+            ? "command -v bun >/dev/null"
+            : $"command -v bun >/dev/null && [ \"$(bun --version)\" = \"{version.TrimStart('v')}\" ]";
+        // Download the installer to a file first so a failed download fails the
+        // step instead of running an empty script, then check the result.
+
+        RegisterCommand("Bun.Install", "bash",
+            () => new ArgumentBuilder()
+                .Add("-c")
+                .Add("set -eu; " +
+                     $"if {check}; then echo \"Bun $(bun --version) already installed\"; exit 0; fi; " +
+                     "export DEBIAN_FRONTEND=noninteractive; " +
+                     "if ! command -v curl >/dev/null || ! command -v unzip >/dev/null; then " +
+                     "apt-get update -qq && apt-get install -y -qq curl unzip ca-certificates; fi; " +
+                     "curl -fsSL https://bun.sh/install -o /tmp/ando-bun-install.sh; " +
+                     $"BUN_INSTALL=/usr/local bash /tmp/ando-bun-install.sh {tag}; rm -f /tmp/ando-bun-install.sh; " +
+                     $"{check} || {{ echo \"Bun {version} was not installed (found $(bun --version 2>/dev/null || echo none))\" >&2; exit 1; }}; " +
+                     "bun --version"),
+            version);
+    }
+}
