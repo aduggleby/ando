@@ -26,16 +26,40 @@ ANDO requires **Docker** to run builds in isolated containers. If Docker is not 
 
 ## Run Options
 
-| Flag                       | Description                                              |
-| -------------------------- | -------------------------------------------------------- |
-| `-f, --file <file>`        | Use a specific build file instead of build.csando.       |
-| `-p, --profile <profiles>` | Activate build profiles (comma-separated).               |
-| `--read-env`               | Load environment file without prompting.                 |
-| `--verbosity <level>`      | Set output verbosity (quiet\|minimal\|normal\|detailed). |
-| `--no-color`               | Disable colored output.                                  |
-| `--cold`                   | Always create a fresh container.                         |
-| `--image <image>`          | Use a custom Docker image.                               |
-| `--dind`                   | Mount Docker socket for Docker-in-Docker builds.         |
+| Flag                       | Description                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| `-f, --file <file>`        | Use a specific build file instead of build.csando.                             |
+| `-p, --profile <profiles>` | Activate build profiles (comma-separated).                                     |
+| `--read-env`               | Load environment file without prompting.                                       |
+| `--verbosity <level>`      | Set output verbosity (quiet\|minimal\|normal\|detailed).                       |
+| `--no-color`               | Disable colored output.                                                        |
+| `--cold`                   | Always create a fresh container.                                               |
+| `--image <image>`          | Use a custom Docker image.                                                     |
+| `--dind`                   | Mount Docker socket for Docker-in-Docker builds.                               |
+| `--ref <commit\|tag>`      | Build that commit from a clean temporary checkout instead of the working tree. |
+| `--yes`                    | Accept every `Ando.Confirm` prompt.                                            |
+
+### Building a specific commit (`--ref`)
+
+`ando run --ref v1.4.0` builds exactly that commit. ANDO checks it out into a temporary detached git worktree under the system temp directory, evaluates the build script from there, and copies only those files into the container. Edits in your working tree cannot change what is built. The worktree is removed when the run ends.
+
+What still uses the directory you ran `ando` from:
+
+- Environment files (`.env.ando`, `.env`) and the gitignore check for them.
+- Host paths of `Ando.CopyToContainer` and `Ando.ImportArtifacts` (and `Ando.InvocationRoot`), so gitignored files such as local certificates stay available.
+- Artifact copies to the host (`Ando.CopyArtifactsToHost`).
+- Run records (`.ando/runs/`).
+- The build container, which is named after your project, so `--ref` runs reuse it.
+
+`Git.Commit`, `Git.ShortCommit`, `Git.LastTag` and `Git.ChangedSince` refer to the checked-out commit, and `Git.RequireClean` always passes. `--ref` needs a git repository, a commit that exists, and a build script that exists in that commit.
+
+### Confirmations (`--yes`)
+
+`Ando.Confirm(message)` asks `[y/N]` and fails the build if you decline. `--yes` accepts every confirmation. Without `--yes`, a run with no interactive console fails at the first `Ando.Confirm`.
+
+### Run records
+
+Every `ando run` writes `.ando/runs/<utc-time>.json` in the directory you ran from. It lists the steps that ran (including steps in blocks and on-failure and finally steps) with start, end, result, error, nesting depth and a `cleanup` flag, plus the values added with `Ando.Report`. `.ando/runs/` has its own `.gitignore`. Values of environment variables whose names look secret (SECRET, PASSWORD, TOKEN, KEY, and similar) are redacted in console output, the build log and run records.
 
 ## Docker-in-Docker (DIND)
 
@@ -283,10 +307,11 @@ if (result.ExitCode != 0) throw new Exception("Tests failed");
 
 ## Cancellation (Ctrl+C)
 
-ANDO handles Ctrl+C gracefully:
+ANDO handles Ctrl+C in three stages:
 
-- **First Ctrl+C** - Requests cancellation. The current step finishes, then the build stops.
-- **Second Ctrl+C** - Forces immediate exit (exit code 130).
+- **First Ctrl+C** - Stops the running step (it is marked cancelled) and any command it left running in the build container, then runs the on-failure and finally steps. Commands started from then on ignore further Ctrl+C presses.
+- **Second Ctrl+C** - Prints a warning. Cleanup keeps running.
+- **Third Ctrl+C** - Exits immediately (exit code 130) and skips the remaining cleanup.
 
 ## Clean Options
 

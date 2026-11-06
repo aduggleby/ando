@@ -21,6 +21,8 @@ ANDO build scripts are compiled as C# scripts with a fixed, typed API surface. I
 - `Env(name, required: bool)` has a second parameter named `required:` and it is a `bool`. There is no `Env(name, "default")` overload. Use `Env(..., required: false) ?? "default"` for defaults.
 - `Dotnet.Build(...)` and `Dotnet.Test(...)` use simple option properties (not fluent methods). Example: `o.Configuration = Configuration.Release; o.NoRestore = true;`
 - Docker tags use `WithTag(...)` (call it multiple times). There is no `WithTags(...)`.
+- Steps register while the script is evaluated and run afterwards. C# `try`/`finally`, `if` and `foreach` around step calls therefore do not act at execution time. Use `Ando.Block`, `Ando.Finally`, `Ando.Defer` and `Ando.When` (see "Step model and deployment gates").
+- Step outputs (`StepOutput`, `CommandStep`) can only be read inside execution-time lambdas (`Ando.Defer`, `Ando.When`, `Ando.Require`, `Ando.Report`, `Func<>` overloads). Reading one while the script is evaluated throws.
 
 ### Minimal Verified Example (Compiles)
 
@@ -82,8 +84,9 @@ Unknown commands show an error with the help text (e.g., `ando foo` displays "Un
 
 ### Cancellation (Ctrl+C)
 
-- First Ctrl+C requests graceful cancellation (current step finishes, then build stops)
-- Second Ctrl+C forces immediate exit (exit code 130)
+- First Ctrl+C stops the running step (marked cancelled) and any command it left running in the build container, then runs on-failure and finally steps; commands started from then on ignore further Ctrl+C presses
+- Second Ctrl+C prints a warning; cleanup keeps running
+- Third Ctrl+C exits immediately (exit code 130) and skips the remaining cleanup
 
 ### Run Options
 
@@ -95,6 +98,16 @@ Unknown commands show an error with the help text (e.g., `ando foo` displays "Un
 - `--cold` - Always create a fresh container (ignore warm cache)
 - `--image <image>` - Use a custom Docker image
 - `--dind` - Mount Docker socket for Docker-in-Docker builds
+- `--ref <commit|tag>` - Build that commit instead of the working tree. ANDO checks it out into a temporary detached git worktree (under the system temp directory), evaluates the build script from there and copies only those files into the container. Env files (`.env.ando`), `Ando.CopyToContainer` host paths, artifact copies to the host and run records still use the directory you ran `ando` from. The worktree is removed when the run ends. `Git.Commit`, `Git.ShortCommit`, `Git.LastTag` and `Git.ChangedSince` refer to the checked-out commit, and `Git.RequireClean` always passes.
+- `--yes` - Accept every `Ando.Confirm` prompt. Without it, a run with no interactive console fails at the first `Ando.Confirm`.
+
+### Run Record
+
+Every `ando run` writes `.ando/runs/<utc-time>.json` in the directory you ran from. It lists every step that ran (including steps in blocks, on-failure and finally steps) with `name`, `context`, `depth`, `cleanup` (true for on-failure/finally steps), start and end time, `success` and `error`, plus the values added with `Ando.Report`, the script, profiles and `ref`. Secret values are redacted. `.ando/runs/` contains its own `.gitignore`, so records never show up in `git status`.
+
+### Secret Redaction
+
+Values of environment variables whose names contain SECRET, PASSWORD, PASSWD, TOKEN, APIKEY, API_KEY, PRIVATE_KEY, CONNECTIONSTRING, CREDENTIAL, `_PAT` or end in KEY are replaced with `[REDACTED]` in console output, the build log and run records. Values shorter than 6 characters are not redacted.
 
 ### Docker-in-Docker (DIND) Detection
 
@@ -374,7 +387,8 @@ Full documentation: https://andobuild.com/hooks
 - File: `build.csando` (C# code, no .cs extension)
 - Execution: All builds run in Docker containers
 - No `using` statements needed - namespaces are pre-imported
-- Operations register steps that execute in order
+- Operations register steps that execute in order, after the whole script has been evaluated
+- The image `mcr.microsoft.com/dotnet/sdk:10.0` (Ubuntu 24.04) has curl, tar, openssl, git and bash but not `zip` or `unzip`. `AppService.DeployFolder` installs zip itself and `Bun.Install` installs unzip.
 
 ## Scripting Basics
 
@@ -490,7 +504,9 @@ if (publish) {
 | Ef | EfOperations | Entity Framework Core operations. |
 | Npm | NpmOperations | npm operations (install, run, ci). Requires DirectoryRef arguments. |
 | Node | NodeInstallOperations | Node.js installation. |
-| Azure | AzureOperations | Azure CLI authentication. |
+| Azure | AzureOperations | Azure CLI authentication and `az` commands (`Azure.Cli`, `Azure.Vm.RunCommand`). |
+| Shell | ShellCommandOperations | Run any command or bash script in the build container (`Shell.Run`, `Shell.Bash`). |
+| Bun | BunOperations | Bun installation. |
 | Bicep | BicepOperations | Azure Bicep deployments. |
 | AppService | AppServiceOperations | Azure App Service deployments. |
 | Http | HttpOperations | HTTP health-check gating (wait for an endpoint to be healthy). |
@@ -663,6 +679,146 @@ Ando.CopyArtifactsToHost("dist", "./dist");
 Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");
 ```
 
+## Step model and deployment gates
+
+### Execution model
+
+A build script runs in two phases:
+
+1. Evaluation: ANDO runs your C# top to bottom. Every operation (`Dotnet.Build`, `AppService.SwapSlots`, `Shell.Run`, ...) only registers a step. Nothing runs yet.
+2. Execution: ANDO runs the registered steps in order, stopping at the first failure.
+
+Plain C# control flow therefore runs in phase 1. `try`/`finally` around a step call does not wrap the step's execution, and `if (output.Value == "x")` cannot see output that does not exist yet. Use these instead:
+
+| Need | Use |
+|------|-----|
+| Group steps, handle failure, clean up | `Ando.Block(name, body).OnFailure(...).Finally(...)` |
+| Run steps at the end of the run (or enclosing block), whatever happened | `Ando.Finally(body)` |
+| Run C# at execution time, then run the steps it registers | `Ando.Defer(body)` |
+| Run steps only if a runtime condition holds | `Ando.When(condition, then, otherwise?)` |
+| Fail the build if a runtime condition is false | `Ando.Require(condition, message)` |
+| Ask before continuing | `Ando.Confirm(message)` |
+| Record a value in the run record | `Ando.Report(key, string \| StepOutput \| Func<string>)` |
+
+Steps that return `StepOutput` or `CommandStep` can be read only at execution time. Reading `Value`, `ExitCode`, `StatusCode` or `Json(...)` before the step ran throws.
+
+### Ordering on failure and cancellation
+
+- A failing step stops its scope (run, block or deferred body). The steps after it do not run.
+- For a failed block, ANDO runs the block's `OnFailure` steps first, then its `Finally` steps. The block still fails, and the failure moves to the enclosing scope.
+- With nested blocks the order is: inner `OnFailure`, inner `Finally`, outer `OnFailure`, outer `Finally`.
+- `Finally` steps of one scope run last-registered first, like nested `try`/`finally`. Every one runs, even if an earlier one failed. Inside one `Finally` lambda all steps run even if one fails.
+- Inside one `OnFailure` lambda the first failing step stops the remaining steps of that lambda. Other `OnFailure` calls on the same block still run.
+- Finally steps belong to the enclosing `Ando.Block` (or the run). `Defer` and `When` bodies are transparent: a finally step registered inside one (including the removal registered by `AppService.TemporaryAccessRule`) runs when the enclosing block ends.
+- Ctrl+C: the first Ctrl+C stops the running step (it is marked cancelled), stops any command it left running in the build container, then runs the on-failure and finally steps. Commands started after the first press ignore further Ctrl+C presses, so a second press only prints a warning. A third press exits immediately (exit code 130) and skips the remaining cleanup.
+
+### Operations
+
+- Ando.Block(name, body) - Returns a StepBlock. Body runs at evaluation time to capture its steps; the steps run in order at execution time. Chain `.OnFailure(Action)` (runs only if a step in the block failed or the run was canceled; may be called more than once) and `.Finally(Action)` (always runs).
+- Ando.Finally(body) - Steps that always run at the end of the enclosing block, or of the run at top level.
+- Ando.Defer(body) - Runs `body` at execution time, then runs the steps it registers.
+- Ando.When(Func<bool> condition, Action then, Action? otherwise = null) - Chooses steps at execution time.
+- Ando.Require(Func<bool> condition, string message) - Fails with `message` if the condition is false at execution time.
+- Ando.Confirm(message) - Prompts `[y/N]`. Declining fails the build. `ando run --yes` accepts. Without `--yes` and without an interactive console the step fails.
+- Ando.Report(key, string) / Ando.Report(key, StepOutput) / Ando.Report(key, Func<string>) - Adds a value to the run record and logs it.
+- Ando.CommandTimeout(TimeSpan) - Default timeout for command steps registered after this call (built-in default 5 minutes). Operations with a longer default of their own, such as AppService zip deploy, keep it.
+- Ando.CopyToContainer(hostPath, containerPath) - Copies a host file or directory into the build container. Relative host paths are relative to the directory you ran `ando` from (also with `--ref`), so gitignored files can be used. Relative container paths are relative to /workspace. A directory replaces an existing directory at the target.
+- Ando.InvocationRoot - Host directory `ando` was run from (string). Use it to read local files during evaluation, also with `--ref`.
+- Ando.WriteManifest(directory, version, commit) - Step that writes `manifest.json` into a container directory with the version, commit, and size and SHA-256 of every file.
+- Ando.ImportArtifacts(hostDirectory, containerDirectory = null) - Returns an `ArtifactManifest`. During evaluation it reads `manifest.json` in the host directory and verifies every file hash (missing, changed or extra files throw before any step runs). The registered step copies the directory into the container and verifies the hashes again there. Default container directory: the same relative path under /workspace.
+- ArtifactManifest members: `Version`, `Commit`, `Files` (each has `Path`, `Size`, `Sha256`), `File(pathOrName)` (relative path, or a unique file name; throws if not found), `PathOf(pathOrName)` (container path of a file), `ContainerPath` (container path of the imported directory).
+
+### StepOutput and CommandStep
+
+`StepOutput` members: `Value` (trimmed stdout, or the response body for HTTP steps), `ExitCode`, `StatusCode` (HTTP steps only, otherwise throws), `HasValue`, and `Json(path)`. `Json` reads a dotted path with optional array indexes, for example `show.Json("siteConfig.ipSecurityRestrictions[0].name")`. Property names match case-insensitively. It returns the string value, raw JSON text for objects and arrays, or null when the path is missing or the value is JSON null.
+
+`CommandStep` (returned by `Shell.Run`, `Shell.Bash`, `Azure.Cli`, `AppService.Show`, `AppService.GetHostName`, `AppService.AccessRestrictions`) is a `StepOutput` with fluent configuration, applied when the step runs:
+- `InDirectory(path)` - Working directory; relative paths are relative to /workspace.
+- `WithTimeout(TimeSpan)` - Default 5 minutes or `Ando.CommandTimeout`.
+- `WithEnv(name, value)` - Environment variable for this command only.
+- `AllowFailure()` - Continue on non-zero exit; check `ExitCode` in a later `When` or `Require`.
+- `Quiet()` - Capture the output without printing it.
+
+### Example: slot deploy with gates and swap-back
+
+This deploys previously built artifacts to the `release` slot of an App Service, opens a temporary access rule for the build machine, waits for the slot, asks for confirmation, swaps, and swaps back if anything after the swap fails.
+
+```csharp
+// ando-doc-snippet-test
+// build.csando (run with: ando run --ref v1.4.0 --yes)
+var app = "my-web-app";
+var rg = "my-rg";
+
+Ando.UseImage("mcr.microsoft.com/dotnet/sdk:10.0");
+Ando.CommandTimeout(TimeSpan.FromMinutes(10));
+
+// Evaluation-time checks: fail before any step runs.
+Git.RequireClean("src", "web");
+var manifest = Ando.ImportArtifacts("artifacts");
+Log.Info($"Deploying {manifest.Version} ({manifest.Commit})");
+
+Azure.EnsureAuthenticated();
+
+var releaseHost = AppService.GetHostName(app, rg, "release");
+var prodHost = AppService.GetHostName(app, rg);
+
+Ando.Block("deploy", () =>
+{
+    // Adds an Allow rule for this machine's IPv4 and removes it again when
+    // this block ends, whatever happened.
+    AppService.TemporaryAccessRule(app, rg, "release", "deploy-gate");
+
+    AppService.DeployFolder(app, manifest.PathOf("web"), rg, o => o.WithDeploymentSlot("release"));
+
+    Http.WaitForHealthy(
+        () => new[] { $"https://{releaseHost.Value}/healthz", $"https://{releaseHost.Value}/healthz/db" },
+        o => o.ConsecutiveSuccesses(3).MinGapSeconds(10).WithTimeoutSeconds(600).ExpectJson("version", manifest.Version));
+
+    Ando.Confirm("Swap release into production?");
+
+    Ando.Block("swap", () =>
+    {
+        AppService.SwapSlots(app, "release", rg);
+        Http.WaitForHealthy(() => $"https://{prodHost.Value}/healthz", o => o.ConsecutiveSuccesses(2));
+    })
+    .OnFailure(() => AppService.SwapSlots(app, "release", rg)); // swap back
+})
+.Finally(() => AppService.Stop(app, rg, "release"));
+
+var health = Http.Get(() => $"https://{prodHost.Value}/healthz");
+Ando.Report("version", manifest.Version);
+Ando.Report("healthz", health);
+```
+
+If the post-swap health check fails, the order is: swap-back (inner `OnFailure`), inner `Finally` (none), outer `OnFailure` (none), then the outer `Finally` steps in reverse registration order (stop the `release` slot, then remove and verify removal of the `deploy-gate` rule). The build fails and the run record shows the cleanup steps with `cleanup: true`.
+
+### Example: reading step output at execution time
+
+```csharp
+// ando-doc-snippet-test
+var rg = "my-rg";
+
+var pending = Shell.Bash("dotnet ef migrations list --no-build | grep -c Pending || true")
+    .InDirectory("src/Api")
+    .WithTimeout(TimeSpan.FromMinutes(2));
+Ando.Require(() => pending.Value == "0", "The database has pending migrations");
+
+var show = Azure.Cli("webapp", "show", "-g", rg, "-n", "my-web-app", "--slot", "release", "-o", "json").Quiet();
+Ando.When(
+    () => show.Json("state") == "Running",
+    () => Log.Info("release slot is running"),
+    () => Log.Warning("release slot is not running"));
+
+var probe = Shell.Run("curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "https://example.com").AllowFailure();
+Ando.Defer(() =>
+{
+    if (probe.ExitCode != 0)
+    {
+        Log.Warning("curl failed");
+    }
+});
+```
+
 ## All Operations
 
 ### Ando
@@ -674,6 +830,7 @@ Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");
 - Ando.CopyArtifactsToHost(containerPath, hostPath) - Copy files from container to host after build
 - Ando.CopyZippedArtifactsToHost(containerPath, hostPath) - Create archive and copy from container to host. Supports .tar.gz (default) and .zip. If hostPath is a directory, creates artifacts.tar.gz.
 - Ando.Build(directory, options?) - Run a nested build in a subdirectory (new container, isolated context)
+- Ando.Block, Ando.Finally, Ando.Defer, Ando.When, Ando.Require, Ando.Confirm, Ando.Report, Ando.CommandTimeout, Ando.CopyToContainer, Ando.InvocationRoot, Ando.WriteManifest, Ando.ImportArtifacts - Step model, gates and artifact import; see "Step model and deployment gates"
 - Log.Info(message) - Log informational message
 - Log.Warning(message) - Log warning message
 - Log.Error(message) - Log error message
@@ -712,8 +869,11 @@ Ando.CopyZippedArtifactsToHost("dist", "./dist/binaries.zip");
 - Azure.LoginWithManagedIdentity(clientId?) - Login with managed identity
 - Azure.SetSubscription(subscriptionId?) - Set active subscription
 - Azure.CreateResourceGroup(name, location) - Create resource group
+- Azure.Cli(params string[] args) - Run `az` with the given arguments as the build's identity, in the build container. Returns a CommandStep (read `Value` or `Json(path)` at execution time).
+- Azure.Vm.RunCommand(resourceGroup, vmName, script, timeout?) - Run a shell script as root on a Linux VM with `az vm run-command invoke`. Fails the step when the script exits non-zero (run-command itself exits 0). Returns a StepOutput whose Value is the script's stdout. Default timeout 30 minutes.
 
-Service principal and managed identity logins always run against an isolated, per-build AZURE_CONFIG_DIR created in the system temp directory. The user's ~/.azure profile is never read or modified, so a build cannot overwrite a developer's personal az login session and az steps cannot silently fall back to it. The isolated profile is deleted when the build process exits.
+The Azure CLI is installed automatically inside the build container (Debian and Ubuntu images only) before the first `az` step if the image does not include it. Without service principal credentials, `Azure.EnsureAuthenticated()` reuses an existing az session in the container or runs `az login --use-device-code` inside the container; it does not check or prompt on the host.
+Every run gets a private AZURE_CONFIG_DIR inside the build container (/tmp/ando-azure-<guid>), which is deleted when the run ends. The host's ~/.azure profile is never read or modified, so a build cannot overwrite a developer's personal az login session and az steps cannot fall back to it. Azure login tokens do not persist in a warm container between runs.
 
 ### Bicep
 - Bicep.DeployToResourceGroup(rg, template, options?) - Deploy to resource group, returns BicepDeployment
@@ -753,10 +913,21 @@ BicepDeployment objects provide typed access to deployment outputs:
 - AppService.ListSlots(name, rg?) - List deployment slots
 - AppService.Restart(name, rg?, slot?) - Restart app service
 - AppService.Start(name, rg?, slot?) - Start app service
-
-### Http
-- Http.WaitForHealthy(url, options?) - Poll a URL until it returns the expected status (default 200) or the timeout elapses; gates a deploy on a health check. Options: WithExpectedStatus(int), WithTimeoutSeconds(int), WithIntervalSeconds(int), WithRequestTimeoutSeconds(int)
 - AppService.Stop(name, rg?, slot?) - Stop app service
+- AppService.Show(name, rg?, slot?) - Returns a CommandStep with the `az webapp show` JSON (quiet). Read fields with `Json("state")` at execution time.
+- AppService.GetHostName(name, rg?, slot?) - Returns a CommandStep whose Value is the default host name, e.g. `myapp-release.azurewebsites.net`.
+- AppService.AccessRestrictions(name, rg?, slot?) - Returns a CommandStep with the `az webapp config access-restriction show` JSON (quiet).
+- AppService.TemporaryAccessRule(name, rg, slot? = null, ruleName = "ando-deploy", ip? = null, priority = 50) - Adds an Allow rule for one IPv4 address (default: this machine's public IPv4; a bare address gets /32) to the app or slot, replacing a rule with the same name. Registers a finally step in the enclosing block (or run) that removes the rule and verifies it is gone. Also works inside `Ando.When`/`Ando.Defer`: the removal still runs when the enclosing block ends.
+
+DeployZip and DeployFolder support `WithDeploymentSlot`. By default they do not restart the app (`WithRestart()` opts in) and they wait for the deployment to finish (`WithNoWait()` opts out).
+### Http
+- Http.WaitForHealthy(url, options?) - Poll a URL until it returns the expected status (default 200) or the timeout elapses; gates a deploy on a health check. Options: WithExpectedStatus(int), WithTimeoutSeconds(int), WithIntervalSeconds(int), WithRequestTimeoutSeconds(int), ConsecutiveSuccesses(int), MinGapSeconds(int), ExpectJson(path, expected)
+- Http.WaitForHealthy(IEnumerable<string> urls, options?) - Poll several URLs together; a check passes only when every URL passes.
+- Http.WaitForHealthy(Func<string> url, options?) and Http.WaitForHealthy(Func<IEnumerable<string>> urls, options?) - URLs computed at execution time, for example from `AppService.GetHostName(...).Value`.
+- Http.Get(url, allowAnyStatus = false) and Http.Get(Func<string> url, allowAnyStatus = false) - GET request. Returns a StepOutput: `Value` is the body, `StatusCode` the status. Fails on a non-2xx status unless allowAnyStatus is true.
+- Http.PublicIpV4() - Returns a StepOutput whose Value is this machine's public IPv4 address.
+
+Health check option details: `ConsecutiveSuccesses(n)` needs n passing checks in a row (a failure resets the count; with several URLs one check means all URLs passed). `MinGapSeconds(s)` waits at least s seconds between counted passing checks. `ExpectJson(path, expected)` requires the JSON body to have that dotted-path value (numbers and booleans compare by their JSON text); it applies to every URL of the call, so use a separate call for URLs that return something else. Polling runs on the host.
 
 ### Nuget
 - Nuget.EnsureAuthenticated() - Ensure API key is available (prompts if NUGET_API_KEY not set)
@@ -819,6 +990,22 @@ To run the suite once per database, give each variant an npm script that sets an
 - Git.Tag(tagName, options?) - Create a git tag (annotated by default)
 - Git.Push(options?) - Push current branch to remote
 - Git.PushTags(remote?) - Push tags to remote, skipping tags that already exist remotely (default: origin). Tags are pushed individually.
+- Git.Commit - Full SHA of the commit being built (HEAD, or the commit given with `--ref`). Property, evaluation time.
+- Git.ShortCommit - Short SHA of the commit being built. Property, evaluation time.
+- Git.RequireClean(params string[] paths) - Throws before any step runs if tracked files are modified, staged or deleted, or non-ignored untracked files exist, under the paths (whole repository if none). Always passes with `--ref`. `.ando/runs/` is ignored, so run records never trip it.
+- Git.ChangedSince(sinceRef, params string[] paths) - True if any file under the paths differs between sinceRef and the commit being built (committed changes only). Evaluation time.
+- Git.LastTag(pattern = "*") - Most recent tag reachable from the commit being built that matches the glob (for example `"v*"`), or null. Evaluation time.
+
+Git.Commit, ShortCommit, RequireClean, ChangedSince and LastTag run git on the host while the script is evaluated, so their values can be used directly in `if` and string interpolation.
+
+### Shell
+- Shell.Run(command, params string[] args) - Run a command in the build container. Arguments are passed as a list, with no shell parsing. Fails on non-zero exit unless `AllowFailure()`. Returns a CommandStep.
+- Shell.Bash(script) - Run a script with `bash -euo pipefail -c` in the build container (pipes, redirection, sourcing). Returns a CommandStep.
+
+Note: hook scripts have a different `Shell` global (`Shell.RunAsync`). The `Shell.Run` and `Shell.Bash` described here are for build.csando.
+
+### Bun
+- Bun.Install(version = "latest") - Install Bun into /usr/local/bin so later steps (including MSBuild targets run by Dotnet.Publish) find `bun` on PATH. Skips the download if that version is already installed. Installs curl and unzip with apt when missing; needs a Debian or Ubuntu image. Example: `Bun.Install("1.2.23");`
 
 ### GitHub
 - GitHub.CreatePr(options) - Create a pull request (requires gh CLI)
@@ -965,7 +1152,7 @@ AppService.DeployZip is resilient to flaky Azure uploads: if the deploy command 
 
 1. Build scripts are C# - use C# syntax including var, lambdas, string interpolation
 2. No semicolons needed at end of lines (but they work if included)
-3. Operations execute in the order they are called
+3. Operations execute in the order they are called, but only after the whole script was evaluated (see "Step model and deployment gates" for blocks, cleanup and conditions)
 4. Use Dotnet.Project() for .csproj files, Directory() for folders
 5. The `/` operator concatenates paths: Root / "src" / "app"
 6. Options are configured via fluent lambdas: o => o.Output(...).WithRuntime(...)
@@ -983,6 +1170,8 @@ AppService.DeployZip is resilient to flaky Azure uploads: if the deploy command 
 | `Ando.SetEnv("NAME", "value")` | CS1061: 'AndoOperations' does not contain 'SetEnv' | Set env vars via `.env.ando` files or OS environment |
 | `Npm.Ci(Root)` | CS1503: cannot convert 'BuildPath' to 'DirectoryRef' | Use `Npm.Ci(Directory("."))` |
 | `Profile("name")` | CS0119: 'Profile' is a type | Use `DefineProfile("name")` to create profiles |
+| `try { AppService.SwapSlots(...); } finally { AppService.Stop(...); }` | No error; the `finally` code runs while the script is evaluated, not after the steps | Use `Ando.Block(...).Finally(...)` or `Ando.Finally(...)` |
+| `if (show.Value == "x") { ... }` at the top level | InvalidOperationException: output not available yet | Read outputs inside `Ando.When(() => ..., ...)` or `Ando.Defer(() => ...)` |
 
 ## API Documentation
 
@@ -1018,10 +1207,11 @@ All pages are available in markdown format for LLM consumption:
 - https://andobuild.com/license.md - License information
 
 ### Provider Documentation
-- https://andobuild.com/providers/ando.md - Core operations (Log, Artifacts, Context)
+- https://andobuild.com/providers/ando.md - Core operations (Log, Artifacts, step model: Block, Finally, Defer, When, Require, Confirm, Report)
 - https://andobuild.com/providers/appservice.md - Azure App Service deployments
-- https://andobuild.com/providers/azure.md - Azure CLI authentication
+- https://andobuild.com/providers/azure.md - Azure CLI authentication and az commands
 - https://andobuild.com/providers/bicep.md - Azure Bicep deployments
+- https://andobuild.com/providers/bun.md - Bun installation
 - https://andobuild.com/providers/cloudflare.md - Cloudflare Pages deployments
 - https://andobuild.com/providers/docfx.md - DocFX API documentation generation
 - https://andobuild.com/providers/docker.md - Docker image building
@@ -1035,6 +1225,7 @@ All pages are available in markdown format for LLM consumption:
 - https://andobuild.com/providers/npm.md - npm operations
 - https://andobuild.com/providers/nuget.md - NuGet package operations
 - https://andobuild.com/providers/playwright.md - Playwright E2E testing
+- https://andobuild.com/providers/shell.md - Run commands and bash scripts in the build container
 
 ### Examples
 - https://andobuild.com/examples/index.md - All examples by category

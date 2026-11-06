@@ -4,6 +4,7 @@ export const providers = [
   { id: "AppService", href: "/providers/appservice", label: "Azure App Service" },
   { id: "Azure", href: "/providers/azure", label: "Azure CLI" },
   { id: "Bicep", href: "/providers/bicep", label: "Azure Bicep" },
+  { id: "Bun", href: "/providers/bun", label: "Bun" },
   { id: "Functions", href: "/providers/functions", label: "Azure Functions" },
   { id: "Cloudflare", href: "/providers/cloudflare", label: "Cloudflare" },
   { id: "Docker", href: "/providers/docker", label: "Docker" },
@@ -17,6 +18,7 @@ export const providers = [
   { id: "Npm", href: "/providers/npm", label: "Npm" },
   { id: "Nuget", href: "/providers/nuget", label: "NuGet" },
   { id: "Playwright", href: "/providers/playwright", label: "Playwright" },
+  { id: "Shell", href: "/providers/shell", label: "Shell" },
 ];
 
 // Get provider by ID (group name from operations)

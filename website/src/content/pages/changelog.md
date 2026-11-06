@@ -3,6 +3,23 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.153
+
+**2026-11-06**
+
+- Add `ando run --ref <commit|tag>` to build a specific commit from a temporary clean checkout, and `--yes` to accept `Ando.Confirm` prompts
+- Add a step model for build scripts: `Ando.Block` with `OnFailure` and `Finally`, `Ando.Finally`, `Ando.Defer`, `Ando.When`, `Ando.Require`, `Ando.Confirm` and `Ando.Report`, so cleanup and conditions work at execution time
+- Add `StepOutput` and `CommandStep` so later steps can read a step's output, exit code, HTTP status or JSON values
+- Add `Shell.Run`, `Shell.Bash` and `Bun.Install`
+- Add `Ando.CommandTimeout`, `Ando.CopyToContainer`, `Ando.InvocationRoot`, `Ando.WriteManifest` and `Ando.ImportArtifacts` to build once and deploy the same verified files
+- Add `Azure.Cli` and `Azure.Vm.RunCommand`; the Azure CLI is now installed automatically in Debian and Ubuntu build containers, each run uses a private Azure profile inside the container, and sign-in without service principal credentials uses a device code inside the container
+- Add `AppService.GetHostName`, `AppService.AccessRestrictions` and `AppService.TemporaryAccessRule`; `AppService.Show` now returns a readable result and accepts a slot
+- Change `AppService.Show` to return a `CommandStep` and no longer print the JSON; read it with `.Value` or `Json()`
+- Add `Http.Get`, `Http.PublicIpV4` and more `Http.WaitForHealthy` options: several or computed URLs, `ConsecutiveSuccesses`, `MinGapSeconds` and `ExpectJson`
+- Add `Git.Commit`, `Git.ShortCommit`, `Git.RequireClean`, `Git.ChangedSince` and `Git.LastTag`
+- Write a run record to `.ando/runs/` for every run, and redact secret-looking environment values from console output, logs and run records
+- Change Ctrl+C: the first press stops the running step and the commands it left in the container, then runs on-failure and finally steps, which further presses don't interrupt; a third press exits immediately
+
 ## 0.9.152
 
 **2026-10-13**

@@ -111,6 +111,104 @@ export const operations = [
     ],
     sourceFile: "Operations/AndoOperations.cs",
   },
+  {
+    group: "Ando",
+    name: "Ando.Block",
+    desc: "Groups steps into a named block with optional failure and cleanup steps. The body runs at evaluation time to capture its steps; they run in order later. <code>.OnFailure(Action)</code> steps run only if a block step failed or the run was canceled (may be called more than once). <code>.Finally(Action)</code> steps always run. On failure the order is inner OnFailure, inner Finally, outer OnFailure, outer Finally. The block still fails the build after its OnFailure steps ran. C# <code>try</code>/<code>finally</code> around steps does not work, because steps run after the script is evaluated.",
+    examples: [
+      'Ando.Block("deploy", () =>\n{\n  AppService.DeployFolder("my-app", "dist/api", "my-rg", o => o.WithDeploymentSlot("release"));\n  AppService.SwapSlots("my-app", "release", "my-rg");\n})\n.OnFailure(() => AppService.SwapSlots("my-app", "release", "my-rg"))\n.Finally(() => AppService.Stop("my-app", "my-rg", "release"));',
+    ],
+    sourceFile: "Operations/AndoOperations.cs",
+  },
+  {
+    group: "Ando",
+    name: "Ando.Finally",
+    desc: "Registers steps that always run at the end of the enclosing block, or at the end of the run at top level: after success, after a failure and after Ctrl+C. Finally steps run last-registered first and every one runs, even if an earlier one failed. All steps inside one Finally lambda run even if one fails. A Finally registered inside <code>Ando.Defer</code> or <code>Ando.When</code> runs when that body ends.",
+    examples: ['Ando.Finally(() => AppService.Stop("my-app", "my-rg", "release"));'],
+    sourceFile: "Operations/AndoOperations.cs",
+  },
+  {
+    group: "Ando",
+    name: "Ando.Defer",
+    desc: "Runs the lambda at execution time, when the steps before it have run, then runs the steps it registers. Use it to pass step outputs to later steps or to use plain C# <code>if</code>/<code>foreach</code> on runtime values.",
+    examples: [
+      'var host = AppService.GetHostName("my-app", "my-rg", "release");\nAndo.Defer(() => Http.WaitForHealthy($"https://{host.Value}/healthz"));',
+    ],
+    sourceFile: "Operations/AndoOperations.cs",
+  },
+  {
+    group: "Ando",
+    name: "Ando.When",
+    desc: "Runs the steps of <code>then</code> only if the condition is true at execution time, otherwise the steps of the optional <code>otherwise</code>. The condition can read step outputs.",
+    examples: [
+      'var rules = AppService.AccessRestrictions("my-app", "my-rg", "release");\nAndo.When(\n  () => rules.Json("ipSecurityRestrictionsDefaultAction") == "Deny",\n  () => Log.Info("Slot restricts access"),\n  () => Log.Info("Slot is open"));',
+    ],
+    sourceFile: "Operations/AndoOperations.cs",
+  },
+  {
+    group: "Ando",
+    name: "Ando.Require",
+    desc: "Fails the build with the message if the condition is false at execution time.",
+    examples: [
+      'var pending = Shell.Bash("./scripts/pending-migrations.sh");\nAndo.Require(() => pending.Value == "", "Database has pending migrations");',
+    ],
+    sourceFile: "Operations/AndoOperations.cs",
+  },
+  {
+    group: "Ando",
+    name: "Ando.Confirm",
+    desc: "Asks <code>[y/N]</code> before the build continues. Declining fails the build. <code>ando run --yes</code> accepts every confirmation. Without <code>--yes</code>, a run with no interactive console fails at this step.",
+    examples: ['Ando.Confirm("Swap release into production?");'],
+    sourceFile: "Operations/AndoOperations.cs",
+  },
+  {
+    group: "Ando",
+    name: "Ando.Report",
+    desc: "Adds a value to the run record (<code>.ando/runs/*.json</code>) when the step runs, and logs it. Overloads take a string, a <code>StepOutput</code> or a <code>Func&lt;string&gt;</code> evaluated at execution time. Secret values are redacted.",
+    examples: [
+      'var health = Http.Get("https://app.example.com/healthz");\nAndo.Report("healthz", health);\nAndo.Report("commit", Git.Commit);',
+    ],
+    sourceFile: "Operations/AndoOperations.cs",
+  },
+  {
+    group: "Ando",
+    name: "Ando.CommandTimeout",
+    desc: "Sets the timeout for command steps registered after this call (built-in default 5 minutes). Operations with their own longer default, such as AppService zip deploy, keep it. Use a step's <code>WithTimeout</code> for one step only.",
+    examples: ["Ando.CommandTimeout(TimeSpan.FromMinutes(15));"],
+    sourceFile: "Operations/AndoOperations.cs",
+  },
+  {
+    group: "Ando",
+    name: "Ando.CopyToContainer",
+    desc: "Copies a host file or directory into the build container. Relative host paths are relative to the directory ANDO was run from (also with <code>--ref</code>), so gitignored files such as local certificates can be used. Relative container paths are relative to <code>/workspace</code>. A directory replaces an existing directory at the container path.",
+    examples: ['Ando.CopyToContainer(".run/seal-1.pem", ".run/seal-1.pem");'],
+    sourceFile: "Operations/AndoOperations.cs",
+  },
+  {
+    group: "Ando",
+    name: "Ando.InvocationRoot",
+    desc: "Host directory ANDO was run from (a string). Use it to read local, for example gitignored, files while the script is evaluated, also with <code>--ref</code>.",
+    examples: ['var local = Path.Combine(Ando.InvocationRoot, ".run", "settings.json");'],
+    sourceFile: "Operations/AndoOperations.cs",
+  },
+  {
+    group: "Ando",
+    name: "Ando.WriteManifest",
+    desc: "Registers a step that writes <code>manifest.json</code> into a container directory with the version, commit, and size and SHA-256 of every file. Copy the directory to the host with <code>Ando.CopyArtifactsToHost</code> and deploy it in a later run with <code>Ando.ImportArtifacts</code>.",
+    examples: [
+      'Ando.WriteManifest(Root / "artifacts", "1.4.0", Git.Commit);\nAndo.CopyArtifactsToHost("artifacts", "./artifacts");',
+    ],
+    sourceFile: "Operations/AndoOperations.cs",
+  },
+  {
+    group: "Ando",
+    name: "Ando.ImportArtifacts",
+    desc: "Imports a build's artifacts for deployment and returns an <code>ArtifactManifest</code> with <code>Version</code>, <code>Commit</code>, <code>Files</code> (<code>Path</code>, <code>Size</code>, <code>Sha256</code>), <code>File(pathOrName)</code>, <code>PathOf(pathOrName)</code> and <code>ContainerPath</code>. While the script is evaluated, ANDO verifies every file's SHA-256 on the host (missing, changed or extra files throw before any step runs). A registered step copies the directory into the container and verifies the hashes again. Relative host paths are relative to the directory ANDO was run from. The default container directory is the same relative path under <code>/workspace</code>.",
+    examples: [
+      'var m = Ando.ImportArtifacts("artifacts");\nAppService.DeployFolder("my-app", m.PathOf("web"), "my-rg");\nLog.Info($"Deploying {m.Version} ({m.Commit})");',
+    ],
+    sourceFile: "Operations/AndoOperations.cs",
+  },
   // Log operation (top-level with methods)
   {
     group: "Ando",
@@ -272,7 +370,7 @@ export const operations = [
   {
     group: "Azure",
     name: "Azure.EnsureAuthenticated",
-    desc: "Authenticate to Azure using the best available method. Uses service principal credentials when provided (explicit arguments or AZURE_CLIENT_ID/SECRET/TENANT_ID), otherwise falls back to an existing CLI session or interactive login. Pass requireServicePrincipal: true (or set ANDO_REQUIRE_SERVICE_PRINCIPAL) to force service principal auth and fail instead of ever using a developer's az login session. Default behavior is unchanged (fallback allowed). When service principal credentials are used, the login runs against an isolated, per-build AZURE_CONFIG_DIR so the user's ~/.azure profile is never read or modified.",
+    desc: "Authenticate to Azure using the best available method. Uses service principal credentials when provided (explicit arguments or AZURE_CLIENT_ID/SECRET/TENANT_ID), otherwise reuses an existing az session in the build container or runs <code>az login --use-device-code</code> inside the container (no host-side az checks or prompts). Pass requireServicePrincipal: true (or set ANDO_REQUIRE_SERVICE_PRINCIPAL) to force service principal auth and fail instead of ever using a developer's az login session. Default behavior is unchanged (fallback allowed). Every run uses a private AZURE_CONFIG_DIR inside the build container, deleted when the run ends, so the host's ~/.azure profile is never read or modified.",
     examples: [
       "Azure.EnsureAuthenticated(); // Auto-detects: SP env vars, else CLI session/interactive",
       "Azure.EnsureAuthenticated(clientId, secret, tenantId); // explicit SP, no env reliance",
@@ -297,7 +395,7 @@ export const operations = [
   {
     group: "Azure",
     name: "Azure.LoginWithServicePrincipal",
-    desc: "Login with a Service Principal (for CI/CD). Runs against an isolated, per-build AZURE_CONFIG_DIR in the system temp directory, so the user's ~/.azure profile is never read or modified; the isolated profile is deleted when the build process exits.",
+    desc: "Login with a Service Principal (for CI/CD). Runs against the run's private AZURE_CONFIG_DIR inside the build container, so the host's ~/.azure profile is never read or modified; it is deleted when the run ends.",
     examples: [
       "Azure.LoginWithServicePrincipal(clientId, secret, tenantId);",
       "Azure.LoginWithServicePrincipal(); // Uses AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID env vars",
@@ -307,7 +405,7 @@ export const operations = [
   {
     group: "Azure",
     name: "Azure.LoginWithManagedIdentity",
-    desc: "Login with Managed Identity (for Azure-hosted environments). Runs against an isolated, per-build AZURE_CONFIG_DIR in the system temp directory, so the user's ~/.azure profile is never read or modified; the isolated profile is deleted when the build process exits.",
+    desc: "Login with Managed Identity (for Azure-hosted environments). Runs against the run's private AZURE_CONFIG_DIR inside the build container, so the host's ~/.azure profile is never read or modified; it is deleted when the run ends.",
     examples: [
       "Azure.LoginWithManagedIdentity(); // System-assigned",
       'Azure.LoginWithManagedIdentity("client-id"); // User-assigned',
@@ -330,6 +428,24 @@ export const operations = [
     desc: "Create a resource group if it doesn't exist.",
     examples: ['Azure.CreateResourceGroup("my-rg", "eastus");', 'Azure.CreateResourceGroup("prod-rg", "westeurope");'],
     sourceFile: "Operations/AzureOperations.cs",
+  },
+  {
+    group: "Azure",
+    name: "Azure.Cli",
+    desc: "Runs <code>az</code> with the given arguments as the build's identity, in the build container. Returns a <code>CommandStep</code> whose stdout is available to later steps (<code>Value</code>, <code>Json(path)</code>, <code>ExitCode</code>). Configure it with <code>InDirectory</code>, <code>WithTimeout</code>, <code>WithEnv</code>, <code>AllowFailure</code> and <code>Quiet</code>. The Azure CLI is installed automatically in the container (Debian and Ubuntu images) before the first az step if the image does not include it.",
+    examples: [
+      'var show = Azure.Cli("webapp", "show", "-g", "my-rg", "-n", "my-app", "--slot", "release", "-o", "json").Quiet();\nAndo.When(() => show.Json("state") == "Running", () => Log.Info("running"));',
+    ],
+    sourceFile: "Operations/AzureOperations.cs",
+  },
+  {
+    group: "Azure",
+    name: "Azure.Vm.RunCommand",
+    desc: "Runs a shell script as root on a Linux VM with <code>az vm run-command invoke</code> and fails the step when the script exits non-zero (run-command itself exits 0). Returns a <code>StepOutput</code> whose <code>Value</code> is the script's stdout. Signature: <code>RunCommand(resourceGroup, vmName, script, TimeSpan? timeout = null)</code>; default timeout 30 minutes.",
+    examples: [
+      'Azure.Vm.RunCommand("rg-eu", "docs-vm", "/usr/local/sbin/update-worker pkg.tar.gz", TimeSpan.FromMinutes(10));',
+    ],
+    sourceFile: "Operations/AzureVmOperations.cs",
   },
   {
     group: "Bicep",
@@ -502,7 +618,7 @@ export const operations = [
   {
     group: "AppService",
     name: "AppService.DeployFolder",
-    desc: "Zip a published folder (contents at the archive root) and deploy it with zip deploy. Use when you have a publish directory rather than a pre-built zip.",
+    desc: "Zip a published folder (contents at the archive root) and deploy it with zip deploy. Use when you have a publish directory rather than a pre-built zip. Supports <code>WithDeploymentSlot</code>. Does not restart the app unless <code>WithRestart()</code> is set and waits for the deployment unless <code>WithNoWait()</code> is set. Installs <code>zip</code> in the container if missing.",
     examples: [
       'AppService.DeployFolder("my-app", "dist/api");',
       'AppService.DeployFolder("my-app", "dist/api", "my-rg", o => o\n  .WithDeploymentSlot("release"));',
@@ -575,13 +691,68 @@ export const operations = [
     sourceFile: "Operations/AppServiceOperations.cs",
   },
   {
+    group: "AppService",
+    name: "AppService.Show",
+    desc: "Reads the app's (or slot's) <code>az webapp show</code> JSON. Returns a <code>CommandStep</code>; the output is quiet. Read fields at execution time with <code>Json(path)</code>.",
+    examples: [
+      'var show = AppService.Show("my-app", "my-rg", "release");\nAndo.Require(() => show.Json("state") == "Running", "Slot is not running");',
+    ],
+    sourceFile: "Operations/AppServiceOperations.cs",
+  },
+  {
+    group: "AppService",
+    name: "AppService.GetHostName",
+    desc: "Reads the app's (or slot's) default host name, for example <code>myapp-release.azurewebsites.net</code>. Returns a <code>CommandStep</code>.",
+    examples: [
+      'var host = AppService.GetHostName("my-app", "my-rg", "release");\nHttp.WaitForHealthy(() => $"https://{host.Value}/healthz");',
+    ],
+    sourceFile: "Operations/AppServiceOperations.cs",
+  },
+  {
+    group: "AppService",
+    name: "AppService.AccessRestrictions",
+    desc: "Reads the app's (or slot's) access restrictions (<code>az webapp config access-restriction show</code>). Returns a quiet <code>CommandStep</code> with JSON.",
+    examples: [
+      'var rules = AppService.AccessRestrictions("my-app", "my-rg", "release");\nAndo.When(() => rules.Json("ipSecurityRestrictionsDefaultAction") == "Deny", () => Log.Info("restricted"));',
+    ],
+    sourceFile: "Operations/AppServiceOperations.cs",
+  },
+  {
+    group: "AppService",
+    name: "AppService.TemporaryAccessRule",
+    desc: 'Adds an Allow access rule for one IPv4 address to the app or slot and removes it again when the enclosing block (or the run) ends, whatever happened. The removal is a finally step, followed by a check that the rule is gone. A rule with the same name is replaced. Without <code>ip</code>, uses this machine\'s public IPv4; a bare address gets <code>/32</code>. Signature: <code>TemporaryAccessRule(appName, resourceGroup, slot = null, ruleName = "ando-deploy", ip = null, priority = 50)</code>. Call it directly in the <code>Ando.Block</code> that needs it: inside <code>Ando.When</code> or <code>Ando.Defer</code> the rule is removed when that body ends.',
+    examples: [
+      'Ando.Block("deploy", () =>\n{\n  AppService.TemporaryAccessRule("my-app", "my-rg", "release", "deploy-gate");\n  AppService.DeployFolder("my-app", "dist/api", "my-rg", o => o.WithDeploymentSlot("release"));\n});',
+    ],
+    sourceFile: "Operations/AppServiceOperations.cs",
+  },
+  {
     group: "Http",
     name: "Http.WaitForHealthy",
-    desc: "Poll a URL until it returns the expected status code (default 200) or the timeout elapses. Runs in-process on the build host, so it needs no curl in the image. Use it to gate a deploy on a health check, for example before swapping a slot into production.",
+    desc: "Poll a URL until it returns the expected status code (default 200) or the timeout elapses. Runs in-process on the build host, so it needs no curl in the image. Use it to gate a deploy on a health check, for example before swapping a slot into production. Overloads take a <code>string</code>, an <code>IEnumerable&lt;string&gt;</code> (every URL must pass), a <code>Func&lt;string&gt;</code> or a <code>Func&lt;IEnumerable&lt;string&gt;&gt;</code> (computed at execution time). Extra options: <code>ConsecutiveSuccesses(n)</code> needs n passing checks in a row (a failure resets the count), <code>MinGapSeconds(s)</code> waits at least s seconds between counted passes, and <code>ExpectJson(path, expected)</code> requires a dotted-path value in the JSON body. <code>ExpectJson</code> applies to every URL of the call.",
     examples: [
+      'Http.WaitForHealthy(() => $"https://{host.Value}/healthz", o => o\n  .ConsecutiveSuccesses(3)\n  .MinGapSeconds(10)\n  .ExpectJson("version", "1.4.0"));',
+      'Http.WaitForHealthy(new[] { "https://a.example.com/healthz", "https://a.example.com/healthz/db" });',
       'Http.WaitForHealthy("https://app.example.com/healthz");',
       'Http.WaitForHealthy("https://app.example.com/healthz/db", o => o\n  .WithTimeoutSeconds(300)\n  .WithIntervalSeconds(5));',
     ],
+    sourceFile: "Operations/HttpOperations.cs",
+  },
+  {
+    group: "Http",
+    name: "Http.Get",
+    desc: "Sends a GET request (from the build host) and keeps the response. Returns a <code>StepOutput</code>: <code>Value</code> is the body and <code>StatusCode</code> the status code. Fails on a non-2xx status unless <code>allowAnyStatus</code> is true. Signatures: <code>Get(string url, bool allowAnyStatus = false)</code> and <code>Get(Func&lt;string&gt; url, bool allowAnyStatus = false)</code>.",
+    examples: [
+      'var health = Http.Get("https://eu.example.com/healthz");\nAndo.Report("eu.healthz", health);',
+      'var probe = Http.Get(() => $"https://{host.Value}/healthz", allowAnyStatus: true);\nAndo.Require(() => probe.StatusCode < 500, "Server error");',
+    ],
+    sourceFile: "Operations/HttpOperations.cs",
+  },
+  {
+    group: "Http",
+    name: "Http.PublicIpV4",
+    desc: "Looks up this machine's public IPv4 address (as seen by public services). Returns a <code>StepOutput</code> whose <code>Value</code> is the address.",
+    examples: ['var ip = Http.PublicIpV4();\nAndo.Report("buildIp", ip);'],
     sourceFile: "Operations/HttpOperations.cs",
   },
   {
@@ -635,6 +806,43 @@ export const operations = [
     name: "Git.PushTags",
     desc: "Pushes tags to the remote repository, skipping tags that already exist on the remote. Tags are pushed individually for safety. <strong>Runs on host</strong> (not in container).",
     examples: ["Git.PushTags();", 'Git.PushTags("upstream");'],
+    sourceFile: "Operations/GitOperations.cs",
+  },
+  {
+    group: "Git",
+    name: "Git.Commit",
+    desc: "Full SHA of the commit being built: HEAD, or the commit given with <code>ando run --ref</code>. A property read while the script is evaluated. <strong>Runs on host</strong>.",
+    examples: ["var commit = Git.Commit;", 'Ando.WriteManifest(Root / "artifacts", "1.4.0", Git.Commit);'],
+    sourceFile: "Operations/GitOperations.cs",
+  },
+  {
+    group: "Git",
+    name: "Git.ShortCommit",
+    desc: "Short SHA of the commit being built. A property read while the script is evaluated. <strong>Runs on host</strong>.",
+    examples: ['Log.Info($"Building {Git.ShortCommit}");'],
+    sourceFile: "Operations/GitOperations.cs",
+  },
+  {
+    group: "Git",
+    name: "Git.RequireClean",
+    desc: "Fails the build before any step runs if tracked files are modified, staged or deleted, or non-ignored untracked files exist, under the given paths (the whole repository if none). With <code>--ref</code> the build uses a clean checkout, so it always passes. <code>.ando/runs/</code> has its own <code>.gitignore</code> and never counts. <strong>Runs on host</strong> at evaluation time.",
+    examples: ['Git.RequireClean("src", "web", "infra", "Directory.Build.props");'],
+    sourceFile: "Operations/GitOperations.cs",
+  },
+  {
+    group: "Git",
+    name: "Git.ChangedSince",
+    desc: "Returns true if any file under the paths differs between <code>sinceRef</code> and the commit being built (committed changes only). Checks the whole repository when no paths are given. Evaluation time, <strong>runs on host</strong>.",
+    examples: [
+      'if (Git.ChangedSince(Git.LastTag("v*") ?? "HEAD~1", "src/Worker", "services/signing"))\n{\n  Log.Info("Worker changed");\n}',
+    ],
+    sourceFile: "Operations/GitOperations.cs",
+  },
+  {
+    group: "Git",
+    name: "Git.LastTag",
+    desc: "Returns the most recent tag reachable from the commit being built that matches the glob pattern (default <code>*</code>), or <code>null</code> when there is none. Evaluation time, <strong>runs on host</strong>.",
+    examples: ['var last = Git.LastTag("v*");'],
     sourceFile: "Operations/GitOperations.cs",
   },
   // GitHub operations
@@ -765,7 +973,29 @@ export function getOperationsGroupedByProvider() {
   const grouped = {};
   for (const op of operations) {
     if (!grouped[op.group]) {
-      grouped[op.group] = [];
+      grouped[op.group] = [
+        {
+          group: "Shell",
+          name: "Shell.Run",
+          desc: "Runs a command with arguments in the build container, in order with the other steps. Arguments are passed as a list with no shell parsing. Fails on a non-zero exit code unless <code>AllowFailure()</code>. Returns a <code>CommandStep</code> (<code>Value</code>, <code>ExitCode</code>, <code>Json(path)</code>; fluent <code>InDirectory</code>, <code>WithTimeout</code>, <code>WithEnv</code>, <code>AllowFailure</code>, <code>Quiet</code>). Signature: <code>Run(string command, params string[] args)</code>.",
+          examples: ['Shell.Run("zip", "-qr", "../web.zip", ".").InDirectory("artifacts/web");'],
+          sourceFile: "Operations/ShellCommandOperations.cs",
+        },
+        {
+          group: "Shell",
+          name: "Shell.Bash",
+          desc: "Runs a script with <code>bash -euo pipefail -c</code> in the build container, for pipes, redirection and sourcing helper scripts. Returns a <code>CommandStep</code>. Signature: <code>Bash(string script)</code>.",
+          examples: ['Shell.Bash("source scripts/lib/deploy-gates.sh && require_spa_build artifacts/web");'],
+          sourceFile: "Operations/ShellCommandOperations.cs",
+        },
+        {
+          group: "Bun",
+          name: "Bun.Install",
+          desc: 'Installs Bun into <code>/usr/local/bin</code> so later steps (including MSBuild targets run by <code>Dotnet.Publish</code>) find <code>bun</code> on PATH. Skips the download when the container already has that version. Installs <code>curl</code> and <code>unzip</code> with apt if missing; needs a Debian or Ubuntu image. Signature: <code>Install(string version = "latest")</code>.',
+          examples: ['Bun.Install("1.2.23");'],
+          sourceFile: "Operations/ToolInstallOperations.cs",
+        },
+      ];
     }
     grouped[op.group].push(op);
   }
