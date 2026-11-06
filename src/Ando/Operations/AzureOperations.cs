@@ -40,6 +40,7 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
     private const string EnvClientId = "AZURE_CLIENT_ID";
     private const string EnvClientSecret = "AZURE_CLIENT_SECRET";
     private const string EnvTenantId = "AZURE_TENANT_ID";
+    private const string EnvClientCertificatePath = "AZURE_CLIENT_CERTIFICATE_PATH";
     private const string EnvSubscriptionId = "AZURE_SUBSCRIPTION_ID";
 
     // When truthy, EnsureAuthenticated must authenticate with a service principal
@@ -94,17 +95,21 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
         var resolvedClientId = clientId ?? EnvironmentHelper.Get(EnvClientId);
         var resolvedClientSecret = clientSecret ?? EnvironmentHelper.Get(EnvClientSecret);
         var resolvedTenantId = tenantId ?? EnvironmentHelper.Get(EnvTenantId);
+        var hasCertificate = !string.IsNullOrEmpty(EnvironmentHelper.Get(EnvClientCertificatePath));
 
         var mustUseServicePrincipal =
             requireServicePrincipal || IsTruthy(EnvironmentHelper.Get(EnvRequireServicePrincipal));
 
         if (!string.IsNullOrEmpty(resolvedClientId)
-            && !string.IsNullOrEmpty(resolvedClientSecret)
+            && (!string.IsNullOrEmpty(resolvedClientSecret) || hasCertificate)
             && !string.IsNullOrEmpty(resolvedTenantId))
         {
             // Service principal credentials found - use them.
             Logger.Info("Azure: Using service principal authentication");
-            SecretValues.Add(resolvedClientSecret);
+            if (!string.IsNullOrEmpty(resolvedClientSecret))
+            {
+                SecretValues.Add(resolvedClientSecret);
+            }
             LoginWithServicePrincipal(resolvedClientId, resolvedClientSecret, resolvedTenantId);
             return;
         }
@@ -187,6 +192,10 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
     /// <summary>
     /// Registers a step to login with a Service Principal.
     /// Credentials can be passed explicitly or read from environment variables.
+    /// If AZURE_CLIENT_CERTIFICATE_PATH is set (a PEM file path with key and certificate inside the build
+    /// container, e.g. after Ando.CopyToContainer), the certificate is used
+    /// instead of the client secret. Credentials reach az through the
+    /// environment of the container command, never as process arguments.
     /// </summary>
     /// <param name="clientId">Application (client) ID, or null to use AZURE_CLIENT_ID env var.</param>
     /// <param name="clientSecret">Client secret, or null to use AZURE_CLIENT_SECRET env var.</param>
@@ -196,22 +205,49 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
         // Resolve credentials from parameters or environment variables.
         // This is done at registration time so we fail fast if credentials are missing.
         var resolvedClientId = clientId ?? EnvironmentHelper.GetRequired(EnvClientId, "Azure Client ID");
-        var resolvedClientSecret = clientSecret ?? EnvironmentHelper.GetRequired(EnvClientSecret, "Azure Client Secret");
+        var certificatePath = EnvironmentHelper.Get(EnvClientCertificatePath);
+        var useCertificate = !string.IsNullOrEmpty(certificatePath);
+        var resolvedClientSecret = useCertificate
+            ? null
+            : clientSecret ?? EnvironmentHelper.GetRequired(EnvClientSecret, "Azure Client Secret");
         var resolvedTenantId = tenantId ?? EnvironmentHelper.GetRequired(EnvTenantId, "Azure Tenant ID");
-        SecretValues.Add(resolvedClientSecret);
+        if (resolvedClientSecret != null)
+        {
+            SecretValues.Add(resolvedClientSecret);
+        }
 
         // The login runs in the build container, which has its own per-run
         // AZURE_CONFIG_DIR (set by the CLI), so ~/.azure is never touched.
         Logger.Info("Azure: Logging in with a private per-run Azure CLI profile (your ~/.azure is not used)");
 
-        RegisterCommand("Azure.Login.ServicePrincipal", "az",
-            () => new ArgumentBuilder()
-                .Add("login", "--service-principal")
-                .Add("--username", resolvedClientId)
-                .Add("--password", resolvedClientSecret)
-                .Add("--tenant", resolvedTenantId)
-                .Add("--output", "none"));
+        var environment = new Dictionary<string, string>
+        {
+            [EnvClientId] = resolvedClientId,
+            [EnvTenantId] = resolvedTenantId
+        };
+        if (useCertificate)
+        {
+            environment[EnvClientCertificatePath] = certificatePath!;
+        }
+        else
+        {
+            environment[EnvClientSecret] = resolvedClientSecret!;
+        }
+
+        RegisterCommand("Azure.Login.ServicePrincipal", "sh",
+            ServicePrincipalLoginArgs(useCertificate),
+            useCertificate ? "certificate" : null,
+            environment: environment);
     }
+
+    // The credentials are referenced by variable name so they never appear in a process argument list.
+    internal static string[] ServicePrincipalLoginArgs(bool useCertificate) =>
+    [
+        "-c",
+        "az login --service-principal -u \"$AZURE_CLIENT_ID\" "
+        + (useCertificate ? "--certificate \"$AZURE_CLIENT_CERTIFICATE_PATH\"" : "-p \"$AZURE_CLIENT_SECRET\"")
+        + " --tenant \"$AZURE_TENANT_ID\" --output none"
+    ];
 
     /// <summary>
     /// Registers a step to login with Managed Identity.

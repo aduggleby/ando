@@ -2,7 +2,7 @@
 // ContainerExecutorDefaultEnvironmentTests.cs
 //
 // Summary: Tests that ContainerExecutor.DefaultEnvironment entries (for example
-// the run's private AZURE_CONFIG_DIR) become `docker exec -e` arguments.
+// the run's private AZURE_CONFIG_DIR) become `docker exec -e NAME` arguments with the values in the docker client's environment, never in its arguments.
 // =============================================================================
 
 using System.Diagnostics;
@@ -40,8 +40,10 @@ public class ContainerExecutorDefaultEnvironmentTests
         var startInfo = executor.Prepare("az", ["account", "show"], new CommandOptions());
 
         var envArgs = EnvArgs(startInfo);
-        envArgs.ShouldContain("AZURE_CONFIG_DIR=/tmp/ando-azure-abc");
-        envArgs.ShouldContain("OTHER=value");
+        envArgs.ShouldContain("AZURE_CONFIG_DIR");
+        envArgs.ShouldContain("OTHER");
+        startInfo.Environment["AZURE_CONFIG_DIR"].ShouldBe("/tmp/ando-azure-abc");
+        startInfo.Environment["OTHER"].ShouldBe("value");
     }
 
     [Fact]
@@ -52,7 +54,7 @@ public class ContainerExecutorDefaultEnvironmentTests
 
         var args = executor.Prepare("az", ["version"], new CommandOptions()).ArgumentList.ToList();
 
-        args.IndexOf("FOO=bar").ShouldBeLessThan(args.IndexOf("c1"));
+        args.IndexOf("FOO").ShouldBeLessThan(args.IndexOf("c1"));
         args.IndexOf("c1").ShouldBeLessThan(args.IndexOf("az"));
     }
 
@@ -64,10 +66,10 @@ public class ContainerExecutorDefaultEnvironmentTests
         var options = new CommandOptions();
         options.Environment["FOO"] = "command";
 
-        var envArgs = EnvArgs(executor.Prepare("az", [], options));
+        var startInfo = executor.Prepare("az", [], options);
 
-        envArgs.ShouldContain("FOO=command");
-        envArgs.ShouldNotContain("FOO=default");
+        EnvArgs(startInfo).Count(a => a == "FOO").ShouldBe(1);
+        startInfo.Environment["FOO"].ShouldBe("command");
     }
 
     [Fact]
@@ -75,6 +77,21 @@ public class ContainerExecutorDefaultEnvironmentTests
     {
         var executor = new TestableContainerExecutor("c1", _logger);
 
-        EnvArgs(executor.Prepare("az", [], new CommandOptions())).ShouldNotContain(a => a.StartsWith("AZURE_CONFIG_DIR="));
+        EnvArgs(executor.Prepare("az", [], new CommandOptions())).ShouldNotContain("AZURE_CONFIG_DIR");
+    }
+
+    [Fact]
+    public void SecretValues_NeverAppearInArguments()
+    {
+        var executor = new TestableContainerExecutor("c1", _logger);
+        executor.DefaultEnvironment["DEFAULT_SECRET"] = "ando-secret-default-1";
+        var options = new CommandOptions();
+        options.Environment["COMMAND_SECRET"] = "ando-secret-command-2";
+
+        var startInfo = executor.Prepare("az", ["account", "show"], options);
+
+        startInfo.ArgumentList.ShouldNotContain(a => a.Contains("ando-secret"));
+        startInfo.Environment["DEFAULT_SECRET"].ShouldBe("ando-secret-default-1");
+        startInfo.Environment["COMMAND_SECRET"].ShouldBe("ando-secret-command-2");
     }
 }

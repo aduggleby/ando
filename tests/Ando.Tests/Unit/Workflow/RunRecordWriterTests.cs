@@ -97,6 +97,38 @@ public class RunRecordWriterTests : IDisposable
     }
 
     [Fact]
+    public void TryWrite_NormalRun_IsNotAborted()
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(Write(new RunSession())));
+
+        doc.RootElement.GetProperty("aborted").GetBoolean().ShouldBeFalse();
+    }
+
+    [Fact]
+    public void TryWrite_AbortedRun_IsMarkedAbortedWithUnfinishedStep()
+    {
+        var aborted = new WorkflowResult
+        {
+            WorkflowName = "build",
+            WasCancelled = true,
+            Aborted = true,
+            StepResults =
+            [
+                new StepResult { StepName = "Dotnet.Build", Success = true },
+                new StepResult { StepName = "Azure.Cli", Success = false, ErrorMessage = "aborted" }
+            ]
+        };
+
+        using var doc = JsonDocument.Parse(File.ReadAllText(Write(new RunSession(), aborted)));
+        var root = doc.RootElement;
+
+        root.GetProperty("aborted").GetBoolean().ShouldBeTrue();
+        root.GetProperty("cancelled").GetBoolean().ShouldBeTrue();
+        root.GetProperty("success").GetBoolean().ShouldBeFalse();
+        root.GetProperty("steps")[1].GetProperty("error").GetString().ShouldBe("aborted");
+    }
+
+    [Fact]
     public void TryWrite_DuplicateReportKeys_LastValueWins()
     {
         var session = new RunSession();

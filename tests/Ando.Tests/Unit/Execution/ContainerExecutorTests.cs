@@ -143,8 +143,10 @@ public class ContainerExecutorTests : IDisposable
         // Check that -e flags are added
         var args = startInfo.ArgumentList.ToList();
         args.Count(a => a == "-e").ShouldBe(2);
-        args.ShouldContain("DOTNET_CLI_TELEMETRY_OPTOUT=1");
-        args.ShouldContain("CI=true");
+        args.ShouldContain("DOTNET_CLI_TELEMETRY_OPTOUT");
+        args.ShouldContain("CI");
+        startInfo.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"].ShouldBe("1");
+        startInfo.Environment["CI"].ShouldBe("true");
     }
 
     [Fact]
@@ -158,7 +160,9 @@ public class ContainerExecutorTests : IDisposable
         var startInfo = executor.TestPrepareProcessStartInfo("npm", ["run", "translate"], new CommandOptions());
 
         startInfo.ArgumentList.ShouldContain("-e");
-        startInfo.ArgumentList.ShouldContain("OPENAI_API_KEY=test-key");
+        startInfo.ArgumentList.ShouldContain("OPENAI_API_KEY");
+        startInfo.ArgumentList.ShouldNotContain("OPENAI_API_KEY=test-key");
+        startInfo.Environment["OPENAI_API_KEY"].ShouldBe("test-key");
     }
 
     [Fact]
@@ -177,8 +181,9 @@ public class ContainerExecutorTests : IDisposable
         var args = startInfo.ArgumentList.ToList();
 
         args.Count(a => a == "-e").ShouldBe(1);
-        args.ShouldContain("OPENAI_API_KEY=explicit-key");
-        args.ShouldNotContain("OPENAI_API_KEY=tracked-key");
+        args.ShouldContain("OPENAI_API_KEY");
+        args.ShouldNotContain(a => a.Contains("-key"));
+        startInfo.Environment["OPENAI_API_KEY"].ShouldBe("explicit-key");
     }
 
     [Fact]

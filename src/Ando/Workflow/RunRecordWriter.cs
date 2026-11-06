@@ -60,10 +60,21 @@ public static class RunRecordWriter
                 path = Path.Combine(directory, attempt == 0 ? $"{stamp}.json" : $"{stamp}-{attempt}.json");
                 try
                 {
-                    // CreateNew: two runs in the same second never overwrite each other.
-                    using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write);
-                    using var writer = new StreamWriter(stream);
-                    writer.Write(json);
+                    // CreateNew reserves the final name: two runs in the same second never
+                    // share one. The content goes to a temp file that then replaces the
+                    // reserved empty file, so a reader never sees a partial record.
+                    using (new FileStream(path, FileMode.CreateNew, FileAccess.Write)) { }
+                    var temp = $"{path}.{Guid.NewGuid():N}.tmp";
+                    try
+                    {
+                        File.WriteAllText(temp, json);
+                        File.Move(temp, path, overwrite: true);
+                    }
+                    catch
+                    {
+                        try { File.Delete(temp); File.Delete(path); } catch { }
+                        throw;
+                    }
                     break;
                 }
                 catch (IOException) when (File.Exists(path) && attempt < 100)
@@ -102,6 +113,7 @@ public static class RunRecordWriter
             ["durationSeconds"] = Math.Round(result.Duration.TotalSeconds, 1),
             ["success"] = result.Success,
             ["cancelled"] = result.WasCancelled,
+            ["aborted"] = result.Aborted,
             ["steps"] = result.StepResults.Select(step => new Dictionary<string, object?>
             {
                 ["name"] = step.StepName,

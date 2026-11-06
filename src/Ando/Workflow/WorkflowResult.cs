@@ -69,6 +69,9 @@ public class WorkflowResult
     /// <summary>Whether the workflow was cancelled by the user (Ctrl+C).</summary>
     public bool WasCancelled { get; init; }
 
+    /// <summary>Whether the process was forced to exit (third Ctrl+C) before the run finished.</summary>
+    public bool Aborted { get; init; }
+
     /// <summary>Total time taken for all steps.</summary>
     public TimeSpan Duration { get; init; }
 

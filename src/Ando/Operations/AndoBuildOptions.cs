@@ -75,10 +75,18 @@ public class AndoBuildOptions
         return this;
     }
 
+    /// <summary>Set from the parent run: it used --no-env, so the child skips the env file too.</summary>
+    internal bool NoEnv { get; set; }
+
     /// <summary>Builds the CLI arguments for ando run.</summary>
     internal string[] BuildArgs()
     {
         var args = new List<string> { "run" };
+
+        if (NoEnv)
+        {
+            args.Add("--no-env");
+        }
 
         if (!string.IsNullOrEmpty(Verbosity))
         {

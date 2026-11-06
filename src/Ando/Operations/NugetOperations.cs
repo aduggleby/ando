@@ -137,15 +137,20 @@ public class NugetOperations : OperationsBase
     {
         Registry.Register("Nuget.Push", async () =>
         {
-            var args = new ArgumentBuilder()
-                .Add("nuget", "push", packagePath)
-                .AddIfNotNull("--source", options.Source ?? NugetPushOptions.NuGetOrgSource)
-                .AddIfNotNull("--api-key", GetEffectiveApiKey(options))
-                .AddFlag(options.SkipDuplicate, "--skip-duplicate")
-                .AddFlag(options.NoSymbols, "--no-symbols")
-                .Build();
+            // The API key goes in the command's environment, not its arguments.
+            var apiKey = GetEffectiveApiKey(options);
+            var script = "dotnet nuget push \"$1\" --source \"$2\""
+                + (string.IsNullOrEmpty(apiKey) ? "" : " --api-key \"$NUGET_API_KEY\"")
+                + (options.SkipDuplicate ? " --skip-duplicate" : "")
+                + (options.NoSymbols ? " --no-symbols" : "");
+            var commandOptions = new CommandOptions();
+            if (!string.IsNullOrEmpty(apiKey))
+            {
+                commandOptions.Environment["NUGET_API_KEY"] = apiKey;
+            }
 
-            var result = await ExecutorFactory().ExecuteAsync("dotnet", args);
+            var result = await ExecutorFactory().ExecuteAsync("sh",
+                ["-c", script, "sh", packagePath, options.Source ?? NugetPushOptions.NuGetOrgSource], commandOptions);
 
             // Check for duplicate/conflict in output (NuGet returns 409 Conflict).
             var output = result.Output + result.Error;

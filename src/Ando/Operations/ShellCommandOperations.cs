@@ -59,9 +59,10 @@ public class ShellCommandOperations(StepRegistry registry, IBuildLogger logger, 
         string stepName,
         string command,
         string[] args,
-        string? context)
+        string? context,
+        int? defaultTimeoutMs = null)
     {
-        var step = new CommandStep(stepName, registry.DefaultCommandTimeoutMs);
+        var step = new CommandStep(stepName, defaultTimeoutMs ?? registry.DefaultCommandTimeoutMs);
 
         registry.Register(stepName, async () =>
         {

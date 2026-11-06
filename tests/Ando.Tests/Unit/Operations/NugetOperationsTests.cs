@@ -164,9 +164,8 @@ public class NugetOperationsTests
             await _registry.Steps[0].Execute();
 
             var cmd = _executor.ExecutedCommands[0];
-            Assert.Equal("dotnet", cmd.Command);
-            Assert.True(cmd.HasArg("nuget"));
-            Assert.True(cmd.HasArg("push"));
+            Assert.Equal("sh", cmd.Command);
+            Assert.Contains("dotnet nuget push", cmd.Args[1]);
             Assert.True(cmd.HasArg("./packages/MyLib.1.0.0.nupkg"));
         }
         finally
@@ -190,9 +189,8 @@ public class NugetOperationsTests
             await _registry.Steps[0].Execute();
 
             var cmd = _executor.ExecutedCommands[0];
-            Assert.Equal("dotnet", cmd.Command);
-            Assert.True(cmd.HasArg("nuget"));
-            Assert.True(cmd.HasArg("push"));
+            Assert.Equal("sh", cmd.Command);
+            Assert.Contains("dotnet nuget push", cmd.Args[1]);
             // Should use the project's bin/Release directory with glob pattern.
             Assert.Contains(cmd.Args, a => a.Contains("bin") && a.Contains("Release") && a.Contains("*.nupkg"));
         }
@@ -216,7 +214,7 @@ public class NugetOperationsTests
             await _registry.Steps[0].Execute();
 
             var cmd = _executor.ExecutedCommands[0];
-            Assert.True(cmd.HasArg("--skip-duplicate"));
+            Assert.Contains("--skip-duplicate", cmd.Args[1]);
         }
         finally
         {
@@ -238,7 +236,7 @@ public class NugetOperationsTests
             await _registry.Steps[0].Execute();
 
             var cmd = _executor.ExecutedCommands[0];
-            Assert.Equal("https://api.nuget.org/v3/index.json", cmd.GetArgValue("--source"));
+            Assert.Equal("https://api.nuget.org/v3/index.json", cmd.Args[^1]);
         }
         finally
         {
@@ -260,7 +258,7 @@ public class NugetOperationsTests
             await _registry.Steps[0].Execute();
 
             var cmd = _executor.ExecutedCommands[0];
-            Assert.Equal("https://my-feed.com/v3/index.json", cmd.GetArgValue("--source"));
+            Assert.Equal("https://my-feed.com/v3/index.json", cmd.Args[^1]);
         }
         finally
         {
@@ -302,7 +300,10 @@ public class NugetOperationsTests
             await _registry.Steps[0].Execute();
 
             var cmd = _executor.ExecutedCommands[0];
-            Assert.Equal("captured-key", cmd.GetArgValue("--api-key"));
+            // The key travels in the command's environment, never in the argument list.
+            Assert.Equal("captured-key", cmd.Options!.Environment["NUGET_API_KEY"]);
+            Assert.DoesNotContain(cmd.Args, a => a.Contains("captured-key"));
+            Assert.Contains("--api-key \"$NUGET_API_KEY\"", cmd.Args[1]);
         }
         finally
         {

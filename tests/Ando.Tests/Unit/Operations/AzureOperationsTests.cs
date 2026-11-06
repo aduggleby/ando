@@ -106,15 +106,49 @@ public class AzureOperationsTests
         await _registry.Steps[0].Execute();
 
         var cmd = _executor.LastCommand!;
-        Assert.Equal("az", cmd.Command);
-        Assert.Contains("login", cmd.Args);
-        Assert.Contains("--service-principal", cmd.Args);
-        Assert.Contains("--username", cmd.Args);
-        Assert.Equal("my-client-id", cmd.GetArgValue("--username"));
-        Assert.Contains("--password", cmd.Args);
-        Assert.Equal("my-secret", cmd.GetArgValue("--password"));
-        Assert.Contains("--tenant", cmd.Args);
-        Assert.Equal("my-tenant", cmd.GetArgValue("--tenant"));
+        Assert.Equal("sh", cmd.Command);
+        Assert.Equal("-c", cmd.Args[0]);
+        Assert.Equal(
+            "az login --service-principal -u \"$AZURE_CLIENT_ID\" -p \"$AZURE_CLIENT_SECRET\" --tenant \"$AZURE_TENANT_ID\" --output none",
+            cmd.Args[1]);
+        Assert.Equal("my-client-id", cmd.Options!.Environment["AZURE_CLIENT_ID"]);
+        Assert.Equal("my-secret", cmd.Options.Environment["AZURE_CLIENT_SECRET"]);
+        Assert.Equal("my-tenant", cmd.Options.Environment["AZURE_TENANT_ID"]);
+    }
+
+    [Fact]
+    public async Task LoginWithServicePrincipal_NoCredentialValueIsAnArgument()
+    {
+        var azure = CreateAzure();
+        azure.LoginWithServicePrincipal("id-value-1", "secret-value-2", "tenant-value-3");
+
+        await _registry.Steps[0].Execute();
+
+        var args = _executor.LastCommand!.Args;
+        Assert.DoesNotContain(args, a => a.Contains("id-value-1") || a.Contains("secret-value-2") || a.Contains("tenant-value-3"));
+    }
+
+    [Fact]
+    public async Task LoginWithServicePrincipal_WithCertificatePath_UsesCertificateInsteadOfSecret()
+    {
+        Environment.SetEnvironmentVariable("AZURE_CLIENT_CERTIFICATE_PATH", "/workspace/.run/seal.pem");
+        try
+        {
+            var azure = CreateAzure();
+            azure.LoginWithServicePrincipal("my-client-id", null, "my-tenant");
+
+            await _registry.Steps[0].Execute();
+
+            var cmd = _executor.LastCommand!;
+            Assert.Contains("--certificate \"$AZURE_CLIENT_CERTIFICATE_PATH\"", cmd.Args[1]);
+            Assert.DoesNotContain("AZURE_CLIENT_SECRET", cmd.Args[1]);
+            Assert.Equal("/workspace/.run/seal.pem", cmd.Options!.Environment["AZURE_CLIENT_CERTIFICATE_PATH"]);
+            Assert.False(cmd.Options.Environment.ContainsKey("AZURE_CLIENT_SECRET"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("AZURE_CLIENT_CERTIFICATE_PATH", null);
+        }
     }
 
     [Fact]

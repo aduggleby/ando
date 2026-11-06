@@ -70,7 +70,9 @@ public class AppServiceOperations(
     /// pre-built zip: it archives the folder's CONTENTS at the archive root (no
     /// nested top-level directory), which is the layout config-zip expects. The zip
     /// step runs in the build container and installs the zip tool if the image does
-    /// not already provide it.
+    /// not already provide it (apt-get; Debian and Ubuntu images). For reproducible
+    /// builds, zip at build time and use DeployZip. Deploys use
+    /// `az webapp deployment source config-zip`.
     /// </summary>
     /// <param name="appName">Name of the Azure App Service.</param>
     /// <param name="folderPath">Path to the published folder to deploy.</param>
@@ -113,79 +115,57 @@ public class AppServiceOperations(
     }
 
     /// <summary>
-    /// Registers a step to swap deployment slots.
+    /// Registers a step to swap deployment slots. A swap warms up the slot and can
+    /// take several minutes, so it defaults to a 30 minute timeout (or
+    /// Ando.CommandTimeout when that is longer); .WithTimeout(...) on the result
+    /// overrides both.
     /// </summary>
     /// <param name="appName">Name of the Azure App Service.</param>
     /// <param name="sourceSlot">Source slot name to swap from.</param>
     /// <param name="resourceGroup">Optional resource group name.</param>
     /// <param name="targetSlot">Target slot name (defaults to "production").</param>
-    public void SwapSlots(string appName, string sourceSlot,
-        string? resourceGroup = null, string targetSlot = "production")
-    {
-        RegisterCommand("AppService.SwapSlots", "az",
-            () => new ArgumentBuilder()
+    public CommandStep SwapSlots(string appName, string sourceSlot,
+        string? resourceGroup = null, string targetSlot = "production") =>
+        AzStep("AppService.SwapSlots", $"{sourceSlot} -> {targetSlot}",
+            new ArgumentBuilder()
                 .Add("webapp", "deployment", "slot", "swap")
                 .Add("--name", appName)
                 .AddIfNotNull("--resource-group", resourceGroup)
                 .Add("--slot", sourceSlot)
                 .Add("--target-slot", targetSlot)
                 .Add("--output", "none"),
-            $"{sourceSlot} -> {targetSlot}");
-    }
+            Math.Max(SwapDefaultTimeoutMs, Registry.DefaultCommandTimeoutMs ?? 0));
 
-    /// <summary>
-    /// Registers a step to restart an app service.
-    /// </summary>
+    private const int SwapDefaultTimeoutMs = 30 * 60 * 1000;
+
+    /// <summary>Registers a step to restart an app service.</summary>
     /// <param name="appName">Name of the Azure App Service.</param>
     /// <param name="resourceGroup">Optional resource group name.</param>
     /// <param name="slot">Optional slot name. If null, restarts the production slot.</param>
-    public void Restart(string appName, string? resourceGroup = null, string? slot = null)
-    {
-        RegisterCommand("AppService.Restart", "az",
-            () => new ArgumentBuilder()
-                .Add("webapp", "restart")
-                .Add("--name", appName)
-                .AddIfNotNull("--resource-group", resourceGroup)
-                .AddIfNotNull("--slot", slot)
-                .Add("--output", "none"),
-            appName);
-    }
+    public CommandStep Restart(string appName, string? resourceGroup = null, string? slot = null) =>
+        AzStep("AppService.Restart", appName, WebappAction("restart", appName, resourceGroup, slot));
 
-    /// <summary>
-    /// Registers a step to stop an app service.
-    /// </summary>
+    /// <summary>Registers a step to stop an app service.</summary>
     /// <param name="appName">Name of the Azure App Service.</param>
     /// <param name="resourceGroup">Optional resource group name.</param>
     /// <param name="slot">Optional slot name. If null, stops the production slot.</param>
-    public void Stop(string appName, string? resourceGroup = null, string? slot = null)
-    {
-        RegisterCommand("AppService.Stop", "az",
-            () => new ArgumentBuilder()
-                .Add("webapp", "stop")
-                .Add("--name", appName)
-                .AddIfNotNull("--resource-group", resourceGroup)
-                .AddIfNotNull("--slot", slot)
-                .Add("--output", "none"),
-            appName);
-    }
+    public CommandStep Stop(string appName, string? resourceGroup = null, string? slot = null) =>
+        AzStep("AppService.Stop", appName, WebappAction("stop", appName, resourceGroup, slot));
 
-    /// <summary>
-    /// Registers a step to start an app service.
-    /// </summary>
+    /// <summary>Registers a step to start an app service.</summary>
     /// <param name="appName">Name of the Azure App Service.</param>
     /// <param name="resourceGroup">Optional resource group name.</param>
     /// <param name="slot">Optional slot name. If null, starts the production slot.</param>
-    public void Start(string appName, string? resourceGroup = null, string? slot = null)
-    {
-        RegisterCommand("AppService.Start", "az",
-            () => new ArgumentBuilder()
-                .Add("webapp", "start")
-                .Add("--name", appName)
-                .AddIfNotNull("--resource-group", resourceGroup)
-                .AddIfNotNull("--slot", slot)
-                .Add("--output", "none"),
-            appName);
-    }
+    public CommandStep Start(string appName, string? resourceGroup = null, string? slot = null) =>
+        AzStep("AppService.Start", appName, WebappAction("start", appName, resourceGroup, slot));
+
+    private static ArgumentBuilder WebappAction(string action, string appName, string? resourceGroup, string? slot) =>
+        new ArgumentBuilder()
+            .Add("webapp", action)
+            .Add("--name", appName)
+            .AddIfNotNull("--resource-group", resourceGroup)
+            .AddIfNotNull("--slot", slot)
+            .Add("--output", "none");
 
     /// <summary>
     /// Registers a step that reads the app's (or slot's) `az webapp show` JSON.
@@ -326,8 +306,9 @@ public class AppServiceOperations(
         }));
     }
 
-    private CommandStep AzStep(string stepName, string context, ArgumentBuilder args) =>
-        ShellCommandOperations.RegisterCommandStep(Registry, Logger, ExecutorFactory, stepName, "az", args.Build(), context);
+    private CommandStep AzStep(string stepName, string context, ArgumentBuilder args, int? defaultTimeoutMs = null) =>
+        ShellCommandOperations.RegisterCommandStep(Registry, Logger, ExecutorFactory, stepName, "az", args.Build(), context,
+            defaultTimeoutMs);
 
     /// <summary>
     /// Registers a step to list deployment slots for an app service.
@@ -427,7 +408,7 @@ public class AppServiceOperations(
 
             if (result.Success)
             {
-                return true;
+                return await RestartAfterDeployAsync(appName, resourceGroup, options);
             }
 
             if (IsTimeout(result))
@@ -438,7 +419,7 @@ public class AppServiceOperations(
                 if (await LatestDeploymentSucceededAsync(appName, resourceGroup, options.DeploymentSlot, startedAt))
                 {
                     Logger.Info("Latest Kudu deployment completed successfully after the zip deploy command timed out.");
-                    return true;
+                    return await RestartAfterDeployAsync(appName, resourceGroup, options);
                 }
 
                 if (timeoutAttempts >= MaxZipDeployTimeoutAttempts ||
@@ -465,6 +446,30 @@ public class AppServiceOperations(
         }
 
         return false;
+    }
+
+    // WithRestart: restart the same app/slot once the zip deploy succeeded.
+    private async Task<bool> RestartAfterDeployAsync(
+        string appName,
+        string? resourceGroup,
+        AppServiceDeployOptions options)
+    {
+        if (options.Restart && options.NoWait)
+        {
+            Logger.Warning("WithNoWait and WithRestart are both set: the restart may happen before the async deploy finishes.");
+        }
+
+        if (!options.Restart)
+        {
+            return true;
+        }
+
+        Logger.Info($"    Restarting {appName}{(options.DeploymentSlot != null ? $" ({options.DeploymentSlot})" : "")} after deployment...");
+        var result = await ExecutorFactory().ExecuteAsync(
+            "az",
+            WebappAction("restart", appName, resourceGroup, options.DeploymentSlot).Build(),
+            new CommandOptions { TimeoutMs = Registry.DefaultCommandTimeoutMs ?? CommandOptions.DefaultTimeoutMs });
+        return result.Success;
     }
 
     private async Task<bool> LatestDeploymentSucceededAsync(

@@ -194,6 +194,13 @@ public class AndoOperationsTests
 public class AndoBuildOptionsTests
 {
     [Fact]
+    public void BuildArgs_IncludesNoEnv_WhenParentUsedNoEnv()
+    {
+        Assert.DoesNotContain("--no-env", new AndoBuildOptions().BuildArgs());
+        Assert.Contains("--no-env", new AndoBuildOptions { NoEnv = true }.BuildArgs());
+    }
+
+    [Fact]
     public void WithProfile_SetsProfile()
     {
         var options = new AndoBuildOptions();

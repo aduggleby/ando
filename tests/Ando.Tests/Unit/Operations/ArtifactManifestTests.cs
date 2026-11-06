@@ -54,6 +54,9 @@ public class ArtifactManifestTests : IDisposable
         return manifest;
     }
 
+    private AndoOperations _ops => _opsInstance ??= CreateAndo();
+    private AndoOperations? _opsInstance;
+
     private AndoOperations CreateAndo() =>
         new(_registry, _logger, p => p, _options, new ArtifactOperations(_logger), new ProfileRegistry(),
             () => _executor);
@@ -205,6 +208,32 @@ public class ArtifactManifestTests : IDisposable
         manifest.PathOf("worker.tar.gz").ShouldBe("/workspace/artifacts/documents/worker.tar.gz");
     }
 
+    [Fact]
+    public void PathOf_Directory_ReturnsContainerDirectory()
+    {
+        var manifest = Sample();
+        manifest.ContainerPath = "/workspace/artifacts/";
+
+        manifest.PathOf("documents").ShouldBe("/workspace/artifacts/documents");
+        manifest.PathOf("./documents/").ShouldBe("/workspace/artifacts/documents");
+    }
+
+    [Fact]
+    public void PathOf_NothingMatches_Throws()
+    {
+        var manifest = Sample();
+        manifest.ContainerPath = "/workspace/artifacts";
+
+        Should.Throw<KeyNotFoundException>(() => manifest.PathOf("docs"));
+        Should.Throw<KeyNotFoundException>(() => manifest.PathOf("documents/missing"));
+    }
+
+    [Fact]
+    public void File_Directory_StillThrows()
+    {
+        Should.Throw<KeyNotFoundException>(() => Sample().File("documents"));
+    }
+
     // ---- Ando.ImportArtifacts ----------------------------------------------
 
     [Fact]
@@ -287,38 +316,105 @@ public class ArtifactManifestTests : IDisposable
 
     // ---- Ando.WriteManifest -------------------------------------------------
 
+    // Replaces docker cp: records the arguments and the content of the copied host file.
+    private List<(string[] Args, string Content)> CaptureDockerCopies()
+    {
+        var copies = new List<(string[] Args, string Content)>();
+        _options.Session.ContainerId = "container-1";
+        _options.Session.DockerRunner = args =>
+        {
+            copies.Add((args, args[0] == "cp" && File.Exists(args[1]) ? File.ReadAllText(args[1]) : ""));
+            return Task.FromResult(CommandResult.Ok());
+        };
+        return copies;
+    }
+
     [Fact]
-    public async Task WriteManifest_HashesFilesAndWritesBase64Manifest()
+    public async Task WriteManifest_HashesFilesAndCopiesManifestIntoContainer()
     {
         var hash = new string('e', 64);
         _executor.QueuedResults.Enqueue(CommandResult.Ok($"{hash}  ./web/index.html\n"));
         _executor.QueuedResults.Enqueue(CommandResult.Ok("99 ./web/index.html\n"));
-        _executor.QueuedResults.Enqueue(CommandResult.Ok());
-        CreateAndo().WriteManifest("artifacts", "2.0.0", "deadbeef");
+        var copies = CaptureDockerCopies();
+        _ops.WriteManifest("artifacts", "2.0.0", "deadbeef");
 
         var result = await new WorkflowRunner(_registry, _logger).RunAsync(_options);
 
         result.Success.ShouldBeTrue();
-        _executor.ExecutedCommands.Count.ShouldBe(3);
+        _executor.ExecutedCommands.Count.ShouldBe(2);
         _executor.ExecutedCommands[0].Args[1].ShouldContain("cd \"$1\"");
         _executor.ExecutedCommands[0].Args[^1].ShouldBe("/workspace/artifacts");
         _executor.ExecutedCommands[0].Args[1].ShouldContain("sha256sum");
         _executor.ExecutedCommands[1].Args[1].ShouldContain("stat -c");
-        var write = _executor.ExecutedCommands[2];
-        write.Args[1].ShouldContain("> \"$2/manifest.json\"");
-        write.Args[^1].ShouldBe("/workspace/artifacts");
-        var json = Encoding.UTF8.GetString(Convert.FromBase64String(write.Args[^2]));
-        var written = ArtifactManifest.Parse(json);
+        var copy = copies.ShouldHaveSingleItem();
+        copy.Args[0].ShouldBe("cp");
+        copy.Args[2].ShouldBe("container-1:/workspace/artifacts/manifest.json");
+        var written = ArtifactManifest.Parse(copy.Content);
         written.Version.ShouldBe("2.0.0");
         written.Commit.ShouldBe("deadbeef");
         written.Files.ShouldBe([new ArtifactFile("web/index.html", 99, hash)]);
     }
 
     [Fact]
+    public async Task WriteManifest_ManyFiles_PayloadIsNotAProcessArgument()
+    {
+        var hashes = new StringBuilder();
+        var sizes = new StringBuilder();
+        for (var i = 0; i < 5000; i++)
+        {
+            hashes.Append($"{new string('a', 64)}  ./dir/file-{i:D5}.txt\n");
+            sizes.Append($"10 ./dir/file-{i:D5}.txt\n");
+        }
+        _executor.QueuedResults.Enqueue(CommandResult.Ok(hashes.ToString()));
+        _executor.QueuedResults.Enqueue(CommandResult.Ok(sizes.ToString()));
+        var copies = CaptureDockerCopies();
+        _ops.WriteManifest("artifacts", "2.0.0", "deadbeef");
+
+        var result = await new WorkflowRunner(_registry, _logger).RunAsync(_options);
+
+        result.Success.ShouldBeTrue();
+        ArtifactManifest.Parse(copies.ShouldHaveSingleItem().Content).Files.Count.ShouldBe(5000);
+        _executor.ExecutedCommands.SelectMany(c => c.Args).ShouldAllBe(a => a.Length < 1000);
+    }
+
+    [Fact]
+    public async Task WriteManifest_WithoutBuildContainer_FailsStep()
+    {
+        _executor.QueuedResults.Enqueue(CommandResult.Ok(""));
+        _executor.QueuedResults.Enqueue(CommandResult.Ok(""));
+        _ops.WriteManifest("artifacts", "2.0.0", "deadbeef");
+
+        var result = await new WorkflowRunner(_registry, _logger).RunAsync(_options);
+
+        result.Success.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task ImportArtifacts_Step_CopiesCheckListIntoContainerInsteadOfPassingItAsArgument()
+    {
+        WriteArtifacts("artifacts", new() { ["a.txt"] = "A", ["b.txt"] = "B" });
+        _options.Session.InvocationRoot = _dir;
+        var copies = CaptureDockerCopies();
+        _executor.QueuedResults.Enqueue(CommandResult.Ok());   // sha256sum -c
+        _executor.QueuedResults.Enqueue(CommandResult.Ok("./a.txt\n./b.txt\n"));   // find
+        _ops.ImportArtifacts("artifacts");
+
+        var result = await new WorkflowRunner(_registry, _logger).RunAsync(_options);
+
+        result.Success.ShouldBeTrue();
+        var checkList = copies.Single(c => c.Args.Length > 2 && c.Args[2].Contains("/tmp/ando-check-"));
+        checkList.Args[2].ShouldStartWith("container-1:/tmp/ando-check-");
+        checkList.Content.ShouldContain($"{Sha("A")}  ./a.txt");
+        var check = _executor.ExecutedCommands[0];
+        check.Args[1].ShouldContain("sha256sum --quiet -c \"$1\"");
+        check.Args.ShouldNotContain(a => a.Contains(Sha("A")));
+    }
+
+    [Fact]
     public async Task WriteManifest_HashFailure_FailsStep()
     {
         _executor.SimulateFailure = true;
-        CreateAndo().WriteManifest("artifacts", "2.0.0", "deadbeef");
+        _ops.WriteManifest("artifacts", "2.0.0", "deadbeef");
 
         var result = await new WorkflowRunner(_registry, _logger).RunAsync(_options);
 

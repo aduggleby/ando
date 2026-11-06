@@ -261,6 +261,65 @@ public class StepModelTests
     }
 
     [Fact]
+    public async Task Cancelled_IsTrueInOnFailureAfterCtrlC_FalseAfterPlainFailure()
+    {
+        var ando = CreateAndo();
+        ando.Cancelled.ShouldBeFalse(); // evaluation time
+        using var cts = new CancellationTokenSource();
+        var seen = new List<bool>();
+        ando.Block("cancelled", () =>
+            {
+                _registry.Register("cancel", () =>
+                {
+                    cts.Cancel();
+                    return Task.FromResult(true);
+                });
+            })
+            .OnFailure(() => ando.When(() => !ando.Cancelled, () => Step("swap"), () => Step("skip-swap")))
+            .Finally(() => ando.Defer(() => seen.Add(ando.Cancelled)));
+
+        var result = await RunAsync(cts.Token);
+
+        result.WasCancelled.ShouldBeTrue();
+        _log.ShouldBe(["skip-swap"]);
+        seen.ShouldBe([true]);
+        ando.Cancelled.ShouldBeFalse(); // outside the run
+    }
+
+    [Fact]
+    public async Task Cancelled_IsFalseInOnFailureAfterPlainFailure()
+    {
+        var ando = CreateAndo();
+        ando.Block("failing", () => Step("boom", false))
+            .OnFailure(() => ando.When(() => !ando.Cancelled, () => Step("swap"), () => Step("skip-swap")));
+
+        var result = await RunAsync();
+
+        result.WasCancelled.ShouldBeFalse();
+        _log.ShouldBe(["boom", "swap"]);
+    }
+
+    [Fact]
+    public async Task SnapshotAborted_ContainsFinishedAndRunningSteps()
+    {
+        var runner = new WorkflowRunner(_registry, _logger);
+        Step("done");
+        _registry.Register("running", () =>
+        {
+            var snapshot = runner.SnapshotAborted();
+            snapshot.Aborted.ShouldBeTrue();
+            snapshot.StepResults.Select(r => (r.StepName, r.Success, r.ErrorMessage))
+                .ShouldBe([("done", true, null), ("running", false, "aborted")]);
+            return Task.FromResult(true);
+        });
+
+        var result = await runner.RunAsync(_options);
+
+        result.Success.ShouldBeTrue();
+        result.Aborted.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task Cancellation_StepThrowingOperationCanceled_RunsFinally()
     {
         var ando = CreateAndo();

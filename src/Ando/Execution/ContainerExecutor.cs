@@ -85,9 +85,12 @@ public class ContainerExecutor : CommandExecutorBase
     /// Installs the Azure CLI in the container before the first az command when
     /// the image doesn't include it.
     /// </summary>
-    protected override async Task<CommandResult?> PrepareCommandAsync(string command, CommandOptions options)
+    protected override async Task<CommandResult?> PrepareCommandAsync(string command, string[] args, CommandOptions options)
     {
-        if (command != "az" || _azureCliEnsured)
+        // Also covers `sh -c "az ..."`, used to keep credentials out of the argument list.
+        var runsAz = command == "az"
+            || (command == "sh" && args is ["-c", var script, ..] && script.StartsWith("az ", StringComparison.Ordinal));
+        if (!runsAz || _azureCliEnsured)
         {
             return null;
         }
@@ -138,30 +141,25 @@ public class ContainerExecutor : CommandExecutorBase
         var workDir = options.WorkingDirectory ?? _containerWorkDir;
         dockerArgs.AddRange(["-w", ConvertToContainerPath(workDir)]);
 
-        // Pass environment variables using -e flags.
-        foreach (var (key, value) in options.Environment)
-        {
-            dockerArgs.AddRange(["-e", $"{key}={value}"]);
-        }
-
-        // Run-wide container environment (e.g. AZURE_CONFIG_DIR).
-        foreach (var (key, value) in DefaultEnvironment)
-        {
-            if (!options.Environment.ContainsKey(key))
-            {
-                dockerArgs.AddRange(["-e", $"{key}={value}"]);
-            }
-        }
-
-        // Forward environment variables that ANDO explicitly loaded from env files.
-        // This keeps containerized subprocesses consistent with the build script's
-        // host-side environment without inheriting the full host environment.
+        // Pass environment variables by name only (-e KEY) and give the values to the
+        // docker client through its own environment, so secrets never appear in the
+        // host process command line. Precedence: per-command > DefaultEnvironment > tracked.
+        var env = new Dictionary<string, string>();
         foreach (var (key, value) in LoadedEnvironmentVariables.GetTrackedVariables())
         {
-            if (!options.Environment.ContainsKey(key) && !DefaultEnvironment.ContainsKey(key))
-            {
-                dockerArgs.AddRange(["-e", $"{key}={value}"]);
-            }
+            env[key] = value;
+        }
+        foreach (var (key, value) in DefaultEnvironment)
+        {
+            env[key] = value;
+        }
+        foreach (var (key, value) in options.Environment)
+        {
+            env[key] = value;
+        }
+        foreach (var key in env.Keys)
+        {
+            dockerArgs.AddRange(["-e", key]);
         }
 
         // Append container ID and the actual command to execute.
@@ -174,6 +172,11 @@ public class ContainerExecutor : CommandExecutorBase
         foreach (var arg in dockerArgs)
         {
             startInfo.ArgumentList.Add(arg);
+        }
+
+        foreach (var (key, value) in env)
+        {
+            startInfo.Environment[key] = value;
         }
 
         return startInfo;

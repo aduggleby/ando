@@ -144,6 +144,7 @@ public class AndoOperations
             // Apply options if provided.
             var options = new AndoBuildOptions();
             configure?.Invoke(options);
+            options.NoEnv = _buildOptions.Session.NoEnv;
 
             // Translate container path to host path for spawning the child process.
             var hostPath = _containerToHostPath(dirPath);
@@ -315,9 +316,14 @@ public class AndoOperations
     /// AppService.TemporaryAccessRule) run when the enclosing block or run ends.
     /// Usage: Ando.Defer(() => Http.WaitForHealthy($"https://{host.Value}/healthz"));
     /// </summary>
-    public void Defer(Action body)
+    public void Defer(Action body) => RegisterDefer(body, null);
+
+    /// <summary>Context that marks an Ando.Defer step as an Ando.When (used by --dry-run).</summary>
+    internal const string WhenContext = "when";
+
+    private void RegisterDefer(Action body, string? context)
     {
-        _registry.Register(new BuildStep("Ando.Defer", () => Task.FromResult(false))
+        _registry.Register(new BuildStep("Ando.Defer", () => Task.FromResult(false), context)
         {
             ExecuteWithRunner = runner => runner.RunDeferredAsync(_registry.Capture(body))
         });
@@ -333,7 +339,7 @@ public class AndoOperations
     /// </summary>
     public void When(Func<bool> condition, Action then, Action? otherwise = null)
     {
-        Defer(() =>
+        RegisterDefer(() =>
         {
             if (condition())
             {
@@ -343,7 +349,7 @@ public class AndoOperations
             {
                 otherwise?.Invoke();
             }
-        });
+        }, WhenContext);
     }
 
     /// <summary>
@@ -421,6 +427,14 @@ public class AndoOperations
     }
 
     /// <summary>
+    /// True once the user pressed Ctrl+C during this run. Read it at execution
+    /// time, for example in Ando.When, Ando.Require, Ando.Defer, OnFailure or
+    /// Finally bodies; while the script is evaluated it is always false.
+    /// Usage: .OnFailure(() => Ando.When(() => !Ando.Cancelled, () => AppService.SwapSlots(app, "staging", rg)))
+    /// </summary>
+    public bool Cancelled => StepCancellation.Cancelled;
+
+    /// <summary>
     /// Sets the timeout for command steps registered after this call (the
     /// built-in default is 5 minutes). Operations with their own longer default,
     /// such as AppService zip deploy, keep it. Use a step's WithTimeout to set
@@ -470,14 +484,12 @@ public class AndoOperations
             return false;
         }
 
-        var docker = new Execution.ProcessRunner(logger);
-        var quiet = new Execution.CommandOptions { SuppressOutput = true };
         var parent = isDirectory ? target : Path.GetDirectoryName(target)!.Replace('\\', '/');
         // Paths are passed as positional arguments, never spliced into the script.
         var prepare = isDirectory ? "rm -rf \"$1\" && mkdir -p \"$1\"" : "mkdir -p \"$1\"";
 
-        var prepared = await docker.ExecuteAsync("docker",
-            ["exec", session.ContainerId, "sh", "-c", prepare, "sh", parent], quiet);
+        var prepared = await RunDockerAsync(session, logger,
+            ["exec", session.ContainerId, "sh", "-c", prepare, "sh", parent]);
         if (!prepared.Success)
         {
             logger.Error($"Could not prepare {target} in the container: {prepared.Error ?? prepared.Output}");
@@ -485,8 +497,8 @@ public class AndoOperations
         }
 
         var copySource = isDirectory ? Path.Combine(source, ".") : source;
-        var copied = await docker.ExecuteAsync("docker",
-            ["cp", copySource, $"{session.ContainerId}:{target}"], quiet);
+        var copied = await RunDockerAsync(session, logger,
+            ["cp", copySource, $"{session.ContainerId}:{target}"]);
         if (!copied.Success)
         {
             logger.Error($"docker cp failed: {copied.Error ?? copied.Output}");
@@ -495,6 +507,48 @@ public class AndoOperations
 
         logger.Info($"    Copied {source} -> {target}");
         return true;
+    }
+
+    // Runs a docker command on the host (tests replace it through the session).
+    private static Task<Execution.CommandResult> RunDockerAsync(RunSession session, IBuildLogger logger, string[] args) =>
+        session.DockerRunner != null
+            ? session.DockerRunner(args)
+            : new Execution.ProcessRunner(logger).ExecuteAsync("docker", args,
+                new Execution.CommandOptions { SuppressOutput = true });
+
+    // Copies generated text into the container through a host temp file and `docker cp`,
+    // so the payload (which grows with the file count) never becomes a process argument.
+    private async Task<bool> WriteTextToContainerAsync(string content, string containerPath)
+    {
+        var containerId = _buildOptions.Session.ContainerId;
+        if (containerId == null)
+        {
+            _logger.Error("No build container: this step only works during `ando run`.");
+            return false;
+        }
+
+        var temp = Path.GetTempFileName();
+        try
+        {
+            await File.WriteAllTextAsync(temp, content);
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite
+                    | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+            }
+
+            string[] args = ["cp", temp, $"{containerId}:{containerPath}"];
+            var copied = await RunDockerAsync(_buildOptions.Session, _logger, args);
+            if (!copied.Success)
+            {
+                _logger.Error($"    docker cp failed: {copied.Error ?? copied.Output}");
+            }
+            return copied.Success;
+        }
+        finally
+        {
+            File.Delete(temp);
+        }
     }
 
     // =========================================================================
@@ -506,6 +560,12 @@ public class AndoOperations
     /// gitignored) files while the script is evaluated, also with --ref.
     /// </summary>
     public string InvocationRoot => _buildOptions.Session.InvocationRoot ?? Environment.CurrentDirectory;
+
+    /// <summary>
+    /// The host directory of the source tree being built: the temporary worktree
+    /// with --ref, otherwise the project directory.
+    /// </summary>
+    public string SourceRoot => _buildOptions.Session.SourceRoot ?? Environment.CurrentDirectory;
 
     /// <summary>
     /// Registers a step that writes manifest.json into <paramref name="directory"/>
@@ -540,12 +600,9 @@ public class AndoOperations
                 Files = ArtifactManifest.ParseListings(hashes.Output ?? "", sizes.Output ?? "")
             };
 
-            var base64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(manifest.ToJson()));
-            var write = await executor.ExecuteAsync("sh",
-                ["-c", "printf %s \"$1\" | base64 -d > \"$2/manifest.json\"", "sh", base64, dir], quiet);
-            if (!write.Success)
+            if (!await WriteTextToContainerAsync(manifest.ToJson(), $"{dir}/{ArtifactManifest.FileName}"))
             {
-                _logger.Error($"    Could not write {dir}/{ArtifactManifest.FileName}: {write.Error}");
+                _logger.Error($"    Could not write {dir}/{ArtifactManifest.FileName}");
                 return false;
             }
 
@@ -600,10 +657,14 @@ public class AndoOperations
 
             // Verify again inside the container, against the manifest read at evaluation time.
             var checkList = string.Join("\n", manifest.Files.Select(f => $"{f.Sha256}  ./{f.Path}")) + "\n";
-            var base64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(checkList));
+            var checkFile = $"/tmp/ando-check-{Guid.NewGuid():N}.txt";
+            if (!await WriteTextToContainerAsync(checkList, checkFile))
+            {
+                return false;
+            }
             var executor = _executorFactory();
             var check = await executor.ExecuteAsync("sh",
-                ["-c", "cd \"$2\" && printf %s \"$1\" | base64 -d | sha256sum --quiet -c -", "sh", base64, manifest.ContainerPath],
+                ["-c", "cd \"$2\" && sha256sum --quiet -c \"$1\"; rc=$?; rm -f \"$1\"; exit $rc", "sh", checkFile, manifest.ContainerPath],
                 new Execution.CommandOptions { TimeoutMs = 30 * 60 * 1000 });
             if (!check.Success)
             {

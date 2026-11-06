@@ -44,6 +44,8 @@ public class WorkflowRunner(StepRegistry registry, IBuildLogger logger) : IStepR
     private readonly Stack<StepScope> _executing = new();
     private int _cleanupDepth;
     private bool _stoppedRunningCommands;
+    private (BuildStep Step, DateTimeOffset StartedAt, int Depth, bool Cleanup)? _runningStep;
+    private DateTimeOffset _runStartedAt;
 
     /// <summary>
     /// Called once when a step is interrupted by Ctrl+C, before any on-failure
@@ -66,6 +68,7 @@ public class WorkflowRunner(StepRegistry registry, IBuildLogger logger) : IStepR
         CancellationToken cancellationToken = default)
     {
         var workflowStopwatch = Stopwatch.StartNew();
+        _runStartedAt = DateTimeOffset.UtcNow;
         _stepResults.Clear();
         _cancellationToken = cancellationToken;
         _wasCancelled = false;
@@ -75,6 +78,7 @@ public class WorkflowRunner(StepRegistry registry, IBuildLogger logger) : IStepR
         _stoppedRunningCommands = false;
         _continueOnFailure = false;
         StepCancellation.Current = cancellationToken;
+        StepCancellation.SetRun(cancellationToken);
 
         // Step counters ("[3/12]") only make sense for a flat list of steps.
         var hasNestedSteps = registry.Root.Finally.Count > 0 || registry.Steps.Any(s => s.IsComposite);
@@ -100,6 +104,46 @@ public class WorkflowRunner(StepRegistry registry, IBuildLogger logger) : IStepR
             WasCancelled = _wasCancelled,
             Duration = workflowStopwatch.Elapsed,
             StepResults = [.. _stepResults]
+        };
+    }
+
+    /// <summary>
+    /// The result so far, for a run that is cut short by a forced exit: the steps
+    /// that finished, plus the step that was running, marked "aborted".
+    /// </summary>
+    public WorkflowResult SnapshotAborted()
+    {
+        List<StepResult> steps;
+        (BuildStep Step, DateTimeOffset StartedAt, int Depth, bool Cleanup)? current;
+        lock (_stepResults)
+        {
+            steps = [.. _stepResults];
+            current = _runningStep;
+        }
+        if (current is { } running)
+        {
+            steps.Add(new StepResult
+            {
+                StepName = running.Step.Name,
+                Context = running.Step.Context,
+                Success = false,
+                StartedAt = running.StartedAt,
+                EndedAt = DateTimeOffset.UtcNow,
+                Duration = DateTimeOffset.UtcNow - running.StartedAt,
+                Depth = running.Depth,
+                Cleanup = running.Cleanup,
+                ErrorMessage = "aborted"
+            });
+        }
+
+        return new WorkflowResult
+        {
+            WorkflowName = "build",
+            Success = false,
+            WasCancelled = true,
+            Aborted = true,
+            Duration = DateTimeOffset.UtcNow - _runStartedAt,
+            StepResults = steps
         };
     }
 
@@ -292,6 +336,7 @@ public class WorkflowRunner(StepRegistry registry, IBuildLogger logger) : IStepR
 
         var stepStopwatch = Stopwatch.StartNew();
         logger.StepStarted(step.Name, step.Context);
+        lock (_stepResults) { _runningStep = (step, startedAt, _depth, InCleanup); }
 
         try
         {
@@ -375,7 +420,8 @@ public class WorkflowRunner(StepRegistry registry, IBuildLogger logger) : IStepR
         string? error = null,
         Exception? exception = null)
     {
-        _stepResults.Add(new StepResult
+        lock (_stepResults) { _runningStep = null; }
+        lock (_stepResults) _stepResults.Add(new StepResult
         {
             StepName = step.Name,
             Context = step.Context,

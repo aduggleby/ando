@@ -53,11 +53,17 @@ public class RunSession
     /// <summary>Whether Ando.Confirm prompts are accepted automatically (--yes).</summary>
     public bool AssumeYes { get; set; }
 
+    /// <summary>Whether the run used --no-env; forwarded to Ando.Build child builds.</summary>
+    public bool NoEnv { get; set; }
+
     /// <summary>The commit being built when running with --ref (full SHA).</summary>
     public string? Ref { get; set; }
 
     /// <summary>Docker manager for copying files into the build container.</summary>
     public DockerManager? DockerManager { get; set; }
+
+    /// <summary>Runs host docker commands for container file copies; tests replace it.</summary>
+    internal Func<string[], Task<CommandResult>>? DockerRunner { get; set; }
 
     /// <summary>Build container ID, set once the container exists.</summary>
     public string? ContainerId { get; set; }

@@ -506,10 +506,98 @@ public class AppServiceOperationsTests
 
         await _registry.Steps[0].Execute();
 
-        var cmd = _executor.LastCommand!;
+        var cmd = _executor.ExecutedCommands[0];
         Assert.Contains("--slot", cmd.Args);
         Assert.Equal("staging", cmd.GetArgValue("--slot"));
         Assert.Contains("--async", cmd.Args);
+    }
+
+    [Fact]
+    public async Task DeployZip_WithRestart_RestartsSameAppResourceGroupAndSlotAfterDeploy()
+    {
+        var appService = CreateAppService();
+        appService.DeployZip("my-app", "./publish.zip", "my-rg", o => o.WithDeploymentSlot("staging").WithRestart());
+
+        (await _registry.Steps[0].Execute()).ShouldBeTrue();
+
+        _executor.ExecutedCommands.Count.ShouldBe(2);
+        _executor.ExecutedCommands[0].Args.ShouldContain("config-zip");
+        var restart = _executor.ExecutedCommands[1];
+        restart.Args.Take(2).ShouldBe(["webapp", "restart"]);
+        restart.GetArgValue("--name").ShouldBe("my-app");
+        restart.GetArgValue("--resource-group").ShouldBe("my-rg");
+        restart.GetArgValue("--slot").ShouldBe("staging");
+    }
+
+    [Fact]
+    public async Task DeployZip_WithoutRestart_DoesNotRestart()
+    {
+        var appService = CreateAppService();
+        appService.DeployZip("my-app", "./publish.zip");
+
+        await _registry.Steps[0].Execute();
+
+        _executor.ExecutedCommands.ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task DeployZip_WithRestart_DeployFailure_DoesNotRestart()
+    {
+        _executor.SimulateFailure = true;
+        var appService = CreateAppService();
+        appService.DeployZip("my-app", "./publish.zip", configure: o => o.WithRestart());
+
+        (await _registry.Steps[0].Execute()).ShouldBeFalse();
+
+        _executor.ExecutedCommands.ShouldAllBe(c => !c.Args.Contains("restart"));
+    }
+
+    [Fact]
+    public void SwapSlots_ReturnsCommandStepWithThirtyMinuteDefaultTimeout()
+    {
+        var swap = CreateAppService().SwapSlots("my-app", "staging");
+
+        swap.ShouldBeOfType<CommandStep>();
+        swap.TimeoutMs.ShouldBe(30 * 60 * 1000);
+    }
+
+    [Fact]
+    public void SwapSlots_LongerCommandTimeout_Wins_ExplicitWithTimeoutOverrides()
+    {
+        _registry.DefaultCommandTimeoutMs = 45 * 60 * 1000;
+        var appService = CreateAppService();
+
+        appService.SwapSlots("my-app", "staging").TimeoutMs.ShouldBe(45 * 60 * 1000);
+        appService.SwapSlots("my-app", "staging").WithTimeout(TimeSpan.FromMinutes(2)).TimeoutMs.ShouldBe(2 * 60 * 1000);
+    }
+
+    [Fact]
+    public void SwapSlots_ShorterCommandTimeout_StillThirtyMinutes()
+    {
+        _registry.DefaultCommandTimeoutMs = 10 * 60 * 1000;
+
+        CreateAppService().SwapSlots("my-app", "staging").TimeoutMs.ShouldBe(30 * 60 * 1000);
+    }
+
+    [Fact]
+    public async Task SwapSlots_WithTimeout_PassesTimeoutToCommand()
+    {
+        CreateAppService().SwapSlots("my-app", "staging").WithTimeout(TimeSpan.FromMinutes(7));
+
+        await _registry.Steps[0].Execute();
+
+        _executor.LastCommand!.Options!.TimeoutMs.ShouldBe(7 * 60 * 1000);
+    }
+
+    [Fact]
+    public void StopStartRestart_ReturnCommandSteps()
+    {
+        var appService = CreateAppService();
+
+        appService.Stop("a").WithTimeout(TimeSpan.FromMinutes(1)).TimeoutMs.ShouldBe(60_000);
+        appService.Start("a").ShouldBeOfType<CommandStep>();
+        appService.Restart("a").ShouldBeOfType<CommandStep>();
+        appService.Restart("a").TimeoutMs.ShouldBe(CommandOptions.DefaultTimeoutMs);
     }
 
     [Fact]

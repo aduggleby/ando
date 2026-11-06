@@ -84,6 +84,7 @@ public class AndoCli : IDisposable
             e.Cancel = true;
             if (HandleCancelKeyPress())
             {
+                CleanupForForcedExit();
                 Environment.Exit(130);
             }
         };
@@ -127,7 +128,7 @@ public class AndoCli : IDisposable
             return false;
         }
 
-        _logger.Error("Third Ctrl+C detected. Forcing immediate exit (cleanup skipped).");
+        _logger.Error("Third Ctrl+C detected. Forcing immediate exit (remaining cleanup skipped; writing the run record and removing the --ref worktree, at most 5 seconds; the temporary Azure profile is removed at the start of the next run).");
         return true;
     }
 
@@ -210,6 +211,19 @@ public class AndoCli : IDisposable
         if (_args.Length == 0 || _args[0] == "run" || isRunOption)
         {
             PrintHeader();
+
+            // A typo such as --dry-rn must never silently run a deploy.
+            var flagError = FindRunFlagError(_args);
+            if (flagError != null)
+            {
+                _logger.Error(flagError);
+                if (FindUnknownRunFlag(_args) != null)
+                {
+                    _logger.Error($"Valid options: {string.Join(", ", RunFlags.Concat(RunFlagsWithValue).Order())}");
+                }
+                return 1;
+            }
+
             return await RunCommandAsync();
         }
 
@@ -275,6 +289,41 @@ public class AndoCli : IDisposable
         return 1;
     }
 
+    // Options `ando run` accepts: switches, and options followed by a value.
+    private static readonly string[] RunFlags =
+        ["--read-env", "--no-env", "--no-color", "--cold", "--dind", "--yes", "--dry-run"];
+    private static readonly string[] RunFlagsWithValue =
+        ["-f", "--file", "-p", "--profile", "--verbosity", "--image", "--ref"];
+
+    // Returns the first option in a run command line that run does not accept, or null.
+    internal static string? FindUnknownRunFlag(string[] args)
+    {
+        for (var i = 0; i < args.Length; i++)
+        {
+            var arg = args[i];
+            if (RunFlagsWithValue.Contains(arg))
+            {
+                i++; // the value
+            }
+            else if (arg.StartsWith('-') && !RunFlags.Contains(arg))
+            {
+                return arg;
+            }
+        }
+
+        return null;
+    }
+
+    // Returns the error for an invalid run command line (unknown or conflicting options), or null.
+    internal static string? FindRunFlagError(string[] args)
+    {
+        var unknown = FindUnknownRunFlag(args);
+        if (unknown != null) return $"Unknown option for run: {unknown}";
+        return args.Contains("--no-env") && args.Contains("--read-env")
+            ? "--no-env and --read-env cannot be used together."
+            : null;
+    }
+
     // Executes the build script - the core functionality of ANDO.
     // This method handles the complete build lifecycle:
     // 1. Locate build script and set up Docker container
@@ -337,13 +386,18 @@ public class AndoCli : IDisposable
 
             // Check that .env.ando is gitignored if it exists.
             // This prevents accidental commits of sensitive environment files.
-            if (!CheckEnvAndoGitIgnoreStatus(invocationRoot))
+            // --no-env skips the env file entirely: nothing is loaded or forwarded.
+            var skipEnvFile = HasFlag("--no-env");
+            if (!skipEnvFile && !CheckEnvAndoGitIgnoreStatus(invocationRoot))
             {
                 return 6; // Exit code for gitignore check failure
             }
 
             // Check for .env file and offer to load it.
-            await PromptToLoadEnvFileAsync(invocationRoot);
+            if (!skipEnvFile)
+            {
+                await PromptToLoadEnvFileAsync(invocationRoot);
+            }
 
             // Never print secret environment values (service principal secrets,
             // tokens, passwords) in console output, the build log or run records.
@@ -366,6 +420,7 @@ public class AndoCli : IDisposable
                 ctx.Options.Session.InvocationRoot = invocationRoot;
                 ctx.Options.Session.SourceRoot = defaultHostRoot;
                 ctx.Options.Session.AssumeYes = HasFlag("--yes");
+                ctx.Options.Session.NoEnv = HasFlag("--no-env");
                 ctx.Options.Session.Ref = _refWorktree?.Commit;
             };
 
@@ -403,6 +458,19 @@ public class AndoCli : IDisposable
             if (profiles.Count > 0)
             {
                 _logger.Info($"Profiles: {string.Join(", ", profiles)}");
+            }
+
+            // --dry-run: show the registered steps and stop before anything runs
+            // (no scope checks, no container).
+            if (HasFlag("--dry-run"))
+            {
+                Console.WriteLine();
+                Console.WriteLine("Dry run: steps that would run (nothing is executed, no container is created):");
+                foreach (var line in StepTreePrinter.Render(context.StepRegistry.Root))
+                {
+                    Console.WriteLine("  " + line);
+                }
+                return 0;
             }
 
             // Step 2b: Pre-flight check for GitHub OAuth scopes.
@@ -531,11 +599,11 @@ public class AndoCli : IDisposable
 
             // Every run gets a private Azure CLI profile inside the container, so
             // az logins never persist in a warm container or leak between runs.
-            // Removed when the run ends; leftovers of killed runs (older than 12 h) now.
+            // Removed when the run ends; leftovers of killed runs now (one run per repo container at a time).
             _azureConfigDir = $"/tmp/ando-azure-{Guid.NewGuid():N}";
             _containerIdForCleanup = container.Id;
             await RunInContainerQuietAsync(container.Id,
-                $"find /tmp -maxdepth 1 -name 'ando-azure-*' -mmin +720 -exec rm -rf {{}} + ; mkdir -m 700 -p {_azureConfigDir}");
+                $"find /tmp -maxdepth 1 -name 'ando-azure-*' -exec rm -rf {{}} + ; mkdir -m 700 -p {_azureConfigDir}");
             containerExecutor.DefaultEnvironment[Ando.Operations.AzureOperations.EnvAzureConfigDir] = _azureConfigDir;
 
             // Step 4: Execute the workflow.
@@ -555,11 +623,15 @@ public class AndoCli : IDisposable
                 }
             };
             var startedAt = DateTimeOffset.UtcNow;
+
+            // A forced exit (third Ctrl+C) skips the code below; it writes the record instead.
+            _writeAbortedRecord = () => WriteRunRecordOnce(invocationRoot, invocationScriptPath, profiles,
+                context.Options.Session, runner.SnapshotAborted(), startedAt);
             var result = await runner.RunAsync(context.Options, scriptPath, _cts.Token);
 
             // Step 4b: Write the run record (.ando/runs/<time>.json).
-            RunRecordWriter.TryWrite(invocationRoot, invocationScriptPath, profiles, context.Options.Session,
-                result, startedAt, Version, _logger);
+            WriteRunRecordOnce(invocationRoot, invocationScriptPath, profiles, context.Options.Session,
+                result, startedAt);
 
             // Step 5: Copy artifacts from container to host.
             // This copies any files registered via Artifacts.CopyToHost().
@@ -617,28 +689,77 @@ public class AndoCli : IDisposable
     private RefWorktree? _refWorktree;
     private string? _azureConfigDir;
     private string? _containerIdForCleanup;
+    private Action? _writeAbortedRecord;
+    private int _recordWriting;
+    private bool _recordWritten;
 
-    // Removes the run's Azure CLI profile from the container and the --ref worktree.
-    private async Task CleanupRunAsync()
+    // Writes the run record once: the forced-exit path and the normal path never write
+    // at the same time, and a failed write leaves the other path free to try.
+    private void WriteRunRecordOnce(string invocationRoot, string scriptPath, IReadOnlyList<string> profiles,
+        RunSession session, WorkflowResult result, DateTimeOffset startedAt)
     {
-        if (_azureConfigDir != null && _containerIdForCleanup != null)
+        if (Interlocked.Exchange(ref _recordWriting, 1) != 0)
         {
-            await RunInContainerQuietAsync(_containerIdForCleanup, $"rm -rf {_azureConfigDir}");
-            _azureConfigDir = null;
+            return;
         }
 
-        if (_refWorktree != null)
+        try
         {
-            await _refWorktree.DisposeAsync();
-            _refWorktree = null;
+            if (!_recordWritten)
+            {
+                _recordWritten = RunRecordWriter.TryWrite(
+                    invocationRoot, scriptPath, profiles, session, result, startedAt, Version, _logger) != null;
+            }
+        }
+        finally
+        {
+            Volatile.Write(ref _recordWriting, 0);
         }
     }
 
-    private async Task RunInContainerQuietAsync(string containerId, string script)
+    // Best effort on the third Ctrl+C: record the aborted run and remove the --ref
+    // worktree, within about 5 seconds. Errors are swallowed. The run's Azure profile
+    // stays: the next run's start sweep removes it, and removing it here could break
+    // an in-flight cleanup az command.
+    private void CleanupForForcedExit()
+    {
+        try
+        {
+            var cleanup = Task.Run(async () =>
+            {
+                _writeAbortedRecord?.Invoke();
+                Interlocked.Exchange(ref _azureConfigDir, null);
+                await CleanupRunAsync(timeoutMs: 4_000);
+            });
+            cleanup.Wait(TimeSpan.FromSeconds(5));
+        }
+        catch
+        {
+            // The process is exiting anyway.
+        }
+    }
+
+    // Removes the run's Azure CLI profile from the container and the --ref worktree.
+    private async Task CleanupRunAsync(int timeoutMs = 60_000)
+    {
+        var azureConfigDir = Interlocked.Exchange(ref _azureConfigDir, null);
+        if (azureConfigDir != null && _containerIdForCleanup != null)
+        {
+            await RunInContainerQuietAsync(_containerIdForCleanup, $"rm -rf {azureConfigDir}", timeoutMs);
+        }
+
+        var worktree = Interlocked.Exchange(ref _refWorktree, null);
+        if (worktree != null)
+        {
+            await worktree.DisposeAsync();
+        }
+    }
+
+    private async Task RunInContainerQuietAsync(string containerId, string script, int timeoutMs = 60_000)
     {
         var runner = new ProcessRunner(_logger);
         var result = await runner.ExecuteAsync("docker", ["exec", containerId, "sh", "-c", script],
-            new CommandOptions { SuppressOutput = true, TimeoutMs = 60_000 });
+            new CommandOptions { SuppressOutput = true, TimeoutMs = timeoutMs });
         if (!result.Success)
         {
             _logger.Debug($"Container command failed: {script}: {result.Error}");
@@ -937,6 +1058,7 @@ public class AndoCli : IDisposable
         Console.WriteLine("                      Activate build profiles (comma-separated for multiple)");
         Console.WriteLine("                      Example: -p release or -p publish,release");
         Console.WriteLine("  --read-env          Load env file without prompting (also applies to sub-builds)");
+        Console.WriteLine("  --no-env            Do not load the env file for this run (even with readEnv in ando.config)");
         Console.WriteLine("  --verbosity <level> Set output verbosity: quiet|minimal|normal|detailed");
         Console.WriteLine("  --no-color          Disable colored output (also respects NO_COLOR env var)");
         Console.WriteLine("  --cold              Always create fresh container (ignore warm container)");
@@ -944,6 +1066,8 @@ public class AndoCli : IDisposable
         Console.WriteLine("  --dind              Mount Docker socket for Docker-in-Docker operations");
         Console.WriteLine("  --ref <commit|tag>  Build that commit from a clean temporary checkout, not the working tree");
         Console.WriteLine("  --yes               Accept every Ando.Confirm prompt (for non-interactive runs)");
+        Console.WriteLine("  --dry-run           Evaluate the script and print the step tree without running anything");
+        Console.WriteLine("                      (unknown options are rejected, so a typo never starts a real run)");
         Console.WriteLine();
         Console.WriteLine("Release Options:");
         Console.WriteLine("  patch               Bump patch version (default): 1.0.0 -> 1.0.1");
@@ -1026,7 +1150,7 @@ public class AndoCli : IDisposable
         Console.WriteLine("Environment Files:");
         Console.WriteLine("  ANDO checks for .env.ando (preferred) or .env in the project root.");
         Console.WriteLine("  When found, prompts to load environment variables before the build.");
-        Console.WriteLine("  Use --read-env to auto-load without prompting.");
+        Console.WriteLine("  Use --read-env to auto-load without prompting, or --no-env to skip the file.");
         Console.WriteLine();
         Console.WriteLine("Note: All builds run in Docker containers for reproducibility.");
         Console.WriteLine();

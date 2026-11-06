@@ -79,8 +79,28 @@ public class ArtifactManifest
         };
     }
 
-    /// <summary>Container path of a file in the imported directory.</summary>
-    public string PathOf(string pathOrName) => $"{ContainerPath.TrimEnd('/')}/{File(pathOrName).Path}";
+    /// <summary>
+    /// Container path of a file in the imported directory, or of a directory
+    /// that contains files ("web" for "web/index.html"). Throws when nothing matches.
+    /// </summary>
+    public string PathOf(string pathOrName)
+    {
+        var root = ContainerPath.TrimEnd('/');
+        try
+        {
+            return $"{root}/{File(pathOrName).Path}";
+        }
+        catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException)
+        {
+            var directory = pathOrName.Replace('\\', '/').Trim('/');
+            while (directory.StartsWith("./", StringComparison.Ordinal)) directory = directory[2..].TrimStart('/');
+            if (directory.Length > 0 && Files.Any(f => f.Path.StartsWith(directory + "/", StringComparison.Ordinal)))
+            {
+                return $"{root}/{directory}";
+            }
+            throw;
+        }
+    }
 
     internal static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 

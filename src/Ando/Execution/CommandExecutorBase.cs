@@ -31,7 +31,7 @@ public abstract class CommandExecutorBase : ICommandExecutor
         options ??= new CommandOptions();
 
         // Let the executor prepare the environment (e.g. install a missing tool).
-        var prepared = await PrepareCommandAsync(command, options);
+        var prepared = await PrepareCommandAsync(command, args, options);
         if (prepared != null)
         {
             return prepared;
@@ -264,7 +264,7 @@ public abstract class CommandExecutorBase : ICommandExecutor
     /// Called before each command. Returns a failed result to stop the command,
     /// or null to run it. The default does nothing.
     /// </summary>
-    protected virtual Task<CommandResult?> PrepareCommandAsync(string command, CommandOptions options) =>
+    protected virtual Task<CommandResult?> PrepareCommandAsync(string command, string[] args, CommandOptions options) =>
         Task.FromResult<CommandResult?>(null);
 
     /// <summary>

@@ -21,6 +21,7 @@
 // - Calling Install() marks manual installation to disable auto-install
 // =============================================================================
 
+using System.Text.RegularExpressions;
 using Ando.Execution;
 using Ando.Logging;
 using Ando.Steps;
@@ -112,15 +113,43 @@ public class BunOperations(
     /// Installs Bun into /usr/local/bin, so later steps (including MSBuild targets
     /// run by Dotnet.Publish) find bun on PATH. Skips the download when the
     /// container already has that version. Needs a Debian or Ubuntu image.
+    /// With <paramref name="sha256"/> the release zip is downloaded from GitHub
+    /// and verified against the hash before it is installed; the step fails on a
+    /// mismatch, and it always downloads and verifies (it never trusts a bun that
+    /// is already installed).
     /// Usage: Bun.Install("1.2.23");
+    ///        Bun.Install("1.2.23", sha256: "&lt;sha256 of bun-linux-x64.zip&gt;");
     /// </summary>
-    /// <param name="version">Exact Bun version, for example "1.2.23", or "latest".</param>
-    public void Install(string version = "latest")
+    /// <param name="version">Exact Bun version, for example "1.2.23", or "latest" (not allowed with sha256).</param>
+    /// <param name="sha256">
+    /// SHA-256 (64 hex characters) of the release zip for the container's architecture
+    /// (bun-linux-x64.zip or bun-linux-aarch64.zip; the two hashes differ).
+    /// </param>
+    public void Install(string version = "latest", string? sha256 = null)
     {
-        var tag = version == "latest" ? "" : $"bun-v{version.TrimStart('v')}";
+        var exact = version.TrimStart('v');
+        if (sha256 != null)
+        {
+            if (version == "latest" || !ExactVersion.IsMatch(exact))
+            {
+                throw new ArgumentException(
+                    $"Bun.Install with a sha256 needs an exact version such as \"1.2.23\", not \"{version}\".", nameof(version));
+            }
+            if (!Sha256Hex.IsMatch(sha256))
+            {
+                throw new ArgumentException("sha256 must be 64 hexadecimal characters.", nameof(sha256));
+            }
+
+            RegisterCommand("Bun.Install", "bash",
+                () => new ArgumentBuilder().Add("-c").Add(BuildVerifiedInstallScript(exact, sha256.ToLowerInvariant())),
+                $"{exact} (sha256)");
+            return;
+        }
+
+        var tag = version == "latest" ? "" : $"bun-v{exact}";
         var check = version == "latest"
             ? "command -v bun >/dev/null"
-            : $"command -v bun >/dev/null && [ \"$(bun --version)\" = \"{version.TrimStart('v')}\" ]";
+            : $"command -v bun >/dev/null && [ \"$(bun --version)\" = \"{exact}\" ]";
         // Download the installer to a file first so a failed download fails the
         // step instead of running an empty script, then check the result.
 
@@ -138,4 +167,28 @@ public class BunOperations(
                      "bun --version"),
             version);
     }
+
+    private static readonly Regex ExactVersion = new(@"^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$", RegexOptions.Compiled);
+    private static readonly Regex Sha256Hex = new("^[0-9a-fA-F]{64}$", RegexOptions.Compiled);
+
+    // Downloads the release zip for this architecture, checks its SHA-256, and
+    // installs the binary. Arguments are validated before they reach the script.
+    internal static string BuildVerifiedInstallScript(string version, string sha256) =>
+        "set -eu; export DEBIAN_FRONTEND=noninteractive; " +
+        "if ! command -v curl >/dev/null; then " +
+        "if command -v apt-get >/dev/null; then apt-get update -qq && apt-get install -y -qq curl ca-certificates; " +
+        "else echo 'curl is required to install Bun and apt-get is not available' >&2; exit 1; fi; fi; " +
+        "if ! command -v unzip >/dev/null; then " +
+        "if command -v apt-get >/dev/null; then apt-get update -qq && apt-get install -y -qq unzip; " +
+        "else echo 'unzip is required to install Bun and apt-get is not available' >&2; exit 1; fi; fi; " +
+        "case \"$(uname -m)\" in x86_64) arch=x64;; aarch64|arm64) arch=aarch64;; " +
+        "*) echo \"Unsupported architecture $(uname -m) for Bun\" >&2; exit 1;; esac; " +
+        "tmp=$(mktemp -d); trap 'rm -rf \"$tmp\"' EXIT; " +
+        $"curl -fsSL \"https://github.com/oven-sh/bun/releases/download/bun-v{version}/bun-linux-$arch.zip\" -o \"$tmp/bun.zip\"; " +
+        $"echo \"{sha256}  $tmp/bun.zip\" | sha256sum -c - >/dev/null 2>&1 || " +
+        $"{{ echo \"SHA-256 mismatch for bun-linux-$arch.zip (Bun {version}): expected {sha256}, got $(sha256sum \"$tmp/bun.zip\" | cut -d' ' -f1)\" >&2; exit 1; }}; " +
+        "unzip -q -o \"$tmp/bun.zip\" -d \"$tmp\"; " +
+        "cp \"$tmp\"/bun-linux-*/bun /usr/local/bin/bun; chmod +x /usr/local/bin/bun; " +
+        $"[ \"$(bun --version)\" = \"{version}\" ] || {{ echo \"Bun {version} was not installed (found $(bun --version 2>/dev/null || echo none))\" >&2; exit 1; }}; " +
+        "bun --version";
 }
