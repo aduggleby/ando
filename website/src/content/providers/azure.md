@@ -10,13 +10,24 @@ Azure operations require authentication via the Azure CLI. Choose the method tha
 
 ### Environment Variables (Service Principal)
 
-| Variable                         | Description                                                                                                                                             |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AZURE_CLIENT_ID`                | Service principal application ID                                                                                                                        |
-| `AZURE_CLIENT_SECRET`            | Service principal secret                                                                                                                                |
-| `AZURE_TENANT_ID`                | Azure AD tenant ID                                                                                                                                      |
-| `AZURE_SUBSCRIPTION_ID`          | Target subscription ID                                                                                                                                  |
-| `ANDO_REQUIRE_SERVICE_PRINCIPAL` | When truthy (`1`, `true`, `yes`, `on`), forces service principal auth and fails instead of falling back to an existing CLI session or interactive login |
+| Variable                         | Description                                                                                                                                                                                                         |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AZURE_CLIENT_ID`                | Service principal application ID                                                                                                                                                                                    |
+| `AZURE_CLIENT_SECRET`            | Service principal secret                                                                                                                                                                                            |
+| `AZURE_CLIENT_CERTIFICATE_PATH`  | Optional. PEM file (key and certificate) inside the build container, for example after `Ando.CopyToContainer`. When set, the service principal logs in with the certificate and `AZURE_CLIENT_SECRET` is not needed |
+| `AZURE_TENANT_ID`                | Azure AD tenant ID                                                                                                                                                                                                  |
+| `AZURE_SUBSCRIPTION_ID`          | Target subscription ID                                                                                                                                                                                              |
+| `ANDO_REQUIRE_SERVICE_PRINCIPAL` | When truthy (`1`, `true`, `yes`, `on`), forces service principal auth and fails instead of falling back to an existing CLI session or interactive login                                                             |
+
+Service principal credentials reach the container through environment variables, never on the `docker exec` command line (`az login --service-principal -u "$AZURE_CLIENT_ID" -p "$AZURE_CLIENT_SECRET" ...` is run by `sh -c`, which expands the variables inside the container). Environment values for all container commands are likewise passed to Docker by name only.
+
+With a client secret, `az login` still receives the secret as an argument inside the container for the few seconds the login runs, which makes it visible to `ps` on the host during that time. Certificate login (`AZURE_CLIENT_CERTIFICATE_PATH`, which needs an `az` version with `--certificate`, for example 2.67 or newer; the automatically installed `az` is current) is the only way to keep the credential out of every process argument list.
+
+```csharp
+// Certificate login: copy the PEM into the container, then set AZURE_CLIENT_CERTIFICATE_PATH=/workspace/.run/seal.pem
+Ando.CopyToContainer(".run/seal.pem", ".run/seal.pem");
+Azure.EnsureAuthenticated();
+```
 
 ### Requiring Service Principal Authentication
 
@@ -34,7 +45,7 @@ Azure.EnsureAuthenticated(clientId, clientSecret, tenantId, requireServicePrinci
 
 ### Isolated CLI Profile
 
-Every run gets a private `AZURE_CONFIG_DIR` inside the build container (`/tmp/ando-azure-<guid>`). It is deleted when the run ends, and leftovers from killed runs are removed at the start of the next run. The host's `~/.azure` profile is never read or modified: an ANDO build cannot overwrite a developer's personal `az login` session, and `az` steps in the build cannot fall back to it. Logins do not persist in a warm container between runs.
+Every run gets a private `AZURE_CONFIG_DIR` inside the build container (`/tmp/ando-azure-<guid>`). It is deleted when the run ends, and leftovers from killed runs are removed at the start of the next run (every `ando-azure-*` folder in the container, whatever its age, so only one run per repository container can be active at a time). After a third Ctrl+C the folder stays until the next run starts. The host's `~/.azure` profile is never read or modified: an ANDO build cannot overwrite a developer's personal `az login` session, and `az` steps in the build cannot fall back to it. Logins do not persist in a warm container between runs.
 
 ### Azure CLI in the container
 

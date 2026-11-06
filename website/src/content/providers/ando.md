@@ -169,6 +169,7 @@ Steps register while the script is evaluated and run afterwards, in order, stopp
 | Ask before continuing                                          | `Ando.Confirm(message)`                                  |
 | Record a value in the run record                               | `Ando.Report(key, string \| StepOutput \| Func<string>)` |
 | Default timeout for command steps                              | `Ando.CommandTimeout(TimeSpan)`                          |
+| Tell a Ctrl+C from a failure in `OnFailure`/`Finally`          | `Ando.Cancelled` (read at execution time)                |
 
 ### Ordering on failure and cancellation
 
@@ -178,11 +179,20 @@ Steps register while the script is evaluated and run afterwards, in order, stopp
 - `Finally` steps of a scope run last-registered first, and every one runs even if an earlier one failed. Within one `Finally` lambda, all steps run even if one fails.
 - Within one `OnFailure` lambda, the first failing step stops the remaining steps of that lambda. Other `OnFailure` calls on the same block still run.
 - Finally steps belong to the enclosing `Ando.Block` (or the run). `Defer` and `When` bodies are transparent: a finally step registered inside one, including the removal registered by `AppService.TemporaryAccessRule`, runs when the enclosing block ends, not when the body ends.
-- Ctrl+C: the first Ctrl+C stops the running step (it is marked cancelled), stops any command it left running in the build container, then runs the on-failure and finally steps. Commands started after the first press ignore further Ctrl+C presses, so a second press only prints a warning. A third press exits immediately (exit code 130) and skips the remaining cleanup.
+- Ctrl+C: the first Ctrl+C stops the running step (it is marked cancelled), stops any command it left running in the build container, then runs the on-failure and finally steps. Commands started after the first press ignore further Ctrl+C presses, so a second press only prints a warning. A third press exits immediately (exit code 130) and skips the remaining cleanup; within 5 seconds it still tries to remove the run's temporary Azure profile and the `--ref` worktree, and writes the run record with `"aborted": true`. `OnFailure` steps run after Ctrl+C as well; read `Ando.Cancelled` to tell the two apart.
+
+### Ando.Cancelled
+
+`Ando.Cancelled` is a `bool` that is `true` once the user pressed Ctrl+C. Read it at execution time, inside `Ando.When`, `Ando.Require`, `Ando.Defer`, `OnFailure` and `Finally` bodies. While the script is evaluated it is always `false`. `OnFailure` steps run after Ctrl+C too, so use it to tell a cancellation from a failure:
+
+```csharp
+Ando.Block("deploy", () => { /* ... */ })
+    .OnFailure(() => Ando.When(() => !Ando.Cancelled, () => AppService.SwapSlots(app, "staging", rg)));
+```
 
 ### Reading step output
 
-`Shell.Run`, `Shell.Bash`, `Azure.Cli`, `AppService.Show`, `AppService.GetHostName` and `AppService.AccessRestrictions` return a `CommandStep`. `Http.Get`, `Http.PublicIpV4` and `Azure.Vm.RunCommand` return a `StepOutput`. Both have:
+`Shell.Run`, `Shell.Bash`, `Azure.Cli`, `AppService.SwapSlots`, `AppService.Stop`, `AppService.Start`, `AppService.Restart`, `AppService.Show`, `AppService.GetHostName` and `AppService.AccessRestrictions` return a `CommandStep`. `Http.Get`, `Http.PublicIpV4` and `Azure.Vm.RunCommand` return a `StepOutput`. Both have:
 
 - `Value`: trimmed stdout, or the response body for HTTP steps.
 - `ExitCode`: exit code of a command step.
@@ -250,7 +260,7 @@ If the post-swap health check fails, the swap-back runs first (inner `OnFailure`
 | `Version`, `Commit`  | Values recorded by the build.                                                    |
 | `Files`              | Every file with `Path`, `Size` and `Sha256`.                                     |
 | `File(pathOrName)`   | Finds a file by relative path, or by file name when unique. Throws if not found. |
-| `PathOf(pathOrName)` | Container path of a file.                                                        |
+| `PathOf(pathOrName)` | Container path of a file, or of a directory that contains files (`PathOf("web")`). |
 | `ContainerPath`      | Container path of the imported directory.                                        |
 
 Relative host paths are relative to the directory ANDO was run from. The default container directory is the same relative path under `/workspace`.
@@ -264,7 +274,7 @@ Ando.CopyArtifactsToHost("artifacts", "./artifacts");
 
 ## Host files and the invocation directory
 
-`Ando.CopyToContainer(hostPath, containerPath)` copies a host file or directory into the build container. Relative host paths are relative to the directory ANDO was run from, also with `ando run --ref`, so gitignored files such as local certificates can be used. Relative container paths are relative to `/workspace`. A directory replaces an existing directory at the container path. `Ando.InvocationRoot` is that host directory as a string, for reading local files while the script is evaluated.
+`Ando.CopyToContainer(hostPath, containerPath)` copies a host file or directory into the build container. Relative host paths are relative to the directory ANDO was run from, also with `ando run --ref`, so gitignored files such as local certificates can be used. Relative container paths are relative to `/workspace`. A directory replaces an existing directory at the container path. `Ando.InvocationRoot` is that host directory as a string, for reading local files while the script is evaluated. `Ando.SourceRoot` is the host directory of the source tree being built: the temporary worktree with `--ref`, otherwise the project directory.
 
 ```csharp
 Ando.CopyToContainer(".run/seal-1.pem", ".run/seal-1.pem");

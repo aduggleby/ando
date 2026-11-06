@@ -31,6 +31,7 @@ ANDO requires **Docker** to run builds in isolated containers. If Docker is not 
 | `-f, --file <file>`        | Use a specific build file instead of build.csando.                             |
 | `-p, --profile <profiles>` | Activate build profiles (comma-separated).                                     |
 | `--read-env`               | Load environment file without prompting.                                       |
+| `--no-env`                 | Do not load the environment file for this run, even with `readEnv: true` in `ando.config`. Cannot be combined with `--read-env`. |
 | `--verbosity <level>`      | Set output verbosity (quiet\|minimal\|normal\|detailed).                       |
 | `--no-color`               | Disable colored output.                                                        |
 | `--cold`                   | Always create a fresh container.                                               |
@@ -38,6 +39,7 @@ ANDO requires **Docker** to run builds in isolated containers. If Docker is not 
 | `--dind`                   | Mount Docker socket for Docker-in-Docker builds.                               |
 | `--ref <commit\|tag>`      | Build that commit from a clean temporary checkout instead of the working tree. |
 | `--yes`                    | Accept every `Ando.Confirm` prompt.                                            |
+| `--dry-run`                | Evaluate the script and print the step tree without running anything.          |
 
 ### Building a specific commit (`--ref`)
 
@@ -56,6 +58,10 @@ What still uses the directory you ran `ando` from:
 ### Confirmations (`--yes`)
 
 `Ando.Confirm(message)` asks `[y/N]` and fails the build if you decline. `--yes` accepts every confirmation. Without `--yes`, a run with no interactive console fails at the first `Ando.Confirm`.
+
+### Previewing a run (`--dry-run`)
+
+`ando run -p deploy --dry-run` evaluates the build script (profiles and environment files apply as usual) and prints the registered steps, with nested `Ando.Block` steps indented, their `on failure:` steps and the `finally (runs last-registered first):` steps. Nothing is executed and no container is created or started; the exit code is 0. The bodies of `Ando.When` and `Ando.Defer` are C# that only runs during the build, so each shows as one line. `ando run` rejects options it does not know, so a typo such as `--dry-rn` fails instead of starting a real run.
 
 ### Run records
 
@@ -115,7 +121,7 @@ ANDO looks for environment files in the project root: `.env.ando` (preferred) or
 - **for this (r)un** - Load for this run and all sub-builds
 - **(a)lways** - Load and save `readEnv: true` to `ando.config`
 
-Use `--read-env` or set `readEnv: true` in `ando.config` to skip the prompt and load automatically.
+Use `--read-env` or set `readEnv: true` in `ando.config` to skip the prompt and load automatically. Use `--no-env` to skip the file entirely for one run: nothing is loaded or forwarded to the container, the `.env.ando` gitignore check is skipped, there is no prompt, and the flag is forwarded to `Ando.Build` child builds, whatever `ando.config` says. `--no-env` together with `--read-env` is an error.
 
 ## Claude Integration
 
@@ -311,7 +317,7 @@ ANDO handles Ctrl+C in three stages:
 
 - **First Ctrl+C** - Stops the running step (it is marked cancelled) and any command it left running in the build container, then runs the on-failure and finally steps. Commands started from then on ignore further Ctrl+C presses.
 - **Second Ctrl+C** - Prints a warning. Cleanup keeps running.
-- **Third Ctrl+C** - Exits immediately (exit code 130) and skips the remaining cleanup.
+- **Third Ctrl+C** - Exits immediately (exit code 130) and skips the remaining cleanup. Before exiting, ANDO makes a best-effort attempt (at most 5 seconds) to remove the `--ref` worktree and writes the run record with `"aborted": true` (the step that was running is recorded with the error `aborted`). The run's temporary Azure profile in the container is removed at the start of the next run.
 
 ## Clean Options
 

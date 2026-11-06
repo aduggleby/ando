@@ -39,7 +39,7 @@ AppService.DeployFolder("my-web-app", Root / "publish", "my-rg", o => o
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `WithDeploymentSlot(string)` | Deploy to a specific slot instead of production. Common slots: "staging", "dev", "canary". Slots have their own URLs and can be swapped with production.                                           |
 | `WithNoWait()`               | Don't wait for deployment to complete. Returns immediately after starting the deployment. Use when you don't need to verify deployment success in the build. By default the deploy is synchronous. |
-| `WithRestart()`              | Restart the app after deployment. Forces the app to pick up new code immediately instead of waiting for the next scheduled restart. By default the app is not restarted.                           |
+| `WithRestart()`              | After a successful deployment, run `az webapp restart` for the same app, resource group and slot, so the app picks up new code immediately. With `WithNoWait()` the restart does not wait for the deployment. By default the app is not restarted.                           |
 | `WithTimeout(TimeSpan)`      | Maximum time to wait for the zip deploy command before reconciling and retrying. Must be greater than zero. Default `20` minutes.                                                                  |
 
 ## Resilient zip deploy
@@ -55,7 +55,9 @@ behaviour Azure App Service sometimes exhibits during large uploads:
   connection resets) are retried with backoff, up to three attempts, as long as
   the overall `WithTimeout` budget has not been exhausted.
 
-`DeployFolder` zips the folder itself and installs `zip` in the container if it is missing. The image `mcr.microsoft.com/dotnet/sdk:10.0` (Ubuntu 24.04) does not include `zip`.
+Deploys use `az webapp deployment source config-zip`.
+
+`DeployFolder` zips the folder itself and installs `zip` with apt in the container if it is missing (Debian and Ubuntu images). The image `mcr.microsoft.com/dotnet/sdk:10.0` (Ubuntu 24.04) does not include `zip`. For reproducible builds, zip at build time (so the same bytes are deployed every time) and use `DeployZip`.
 
 ## Reading app state
 

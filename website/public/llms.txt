@@ -86,13 +86,14 @@ Unknown commands show an error with the help text (e.g., `ando foo` displays "Un
 
 - First Ctrl+C stops the running step (marked cancelled) and any command it left running in the build container, then runs on-failure and finally steps; commands started from then on ignore further Ctrl+C presses
 - Second Ctrl+C prints a warning; cleanup keeps running
-- Third Ctrl+C exits immediately (exit code 130) and skips the remaining cleanup
+- Third Ctrl+C exits immediately (exit code 130) and skips the remaining cleanup; within 5 seconds it still tries to remove the `--ref` worktree and writes the run record with `"aborted": true`; the temporary Azure profile is removed at the start of the next run
 
 ### Run Options
 
 - `-f, --file <file>` - Use a specific build file instead of build.csando
 - `-p, --profile <profiles>` - Activate build profiles (comma-separated, e.g., `-p publish,release`)
 - `--read-env` - Load environment file without prompting (checks for `.env.ando` first, falls back to `.env`)
+- `--no-env` - Do not load the environment file for this run (no prompt, nothing forwarded, no `.env.ando` gitignore check; forwarded to `Ando.Build` child builds), even with `readEnv: true` in `ando.config`. Cannot be combined with `--read-env`.
 - `--verbosity <level>` - Set output verbosity (quiet|minimal|normal|detailed)
 - `--no-color` - Disable colored output
 - `--cold` - Always create a fresh container (ignore warm cache)
@@ -100,6 +101,7 @@ Unknown commands show an error with the help text (e.g., `ando foo` displays "Un
 - `--dind` - Mount Docker socket for Docker-in-Docker builds
 - `--ref <commit|tag>` - Build that commit instead of the working tree. ANDO checks it out into a temporary detached git worktree (under the system temp directory), evaluates the build script from there and copies only those files into the container. Env files (`.env.ando`), `Ando.CopyToContainer` host paths, artifact copies to the host and run records still use the directory you ran `ando` from. The worktree is removed when the run ends. `Git.Commit`, `Git.ShortCommit`, `Git.LastTag` and `Git.ChangedSince` refer to the checked-out commit, and `Git.RequireClean` always passes.
 - `--yes` - Accept every `Ando.Confirm` prompt. Without it, a run with no interactive console fails at the first `Ando.Confirm`.
+- `--dry-run` - Evaluate the script and print the registered step tree (nested blocks, `on failure:` and `finally (runs last-registered first):` steps) without running any step or creating a container; exit code 0. `Ando.When` and `Ando.Defer` bodies show as one line because they run at execution time. `ando run` rejects unknown options, so a typo never starts a real run.
 
 ### Run Record
 
@@ -284,7 +286,7 @@ When environment variables are found, ANDO prompts:
 - for this (r)un - Load for this run and all sub-builds
 - (a)lways - Load and save `readEnv: true` to ando.config
 
-Use `--read-env` or set `readEnv: true` in `ando.config` to skip the prompt and load automatically.
+Use `--read-env` or set `readEnv: true` in `ando.config` to skip the prompt and load automatically. Use `--no-env` to skip the file entirely for one run (it also skips the `.env.ando` gitignore check and is forwarded to `Ando.Build` child builds; an error together with `--read-env`).
 
 ### Project Files
 
@@ -710,7 +712,7 @@ Steps that return `StepOutput` or `CommandStep` can be read only at execution ti
 - `Finally` steps of one scope run last-registered first, like nested `try`/`finally`. Every one runs, even if an earlier one failed. Inside one `Finally` lambda all steps run even if one fails.
 - Inside one `OnFailure` lambda the first failing step stops the remaining steps of that lambda. Other `OnFailure` calls on the same block still run.
 - Finally steps belong to the enclosing `Ando.Block` (or the run). `Defer` and `When` bodies are transparent: a finally step registered inside one (including the removal registered by `AppService.TemporaryAccessRule`) runs when the enclosing block ends.
-- Ctrl+C: the first Ctrl+C stops the running step (it is marked cancelled), stops any command it left running in the build container, then runs the on-failure and finally steps. Commands started after the first press ignore further Ctrl+C presses, so a second press only prints a warning. A third press exits immediately (exit code 130) and skips the remaining cleanup.
+- Ctrl+C: the first Ctrl+C stops the running step (it is marked cancelled), stops any command it left running in the build container, then runs the on-failure and finally steps. Commands started after the first press ignore further Ctrl+C presses, so a second press only prints a warning. A third press exits immediately (exit code 130) and skips the remaining cleanup (it still tries, within 5 seconds, to remove the `--ref` worktree and to write the run record with `"aborted": true`; the temporary Azure profile is removed at the start of the next run). `OnFailure` steps run after Ctrl+C as well; read `Ando.Cancelled` to tell the two apart.
 
 ### Operations
 
@@ -721,12 +723,14 @@ Steps that return `StepOutput` or `CommandStep` can be read only at execution ti
 - Ando.Require(Func<bool> condition, string message) - Fails with `message` if the condition is false at execution time.
 - Ando.Confirm(message) - Prompts `[y/N]`. Declining fails the build. `ando run --yes` accepts. Without `--yes` and without an interactive console the step fails.
 - Ando.Report(key, string) / Ando.Report(key, StepOutput) / Ando.Report(key, Func<string>) - Adds a value to the run record and logs it.
+- Ando.Cancelled - bool, true once the user pressed Ctrl+C. Read it at execution time (inside `Ando.When`, `Ando.Require`, `Ando.Defer`, `OnFailure` and `Finally` bodies); while the script is evaluated it is always false. Example: `.OnFailure(() => Ando.When(() => !Ando.Cancelled, () => AppService.SwapSlots(app, "staging", rg)))`.
 - Ando.CommandTimeout(TimeSpan) - Default timeout for command steps registered after this call (built-in default 5 minutes). Operations with a longer default of their own, such as AppService zip deploy, keep it.
 - Ando.CopyToContainer(hostPath, containerPath) - Copies a host file or directory into the build container. Relative host paths are relative to the directory you ran `ando` from (also with `--ref`), so gitignored files can be used. Relative container paths are relative to /workspace. A directory replaces an existing directory at the target.
 - Ando.InvocationRoot - Host directory `ando` was run from (string). Use it to read local files during evaluation, also with `--ref`.
+- Ando.SourceRoot - Host directory of the source tree being built (string): the temporary worktree with `--ref`, otherwise the project directory.
 - Ando.WriteManifest(directory, version, commit) - Step that writes `manifest.json` into a container directory with the version, commit, and size and SHA-256 of every file.
 - Ando.ImportArtifacts(hostDirectory, containerDirectory = null) - Returns an `ArtifactManifest`. During evaluation it reads `manifest.json` in the host directory and verifies every file hash (missing, changed or extra files throw before any step runs). The registered step copies the directory into the container and verifies the hashes again there. Default container directory: the same relative path under /workspace.
-- ArtifactManifest members: `Version`, `Commit`, `Files` (each has `Path`, `Size`, `Sha256`), `File(pathOrName)` (relative path, or a unique file name; throws if not found), `PathOf(pathOrName)` (container path of a file), `ContainerPath` (container path of the imported directory).
+- ArtifactManifest members: `Version`, `Commit`, `Files` (each has `Path`, `Size`, `Sha256`), `File(pathOrName)` (relative path, or a unique file name; throws if not found), `PathOf(pathOrName)` (container path of a file, or of a directory that contains files such as `PathOf("web")`; throws if nothing matches), `ContainerPath` (container path of the imported directory).
 
 ### StepOutput and CommandStep
 
@@ -830,7 +834,7 @@ Ando.Defer(() =>
 - Ando.CopyArtifactsToHost(containerPath, hostPath) - Copy files from container to host after build
 - Ando.CopyZippedArtifactsToHost(containerPath, hostPath) - Create archive and copy from container to host. Supports .tar.gz (default) and .zip. If hostPath is a directory, creates artifacts.tar.gz.
 - Ando.Build(directory, options?) - Run a nested build in a subdirectory (new container, isolated context)
-- Ando.Block, Ando.Finally, Ando.Defer, Ando.When, Ando.Require, Ando.Confirm, Ando.Report, Ando.CommandTimeout, Ando.CopyToContainer, Ando.InvocationRoot, Ando.WriteManifest, Ando.ImportArtifacts - Step model, gates and artifact import; see "Step model and deployment gates"
+- Ando.Block, Ando.Finally, Ando.Defer, Ando.When, Ando.Require, Ando.Cancelled, Ando.Confirm, Ando.Report, Ando.CommandTimeout, Ando.CopyToContainer, Ando.InvocationRoot, Ando.SourceRoot, Ando.WriteManifest, Ando.ImportArtifacts - Step model, gates and artifact import; see "Step model and deployment gates"
 - Log.Info(message) - Log informational message
 - Log.Warning(message) - Log warning message
 - Log.Error(message) - Log error message
@@ -865,7 +869,7 @@ Ando.Defer(() =>
 - Azure.EnsureAuthenticated(clientId?, clientSecret?, tenantId?, requireServicePrincipal?) - Authenticate using best available method. Pass explicit SP credentials to avoid env reliance, and requireServicePrincipal: true (or set ANDO_REQUIRE_SERVICE_PRINCIPAL) to force SP auth and never fall back to an existing az login session. Default unchanged (fallback allowed)
 - Azure.EnsureLoggedIn() - Verify logged in to Azure CLI
 - Azure.ShowAccount() - Display current account info
-- Azure.LoginWithServicePrincipal(clientId?, secret?, tenantId?) - Login with SP
+- Azure.LoginWithServicePrincipal(clientId?, secret?, tenantId?) - Login with SP. Credentials reach the container through environment variables, never on the `docker exec` command line; with a client secret, `az login` still receives the secret as an argument inside the container for the few seconds the login runs (visible to host `ps`). If `AZURE_CLIENT_CERTIFICATE_PATH` is set (a PEM file with key and certificate inside the build container, for example after `Ando.CopyToContainer`), the certificate is used instead of the secret (needs an az version with `--certificate`, e.g. 2.67+; the auto-installed az is current). Certificate login is the only way to keep the credential out of every argv
 - Azure.LoginWithManagedIdentity(clientId?) - Login with managed identity
 - Azure.SetSubscription(subscriptionId?) - Set active subscription
 - Azure.CreateResourceGroup(name, location) - Create resource group
@@ -873,7 +877,7 @@ Ando.Defer(() =>
 - Azure.Vm.RunCommand(resourceGroup, vmName, script, timeout?) - Run a shell script as root on a Linux VM with `az vm run-command invoke`. Fails the step when the script exits non-zero (run-command itself exits 0). Returns a StepOutput whose Value is the script's stdout. Default timeout 30 minutes.
 
 The Azure CLI is installed automatically inside the build container (Debian and Ubuntu images only) before the first `az` step if the image does not include it. Without service principal credentials, `Azure.EnsureAuthenticated()` reuses an existing az session in the container or runs `az login --use-device-code` inside the container; it does not check or prompt on the host.
-Every run gets a private AZURE_CONFIG_DIR inside the build container (/tmp/ando-azure-<guid>), which is deleted when the run ends. The host's ~/.azure profile is never read or modified, so a build cannot overwrite a developer's personal az login session and az steps cannot fall back to it. Azure login tokens do not persist in a warm container between runs.
+Every run gets a private AZURE_CONFIG_DIR inside the build container (/tmp/ando-azure-<guid>), which is deleted when the run ends (leftovers of killed runs are removed at the start of the next run, every `ando-azure-*` folder regardless of age, so run only one build per repository container at a time; after a third Ctrl+C the folder stays until the next run starts). The host's ~/.azure profile is never read or modified, so a build cannot overwrite a developer's personal az login session and az steps cannot fall back to it. Azure login tokens do not persist in a warm container between runs.
 
 ### Bicep
 - Bicep.DeployToResourceGroup(rg, template, options?) - Deploy to resource group, returns BicepDeployment
@@ -907,19 +911,19 @@ BicepDeployment objects provide typed access to deployment outputs:
 - AppService.DeployZip(name, zipPath, rg?, options?) - Deploy via zip deploy
 - AppService.DeployFolder(name, folderPath, rg?, options?) - Zip a published folder (contents at root) and deploy
 - AppService.DeployWithSwap(name, zipPath, slot?, rg?) - Deploy then swap
-- AppService.SwapSlots(name, sourceSlot, rg?, targetSlot?) - Swap slots
+- AppService.SwapSlots(name, sourceSlot, rg?, targetSlot?) - Swap slots. Returns a CommandStep (chain `.WithTimeout(...)`). Default timeout 30 minutes, or `Ando.CommandTimeout` when that is longer; an explicit `.WithTimeout` always wins.
 - AppService.CreateSlot(name, slotName, rg?, configSource?) - Create slot
 - AppService.DeleteSlot(name, slotName, rg?) - Delete slot
 - AppService.ListSlots(name, rg?) - List deployment slots
-- AppService.Restart(name, rg?, slot?) - Restart app service
-- AppService.Start(name, rg?, slot?) - Start app service
-- AppService.Stop(name, rg?, slot?) - Stop app service
+- AppService.Restart(name, rg?, slot?) - Restart app service. Returns a CommandStep.
+- AppService.Start(name, rg?, slot?) - Start app service. Returns a CommandStep.
+- AppService.Stop(name, rg?, slot?) - Stop app service. Returns a CommandStep.
 - AppService.Show(name, rg?, slot?) - Returns a CommandStep with the `az webapp show` JSON (quiet). Read fields with `Json("state")` at execution time.
 - AppService.GetHostName(name, rg?, slot?) - Returns a CommandStep whose Value is the default host name, e.g. `myapp-release.azurewebsites.net`.
 - AppService.AccessRestrictions(name, rg?, slot?) - Returns a CommandStep with the `az webapp config access-restriction show` JSON (quiet).
 - AppService.TemporaryAccessRule(name, rg, slot? = null, ruleName = "ando-deploy", ip? = null, priority = 50) - Adds an Allow rule for one IPv4 address (default: this machine's public IPv4; a bare address gets /32) to the app or slot, replacing a rule with the same name. Registers a finally step in the enclosing block (or run) that removes the rule and verifies it is gone. Also works inside `Ando.When`/`Ando.Defer`: the removal still runs when the enclosing block ends.
 
-DeployZip and DeployFolder support `WithDeploymentSlot`. By default they do not restart the app (`WithRestart()` opts in) and they wait for the deployment to finish (`WithNoWait()` opts out).
+DeployZip and DeployFolder support `WithDeploymentSlot`. Deploys use `az webapp deployment source config-zip`. By default they do not restart the app (`WithRestart()` opts in: after a successful deploy ANDO runs `az webapp restart` for the same app, resource group and slot) and they wait for the deployment to finish (`WithNoWait()` opts out; with it the restart does not wait for the deployment). DeployFolder zips the folder in the container and apt-installs `zip` if it is missing; for reproducible builds zip at build time and use DeployZip.
 ### Http
 - Http.WaitForHealthy(url, options?) - Poll a URL until it returns the expected status (default 200) or the timeout elapses; gates a deploy on a health check. Options: WithExpectedStatus(int), WithTimeoutSeconds(int), WithIntervalSeconds(int), WithRequestTimeoutSeconds(int), ConsecutiveSuccesses(int), MinGapSeconds(int), ExpectJson(path, expected)
 - Http.WaitForHealthy(IEnumerable<string> urls, options?) - Poll several URLs together; a check passes only when every URL passes.
@@ -1005,7 +1009,7 @@ Git.Commit, ShortCommit, RequireClean, ChangedSince and LastTag run git on the h
 Note: hook scripts have a different `Shell` global (`Shell.RunAsync`). The `Shell.Run` and `Shell.Bash` described here are for build.csando.
 
 ### Bun
-- Bun.Install(version = "latest") - Install Bun into /usr/local/bin so later steps (including MSBuild targets run by Dotnet.Publish) find `bun` on PATH. Skips the download if that version is already installed. Installs curl and unzip with apt when missing; needs a Debian or Ubuntu image. Example: `Bun.Install("1.2.23");`
+- Bun.Install(version = "latest", sha256 = null) - Install Bun into /usr/local/bin so later steps (including MSBuild targets run by Dotnet.Publish) find `bun` on PATH. Skips the download if that version is already installed. Installs curl and unzip with apt when missing; needs a Debian or Ubuntu image. With `sha256`, `version` must be exact (not "latest"): the release zip `bun-linux-x64.zip` or `bun-linux-aarch64.zip` (chosen by `uname -m`) is downloaded from GitHub, verified against the hash (the step fails on a mismatch), installed, and `bun --version` must equal the version. The hash is of the zip for the container's architecture; x64 and aarch64 hashes differ. The standard x64 build needs AVX2; on CPUs without AVX2 use the installer path without `sha256` (no hash check). With a hash the step always downloads and verifies. Examples: `Bun.Install("1.2.23");` `Bun.Install("1.2.23", sha256: "<sha256 of bun-linux-x64.zip>");`
 
 ### GitHub
 - GitHub.CreatePr(options) - Create a pull request (requires gh CLI)
@@ -1130,7 +1134,7 @@ Note: Annotated tags require a git identity (user.name/user.email). The ANDO CI 
 ### AppService.DeployZip Options
 - WithDeploymentSlot(string) - Deploy to specific slot
 - WithNoWait() - Don't wait for completion
-- WithRestart() - Restart after deployment
+- WithRestart() - Run `az webapp restart` (same app, resource group and slot) after a successful deployment
 - WithTimeout(TimeSpan) - Max time to wait for zip deploy before reconciling/retrying (default 20 minutes)
 
 AppService.DeployZip is resilient to flaky Azure uploads: if the deploy command times out it reconciles against the latest Kudu deployment status (treating a completed deployment as success), and it retries transient failures (5xx, Service Unavailable, connection resets) with backoff up to 3 attempts within the WithTimeout budget.

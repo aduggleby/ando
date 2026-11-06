@@ -156,6 +156,15 @@ export const operations = [
   },
   {
     group: "Ando",
+    name: "Ando.Cancelled",
+    desc: "A <code>bool</code> that is <code>true</code> once the user pressed Ctrl+C. Read it at execution time, inside <code>Ando.When</code>, <code>Ando.Require</code>, <code>Ando.Defer</code>, <code>OnFailure</code> and <code>Finally</code> bodies; while the script is evaluated it is always <code>false</code>. <code>OnFailure</code> steps run after Ctrl+C too, so use it to tell a cancellation from a failure.",
+    examples: [
+      'Ando.Block("deploy", () => { /* ... */ })\n  .OnFailure(() => Ando.When(() => !Ando.Cancelled, () => AppService.SwapSlots("my-app", "staging", "my-rg")));',
+    ],
+    sourceFile: "Operations/AndoOperations.cs",
+  },
+  {
+    group: "Ando",
     name: "Ando.Confirm",
     desc: "Asks <code>[y/N]</code> before the build continues. Declining fails the build. <code>ando run --yes</code> accepts every confirmation. Without <code>--yes</code>, a run with no interactive console fails at this step.",
     examples: ['Ando.Confirm("Swap release into production?");'],
@@ -618,7 +627,7 @@ export const operations = [
   {
     group: "AppService",
     name: "AppService.DeployFolder",
-    desc: "Zip a published folder (contents at the archive root) and deploy it with zip deploy. Use when you have a publish directory rather than a pre-built zip. Supports <code>WithDeploymentSlot</code>. Does not restart the app unless <code>WithRestart()</code> is set and waits for the deployment unless <code>WithNoWait()</code> is set. Installs <code>zip</code> in the container if missing.",
+    desc: "Zip a published folder (contents at the archive root) and deploy it with zip deploy. Use when you have a publish directory rather than a pre-built zip. Supports <code>WithDeploymentSlot</code>. Does not restart the app unless <code>WithRestart()</code> is set (then <code>az webapp restart</code> runs after a successful deploy) and waits for the deployment unless <code>WithNoWait()</code> is set. Deploys use <code>az webapp deployment source config-zip</code>. Installs <code>zip</code> with apt in the container if missing; for reproducible builds zip at build time and use <code>DeployZip</code>.",
     examples: [
       'AppService.DeployFolder("my-app", "dist/api");',
       'AppService.DeployFolder("my-app", "dist/api", "my-rg", o => o\n  .WithDeploymentSlot("release"));',
@@ -638,10 +647,11 @@ export const operations = [
   {
     group: "AppService",
     name: "AppService.SwapSlots",
-    desc: "Swap deployment slots.",
+    desc: "Swap deployment slots. Returns a <code>CommandStep</code> (chain <code>.WithTimeout(...)</code>). The default timeout is 30 minutes, or <code>Ando.CommandTimeout</code> when that is longer; an explicit <code>.WithTimeout</code> always wins.",
     examples: [
       'AppService.SwapSlots("my-app", "staging");',
       'AppService.SwapSlots("my-app", "staging", "my-rg", "production");',
+      'AppService.SwapSlots("my-app", "staging", "my-rg").WithTimeout(TimeSpan.FromMinutes(45));',
     ],
     sourceFile: "Operations/AppServiceOperations.cs",
   },
@@ -672,21 +682,21 @@ export const operations = [
   {
     group: "AppService",
     name: "AppService.Restart",
-    desc: "Restart an app service.",
+    desc: "Restart an app service. Returns a <code>CommandStep</code>.",
     examples: ['AppService.Restart("my-app");', 'AppService.Restart("my-app", "my-rg", "staging");'],
     sourceFile: "Operations/AppServiceOperations.cs",
   },
   {
     group: "AppService",
     name: "AppService.Start",
-    desc: "Start an app service.",
+    desc: "Start an app service. Returns a <code>CommandStep</code>.",
     examples: ['AppService.Start("my-app");', 'AppService.Start("my-app", slot: "staging");'],
     sourceFile: "Operations/AppServiceOperations.cs",
   },
   {
     group: "AppService",
     name: "AppService.Stop",
-    desc: "Stop an app service.",
+    desc: "Stop an app service. Returns a <code>CommandStep</code>.",
     examples: ['AppService.Stop("my-app");', 'AppService.Stop("my-app", slot: "staging");'],
     sourceFile: "Operations/AppServiceOperations.cs",
   },
@@ -991,8 +1001,8 @@ export function getOperationsGroupedByProvider() {
         {
           group: "Bun",
           name: "Bun.Install",
-          desc: 'Installs Bun into <code>/usr/local/bin</code> so later steps (including MSBuild targets run by <code>Dotnet.Publish</code>) find <code>bun</code> on PATH. Skips the download when the container already has that version. Installs <code>curl</code> and <code>unzip</code> with apt if missing; needs a Debian or Ubuntu image. Signature: <code>Install(string version = "latest")</code>.',
-          examples: ['Bun.Install("1.2.23");'],
+          desc: 'Installs Bun into <code>/usr/local/bin</code> so later steps (including MSBuild targets run by <code>Dotnet.Publish</code>) find <code>bun</code> on PATH. Skips the download when the container already has that version. Installs <code>curl</code> and <code>unzip</code> with apt if missing; needs a Debian or Ubuntu image. Signature: <code>Install(string version = "latest", string? sha256 = null)</code>. With <code>sha256</code> (the hash of the release zip for the container architecture, <code>bun-linux-x64.zip</code> or <code>bun-linux-aarch64.zip</code>; the hashes differ) <code>version</code> must be exact, the zip is downloaded from GitHub and verified, and the step fails on a mismatch.',
+          examples: ['Bun.Install("1.2.23");', 'Bun.Install("1.2.23", sha256: "cf0ed0a920799d576ffde4e0cae66d732bf23c2530407f26f59c7831dffe1f0e");'],
           sourceFile: "Operations/ToolInstallOperations.cs",
         },
       ];

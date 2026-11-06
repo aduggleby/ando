@@ -3,6 +3,24 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.154
+
+**2026-11-06**
+
+- Fix `Ando.WriteManifest` and `Ando.ImportArtifacts` failing with "Argument list too long" on artifact sets of a few thousand files; the manifest and hash list are now copied into the container instead of passed as an argument
+- Add `ando run --dry-run`, which evaluates the script and prints the step tree without running anything or creating a container; `ando run` now rejects unknown options instead of ignoring them, so a typo can no longer start a real run
+- Keep secrets off the `docker exec` command line: container environment values are passed to Docker by name only, and the Azure service principal login and `Nuget.Push` read their secrets from environment variables. With a client secret, `az login` still receives it as an argument inside the container for the few seconds the login runs; certificate login is the only way to keep it out of every argument list. Known remaining: `Ef` operations pass `--connection <connection string>` as an argument
+- Add certificate login for the Azure service principal with `AZURE_CLIENT_CERTIFICATE_PATH`
+- Add `Ando.SourceRoot`, the host directory of the source tree being built (the `--ref` worktree, otherwise the project directory)
+- Change `ando run --help`, `-h` and `-v` to fail as unknown options instead of being ignored; use `ando help` and `ando --version`
+- Add `ando run --no-env` to skip the environment file for one run, even with `readEnv: true` in `ando.config`; it cannot be combined with `--read-env`
+- Add `Ando.Cancelled`, true once the user pressed Ctrl+C, so `OnFailure` and `Finally` steps can tell a cancellation from a failure
+- Fix a third Ctrl+C leaving the run's temporary Azure profile behind and writing no run record: it now removes the `--ref` worktree (best effort, at most 5 seconds) and writes the record with `"aborted": true`; the Azure profile is removed at the start of the next run, which sweeps every leftover profile
+- Change `AppService.SwapSlots`, `Stop`, `Start` and `Restart` to return a `CommandStep` so you can chain `.WithTimeout(...)`; code that ignores the result still compiles. `SwapSlots` now defaults to a 30 minute timeout (or `Ando.CommandTimeout` when that is longer)
+- Fix `AppService` `WithRestart()` being ignored: after a successful zip deploy it now runs `az webapp restart` for the same app, resource group and slot
+- Fix `ArtifactManifest.PathOf` throwing for a directory such as `PathOf("web")`, so `AppService.DeployFolder(app, manifest.PathOf("web"))` works
+- Add a `sha256` argument to `Bun.Install` that downloads the release zip for the container's architecture, verifies the hash and fails on a mismatch
+
 ## 0.9.153
 
 **2026-11-06**
