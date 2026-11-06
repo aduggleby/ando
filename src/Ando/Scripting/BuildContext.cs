@@ -206,5 +206,16 @@ public class BuildContext
             : _hostRootPath;
         await Artifacts.CopyToHostAsync(_containerId, artifactsRoot, Logger);
         await Artifacts.CopyZippedToHostAsync(_containerId, artifactsRoot, Logger);
+
+        // List each copy in the run record so the resolved host path is visible.
+        foreach (var (containerPath, hostPath) in Artifacts.Artifacts.Select(a => (a.ContainerPath, a.HostPath))
+                     .Concat(Artifacts.ZippedArtifacts.Select(a => (a.ContainerPath, a.HostPath))))
+        {
+            var resolved = ArtifactOperations.ResolveHostPath(artifactsRoot, hostPath);
+            if (!ArtifactOperations.IsProjectRootOrAncestor(artifactsRoot, resolved))
+            {
+                Options.Session.Reports.Add(new KeyValuePair<string, string>($"artifact {resolved}", containerPath));
+            }
+        }
     }
 }

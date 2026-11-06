@@ -59,6 +59,63 @@ public class ArtifactOperationsTests
     }
 
     [Fact]
+    public void CopyToHost_KeepsLeadingDotOfHiddenContainerPath()
+    {
+        var artifacts = CreateArtifacts();
+
+        artifacts.CopyToHost(".run/out", "out");
+        artifacts.CopyZippedToHost(".run/zip", "zip");
+
+        Assert.Equal("/workspace/.run/out", artifacts.Artifacts[0].ContainerPath);
+        Assert.Equal("/workspace/.run/zip", artifacts.ZippedArtifacts[0].ContainerPath);
+    }
+
+    [Theory]
+    [InlineData(".run/release/abc1234", "repo/.run/release/abc1234")]
+    [InlineData("./out", "repo/out")]
+    [InlineData("../sibling", "sibling")]
+    public void ResolveHostPath_KeepsLeadingDots(string hostPath, string expectedUnderBase)
+    {
+        var baseDir = Path.GetFullPath(Path.GetTempPath());
+        var projectRoot = Path.Combine(baseDir, "repo");
+
+        Assert.Equal(Path.GetFullPath(Path.Combine(baseDir, expectedUnderBase)),
+            ArtifactOperations.ResolveHostPath(projectRoot, hostPath));
+    }
+
+    [Fact]
+    public void ResolveHostPath_KeepsRootedPath()
+    {
+        var rooted = Path.Combine(Path.GetTempPath(), "abs", "out");
+
+        Assert.Equal(rooted, ArtifactOperations.ResolveHostPath(Path.Combine(Path.GetTempPath(), "repo"), rooted));
+    }
+
+    [Theory]
+    [InlineData(".", true)]
+    [InlineData("./", true)]
+    [InlineData("..", true)]
+    [InlineData("../..", true)]
+    [InlineData("out", false)]
+    [InlineData("../sibling", false)]
+    [InlineData("../repo-other", false)]
+    public void IsProjectRootOrAncestor_RefusesRootAndParents(string hostPath, bool expected)
+    {
+        var projectRoot = Path.Combine(Path.GetFullPath(Path.GetTempPath()), "a", "repo");
+        var resolved = ArtifactOperations.ResolveHostPath(projectRoot, hostPath);
+
+        Assert.Equal(expected, ArtifactOperations.IsProjectRootOrAncestor(projectRoot, resolved));
+    }
+
+    [Fact]
+    public void IsProjectRootOrAncestor_RefusesFilesystemRoot()
+    {
+        var projectRoot = Path.Combine(Path.GetFullPath(Path.GetTempPath()), "repo");
+
+        Assert.True(ArtifactOperations.IsProjectRootOrAncestor(projectRoot, Path.GetPathRoot(projectRoot)!));
+    }
+
+    [Fact]
     public void CopyToHost_PreservesAbsolutePath()
     {
         var artifacts = CreateArtifacts();

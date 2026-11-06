@@ -629,15 +629,21 @@ public class AndoCli : IDisposable
                 context.Options.Session, runner.SnapshotAborted(), startedAt);
             var result = await runner.RunAsync(context.Options, scriptPath, _cts.Token);
 
-            // Step 4b: Write the run record (.ando/runs/<time>.json).
-            WriteRunRecordOnce(invocationRoot, invocationScriptPath, profiles, context.Options.Session,
-                result, startedAt);
-
             // Step 5: Copy artifacts from container to host.
             // This copies any files registered via Artifacts.CopyToHost().
-            if (result.Success)
+            // Step 5b: the run record (.ando/runs/<time>.json) is written after the
+            // copy so it lists where each artifact went, and also when the copy throws.
+            try
             {
-                await context.CopyArtifactsToHostAsync();
+                if (result.Success)
+                {
+                    await context.CopyArtifactsToHostAsync();
+                }
+            }
+            finally
+            {
+                WriteRunRecordOnce(invocationRoot, invocationScriptPath, profiles, context.Options.Session,
+                    result, startedAt);
             }
 
             return result.Success ? 0 : 1;

@@ -293,7 +293,7 @@ public class GitHubOperations(
                 candidates.Add(Path.GetFullPath(Path.Combine(normalizedHostRoot, relative)));
             }
 
-            candidates.Add(Path.GetFullPath(Path.Combine(normalizedHostRoot, filePath.TrimStart('.', '/', '\\'))));
+            candidates.Add(Path.GetFullPath(Path.Combine(normalizedHostRoot, filePath)));
         }
 
         foreach (var candidate in candidates.Distinct(StringComparer.Ordinal))

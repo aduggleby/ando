@@ -72,6 +72,29 @@ public class ArtifactOperations
     public IReadOnlyList<ZippedArtifactEntry> ZippedArtifacts => _zippedArtifacts;
 
     /// <summary>
+    /// Resolves a host path against the project root. Relative paths keep their
+    /// leading dots, so ".run/out" stays hidden and "../out" leaves the project.
+    /// </summary>
+    internal static string ResolveHostPath(string projectRoot, string hostPath) =>
+        Path.IsPathRooted(hostPath) ? hostPath : Path.GetFullPath(Path.Combine(projectRoot, hostPath));
+
+    /// <summary>
+    /// True when <paramref name="path"/> is the project root or one of its parent
+    /// folders. The copy deletes its destination first, so these are refused.
+    /// </summary>
+    internal static bool IsProjectRootOrAncestor(string projectRoot, string path)
+    {
+        var separators = new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
+        var root = Path.GetFullPath(projectRoot).TrimEnd(separators);
+        var candidate = Path.GetFullPath(path).TrimEnd(separators);
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+        return candidate.Length == 0 ||
+               string.Equals(root, candidate, comparison) ||
+               root.StartsWith(candidate + Path.DirectorySeparatorChar, comparison);
+    }
+
+    /// <summary>
     /// Registers an artifact to be copied from the container to the host.
     /// The actual copy happens after build completion via CopyToHostAsync().
     /// </summary>
@@ -81,9 +104,7 @@ public class ArtifactOperations
     {
         // Normalize container paths to be absolute.
         // Paths starting with / are kept as-is, others are relative to /workspace.
-        var normalizedContainerPath = containerPath.StartsWith("/")
-            ? containerPath
-            : $"/workspace/{containerPath.TrimStart('.', '/')}";
+        var normalizedContainerPath = Ando.Context.ContainerPaths.Resolve(containerPath);
 
         _artifacts.Add(new ArtifactEntry(normalizedContainerPath, hostPath));
         _logger.Debug($"Registered artifact: {normalizedContainerPath} -> {hostPath}");
@@ -99,9 +120,7 @@ public class ArtifactOperations
     public void CopyZippedToHost(string containerPath, string hostPath)
     {
         // Normalize container paths to be absolute.
-        var normalizedContainerPath = containerPath.StartsWith("/")
-            ? containerPath
-            : $"/workspace/{containerPath.TrimStart('.', '/')}";
+        var normalizedContainerPath = Ando.Context.ContainerPaths.Resolve(containerPath);
 
         _zippedArtifacts.Add(new ZippedArtifactEntry(normalizedContainerPath, hostPath));
         _logger.Debug($"Registered zipped artifact: {normalizedContainerPath} -> {hostPath}");
@@ -128,9 +147,14 @@ public class ArtifactOperations
         foreach (var artifact in _artifacts)
         {
             // Resolve host path relative to project root if not absolute.
-            var hostPath = Path.IsPathRooted(artifact.HostPath)
-                ? artifact.HostPath
-                : Path.Combine(projectRoot, artifact.HostPath.TrimStart('.', '/'));
+            var hostPath = ResolveHostPath(projectRoot, artifact.HostPath);
+
+            // Never wipe the project or a folder that contains it (e.g. "." or "..").
+            if (IsProjectRootOrAncestor(projectRoot, hostPath))
+            {
+                logger.Error($"  Refusing to copy {artifact.ContainerPath} to {hostPath}: it is the project folder or contains it, and would be deleted first.");
+                continue;
+            }
 
             // Ensure parent directory exists.
             var hostDir = Path.GetDirectoryName(hostPath);
@@ -190,9 +214,14 @@ public class ArtifactOperations
         foreach (var artifact in _zippedArtifacts)
         {
             // Resolve host path relative to project root if not absolute.
-            var hostPath = Path.IsPathRooted(artifact.HostPath)
-                ? artifact.HostPath
-                : Path.Combine(projectRoot, artifact.HostPath.TrimStart('.', '/'));
+            var hostPath = ResolveHostPath(projectRoot, artifact.HostPath);
+
+            // Never wipe the project or a folder that contains it (e.g. "." or "..").
+            if (IsProjectRootOrAncestor(projectRoot, hostPath))
+            {
+                logger.Error($"  Refusing to copy {artifact.ContainerPath} to {hostPath}: it is the project folder or contains it, and would be deleted first.");
+                continue;
+            }
 
             // Ensure parent directory exists.
             var hostDir = Path.GetDirectoryName(hostPath);
