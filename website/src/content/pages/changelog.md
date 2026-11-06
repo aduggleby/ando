@@ -3,6 +3,14 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.155
+
+**2026-11-06**
+
+- Fix `Ando.CopyArtifactsToHost` and `Ando.CopyZippedArtifactsToHost` dropping the leading dot of relative paths: `.run/release` now stays `.run/release` instead of becoming `run/release`. Relative host paths resolve against the project folder like any path, so `../out` now points outside the project
+- Refuse an artifact destination that is the project folder or one of its parents (for example `.` or `..`), because the copy deletes its destination first
+- List each copied artifact (host path and container path) in the run record, which is now written after artifacts are copied
+
 ## 0.9.154
 
 **2026-11-06**
