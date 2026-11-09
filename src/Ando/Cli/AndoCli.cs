@@ -101,6 +101,14 @@ public class AndoCli : IDisposable
         _logger.Dispose();
     }
 
+    /// <summary>
+    /// A run the user interrupted with Ctrl+C exits with 130 (128 + SIGINT),
+    /// whether the graceful path or the forced exit finishes first, so scripts
+    /// can tell an abort from a failure. A run that already succeeded keeps 0.
+    /// </summary>
+    internal static int ExitCodeAfterRun(int exitCode, int cancelPressCount) =>
+        cancelPressCount > 0 && exitCode != 0 ? 130 : exitCode;
+
     // Returns true when the process should be forcefully terminated.
     internal bool HandleCancelKeyPress()
     {
@@ -224,7 +232,8 @@ public class AndoCli : IDisposable
                 return 1;
             }
 
-            return await RunCommandAsync();
+            var exitCode = await RunCommandAsync();
+            return ExitCodeAfterRun(exitCode, Volatile.Read(ref _cancelPressCount));
         }
 
         if (_args[0] == "help" || _args[0] == "--help" || _args[0] == "-h")

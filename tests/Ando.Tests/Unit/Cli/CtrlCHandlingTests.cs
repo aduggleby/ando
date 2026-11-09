@@ -47,6 +47,18 @@ public class CtrlCHandlingTests : IDisposable
         secondPressShouldForceExit.ShouldBeFalse();
         thirdPressShouldForceExit.ShouldBeTrue();
     }
+
+    [Theory]
+    [InlineData(0, 0, 0)]
+    [InlineData(1, 0, 1)]
+    [InlineData(5, 0, 5)]
+    [InlineData(1, 1, 130)]
+    [InlineData(1, 3, 130)]
+    [InlineData(0, 1, 0)]
+    public void ExitCodeAfterRun_Is130WhenCtrlCInterruptedTheRun(int runExitCode, int presses, int expected)
+    {
+        AndoCli.ExitCodeAfterRun(runExitCode, presses).ShouldBe(expected);
+    }
 }
 
 [Trait("Category", "Unit")]

@@ -59,7 +59,7 @@ public class AppServiceOperationsTests
         Assert.Equal("my-app", cmd.GetArgValue("--name"));
         Assert.Equal("./publish.zip", cmd.GetArgValue("--src-path"));
         cmd.GetArgValue("--type").ShouldBe("zip");
-        cmd.HasArg("--restart").ShouldBeFalse();
+        cmd.GetArgValue("--restart").ShouldBe("false");
         cmd.GetArgValue("--async").ShouldBe("false");
         cmd.Args.ShouldNotContain("--timeout");
     }
@@ -548,7 +548,7 @@ public class AppServiceOperationsTests
 
         await _registry.Steps[0].Execute();
 
-        _executor.ExecutedCommands.ShouldHaveSingleItem().HasArg("--restart").ShouldBeFalse();
+        _executor.ExecutedCommands.ShouldHaveSingleItem().GetArgValue("--restart").ShouldBe("false");
     }
 
     [Fact]

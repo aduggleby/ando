@@ -381,9 +381,9 @@ public class AppServiceOperations(
             .Add("--src-path", zipPath)
             .Add("--type", "zip")
             .AddIfNotNull("--slot", options.DeploymentSlot)
-            // Without WithRestart no restart flag is sent, so App Service applies its own
-            // default, as it did for the old config-zip command (which sent none).
-            .AddIf(options.Restart, "--restart", "true")
+            // az webapp deploy (OneDeploy) restarts the site by default; only restart
+            // with WithRestart, so a stopped slot is not started by the deploy.
+            .Add("--restart", options.Restart ? "true" : "false")
             .Add("--async", options.NoWait ? "true" : "false")
             // az's own deployment timeout is only set when WithTimeout was used.
             .AddIfNotNull("--timeout", timeoutMs)
