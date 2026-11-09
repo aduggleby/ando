@@ -1,3 +1,5 @@
+using Ando.Execution;
+using Ando.Tests.TestFixtures;
 using Ando.Cli;
 
 namespace Ando.Tests.Unit.Cli;
@@ -44,5 +46,41 @@ public class CtrlCHandlingTests : IDisposable
         firstPressShouldForceExit.ShouldBeFalse();
         secondPressShouldForceExit.ShouldBeFalse();
         thirdPressShouldForceExit.ShouldBeTrue();
+    }
+}
+
+[Trait("Category", "Unit")]
+public class ColdContainerCleanupTests
+{
+    private sealed class RecordingDockerManager() : DockerManager(new TestLogger())
+    {
+        public List<string> Removed { get; } = [];
+
+        public override Task RemoveContainerAsync(string containerName)
+        {
+            Removed.Add(containerName);
+            return Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task ColdRun_RemovesItsContainerOnce()
+    {
+        using var cli = new AndoCli(new[] { "run", "--cold" });
+        var docker = new RecordingDockerManager();
+        cli.RegisterColdContainer(docker, "ando-cold-test");
+
+        (await cli.RemoveColdContainerAsync()).ShouldBeTrue();
+        (await cli.RemoveColdContainerAsync()).ShouldBeFalse();
+
+        docker.Removed.ShouldBe(["ando-cold-test"]);
+    }
+
+    [Fact]
+    public async Task WarmRun_RemovesNothing()
+    {
+        using var cli = new AndoCli(new[] { "run" });
+
+        (await cli.RemoveColdContainerAsync()).ShouldBeFalse();
     }
 }

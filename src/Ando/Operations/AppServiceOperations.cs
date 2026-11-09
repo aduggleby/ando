@@ -8,7 +8,7 @@
 // management.
 //
 // Architecture:
-// - Zip deploy uses `az webapp deployment source config-zip`
+// - Zip deploy uses `az webapp deploy --type zip`
 // - Slot swapping uses `az webapp deployment slot swap`
 // - Authentication relies on prior Azure.Login* steps
 //
@@ -68,11 +68,11 @@ public class AppServiceOperations(
     /// Registers steps to zip a published folder and deploy it with zip deploy.
     /// Use this instead of DeployZip when you have a publish directory rather than a
     /// pre-built zip: it archives the folder's CONTENTS at the archive root (no
-    /// nested top-level directory), which is the layout config-zip expects. The zip
+    /// nested top-level directory), which is the layout zip deploy expects. The zip
     /// step runs in the build container and installs the zip tool if the image does
     /// not already provide it (apt-get; Debian and Ubuntu images). For reproducible
     /// builds, zip at build time and use DeployZip. Deploys use
-    /// `az webapp deployment source config-zip`.
+    /// `az webapp deploy --type zip`.
     /// </summary>
     /// <param name="appName">Name of the Azure App Service.</param>
     /// <param name="folderPath">Path to the published folder to deploy.</param>
@@ -371,15 +371,22 @@ public class AppServiceOperations(
         string appName,
         string zipPath,
         string? resourceGroup,
-        AppServiceDeployOptions options)
+        AppServiceDeployOptions options,
+        string? timeoutMs = null)
     {
         return new ArgumentBuilder()
-            .Add("webapp", "deployment", "source", "config-zip")
+            .Add("webapp", "deploy")
             .Add("--name", appName)
             .AddIfNotNull("--resource-group", resourceGroup)
-            .Add("--src", zipPath)
+            .Add("--src-path", zipPath)
+            .Add("--type", "zip")
             .AddIfNotNull("--slot", options.DeploymentSlot)
-            .AddFlag(options.NoWait, "--async")
+            // Without WithRestart no restart flag is sent, so App Service applies its own
+            // default, as it did for the old config-zip command (which sent none).
+            .AddIf(options.Restart, "--restart", "true")
+            .Add("--async", options.NoWait ? "true" : "false")
+            // az's own deployment timeout is only set when WithTimeout was used.
+            .AddIfNotNull("--timeout", timeoutMs)
             .Add("--output", "none");
     }
 
@@ -403,12 +410,13 @@ public class AppServiceOperations(
 
             var result = await ExecutorFactory().ExecuteAsync(
                 "az",
-                BuildZipDeployArgs(appName, zipPath, resourceGroup, options).Build(),
+                BuildZipDeployArgs(appName, zipPath, resourceGroup, options,
+                    options.TimeoutExplicit ? Math.Max(1_000, timeoutMs - 10_000).ToString(CultureInfo.InvariantCulture) : null).Build(),
                 new CommandOptions { TimeoutMs = timeoutMs });
 
             if (result.Success)
             {
-                return await RestartAfterDeployAsync(appName, resourceGroup, options);
+                return true;
             }
 
             if (IsTimeout(result))
@@ -419,7 +427,7 @@ public class AppServiceOperations(
                 if (await LatestDeploymentSucceededAsync(appName, resourceGroup, options.DeploymentSlot, startedAt))
                 {
                     Logger.Info("Latest Kudu deployment completed successfully after the zip deploy command timed out.");
-                    return await RestartAfterDeployAsync(appName, resourceGroup, options);
+                    return true;
                 }
 
                 if (timeoutAttempts >= MaxZipDeployTimeoutAttempts ||
@@ -446,30 +454,6 @@ public class AppServiceOperations(
         }
 
         return false;
-    }
-
-    // WithRestart: restart the same app/slot once the zip deploy succeeded.
-    private async Task<bool> RestartAfterDeployAsync(
-        string appName,
-        string? resourceGroup,
-        AppServiceDeployOptions options)
-    {
-        if (options.Restart && options.NoWait)
-        {
-            Logger.Warning("WithNoWait and WithRestart are both set: the restart may happen before the async deploy finishes.");
-        }
-
-        if (!options.Restart)
-        {
-            return true;
-        }
-
-        Logger.Info($"    Restarting {appName}{(options.DeploymentSlot != null ? $" ({options.DeploymentSlot})" : "")} after deployment...");
-        var result = await ExecutorFactory().ExecuteAsync(
-            "az",
-            WebappAction("restart", appName, resourceGroup, options.DeploymentSlot).Build(),
-            new CommandOptions { TimeoutMs = Registry.DefaultCommandTimeoutMs ?? CommandOptions.DefaultTimeoutMs });
-        return result.Success;
     }
 
     private async Task<bool> LatestDeploymentSucceededAsync(

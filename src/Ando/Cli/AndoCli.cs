@@ -128,7 +128,7 @@ public class AndoCli : IDisposable
             return false;
         }
 
-        _logger.Error("Third Ctrl+C detected. Forcing immediate exit (remaining cleanup skipped; writing the run record and removing the --ref worktree, at most 5 seconds; the temporary Azure profile is removed at the start of the next run).");
+        _logger.Error("Third Ctrl+C detected. Forcing immediate exit (remaining cleanup skipped; writing the run record and removing the --ref worktree, at most 5 seconds; a --cold container is removed with its Azure profile, a warm container keeps the profile until the next run starts).");
         return true;
     }
 
@@ -577,8 +577,10 @@ public class AndoCli : IDisposable
             ContainerInfo container;
             if (HasFlag("--cold"))
             {
+                // Cold runs own their container: it is removed when the run ends.
                 await dockerManager.RemoveContainerAsync(containerName);
                 container = await dockerManager.EnsureContainerAsync(containerConfig);
+                RegisterColdContainer(dockerManager, containerName);
             }
             else
             {
@@ -695,6 +697,8 @@ public class AndoCli : IDisposable
     private RefWorktree? _refWorktree;
     private string? _azureConfigDir;
     private string? _containerIdForCleanup;
+    private DockerManager? _coldDockerManager;
+    private string? _coldContainerName;
     private Action? _writeAbortedRecord;
     private int _recordWriting;
     private bool _recordWritten;
@@ -725,8 +729,8 @@ public class AndoCli : IDisposable
 
     // Best effort on the third Ctrl+C: record the aborted run and remove the --ref
     // worktree, within about 5 seconds. Errors are swallowed. The run's Azure profile
-    // stays: the next run's start sweep removes it, and removing it here could break
-    // an in-flight cleanup az command.
+    // stays in a warm container: the next run's start sweep removes it, and removing it
+    // here could break an in-flight cleanup az command. A --cold container is removed.
     private void CleanupForForcedExit()
     {
         try
@@ -745,10 +749,44 @@ public class AndoCli : IDisposable
         }
     }
 
-    // Removes the run's Azure CLI profile from the container and the --ref worktree.
+    internal void RegisterColdContainer(DockerManager dockerManager, string containerName)
+    {
+        _coldDockerManager = dockerManager;
+        _coldContainerName = containerName;
+    }
+
+    // Removes the container of a --cold run (also on a forced exit, which kills anything
+    // still running in it). Returns true when a container was removed.
+    internal async Task<bool> RemoveColdContainerAsync()
+    {
+        var name = Interlocked.Exchange(ref _coldContainerName, null);
+        if (name == null || _coldDockerManager == null)
+        {
+            return false;
+        }
+
+        await _coldDockerManager.RemoveContainerAsync(name);
+        _logger.Info($"Removed cold container {name}");
+        return true;
+    }
+
+    // Removes the run's Azure CLI profile from the container (or the whole container for
+    // --cold runs) and the --ref worktree.
     private async Task CleanupRunAsync(int timeoutMs = 60_000)
     {
         var azureConfigDir = Interlocked.Exchange(ref _azureConfigDir, null);
+        try
+        {
+            if (await RemoveColdContainerAsync())
+            {
+                azureConfigDir = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning($"Could not remove cold container: {ex.Message}");
+        }
+
         if (azureConfigDir != null && _containerIdForCleanup != null)
         {
             await RunInContainerQuietAsync(_containerIdForCleanup, $"rm -rf {azureConfigDir}", timeoutMs);
@@ -1067,7 +1105,7 @@ public class AndoCli : IDisposable
         Console.WriteLine("  --no-env            Do not load the env file for this run (even with readEnv in ando.config)");
         Console.WriteLine("  --verbosity <level> Set output verbosity: quiet|minimal|normal|detailed");
         Console.WriteLine("  --no-color          Disable colored output (also respects NO_COLOR env var)");
-        Console.WriteLine("  --cold              Always create fresh container (ignore warm container)");
+        Console.WriteLine("  --cold              Use a fresh container and remove it when the run ends");
         Console.WriteLine("  --image <image>     Use custom Docker image instead of default/script-defined");
         Console.WriteLine("  --dind              Mount Docker socket for Docker-in-Docker operations");
         Console.WriteLine("  --ref <commit|tag>  Build that commit from a clean temporary checkout, not the working tree");

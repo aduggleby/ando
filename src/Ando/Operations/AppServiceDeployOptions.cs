@@ -34,6 +34,9 @@ public class AppServiceDeployOptions
     /// <summary>Timeout for the zip deploy command.</summary>
     internal int TimeoutMs { get; private set; } = DefaultZipDeployTimeoutMs;
 
+    /// <summary>True when WithTimeout was called; then az gets its own --timeout.</summary>
+    internal bool TimeoutExplicit { get; private set; }
+
     /// <summary>
     /// Sets the deployment slot for the app service.
     /// </summary>
@@ -75,6 +78,7 @@ public class AppServiceDeployOptions
         }
 
         TimeoutMs = Math.Max(1, (int)timeout.TotalMilliseconds);
+        TimeoutExplicit = true;
         return this;
     }
 }

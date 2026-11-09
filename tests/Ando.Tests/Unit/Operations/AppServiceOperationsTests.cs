@@ -54,13 +54,14 @@ public class AppServiceOperationsTests
         var cmd = _executor.LastCommand!;
         Assert.Equal("az", cmd.Command);
         Assert.Contains("webapp", cmd.Args);
-        Assert.Contains("deployment", cmd.Args);
-        Assert.Contains("source", cmd.Args);
-        Assert.Contains("config-zip", cmd.Args);
+        cmd.Args.Take(2).ShouldBe(["webapp", "deploy"]);
         Assert.Contains("--name", cmd.Args);
         Assert.Equal("my-app", cmd.GetArgValue("--name"));
-        Assert.Contains("--src", cmd.Args);
-        Assert.Equal("./publish.zip", cmd.GetArgValue("--src"));
+        Assert.Equal("./publish.zip", cmd.GetArgValue("--src-path"));
+        cmd.GetArgValue("--type").ShouldBe("zip");
+        cmd.HasArg("--restart").ShouldBeFalse();
+        cmd.GetArgValue("--async").ShouldBe("false");
+        cmd.Args.ShouldNotContain("--timeout");
     }
 
     [Fact]
@@ -97,8 +98,7 @@ public class AppServiceOperationsTests
 
         await _registry.Steps[0].Execute();
 
-        var cmd = _executor.LastCommand!;
-        Assert.Contains("--async", cmd.Args);
+        _executor.LastCommand!.GetArgValue("--async").ShouldBe("true");
     }
 
     [Fact]
@@ -139,7 +139,7 @@ public class AppServiceOperationsTests
 
         success.ShouldBeTrue();
         _executor.ExecutedCommands.Count.ShouldBe(2);
-        _executor.ExecutedCommands.All(command => command.CommandLine.Contains("config-zip")).ShouldBeTrue();
+        _executor.ExecutedCommands.All(command => command.CommandLine.Contains("webapp deploy")).ShouldBeTrue();
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public class AppServiceOperationsTests
 
         success.ShouldBeTrue();
         _executor.ExecutedCommands.Count.ShouldBe(2);
-        _executor.ExecutedCommands[0].CommandLine.ShouldContain("config-zip");
+        _executor.ExecutedCommands[0].CommandLine.ShouldContain("webapp deploy");
         _executor.ExecutedCommands[1].CommandLine.ShouldContain("log deployment show");
         _executor.ExecutedCommands[1].GetArgValue("--resource-group").ShouldBe("my-rg");
         _executor.ExecutedCommands[1].GetArgValue("--slot").ShouldBe("staging");
@@ -509,24 +509,35 @@ public class AppServiceOperationsTests
         var cmd = _executor.ExecutedCommands[0];
         Assert.Contains("--slot", cmd.Args);
         Assert.Equal("staging", cmd.GetArgValue("--slot"));
-        Assert.Contains("--async", cmd.Args);
+        cmd.GetArgValue("--async").ShouldBe("true");
+        cmd.GetArgValue("--restart").ShouldBe("true");
     }
 
     [Fact]
-    public async Task DeployZip_WithRestart_RestartsSameAppResourceGroupAndSlotAfterDeploy()
+    public async Task DeployZip_WithTimeout_PassesAzTimeoutInMilliseconds()
+    {
+        var appService = CreateAppService();
+        appService.DeployZip("my-app", "./publish.zip", configure: o => o.WithTimeout(TimeSpan.FromMinutes(30)));
+
+        await _registry.Steps[0].Execute();
+
+        var azTimeout = int.Parse(_executor.LastCommand!.GetArgValue("--timeout")!);
+        azTimeout.ShouldBeInRange(30 * 60 * 1000 - 20_000, 30 * 60 * 1000 - 10_000 + 1);
+    }
+
+    [Fact]
+    public async Task DeployZip_WithRestart_RestartsViaAzDeployInOneCommand()
     {
         var appService = CreateAppService();
         appService.DeployZip("my-app", "./publish.zip", "my-rg", o => o.WithDeploymentSlot("staging").WithRestart());
 
         (await _registry.Steps[0].Execute()).ShouldBeTrue();
 
-        _executor.ExecutedCommands.Count.ShouldBe(2);
-        _executor.ExecutedCommands[0].Args.ShouldContain("config-zip");
-        var restart = _executor.ExecutedCommands[1];
-        restart.Args.Take(2).ShouldBe(["webapp", "restart"]);
-        restart.GetArgValue("--name").ShouldBe("my-app");
-        restart.GetArgValue("--resource-group").ShouldBe("my-rg");
-        restart.GetArgValue("--slot").ShouldBe("staging");
+        var deploy = _executor.ExecutedCommands.ShouldHaveSingleItem();
+        deploy.Args.Take(2).ShouldBe(["webapp", "deploy"]);
+        deploy.GetArgValue("--restart").ShouldBe("true");
+        deploy.GetArgValue("--resource-group").ShouldBe("my-rg");
+        deploy.GetArgValue("--slot").ShouldBe("staging");
     }
 
     [Fact]
@@ -537,19 +548,7 @@ public class AppServiceOperationsTests
 
         await _registry.Steps[0].Execute();
 
-        _executor.ExecutedCommands.ShouldHaveSingleItem();
-    }
-
-    [Fact]
-    public async Task DeployZip_WithRestart_DeployFailure_DoesNotRestart()
-    {
-        _executor.SimulateFailure = true;
-        var appService = CreateAppService();
-        appService.DeployZip("my-app", "./publish.zip", configure: o => o.WithRestart());
-
-        (await _registry.Steps[0].Execute()).ShouldBeFalse();
-
-        _executor.ExecutedCommands.ShouldAllBe(c => !c.Args.Contains("restart"));
+        _executor.ExecutedCommands.ShouldHaveSingleItem().HasArg("--restart").ShouldBeFalse();
     }
 
     [Fact]
@@ -638,7 +637,7 @@ public class AppServiceOperationsTests
 
         var cmd = _executor.LastCommand!;
         Assert.Equal("az", cmd.Command);
-        Assert.Equal("dist/api.zip", cmd.GetArgValue("--src"));
+        Assert.Equal("dist/api.zip", cmd.GetArgValue("--src-path"));
         Assert.Equal("my-rg", cmd.GetArgValue("--resource-group"));
     }
 
