@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.157
+
+**2026-11-09**
+
+- Fix `AppService.DeployZip` and `AppService.DeployFolder` to pass `--restart false` unless `WithRestart()` is set. `az webapp deploy` restarts the site by default, which could start a slot that the script stopped on purpose; 0.9.156 sent no restart flag
+- Change `ando run` to exit with 130 whenever the run was interrupted with Ctrl+C (before, a run whose cleanup finished before the forced exit could exit with 1), so scripts can tell an abort from a failure
+
 ## 0.9.156
 
 **2026-11-09**

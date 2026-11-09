@@ -39,7 +39,7 @@ AppService.DeployFolder("my-web-app", Root / "publish", "my-rg", o => o
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `WithDeploymentSlot(string)` | Deploy to a specific slot instead of production. Common slots: "staging", "dev", "canary". Slots have their own URLs and can be swapped with production.                                           |
 | `WithNoWait()`               | Pass `--async true` to `az webapp deploy`. Azure CLI 2.87 still polls the deployment status in some cases, so the step may not return immediately. By default the deploy is synchronous (`--async false`). |
-| `WithRestart()`              | Pass `--restart true` to `az webapp deploy`, so the app restarts after the deployment. Without it ANDO sends no restart flag, and App Service applies its default, as with the old `config-zip` command.                           |
+| `WithRestart()`              | Pass `--restart true` to `az webapp deploy`, so the app restarts after the deployment. Without it ANDO passes `--restart false`, because `az webapp deploy` restarts the site by default, which could start a slot you stopped on purpose.                           |
 | `WithTimeout(TimeSpan)`      | Maximum time to wait for the zip deploy command before reconciling and retrying. Also passed to az as `--timeout`. Must be greater than zero. Default `20` minutes.                                                                  |
 
 ## Resilient zip deploy
@@ -55,7 +55,7 @@ behaviour Azure App Service sometimes exhibits during large uploads:
   connection resets) are retried with backoff, up to three attempts, as long as
   the overall `WithTimeout` budget has not been exhausted.
 
-Deploys use `az webapp deploy --type zip` with `--async false` (or `true` with `WithNoWait()`), plus `--restart true` only with `WithRestart()`.
+Deploys use `az webapp deploy --type zip` with `--restart false --async false` (`--restart true` with `WithRestart()`, `--async true` with `WithNoWait()`).
 
 `DeployFolder` zips the folder itself and installs `zip` with apt in the container if it is missing (Debian and Ubuntu images). The image `mcr.microsoft.com/dotnet/sdk:10.0` (Ubuntu 24.04) does not include `zip`. For reproducible builds, zip at build time (so the same bytes are deployed every time) and use `DeployZip`.
 

@@ -317,7 +317,8 @@ ANDO handles Ctrl+C in three stages:
 
 - **First Ctrl+C** - Stops the running step (it is marked cancelled) and any command it left running in the build container, then runs the on-failure and finally steps. Commands started from then on ignore further Ctrl+C presses.
 - **Second Ctrl+C** - Prints a warning. Cleanup keeps running.
-- **Third Ctrl+C** - Exits immediately (exit code 130) and skips the remaining cleanup. Before exiting, ANDO makes a best-effort attempt (at most 5 seconds) to remove the `--ref` worktree and writes the run record with `"aborted": true` (the step that was running is recorded with the error `aborted`). The run's temporary Azure profile in the container is removed at the start of the next run.
+- **Third Ctrl+C** - Exits immediately (exit code 130) and skips the remaining cleanup. Before exiting, ANDO makes a best-effort attempt (at most 5 seconds) to remove the `--ref` worktree and writes the run record with `"aborted": true` (the step that was running is recorded with the error `aborted`). The run's temporary Azure profile is removed with the container for `--cold` runs, and at the start of the next run for warm containers.
+- **Exit code** - A run interrupted with Ctrl+C exits with 130, whether the cleanup finished or the third press forced the exit, so scripts can tell an abort from a failure (exit 1).
 
 ## Clean Options
 
