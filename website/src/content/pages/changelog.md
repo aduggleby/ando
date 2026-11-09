@@ -3,6 +3,13 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.156
+
+**2026-11-09**
+
+- Change `ando run --cold` to remove its container when the run ends, after success, failure, a first Ctrl+C and a forced exit (third Ctrl+C), so the per-run Azure profile and token cache never outlive the run. Warm runs are unchanged and keep their container
+- Change `AppService.DeployZip` and `AppService.DeployFolder` to deploy with `az webapp deploy --type zip` instead of the deprecated `az webapp deployment source config-zip`. Without `WithRestart()` no restart flag is sent, so App Service restart behavior matches the old command; `WithRestart()` passes `--restart true` instead of running a separate `az webapp restart`. Deploys are synchronous (`--async false`); `WithNoWait()` now passes `--async true` (it was not accepted by the old command). `WithTimeout` is also passed to az as `--timeout`
+
 ## 0.9.155
 
 **2026-11-06**

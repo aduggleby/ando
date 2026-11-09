@@ -45,7 +45,7 @@ Azure.EnsureAuthenticated(clientId, clientSecret, tenantId, requireServicePrinci
 
 ### Isolated CLI Profile
 
-Every run gets a private `AZURE_CONFIG_DIR` inside the build container (`/tmp/ando-azure-<guid>`). It is deleted when the run ends, and leftovers from killed runs are removed at the start of the next run (every `ando-azure-*` folder in the container, whatever its age, so only one run per repository container can be active at a time). After a third Ctrl+C the folder stays until the next run starts. The host's `~/.azure` profile is never read or modified: an ANDO build cannot overwrite a developer's personal `az login` session, and `az` steps in the build cannot fall back to it. Logins do not persist in a warm container between runs.
+Every run gets a private `AZURE_CONFIG_DIR` inside the build container (`/tmp/ando-azure-<guid>`). It is deleted when the run ends, and leftovers from killed runs are removed at the start of the next run (every `ando-azure-*` folder in the container, whatever its age, so only one run per repository container can be active at a time). After a third Ctrl+C the folder stays in a warm container until the next run starts. With `--cold` the whole container is removed when the run ends, even after a forced exit, so the profile never outlives the run. The host's `~/.azure` profile is never read or modified: an ANDO build cannot overwrite a developer's personal `az login` session, and `az` steps in the build cannot fall back to it. Logins do not persist in a warm container between runs.
 
 ### Azure CLI in the container
 

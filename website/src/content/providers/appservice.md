@@ -26,7 +26,7 @@ AppService.DeployZip("my-web-app", Root / "app.zip", "my-rg", o => o
   .WithDeploymentSlot("staging"));
 
 // Or skip the manual zip and deploy the publish folder directly
-// (contents are placed at the archive root, as config-zip expects)
+// (contents are placed at the archive root, as zip deploy expects)
 AppService.DeployFolder("my-web-app", Root / "publish", "my-rg", o => o
   .WithDeploymentSlot("staging"));
 ```
@@ -38,9 +38,9 @@ AppService.DeployFolder("my-web-app", Root / "publish", "my-rg", o => o
 | Option                       | Description                                                                                                                                                                                        |
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `WithDeploymentSlot(string)` | Deploy to a specific slot instead of production. Common slots: "staging", "dev", "canary". Slots have their own URLs and can be swapped with production.                                           |
-| `WithNoWait()`               | Don't wait for deployment to complete. Returns immediately after starting the deployment. Use when you don't need to verify deployment success in the build. By default the deploy is synchronous. |
-| `WithRestart()`              | After a successful deployment, run `az webapp restart` for the same app, resource group and slot, so the app picks up new code immediately. With `WithNoWait()` the restart does not wait for the deployment. By default the app is not restarted.                           |
-| `WithTimeout(TimeSpan)`      | Maximum time to wait for the zip deploy command before reconciling and retrying. Must be greater than zero. Default `20` minutes.                                                                  |
+| `WithNoWait()`               | Pass `--async true` to `az webapp deploy`. Azure CLI 2.87 still polls the deployment status in some cases, so the step may not return immediately. By default the deploy is synchronous (`--async false`). |
+| `WithRestart()`              | Pass `--restart true` to `az webapp deploy`, so the app restarts after the deployment. Without it ANDO sends no restart flag, and App Service applies its default, as with the old `config-zip` command.                           |
+| `WithTimeout(TimeSpan)`      | Maximum time to wait for the zip deploy command before reconciling and retrying. Also passed to az as `--timeout`. Must be greater than zero. Default `20` minutes.                                                                  |
 
 ## Resilient zip deploy
 
@@ -55,7 +55,7 @@ behaviour Azure App Service sometimes exhibits during large uploads:
   connection resets) are retried with backoff, up to three attempts, as long as
   the overall `WithTimeout` budget has not been exhausted.
 
-Deploys use `az webapp deployment source config-zip`.
+Deploys use `az webapp deploy --type zip` with `--async false` (or `true` with `WithNoWait()`), plus `--restart true` only with `WithRestart()`.
 
 `DeployFolder` zips the folder itself and installs `zip` with apt in the container if it is missing (Debian and Ubuntu images). The image `mcr.microsoft.com/dotnet/sdk:10.0` (Ubuntu 24.04) does not include `zip`. For reproducible builds, zip at build time (so the same bytes are deployed every time) and use `DeployZip`.
 

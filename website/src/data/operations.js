@@ -627,7 +627,7 @@ export const operations = [
   {
     group: "AppService",
     name: "AppService.DeployFolder",
-    desc: "Zip a published folder (contents at the archive root) and deploy it with zip deploy. Use when you have a publish directory rather than a pre-built zip. Supports <code>WithDeploymentSlot</code>. Does not restart the app unless <code>WithRestart()</code> is set (then <code>az webapp restart</code> runs after a successful deploy) and waits for the deployment unless <code>WithNoWait()</code> is set. Deploys use <code>az webapp deployment source config-zip</code>. Installs <code>zip</code> with apt in the container if missing; for reproducible builds zip at build time and use <code>DeployZip</code>.",
+    desc: "Zip a published folder (contents at the archive root) and deploy it with zip deploy. Use when you have a publish directory rather than a pre-built zip. Supports <code>WithDeploymentSlot</code>. Sends <code>--restart true</code> to az only with <code>WithRestart()</code> (otherwise App Service applies its default) and waits for the deployment unless <code>WithNoWait()</code> is set. Deploys use <code>az webapp deploy --type zip</code>. Installs <code>zip</code> with apt in the container if missing; for reproducible builds zip at build time and use <code>DeployZip</code>.",
     examples: [
       'AppService.DeployFolder("my-app", "dist/api");',
       'AppService.DeployFolder("my-app", "dist/api", "my-rg", o => o\n  .WithDeploymentSlot("release"));',

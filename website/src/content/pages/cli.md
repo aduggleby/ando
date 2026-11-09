@@ -34,7 +34,7 @@ ANDO requires **Docker** to run builds in isolated containers. If Docker is not 
 | `--no-env`                 | Do not load the environment file for this run, even with `readEnv: true` in `ando.config`. Cannot be combined with `--read-env`. |
 | `--verbosity <level>`      | Set output verbosity (quiet\|minimal\|normal\|detailed).                       |
 | `--no-color`               | Disable colored output.                                                        |
-| `--cold`                   | Always create a fresh container.                                               |
+| `--cold`                   | Use a fresh container and remove it when the run ends.                         |
 | `--image <image>`          | Use a custom Docker image.                                                     |
 | `--dind`                   | Mount Docker socket for Docker-in-Docker builds.                               |
 | `--ref <commit\|tag>`      | Build that commit from a clean temporary checkout instead of the working tree. |

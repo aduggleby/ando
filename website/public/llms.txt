@@ -96,7 +96,7 @@ Unknown commands show an error with the help text (e.g., `ando foo` displays "Un
 - `--no-env` - Do not load the environment file for this run (no prompt, nothing forwarded, no `.env.ando` gitignore check; forwarded to `Ando.Build` child builds), even with `readEnv: true` in `ando.config`. Cannot be combined with `--read-env`.
 - `--verbosity <level>` - Set output verbosity (quiet|minimal|normal|detailed)
 - `--no-color` - Disable colored output
-- `--cold` - Always create a fresh container (ignore warm cache)
+- `--cold` - Use a fresh container and remove it when the run ends (also after a forced exit with a third Ctrl+C)
 - `--image <image>` - Use a custom Docker image
 - `--dind` - Mount Docker socket for Docker-in-Docker builds
 - `--ref <commit|tag>` - Build that commit instead of the working tree. ANDO checks it out into a temporary detached git worktree (under the system temp directory), evaluates the build script from there and copies only those files into the container. Env files (`.env.ando`), `Ando.CopyToContainer` host paths, artifact copies to the host and run records still use the directory you ran `ando` from. The worktree is removed when the run ends. `Git.Commit`, `Git.ShortCommit`, `Git.LastTag` and `Git.ChangedSince` refer to the checked-out commit, and `Git.RequireClean` always passes.
@@ -923,7 +923,7 @@ BicepDeployment objects provide typed access to deployment outputs:
 - AppService.AccessRestrictions(name, rg?, slot?) - Returns a CommandStep with the `az webapp config access-restriction show` JSON (quiet).
 - AppService.TemporaryAccessRule(name, rg, slot? = null, ruleName = "ando-deploy", ip? = null, priority = 50) - Adds an Allow rule for one IPv4 address (default: this machine's public IPv4; a bare address gets /32) to the app or slot, replacing a rule with the same name. Registers a finally step in the enclosing block (or run) that removes the rule and verifies it is gone. Also works inside `Ando.When`/`Ando.Defer`: the removal still runs when the enclosing block ends.
 
-DeployZip and DeployFolder support `WithDeploymentSlot`. Deploys use `az webapp deployment source config-zip`. By default they do not restart the app (`WithRestart()` opts in: after a successful deploy ANDO runs `az webapp restart` for the same app, resource group and slot) and they wait for the deployment to finish (`WithNoWait()` opts out; with it the restart does not wait for the deployment). DeployFolder zips the folder in the container and apt-installs `zip` if it is missing; for reproducible builds zip at build time and use DeployZip.
+DeployZip and DeployFolder support `WithDeploymentSlot`. Deploys use `az webapp deploy --type zip`. Without `WithRestart()` no restart flag is sent (App Service applies its default, as with the old config-zip); `WithRestart()` passes `--restart true`. They wait for the deployment (`--async false`; `WithNoWait()` passes `--async true`). `WithTimeout` is also passed to az as `--timeout`. DeployFolder zips the folder in the container and apt-installs `zip` if it is missing; for reproducible builds zip at build time and use DeployZip.
 ### Http
 - Http.WaitForHealthy(url, options?) - Poll a URL until it returns the expected status (default 200) or the timeout elapses; gates a deploy on a health check. Options: WithExpectedStatus(int), WithTimeoutSeconds(int), WithIntervalSeconds(int), WithRequestTimeoutSeconds(int), ConsecutiveSuccesses(int), MinGapSeconds(int), ExpectJson(path, expected)
 - Http.WaitForHealthy(IEnumerable<string> urls, options?) - Poll several URLs together; a check passes only when every URL passes.
@@ -1134,7 +1134,7 @@ Note: Annotated tags require a git identity (user.name/user.email). The ANDO CI 
 ### AppService.DeployZip Options
 - WithDeploymentSlot(string) - Deploy to specific slot
 - WithNoWait() - Don't wait for completion
-- WithRestart() - Run `az webapp restart` (same app, resource group and slot) after a successful deployment
+- WithRestart() - Pass `--restart true` to `az webapp deploy` so the app restarts after the deployment
 - WithTimeout(TimeSpan) - Max time to wait for zip deploy before reconciling/retrying (default 20 minutes)
 
 AppService.DeployZip is resilient to flaky Azure uploads: if the deploy command times out it reconciles against the latest Kudu deployment status (treating a completed deployment as success), and it retries transient failures (5xx, Service Unavailable, connection resets) with backoff up to 3 attempts within the WithTimeout budget.
