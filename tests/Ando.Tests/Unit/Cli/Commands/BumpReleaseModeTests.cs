@@ -447,9 +447,9 @@ public class BumpReleaseModeTests : IDisposable
     public void Insert_AddsTitleWhenMissing_AndKeepsFrontmatterlessBody()
     {
         ChangelogGenerator.Insert("some text\n", "## 1.0.0 (2026-01-01)\n\n")
-            .ShouldBe("# Changelog\n\n## 1.0.0 (2026-01-01)\n\nsome text\n");
+            .ShouldBe("# Changelog\n\nsome text\n\n## 1.0.0 (2026-01-01)\n");
         ChangelogGenerator.Insert("# Log\nbody\n", "## 1.0.0 (2026-01-01)\n\n")
-            .ShouldBe("# Log\n\n## 1.0.0 (2026-01-01)\n\nbody\n");
+            .ShouldBe("# Log\nbody\n\n## 1.0.0 (2026-01-01)\n");
     }
 
     [Theory]
@@ -675,7 +675,7 @@ public class BumpReleaseModeTests : IDisposable
         ChangelogGenerator.Insert("---\r\ntitle: x\r\n---\r\n## 0.9.0\r\n", section)
             .ShouldBe("---\r\ntitle: x\r\n---\r\n\r\n" + section.Replace("\n", "\r\n") + "## 0.9.0\r\n");
         // A horizontal rule that is not frontmatter keeps the old behavior.
-        ChangelogGenerator.Insert("intro\n---\n", section).ShouldStartWith("# Changelog\n\n" + section);
+        ChangelogGenerator.Insert("intro\n---\n", section).ShouldBe("# Changelog\n\nintro\n---\n\n" + section.TrimEnd('\n') + "\n");
     }
 
     [Theory]
@@ -720,5 +720,222 @@ public class BumpReleaseModeTests : IDisposable
         result.ShouldBe(0);
         writer.ToString().ShouldContain("2026.13.1 → 2026.14.0");
         AssertNoClaude();
+    }
+
+    // ---- Placement, Unreleased conversion and pathspecs -----------------------------------
+
+    private static readonly (string Sha, string Subject)[] TwoCommits =
+        [("abc1234", "feat: a"), ("def5678", "fix: b")];
+
+    private const string Generated =
+        "### Features\n- feat: a (abc1234)\n\n### Fixes\n- fix: b (def5678)\n\n<!-- edit before committing -->\n\n";
+
+    private const string ReleaseHeading = "## 2026.14.0 (2026-11-10)\n\n";
+
+    private static ChangelogGenerator.Entry PlanFor(string existing, string? heading = null, bool keep = false,
+        (string Sha, string Subject)[]? commits = null) =>
+        ChangelogGenerator.Plan(existing, "2026.14.0", Nov2026, commits ?? TwoCommits, null, heading, keep);
+
+    [Fact]
+    public void Plan_IntroParagraphStaysAboveNewSection()
+    {
+        var result = PlanFor("# Changelog\n\nIntro line one.\n\nIntro line two.\n\n## 2026.13.1 (2026-10-01)\n\n- old\n");
+
+        result.Content.ShouldBe("# Changelog\n\nIntro line one.\n\nIntro line two.\n\n" + ReleaseHeading + Generated +
+                                "## 2026.13.1 (2026-10-01)\n\n- old\n");
+        result.Section.ShouldBe(ReleaseHeading + Generated);
+    }
+
+    [Fact]
+    public void Plan_InsertsBeforeFirstLevel2Heading_NotBeforeLevel3()
+    {
+        var result = PlanFor("# Changelog\n\n### Not a release\n\n## 1.0.0 (2026-01-01)\n\n## 0.9.0\n");
+
+        result.Content.ShouldBe("# Changelog\n\n### Not a release\n\n" + ReleaseHeading + Generated +
+                                "## 1.0.0 (2026-01-01)\n\n## 0.9.0\n");
+    }
+
+    [Fact]
+    public void Plan_WithoutLevel2Heading_AppendsAfterIntro()
+    {
+        PlanFor("# Changelog\n\nOnly an intro.\n").Content
+            .ShouldBe("# Changelog\n\nOnly an intro.\n\n" + ReleaseHeading + Generated.TrimEnd('\n') + "\n");
+        PlanFor("# Changelog\n").Content
+            .ShouldBe("# Changelog\n\n" + ReleaseHeading + Generated.TrimEnd('\n') + "\n");
+    }
+
+    [Fact]
+    public void Plan_IgnoresLevel2HeadingsInsideCodeFences()
+    {
+        const string intro = "# Changelog\n\nFormat:\n\n```md\n## Unreleased\n\n- example\n```\n\n";
+
+        PlanFor(intro + "## 1.0.0 (2026-01-01)\n").Content
+            .ShouldBe(intro + ReleaseHeading + Generated + "## 1.0.0 (2026-01-01)\n");
+        PlanFor(intro).Content.ShouldBe(intro + ReleaseHeading + Generated.TrimEnd('\n') + "\n");
+    }
+
+    [Fact]
+    public void Plan_ConvertsUnreleasedWithHandWrittenLines()
+    {
+        var result = PlanFor("# Changelog\n\nIntro.\n\n## Unreleased\n\n- hand one\n- hand two\n\n\n## 2026.13.1 (2026-10-01)\n\n- old\n");
+
+        result.Section.ShouldBe(ReleaseHeading + "- hand one\n- hand two\n\n" + Generated);
+        result.Content.ShouldBe("# Changelog\n\nIntro.\n\n" + ReleaseHeading + "- hand one\n- hand two\n\n" + Generated +
+                                "## 2026.13.1 (2026-10-01)\n\n- old\n");
+    }
+
+    [Fact]
+    public void Plan_ConvertsBracketedAndCaseInsensitiveUnreleased()
+    {
+        PlanFor("# Changelog\n\n## [Unreleased]\n\n- hand\n\n## 1.0.0\n").Content
+            .ShouldBe("# Changelog\n\n" + ReleaseHeading + "- hand\n\n" + Generated + "## 1.0.0\n");
+        PlanFor("# Changelog\n\n##   UNRELEASED  \n- hand\n\n## 1.0.0\n").Content
+            .ShouldBe("# Changelog\n\n" + ReleaseHeading + "- hand\n\n" + Generated + "## 1.0.0\n");
+    }
+
+    [Fact]
+    public void Plan_UnreleasedWithoutCommits_OmitsGeneratedGroups()
+    {
+        PlanFor("# Changelog\n\n## Unreleased\n\n- hand\n\n## 1.0.0\n", commits: []).Content
+            .ShouldBe("# Changelog\n\n" + ReleaseHeading + "- hand\n\n<!-- edit before committing -->\n\n## 1.0.0\n");
+    }
+
+    [Fact]
+    public void Plan_KeepUnreleased_AddsEmptyHeadingAboveRelease()
+    {
+        var result = PlanFor("# Changelog\n\nIntro.\n\n## Unreleased\n\n- hand one\n\n## 2026.13.1 (2026-10-01)\n\n- old\n", keep: true);
+
+        result.Section.ShouldBe("## Unreleased\n\n" + ReleaseHeading + "- hand one\n\n" + Generated);
+        result.Content.ShouldBe("# Changelog\n\nIntro.\n\n## Unreleased\n\n" + ReleaseHeading + "- hand one\n\n" + Generated +
+                                "## 2026.13.1 (2026-10-01)\n\n- old\n");
+    }
+
+    [Fact]
+    public void Plan_KeepUnreleased_PreservesBracketedHeadingAsWritten()
+    {
+        PlanFor("# Changelog\n\n## [Unreleased]\n\n- hand\n", keep: true).Content
+            .ShouldBe("# Changelog\n\n## [Unreleased]\n\n" + ReleaseHeading + "- hand\n\n" + Generated.TrimEnd('\n') + "\n");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Plan_EmptyUnreleasedBody_BehavesLikePlainInsertAtThatPosition(bool keep)
+    {
+        var result = PlanFor("# Changelog\n\n## Unreleased\n\n## 1.0.0\n\n- old\n", keep: keep);
+
+        result.Content.ShouldBe("# Changelog\n\n" + (keep ? "## Unreleased\n\n" : "") + ReleaseHeading + Generated +
+                                "## 1.0.0\n\n- old\n");
+    }
+
+    [Fact]
+    public void Plan_CustomUnreleasedHeading()
+    {
+        const string existing = "# Changelog\n\n## Unreleased\n\n- not mine\n\n## Next release\n\n- mine\n\n## 1.0.0\n";
+
+        PlanFor(existing, heading: "next release").Content
+            .ShouldBe("# Changelog\n\n## Unreleased\n\n- not mine\n\n" + ReleaseHeading + "- mine\n\n" + Generated + "## 1.0.0\n");
+        // The default heading is not matched when a custom one is configured and a different one exists.
+        PlanFor("# Changelog\n\n## Unreleased\n\n- x\n\n## 1.0.0\n", heading: "Next").Content
+            .ShouldBe("# Changelog\n\n" + ReleaseHeading + Generated + "## Unreleased\n\n- x\n\n## 1.0.0\n");
+    }
+
+    [Fact]
+    public void Plan_EmptyLevel2Heading_DoesNotCrash()
+    {
+        PlanFor("# Changelog\n\n## \n\n- x\n\n## 1.0.0\n").Content
+            .ShouldBe("# Changelog\n\n" + ReleaseHeading + Generated + "## \n\n- x\n\n## 1.0.0\n");
+    }
+
+    [Fact]
+    public void Plan_HeadingsInsideLongerFenceAreIgnored()
+    {
+        const string fence = "````\n```\n## Unreleased\n```\n## 9.9.9\n````\n\n";
+
+        PlanFor("# Changelog\n\n" + fence + "## 1.0.0\n").Content
+            .ShouldBe("# Changelog\n\n" + fence + ReleaseHeading + Generated + "## 1.0.0\n");
+    }
+
+    [Fact]
+    public void Plan_ConfiguredBracketedHeadingMatchesEitherForm()
+    {
+        PlanFor("# Changelog\n\n## Unreleased\n\n- hand\n\n## 1.0.0\n", heading: "[Unreleased]").Content
+            .ShouldBe("# Changelog\n\n" + ReleaseHeading + "- hand\n\n" + Generated + "## 1.0.0\n");
+    }
+
+    [Fact]
+    public void Plan_PreservesCrlf()
+    {
+        var existing = "# Changelog\r\n\r\nIntro.\r\n\r\n## Unreleased\r\n\r\n- hand\r\n\r\n## 1.0.0\r\n";
+
+        var result = PlanFor(existing, keep: true);
+
+        result.Content.ShouldBe(("# Changelog\n\nIntro.\n\n## Unreleased\n\n" + ReleaseHeading + "- hand\n\n" + Generated +
+                                 "## 1.0.0\n").Replace("\n", "\r\n"));
+        result.Content.Replace("\r\n", "").ShouldNotContain("\n");
+    }
+
+    [Fact]
+    public void Plan_FrontmatterTitleAndIntro()
+    {
+        const string fm = "---\ntitle: Changelog\n---\n\n# Changelog\n\nIntro.\n\n";
+
+        PlanFor(fm + "## 1.0.0\n").Content.ShouldBe(fm + ReleaseHeading + Generated + "## 1.0.0\n");
+        PlanFor(fm + "## Unreleased\n\n- hand\n\n## 1.0.0\n").Content
+            .ShouldBe(fm + ReleaseHeading + "- hand\n\n" + Generated + "## 1.0.0\n");
+        PlanFor(fm.TrimEnd('\n') + "\n").Content
+            .ShouldBe(fm + ReleaseHeading + Generated.TrimEnd('\n') + "\n");
+    }
+
+    private const string ConsumerChangelog =
+        "# Changelog\n\nAll notable changes.\n\n## Unreleased\n\n- hand written line\n\n## 2026.13.1 (2026-10-01)\n\n- old entry\n";
+
+    private const string ConsumerConfig =
+        """{"versionFiles":["Directory.Build.props"],"versionScheme":"year-minor-patch","changelog":"template","changelogPaths":["src",":!src/website"],"commitMessage":"chore(release): {version}","keepUnreleased":true}""";
+
+    private void CreateConsumerRepo()
+    {
+        CreateRepo(config: ConsumerConfig);
+        Write("CHANGELOG.md", ConsumerChangelog);
+        Git("add -A");
+        Git("commit -q -m \"docs: changelog\"");
+        _shas.Clear();
+    }
+
+    [Fact]
+    public async Task DryRun_PrintsExactlyTheSectionThatIsWritten()
+    {
+        CreateConsumerRepo();
+
+        var output = "";
+        var dry = CaptureConsole(async () =>
+            (await Command().ExecuteAsync(BumpType.Minor, options: new BumpOptions { Changelog = "template", DryRun = true })).ShouldBe(0));
+        output = dry;
+        var section = output[(output.IndexOf("Changelog entry:", StringComparison.Ordinal) + "Changelog entry:".Length)..];
+        File.ReadAllText(Path.Combine(_dir, "CHANGELOG.md")).ShouldBe(ConsumerChangelog);
+
+        (await Command().ExecuteAsync(BumpType.Minor, options: Template(noCommit: true))).ShouldBe(0);
+        var written = File.ReadAllText(Path.Combine(_dir, "CHANGELOG.md"));
+
+        var printed = section.TrimStart('\r', '\n');
+        printed = printed[..(printed.IndexOf("<!-- edit before committing -->", StringComparison.Ordinal) + ChangelogGenerator.ReviewMarker.Length + 2)];
+        printed.ShouldStartWith("## Unreleased\n\n## 2026.14.0 (2026-11-10)\n\n- hand written line\n\n### Features\n");
+        written.ShouldContain(printed);
+        written.ShouldStartWith("# Changelog\n\nAll notable changes.\n\n" + printed + "## 2026.13.1 (2026-10-01)\n\n- old entry\n");
+        AssertNoClaude();
+    }
+
+    [Fact]
+    public async Task ChangelogPaths_ExcludePathspecIsPassedToGit()
+    {
+        CreateConsumerRepo();
+        CommitFile("src/website/page.txt", "1", "feat(web): website only");
+        CommitFile("src/app/app.txt", "1", "fix(app): app change");
+
+        (await Command().ExecuteAsync(BumpType.Minor, options: Template(noCommit: true))).ShouldBe(0);
+
+        var text = File.ReadAllText(Path.Combine(_dir, "CHANGELOG.md"));
+        text.ShouldContain("fix(app): app change");
+        text.ShouldNotContain("website only");
     }
 }

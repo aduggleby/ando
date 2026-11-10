@@ -94,6 +94,16 @@ public record ProjectConfig
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ChangelogFile { get; init; }
 
+    /// <summary>Heading of the hand-written section converted into the release (default: "Unreleased").</summary>
+    [JsonPropertyName("unreleasedHeading")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? UnreleasedHeading { get; init; }
+
+    /// <summary>Keep an empty Unreleased heading above the new release section (default: false).</summary>
+    [JsonPropertyName("keepUnreleased")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool KeepUnreleased { get; init; }
+
     /// <summary>Release commit message; {version} is replaced (default: "Bump version to {version}").</summary>
     [JsonPropertyName("commitMessage")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -1160,7 +1160,8 @@ public class AndoCli : IDisposable
         Console.WriteLine("  --no-commit         Write the files and stop");
         Console.WriteLine("  --tag               Create annotated tag <tagPrefix><version> on the release commit (never pushed)");
         Console.WriteLine("  ando.config: versionFiles, versionScheme (semver|year-minor-patch), changelog,");
-        Console.WriteLine("    changelogPaths, changelogFile, commitMessage ({version}), tagPrefix, tagPattern, requireClean");
+        Console.WriteLine("    changelogPaths (git pathspecs), changelogFile, commitMessage ({version}), tagPrefix, tagPattern,");
+        Console.WriteLine("    requireClean, unreleasedHeading, keepUnreleased");
         Console.WriteLine("  Template/none mode and requireClean refuse a dirty tree and commit only the changed files.");
         Console.WriteLine();
         Console.WriteLine("Docs Command:");

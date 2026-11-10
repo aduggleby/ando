@@ -327,12 +327,16 @@ public class BumpCommand
                 : $"Bumping {type.ToString().ToLower()}: {baseVersion} → {newVersion}");
             Console.WriteLine();
 
-            string? changelogSection = null;
+            ChangelogGenerator.Entry? changelogEntry = null;
             if (changelogMode == "template")
             {
                 var (_, commits) = await GetTemplateCommitsAsync(config);
-                changelogSection = ChangelogGenerator.RenderSection(newVersion, now, commits, ReleaseMessageTemplate(config));
+                var existingChangelog = File.Exists(Path.Combine(repoRoot, changelogFile))
+                    ? File.ReadAllText(Path.Combine(repoRoot, changelogFile)) : null;
+                changelogEntry = ChangelogGenerator.Plan(existingChangelog, newVersion, now, commits,
+                    ReleaseMessageTemplate(config), config.UnreleasedHeading, config.KeepUnreleased);
             }
+            var changelogSection = changelogEntry?.Section;
 
             // An existing release tag (at HEAD or elsewhere) is refused before anything is written.
             if (tagName != null && await _git.GetTagCommitAsync(tagName) != null)
@@ -361,11 +365,9 @@ public class BumpCommand
             }
 
             // Step 8: Update changelog files.
-            if (changelogSection != null)
+            if (changelogEntry != null)
             {
-                var changelogPath = Path.Combine(repoRoot, changelogFile);
-                var existing = File.Exists(changelogPath) ? File.ReadAllText(changelogPath) : null;
-                File.WriteAllText(changelogPath, ChangelogGenerator.Insert(existing, changelogSection));
+                File.WriteAllText(Path.Combine(repoRoot, changelogFile), changelogEntry.Content);
                 Console.WriteLine($"  ✓ {changelogFile}");
                 updatedFiles.Add(changelogFile);
             }
