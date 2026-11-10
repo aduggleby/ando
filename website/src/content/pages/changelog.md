@@ -3,6 +3,14 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.159
+
+**2026-11-10**
+
+- Change the `ando bump --changelog template` entry to go immediately before the first `## ` heading, so the title and intro text of `CHANGELOG.md` stay on top (no `## ` heading: appended after the content; `## ` lines in code fences are ignored)
+- Add the `ando.config` settings `unreleasedHeading` (default `Unreleased`) and `keepUnreleased`: an existing Unreleased section is converted into the release with its hand-written lines first, optionally leaving a new empty Unreleased heading. `--dry-run` prints exactly the section that is written
+- Document that `changelogPaths` entries are git pathspecs, so exclusions like `":!src/website"` work
+
 ## 0.9.158
 
 **2026-11-10**
