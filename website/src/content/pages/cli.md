@@ -26,20 +26,20 @@ ANDO requires **Docker** to run builds in isolated containers. If Docker is not 
 
 ## Run Options
 
-| Flag                       | Description                                                                    |
-| -------------------------- | ------------------------------------------------------------------------------ |
-| `-f, --file <file>`        | Use a specific build file instead of build.csando.                             |
-| `-p, --profile <profiles>` | Activate build profiles (comma-separated).                                     |
-| `--read-env`               | Load environment file without prompting.                                       |
+| Flag                       | Description                                                                                                                      |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `-f, --file <file>`        | Use a specific build file instead of build.csando.                                                                               |
+| `-p, --profile <profiles>` | Activate build profiles (comma-separated).                                                                                       |
+| `--read-env`               | Load environment file without prompting.                                                                                         |
 | `--no-env`                 | Do not load the environment file for this run, even with `readEnv: true` in `ando.config`. Cannot be combined with `--read-env`. |
-| `--verbosity <level>`      | Set output verbosity (quiet\|minimal\|normal\|detailed).                       |
-| `--no-color`               | Disable colored output.                                                        |
-| `--cold`                   | Use a fresh container and remove it when the run ends.                         |
-| `--image <image>`          | Use a custom Docker image.                                                     |
-| `--dind`                   | Mount Docker socket for Docker-in-Docker builds.                               |
-| `--ref <commit\|tag>`      | Build that commit from a clean temporary checkout instead of the working tree. |
-| `--yes`                    | Accept every `Ando.Confirm` prompt.                                            |
-| `--dry-run`                | Evaluate the script and print the step tree without running anything.          |
+| `--verbosity <level>`      | Set output verbosity (quiet\|minimal\|normal\|detailed).                                                                         |
+| `--no-color`               | Disable colored output.                                                                                                          |
+| `--cold`                   | Use a fresh container and remove it when the run ends.                                                                           |
+| `--image <image>`          | Use a custom Docker image.                                                                                                       |
+| `--dind`                   | Mount Docker socket for Docker-in-Docker builds.                                                                                 |
+| `--ref <commit\|tag>`      | Build that commit from a clean temporary checkout instead of the working tree.                                                   |
+| `--yes`                    | Accept every `Ando.Confirm` prompt.                                                                                              |
+| `--dry-run`                | Evaluate the script and print the step tree without running anything.                                                            |
 
 ### Building a specific commit (`--ref`)
 
@@ -167,7 +167,8 @@ Commit with this message? [Y/n] y
 Bumps the version of all projects detected in `build.csando`.
 
 ```bash
-ando bump [patch|minor|major]
+ando bump [patch|minor|major] [--changelog template|claude|none] [--set <version>]
+          [--suggest] [--dry-run] [--no-commit] [--tag]
 ```
 
 **What it does:**
@@ -185,6 +186,58 @@ ando bump [patch|minor|major]
 
 - `.csproj` files via `Dotnet.Project("path")`
 - `package.json` in directories used with `Npm.*` operations
+
+### Release mode (opt-in, no AI)
+
+Everything below is opt-in. Without these settings and flags, `ando bump`, `ando release` and `ando ship` behave as described above.
+
+**Flags** (unknown flags are rejected):
+
+| Flag                                 | Effect                                                                                                                                                                                                                                                        |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--changelog template\|claude\|none` | Changelog source. `template` builds it from commits (no AI), `none` skips it. Default: `changelog` setting, else `claude`.                                                                                                                                    |
+| `--set <version>`                    | Set an explicit version instead of bumping. Semver must parse; `year-minor-patch` must be `YYYY.MINOR.PATCH`, a plausible year, and greater than the current version.                                                                                         |
+| `--suggest`                          | Print `minor` if a `feat` commit exists since the last tag, else `patch` (last output line), after listing the commits considered. Changes nothing.                                                                                                           |
+| `--dry-run`                          | Print the new version, files that would change, the changelog entry, commit message and tag. Changes nothing.                                                                                                                                                 |
+| `--no-commit`                        | Write the files and stop.                                                                                                                                                                                                                                     |
+| `--tag`                              | Create the annotated tag `<tagPrefix><version>` on the release commit (message = commit message). Refused, before anything is written, if the tag already exists (at HEAD or anywhere else). Never pushes. Cannot be combined with `--no-commit`. |
+
+**`ando.config` settings:**
+
+| Setting          | Default                      | Meaning                                                                                                                                                                                                                                                |
+| ---------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `versionFiles`   | (detect from `build.csando`) | Files relative to the repo root holding the version: the single `<Version>` that is a direct child of a `<PropertyGroup>` in `.props`/`.csproj`/`.targets` (attributes such as `Condition` are fine; `<PackageReference><Version>` children are ignored and kept; zero or several such elements are refused, naming the file), or `"version"` in `package.json`. Only the value is rewritten (line endings and a UTF-8 BOM are kept). Files are validated before hooks or the dirty-tree check. Each file must have a version and all must match. `build.csando` is not required. Version badges are not touched. |
+| `versionScheme`  | `semver`                     | `semver` or `year-minor-patch` (`YYYY.MINOR.PATCH`). Minor in the same year: `2026.13.1` to `2026.14.0`; patch: `2026.13.2`. In a new year minor and patch both give `<year>.1.0` (UTC date). `major` is rejected.                                     |
+| `changelog`      | `claude`                     | `template`, `claude` or `none`.                                                                                                                                                                                                                        |
+| `changelogPaths` | whole repo                   | Only commits touching these paths feed the template changelog.                                                                                                                                                                                         |
+| `changelogFile`  | `CHANGELOG.md`               | File that receives the template section (created with `# Changelog` if missing).                                                                                                                                                                       |
+| `commitMessage`  | `Bump version to {version}`  | Release commit message; `{version}` is replaced.                                                                                                                                                                                                       |
+| `tagPrefix`      | `v`                          | Prefix of the tag created by `--tag`.                                                                                                                                                                                                                  |
+| `tagPattern`     | `v*`                         | Glob for the last release tag (`git describe --tags --abbrev=0 --match`). No tag: all history is used.                                                                                                                                                 |
+| `requireClean`   | `false`                      | Refuse to run with uncommitted changes instead of running `ando commit`.                                                                                                                                                                               |
+
+**Template changelog:** commits since the last matching tag (`--no-merges`, limited to `changelogPaths`) are grouped into `### Features` (`feat`), `### Fixes` (`fix`) and `### Other` (everything else), newest first, each as `- <subject> (<sha7>)`. `chore(release)` commits and commits matching the configured `commitMessage` (`{version}` is a wildcard) are skipped. The section `## <version> (<yyyy-MM-dd>)` (Gregorian, culture-independent) ends with `<!-- edit before committing -->` and is inserted below the first `# ` title; in a file that starts with YAML frontmatter it goes after the frontmatter (and after a `# ` title if one follows). Dry runs and `--suggest` never ask for Claude permission.
+
+**Safe commits:** with `changelog` set to `template` or `none` (flag or config), or `requireClean: true`, bump refuses a dirty working tree (ANDO's own `build.csando.log` and `.ando/` are ignored), never starts `ando commit` or Claude, and commits only the files it changed, by explicit path. `ando release` and `ando ship` apply the same guard: in safe mode they print the uncommitted files and exit with code 1 before any step (so they never run the AI commit), and they show the current and next version using `versionFiles` and `versionScheme`.
+
+Example `ando.config`:
+
+```json
+{
+  "versionFiles": ["Directory.Build.props"],
+  "versionScheme": "year-minor-patch",
+  "changelog": "template",
+  "changelogPaths": ["src", "services", "infra"],
+  "commitMessage": "chore(release): {version}",
+  "tagPrefix": "v",
+  "tagPattern": "v*"
+}
+```
+
+```bash
+ando bump "$(ando bump --suggest | tail -n 1)" --dry-run
+ando bump minor --tag
+```
 
 ## Docs Command
 

@@ -3,6 +3,16 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.158
+
+**2026-11-10**
+
+- Add an opt-in, AI-free release mode to `ando bump`. New `ando.config` settings `versionFiles`, `versionScheme` (`semver` or `year-minor-patch`), `changelog`, `changelogPaths`, `changelogFile`, `commitMessage`, `tagPrefix`, `tagPattern` and `requireClean`, and new flags `--changelog template|claude|none`, `--set`, `--suggest`, `--dry-run`, `--no-commit` and `--tag`. Without them, `bump`, `release` and `ship` behave as before
+- Add a template changelog built from conventional commits since the last tag. It never starts Claude, refuses a dirty working tree and commits only the files bump changed, skips earlier release commits and inserts below YAML frontmatter
+- Make `ando bump --tag` refuse when the tag already exists, and make `versionFiles` update only the single PropertyGroup `<Version>` (validated before hooks)
+- Make `ando release` and `ando ship` refuse a dirty working tree in template, none or `requireClean` mode instead of running the AI commit
+- Change `ando bump` to reject unknown options
+
 ## 0.9.157
 
 **2026-11-09**
