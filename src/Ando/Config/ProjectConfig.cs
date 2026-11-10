@@ -63,6 +63,65 @@ public record ProjectConfig
     [JsonPropertyName("claudePath")]
     public string? ClaudePath { get; init; }
 
+    // Release settings for 'ando bump'. All are optional; absent settings keep the default
+    // bump behavior (versions detected from build.csando, AI changelog and commit).
+
+    /// <summary>
+    /// Files (relative to the repo root) holding the version. When set, replaces project
+    /// detection from build.csando. XML MSBuild files use &lt;Version&gt;, package.json uses "version".
+    /// </summary>
+    [JsonPropertyName("versionFiles")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? VersionFiles { get; init; }
+
+    /// <summary>Version scheme: "semver" (default) or "year-minor-patch" (YYYY.MINOR.PATCH).</summary>
+    [JsonPropertyName("versionScheme")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? VersionScheme { get; init; }
+
+    /// <summary>Changelog mode: "claude" (default), "template" or "none".</summary>
+    [JsonPropertyName("changelog")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Changelog { get; init; }
+
+    /// <summary>Repo paths whose commits feed the template changelog (default: whole repo).</summary>
+    [JsonPropertyName("changelogPaths")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? ChangelogPaths { get; init; }
+
+    /// <summary>Changelog file for template mode (default: CHANGELOG.md).</summary>
+    [JsonPropertyName("changelogFile")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ChangelogFile { get; init; }
+
+    /// <summary>Release commit message; {version} is replaced (default: "Bump version to {version}").</summary>
+    [JsonPropertyName("commitMessage")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CommitMessage { get; init; }
+
+    /// <summary>Prefix of the tag created by 'ando bump --tag' (default: "v").</summary>
+    [JsonPropertyName("tagPrefix")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TagPrefix { get; init; }
+
+    /// <summary>Glob matching release tags when looking for the last release (default: "v*").</summary>
+    [JsonPropertyName("tagPattern")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TagPattern { get; init; }
+
+    /// <summary>Refuse to bump with uncommitted changes instead of running the AI commit.</summary>
+    [JsonPropertyName("requireClean")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool RequireClean { get; init; }
+
+    /// <summary>
+    /// Safe release mode: the changelog is a template or none (not Claude), or requireClean is set.
+    /// In safe mode a dirty tree is refused and no AI commit is ever run.
+    /// </summary>
+    /// <param name="changelogOverride">The --changelog flag, which wins over the setting.</param>
+    public bool IsSafeReleaseMode(string? changelogOverride = null)
+        => (changelogOverride ?? Changelog ?? "claude") != "claude" || RequireClean;
+
     /// <summary>
     /// Loads project configuration from the specified directory.
     /// Returns default configuration if file doesn't exist or is invalid.

@@ -876,22 +876,16 @@ public class AndoCli : IDisposable
     // Parses build.csando to find projects and updates their versions.
     private async Task<int> BumpCommandAsync()
     {
-        // Parse bump type argument.
-        var bumpType = Versioning.BumpType.Patch;
-        if (_args.Length > 1)
+        var error = BumpOptions.TryParse(_args[1..], out var bumpType, out var options);
+        if (error != null)
         {
-            bumpType = _args[1].ToLower() switch
-            {
-                "minor" => Versioning.BumpType.Minor,
-                "major" => Versioning.BumpType.Major,
-                "patch" => Versioning.BumpType.Patch,
-                _ => throw new ArgumentException($"Invalid bump type: {_args[1]}. Use 'patch', 'minor', or 'major'.")
-            };
+            _logger.Error(error);
+            return 1;
         }
 
         var runner = new CliProcessRunner();
         var command = new BumpCommand(runner, _logger);
-        return await command.ExecuteAsync(bumpType);
+        return await command.ExecuteAsync(bumpType, options: options);
     }
 
     // Handles the 'docs' command which uses Claude to review and update documentation.
@@ -1097,7 +1091,7 @@ public class AndoCli : IDisposable
         Console.WriteLine("  run               Run the build script (default command)");
         Console.WriteLine("  verify            Check build script for errors without executing");
         Console.WriteLine("  commit            Commit all changes with AI-generated message");
-        Console.WriteLine("  bump [type]       Bump version in all projects (patch|minor|major)");
+        Console.WriteLine("  bump [type]       Bump version in all projects (patch|minor|major) [--changelog|--set|--suggest|--dry-run|--no-commit|--tag]");
         Console.WriteLine("  docs              Update documentation using Claude");
         Console.WriteLine("  release [type]    Interactive release workflow (patch|minor|major)");
         Console.WriteLine("  ship [type]       Ship without publish (commit, bump, docs, push)");
@@ -1157,6 +1151,17 @@ public class AndoCli : IDisposable
         Console.WriteLine("  patch               Increment patch version: 1.0.0 -> 1.0.1 (default)");
         Console.WriteLine("  minor               Increment minor version: 1.0.0 -> 1.1.0");
         Console.WriteLine("  major               Increment major version: 1.0.0 -> 2.0.0");
+        Console.WriteLine();
+        Console.WriteLine("Bump Flags (all opt-in; see ando.config settings below):");
+        Console.WriteLine("  --changelog <mode>  template (from commits, no AI) | claude (default) | none");
+        Console.WriteLine("  --set <version>     Set an explicit version instead of bumping");
+        Console.WriteLine("  --suggest           Print minor (feat commits since last tag) or patch; changes nothing");
+        Console.WriteLine("  --dry-run           Print version, files, changelog and commit/tag; changes nothing");
+        Console.WriteLine("  --no-commit         Write the files and stop");
+        Console.WriteLine("  --tag               Create annotated tag <tagPrefix><version> on the release commit (never pushed)");
+        Console.WriteLine("  ando.config: versionFiles, versionScheme (semver|year-minor-patch), changelog,");
+        Console.WriteLine("    changelogPaths, changelogFile, commitMessage ({version}), tagPrefix, tagPattern, requireClean");
+        Console.WriteLine("  Template/none mode and requireClean refuse a dirty tree and commit only the changed files.");
         Console.WriteLine();
         Console.WriteLine("Docs Command:");
         Console.WriteLine("  Uses Claude to analyze code changes and update documentation.");

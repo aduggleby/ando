@@ -37,9 +37,10 @@ public partial class VersionWriter
     /// <param name="projectPath">Path to the project file.</param>
     /// <param name="type">Type of project.</param>
     /// <param name="newVersion">New version string to write.</param>
+    /// <param name="strictMsBuild">Replace only the single PropertyGroup Version element (versionFiles mode).</param>
     /// <exception cref="ArgumentException">Thrown if version format is invalid.</exception>
     /// <exception cref="InvalidOperationException">Thrown if version element not found.</exception>
-    public void WriteVersion(string projectPath, ProjectType type, string newVersion)
+    public void WriteVersion(string projectPath, ProjectType type, string newVersion, bool strictMsBuild = false)
     {
         // Validate the version format.
         if (!SemVer.TryParse(newVersion, out _))
@@ -49,6 +50,9 @@ public partial class VersionWriter
 
         switch (type)
         {
+            case ProjectType.Dotnet when strictMsBuild:
+                MsBuildVersionFile.Write(projectPath, newVersion);
+                break;
             case ProjectType.Dotnet:
                 WriteCsprojVersion(projectPath, newVersion);
                 break;

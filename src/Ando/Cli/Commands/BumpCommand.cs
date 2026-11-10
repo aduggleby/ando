@@ -13,12 +13,21 @@
 // - Updates both project files and documentation (changelog, badges)
 // - Commits all changes automatically with "Bump version to X.Y.Z" message
 // - Integrates with ando commit if there are uncommitted changes
+//
+// Opt-in release mode (ando.config / flags), AI-free and safe for shared trees:
+// - versionFiles replaces project detection; versionScheme selects semver or
+//   year-minor-patch; --changelog template builds the changelog from commits
+// - In template/none mode (or requireClean) a dirty tree is refused and only
+//   the files bump changed are committed, by explicit path
+// - --suggest, --dry-run, --no-commit and --tag work without any AI process
 // =============================================================================
 
+using Ando.Config;
 using Ando.Hooks;
 using Ando.Logging;
 using Ando.Utilities;
 using Ando.Versioning;
+using static Ando.Versioning.ProjectDetector;
 
 namespace Ando.Cli.Commands;
 
@@ -34,9 +43,11 @@ public class BumpCommand
     private readonly VersionReader _reader;
     private readonly VersionWriter _writer;
     private readonly IBuildLogger _logger;
+    private readonly TimeProvider _clock;
 
-    public BumpCommand(CliProcessRunner runner, IBuildLogger logger)
+    public BumpCommand(CliProcessRunner runner, IBuildLogger logger, TimeProvider? clock = null)
     {
+        _clock = clock ?? TimeProvider.System;
         _runner = runner;
         _git = new CliGitOperations(runner);
         _detector = new ProjectDetector();
@@ -50,27 +61,62 @@ public class BumpCommand
     /// </summary>
     /// <param name="type">Type of version bump (Patch, Minor, Major).</param>
     /// <param name="autoConfirm">Skip confirmation prompts and proceed automatically.</param>
+    /// <param name="options">Opt-in release options (flags); null keeps the original behavior.</param>
     /// <returns>Exit code: 0 for success, 1 for errors.</returns>
-    public async Task<int> ExecuteAsync(BumpType type = BumpType.Patch, bool autoConfirm = false)
+    public async Task<int> ExecuteAsync(BumpType type = BumpType.Patch, bool autoConfirm = false, BumpOptions? options = null)
     {
+        options ??= new BumpOptions();
         try
         {
-            // Step 1: Check for build.csando.
+            // Step 1: Check for build.csando (not needed when ando.config lists versionFiles).
             var buildScript = FindBuildScript();
-            if (buildScript == null)
+            var repoRoot = buildScript != null ? Path.GetDirectoryName(buildScript) ?? "." : Directory.GetCurrentDirectory();
+            var config = ProjectConfig.Load(repoRoot);
+            var useVersionFiles = config.VersionFiles is { Length: > 0 };
+
+            if (buildScript == null && !useVersionFiles)
             {
                 _logger.Error("Error: No build.csando found in current directory.");
                 return 1;
             }
 
-            var repoRoot = Path.GetDirectoryName(buildScript) ?? ".";
-
-            // Check for Claude permission (this command uses Claude for changelog generation).
-            var claudeChecker = new ClaudePermissionChecker(_logger);
-            var claudeResult = claudeChecker.CheckAndPrompt(repoRoot, "bump");
-            if (!ClaudePermissionChecker.IsAllowed(claudeResult))
+            var settingsError = ValidateSettings(config, options);
+            if (settingsError != null)
             {
+                _logger.Error($"Error: {settingsError}");
                 return 1;
+            }
+
+            var changelogMode = options.Changelog ?? config.Changelog ?? "claude";
+            var scheme = config.VersionScheme ?? VersionCalculator.SemVerScheme;
+            var safeMode = config.IsSafeReleaseMode(options.Changelog);
+            var preview = options.DryRun || options.Suggest;
+
+            if (options.Suggest)
+            {
+                return await SuggestAsync(config);
+            }
+
+            // Fail fast on misconfigured version files, before any hook or prompt.
+            if (useVersionFiles)
+            {
+                var fileError = ValidateVersionFiles(repoRoot, config.VersionFiles!);
+                if (fileError != null)
+                {
+                    _logger.Error($"Error: {fileError}");
+                    return 1;
+                }
+            }
+
+            // Check for Claude permission (only a real Claude changelog run uses Claude).
+            if (changelogMode == "claude" && !preview)
+            {
+                var claudeChecker = new ClaudePermissionChecker(_logger);
+                var claudeResult = claudeChecker.CheckAndPrompt(repoRoot, "bump");
+                if (!ClaudePermissionChecker.IsAllowed(claudeResult))
+                {
+                    return 1;
+                }
             }
 
             // Initialize hook runner.
@@ -82,14 +128,34 @@ public class BumpCommand
             };
 
             // Run pre-hooks.
-            if (!await hookRunner.RunHooksAsync(HookRunner.HookType.Pre, "bump", hookContext))
+            if (!options.DryRun && !await hookRunner.RunHooksAsync(HookRunner.HookType.Pre, "bump", hookContext))
             {
                 _logger.Error("Bump aborted by pre-hook.");
                 return 1;
             }
 
             // Step 2: Check for uncommitted changes.
-            if (await _git.HasUncommittedChangesAsync())
+            if (safeMode)
+            {
+                // Safe mode never runs the AI commit: a dirty tree is refused (ANDO's own log is ignored).
+                var dirty = (await _git.GetStatusAsync(excludeAndoFiles: true))
+                    .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                if (dirty.Length > 0)
+                {
+                    if (!preview)
+                    {
+                        _logger.Error("Error: The working tree has uncommitted changes. Commit or stash them first:");
+                        foreach (var line in dirty)
+                        {
+                            Console.WriteLine($"  {line.TrimEnd('\r')}");
+                        }
+                        return 1;
+                    }
+
+                    _logger.Warning("You have uncommitted changes (a real bump would refuse).");
+                }
+            }
+            else if (await _git.HasUncommittedChangesAsync())
             {
                 _logger.Warning("You have uncommitted changes.");
                 Console.WriteLine();
@@ -101,32 +167,43 @@ public class BumpCommand
                 }
                 Console.WriteLine();
 
-                if (!autoConfirm)
+                if (!preview)
                 {
-                    Console.Write("Run 'ando commit' to commit them first? [Y/n] ");
-                    var response = Console.ReadLine()?.Trim().ToLowerInvariant();
-
-                    if (response == "n" || response == "no")
+                    if (!autoConfirm)
                     {
-                        return 1;
+                        Console.Write("Run 'ando commit' to commit them first? [Y/n] ");
+                        var response = Console.ReadLine()?.Trim().ToLowerInvariant();
+
+                        if (response == "n" || response == "no")
+                        {
+                            return 1;
+                        }
                     }
-                }
 
-                // Run ando commit.
-                _logger.Info("Running commit...");
-                var commitCommand = new CommitCommand(_runner, _logger);
-                var commitResult = await commitCommand.ExecuteAsync(autoConfirm);
-                if (commitResult != 0)
-                {
-                    return commitResult;
-                }
+                    // Run ando commit.
+                    _logger.Info("Running commit...");
+                    var commitCommand = new CommitCommand(_runner, _logger);
+                    var commitResult = await commitCommand.ExecuteAsync(autoConfirm);
+                    if (commitResult != 0)
+                    {
+                        return commitResult;
+                    }
 
-                Console.WriteLine();
+                    Console.WriteLine();
+                }
             }
 
-            // Step 3: Detect projects.
-            _logger.Info("Detecting projects...");
-            var projects = _detector.DetectProjects(buildScript);
+            // Step 3: Detect projects (or take them from versionFiles).
+            List<DetectedProject> projects;
+            if (useVersionFiles)
+            {
+                projects = config.VersionFiles!.Select(f => new DetectedProject(f, GetFileType(f))).ToList();
+            }
+            else
+            {
+                _logger.Info("Detecting projects...");
+                projects = _detector.DetectProjects(buildScript!);
+            }
 
             if (projects.Count == 0)
             {
@@ -140,16 +217,29 @@ public class BumpCommand
 
             // Step 4: Read current versions.
             Console.WriteLine();
-            _logger.Info("Detected projects:");
-            var projectVersions = new List<(ProjectDetector.DetectedProject Project, string Version)>();
+            _logger.Info(useVersionFiles ? "Version files:" : "Detected projects:");
+            var projectVersions = new List<(DetectedProject Project, string Version)>();
 
             foreach (var project in projects)
             {
                 var fullPath = Path.Combine(repoRoot, project.Path);
-                var version = _reader.ReadVersion(fullPath, project.Type);
+                if (useVersionFiles && !File.Exists(fullPath))
+                {
+                    _logger.Error($"Error: Version file not found: {project.Path}");
+                    return 1;
+                }
+
+                var version = _reader.ReadVersion(fullPath, project.Type, strictMsBuild: useVersionFiles);
 
                 if (version == null)
                 {
+                    if (useVersionFiles)
+                    {
+                        _logger.Error($"Error: No version found in {project.Path} " +
+                            (project.Type == ProjectType.Npm ? "(expected a \"version\" field)." : "(expected a <Version> element)."));
+                        return 1;
+                    }
+
                     _logger.Warning($"  {project.Path}: no version found");
                     continue;
                 }
@@ -167,6 +257,13 @@ public class BumpCommand
             // Step 5: Validate versions match.
             var distinctVersions = projectVersions.Select(pv => pv.Version).Distinct().ToList();
             string baseVersion;
+
+            if (distinctVersions.Count > 1 && useVersionFiles)
+            {
+                _logger.Error("Error: Version files hold different versions: " +
+                    string.Join(", ", projectVersions.Select(pv => $"{pv.Project.Path} {pv.Version}")));
+                return 1;
+            }
 
             if (distinctVersions.Count > 1)
             {
@@ -215,13 +312,41 @@ public class BumpCommand
             }
 
             // Step 6: Calculate new version.
-            var semver = SemVer.Parse(baseVersion);
-            var newSemver = semver.Bump(type);
-            var newVersion = newSemver.ToString();
+            var now = _clock.GetUtcNow().UtcDateTime;
+            var newVersion = options.SetVersion != null
+                ? VersionCalculator.ValidateExplicit(options.SetVersion, baseVersion, scheme, now)
+                : VersionCalculator.Next(baseVersion, type, scheme, now);
+
+            var message = ReleaseMessageTemplate(config).Replace("{version}", newVersion);
+            var tagName = options.Tag ? $"{config.TagPrefix ?? "v"}{newVersion}" : null;
+            var changelogFile = config.ChangelogFile ?? "CHANGELOG.md";
 
             Console.WriteLine();
-            _logger.Info($"Bumping {type.ToString().ToLower()}: {baseVersion} → {newVersion}");
+            _logger.Info(options.SetVersion != null
+                ? $"Setting version: {baseVersion} → {newVersion}"
+                : $"Bumping {type.ToString().ToLower()}: {baseVersion} → {newVersion}");
             Console.WriteLine();
+
+            string? changelogSection = null;
+            if (changelogMode == "template")
+            {
+                var (_, commits) = await GetTemplateCommitsAsync(config);
+                changelogSection = ChangelogGenerator.RenderSection(newVersion, now, commits, ReleaseMessageTemplate(config));
+            }
+
+            // An existing release tag (at HEAD or elsewhere) is refused before anything is written.
+            if (tagName != null && await _git.GetTagCommitAsync(tagName) != null)
+            {
+                _logger.Error($"Error: Tag {tagName} already exists.");
+                return 1;
+            }
+
+            if (options.DryRun)
+            {
+                PrintDryRun(projectVersions.Select(pv => pv.Project.Path), changelogMode, changelogFile,
+                    changelogSection, options.NoCommit ? null : message, tagName);
+                return 0;
+            }
 
             // Step 7: Update all project files.
             _logger.Info("Updating project versions:");
@@ -230,40 +355,73 @@ public class BumpCommand
             foreach (var (project, _) in projectVersions)
             {
                 var fullPath = Path.Combine(repoRoot, project.Path);
-                _writer.WriteVersion(fullPath, project.Type, newVersion);
+                _writer.WriteVersion(fullPath, project.Type, newVersion, strictMsBuild: useVersionFiles);
                 Console.WriteLine($"  ✓ {project.Path}");
                 updatedFiles.Add(project.Path);
             }
 
-            // Step 8: Update changelog files using Claude.
-            await UpdateChangelogsAsync(baseVersion, newVersion, autoConfirm);
-
-            // Step 9: Update version badges in documentation.
-            Console.WriteLine();
-            _logger.Info("Updating version badges:");
-
-            var docUpdater = new DocumentationUpdater(repoRoot);
-            var docResults = docUpdater.UpdateVersionBadges(baseVersion, newVersion);
-
-            foreach (var result in docResults)
+            // Step 8: Update changelog files.
+            if (changelogSection != null)
             {
-                if (result.Success)
+                var changelogPath = Path.Combine(repoRoot, changelogFile);
+                var existing = File.Exists(changelogPath) ? File.ReadAllText(changelogPath) : null;
+                File.WriteAllText(changelogPath, ChangelogGenerator.Insert(existing, changelogSection));
+                Console.WriteLine($"  ✓ {changelogFile}");
+                updatedFiles.Add(changelogFile);
+            }
+            else if (changelogMode == "claude")
+            {
+                await UpdateChangelogsAsync(baseVersion, newVersion, autoConfirm);
+            }
+
+            // Step 9: Update version badges in documentation (not with versionFiles).
+            if (!useVersionFiles)
+            {
+                Console.WriteLine();
+                _logger.Info("Updating version badges:");
+
+                var docUpdater = new DocumentationUpdater(repoRoot);
+                var docResults = docUpdater.UpdateVersionBadges(baseVersion, newVersion);
+
+                foreach (var result in docResults)
                 {
-                    Console.WriteLine($"  ✓ {result.FilePath}");
-                    updatedFiles.Add(result.FilePath);
-                }
-                else if (result.Error != null)
-                {
-                    Console.WriteLine($"  ⚠ {result.FilePath}: {result.Error}");
+                    if (result.Success)
+                    {
+                        Console.WriteLine($"  ✓ {result.FilePath}");
+                        updatedFiles.Add(result.FilePath);
+                    }
+                    else if (result.Error != null)
+                    {
+                        Console.WriteLine($"  ⚠ {result.FilePath}: {result.Error}");
+                    }
                 }
             }
 
             // Step 10: Commit changes.
             Console.WriteLine();
-            await _git.StageFilesAsync(updatedFiles.Select(f => Path.Combine(repoRoot, f)));
-            await _git.CommitAsync($"Bump version to {newVersion}");
+            if (options.NoCommit)
+            {
+                _logger.Info("Files updated; not committed (--no-commit).");
+            }
+            else if (safeMode)
+            {
+                // Only the files bump changed, by explicit path.
+                await _git.StagePathsAsync(updatedFiles);
+                await _git.CommitPathsAsync(message, updatedFiles);
+                _logger.Info($"Committed: {message}");
+            }
+            else
+            {
+                await _git.StageFilesAsync(updatedFiles.Select(f => Path.Combine(repoRoot, f)));
+                await _git.CommitAsync(message);
+                _logger.Info($"Committed: {message}");
+            }
 
-            _logger.Info($"Committed: Bump version to {newVersion}");
+            if (tagName != null)
+            {
+                await _git.CreateAnnotatedTagAsync(tagName, message);
+                _logger.Info($"Tagged: {tagName}");
+            }
 
             // Run post-hooks with updated context.
             hookContext = hookContext with
@@ -279,6 +437,126 @@ public class BumpCommand
         {
             _logger.Error($"Error: {ex.Message}");
             return 1;
+        }
+    }
+
+    /// <summary>
+    /// Checks the opt-in settings; returns an error message or null.
+    /// </summary>
+    private static string? ValidateSettings(ProjectConfig config, BumpOptions options)
+    {
+        if (config.VersionScheme != null && !VersionCalculator.IsKnownScheme(config.VersionScheme))
+            return $"Invalid versionScheme '{config.VersionScheme}' in ando.config. Use semver or year-minor-patch.";
+        if (config.Changelog != null && !BumpOptions.ChangelogModes.Contains(config.Changelog))
+            return $"Invalid changelog '{config.Changelog}' in ando.config. Use template, claude or none.";
+        if (options.Tag && options.NoCommit)
+            return "--tag cannot be used with --no-commit.";
+        if (config.CommitMessage != null && string.IsNullOrWhiteSpace(config.CommitMessage.Replace("{version}", "")))
+            return "commitMessage in ando.config needs text besides {version}, for example \"chore(release): {version}\".";
+        return null;
+    }
+
+    private static string ReleaseMessageTemplate(ProjectConfig config)
+        => config.CommitMessage ?? "Bump version to {version}";
+
+    /// <summary>
+    /// Checks every versionFiles entry (supported type, exists, exactly one version); returns an error or null.
+    /// </summary>
+    private string? ValidateVersionFiles(string repoRoot, IEnumerable<string> files)
+    {
+        foreach (var file in files)
+        {
+            try
+            {
+                var type = GetFileType(file);
+                var fullPath = Path.Combine(repoRoot, file);
+                if (!File.Exists(fullPath))
+                    return $"Version file not found: {file}";
+
+                if (_reader.ReadVersion(fullPath, type, strictMsBuild: true) == null)
+                    return $"No version found in {file} (expected a \"version\" field).";
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                return ex.Message;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// package.json holds a "version" field; every other version file is an XML MSBuild file.
+    /// </summary>
+    internal static ProjectType GetFileType(string path)
+    {
+        var name = Path.GetFileName(path);
+        if (name.Equals("package.json", StringComparison.OrdinalIgnoreCase))
+            return ProjectType.Npm;
+
+        string[] xmlExtensions = [".props", ".csproj", ".targets", ".fsproj", ".vbproj", ".proj"];
+        if (!xmlExtensions.Contains(Path.GetExtension(name), StringComparer.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                $"Unsupported version file '{path}'. Use package.json or an MSBuild file (.props, .csproj, .targets).");
+        return ProjectType.Dotnet;
+    }
+
+    /// <summary>
+    /// Commits since the last release tag matching tagPattern (all history without one),
+    /// limited to changelogPaths, with release commits removed.
+    /// </summary>
+    private async Task<(string? Tag, List<(string Sha, string Subject)> Commits)> GetTemplateCommitsAsync(ProjectConfig config)
+    {
+        var tag = await _git.GetLastTagMatchingAsync(config.TagPattern ?? "v*");
+        var commits = await _git.GetCommitLogAsync(tag, config.ChangelogPaths);
+        return (tag, ChangelogGenerator.Filter(commits, ReleaseMessageTemplate(config)));
+    }
+
+    /// <summary>
+    /// --suggest: prints minor when a feat commit exists since the last tag, else patch.
+    /// </summary>
+    private async Task<int> SuggestAsync(ProjectConfig config)
+    {
+        var (tag, commits) = await GetTemplateCommitsAsync(config);
+        Console.WriteLine(tag == null
+            ? $"Commits considered (no tag, all history): {commits.Count}"
+            : $"Commits considered since {tag}: {commits.Count}");
+        foreach (var (sha, subject) in commits)
+        {
+            Console.WriteLine($"  {sha} {subject}");
+        }
+
+        Console.WriteLine(commits.Any(c => ChangelogGenerator.GetType(c.Subject) == "feat") ? "minor" : "patch");
+        return 0;
+    }
+
+    private static void PrintDryRun(IEnumerable<string> versionFiles, string changelogMode, string changelogFile,
+        string? changelogSection, string? message, string? tagName)
+    {
+        Console.WriteLine("Dry run: nothing is changed.");
+        Console.WriteLine("Files that would change:");
+        foreach (var file in versionFiles)
+        {
+            Console.WriteLine($"  {file}");
+        }
+
+        if (changelogSection != null)
+        {
+            Console.WriteLine($"  {changelogFile}");
+            Console.WriteLine();
+            Console.WriteLine("Changelog entry:");
+            Console.Write(changelogSection);
+        }
+        else if (changelogMode == "claude")
+        {
+            Console.WriteLine("  (changelog files would be updated by Claude)");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine(message != null ? $"Commit message: {message}" : "No commit (--no-commit).");
+        if (tagName != null)
+        {
+            Console.WriteLine($"Tag: {tagName}");
         }
     }
 

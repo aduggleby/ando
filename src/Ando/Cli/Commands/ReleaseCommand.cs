@@ -17,6 +17,7 @@
 // - Parameterized to power both 'release' (5 steps) and 'ship' (4 steps)
 // =============================================================================
 
+using Ando.Config;
 using Ando.Hooks;
 using Ando.Logging;
 using Ando.Release;
@@ -74,9 +75,31 @@ public class ReleaseCommand
 
             // 2. Analyze current state.
             var branch = await _git.GetCurrentBranchAsync();
-            var version = GetCurrentVersion(repoRoot);
+            var config = ProjectConfig.Load(repoRoot);
+            var version = GetCurrentVersion(repoRoot, config);
             var hasChanges = await _git.HasUncommittedChangesAsync();
             var changedFiles = hasChanges ? await _git.GetChangedFilesAsync() : [];
+
+            // Safe mode (template/none changelog or requireClean) never runs the AI commit:
+            // a dirty tree is refused. ANDO's own log files are ignored, as in bump.
+            if (config.IsSafeReleaseMode())
+            {
+                var dirty = (await _git.GetStatusAsync(excludeAndoFiles: true))
+                    .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                if (dirty.Length > 0)
+                {
+                    _logger.Error("The working tree has uncommitted changes. Commit or stash them first:");
+                    foreach (var line in dirty)
+                    {
+                        Console.WriteLine($"  {line.TrimEnd('\r')}");
+                    }
+                    return 1;
+                }
+
+                hasChanges = false;
+                changedFiles = [];
+            }
+
             var hasRemote = await _git.HasRemoteTrackingAsync();
             var remoteBranch = hasRemote ? await _git.GetRemoteTrackingBranchAsync() : null;
             var hasWebsite = Directory.Exists(Path.Combine(repoRoot, "website"));
@@ -122,7 +145,7 @@ public class ReleaseCommand
             }
             else
             {
-                var result = ShowChecklist(steps, version, bumpType);
+                var result = ShowChecklist(steps, version, bumpType, config);
                 if (result == null)
                 {
                     AnsiConsole.MarkupLine($"[yellow]{title} cancelled.[/]");
@@ -140,7 +163,7 @@ public class ReleaseCommand
             // 6. Dry run or execute.
             if (dryRun)
             {
-                ShowDryRun(selectedSteps, version, bumpType, commandName);
+                ShowDryRun(selectedSteps, version, bumpType, config, commandName);
                 return 0;
             }
 
@@ -209,10 +232,10 @@ public class ReleaseCommand
         return steps;
     }
 
-    private List<ReleaseStep>? ShowChecklist(List<ReleaseStep> steps, string currentVersion, BumpType bumpType)
+    private List<ReleaseStep>? ShowChecklist(List<ReleaseStep> steps, string currentVersion, BumpType bumpType, ProjectConfig config)
     {
         // Show what version bump will be applied.
-        var newVersion = CalculateNextVersion(currentVersion, bumpType);
+        var newVersion = CalculateNextVersion(currentVersion, bumpType, config);
         AnsiConsole.MarkupLine($"[bold]Version bump:[/] {currentVersion} → {newVersion} [dim]({bumpType.ToString().ToLower()})[/]");
         AnsiConsole.WriteLine();
 
@@ -425,7 +448,7 @@ public class ReleaseCommand
         static string Esc(string value) => Markup.Escape(value);
 
         var finishedAt = DateTimeOffset.Now;
-        var newVersion = GetCurrentVersion(repoRoot);
+        var newVersion = GetCurrentVersion(repoRoot, ProjectConfig.Load(repoRoot));
         var commitHash = await _git.GetCurrentCommitShortAsync();
         var branch = await _git.GetCurrentBranchAsync();
 
@@ -529,8 +552,17 @@ public class ReleaseCommand
                content.Contains("DefineProfile('publish'");
     }
 
-    private static string GetCurrentVersion(string repoRoot)
+    private static string GetCurrentVersion(string repoRoot, ProjectConfig config)
     {
+        var reader = new VersionReader();
+
+        // versionFiles replaces project detection from build.csando.
+        if (config.VersionFiles is { Length: > 0 } files)
+        {
+            var type = BumpCommand.GetFileType(files[0]);
+            return reader.ReadVersion(Path.Combine(repoRoot, files[0]), type, strictMsBuild: true) ?? "0.0.0";
+        }
+
         var buildScript = Path.Combine(repoRoot, "build.csando");
         if (!File.Exists(buildScript))
             return "0.0.0";
@@ -540,20 +572,26 @@ public class ReleaseCommand
         if (projects.Count == 0)
             return "0.0.0";
 
-        var reader = new VersionReader();
         var fullPath = Path.Combine(repoRoot, projects[0].Path);
         return reader.ReadVersion(fullPath, projects[0].Type) ?? "0.0.0";
     }
 
-    private static string CalculateNextVersion(string current, BumpType type)
+    private static string CalculateNextVersion(string current, BumpType type, ProjectConfig config)
     {
-        if (!SemVer.TryParse(current, out var semver))
+        if (!SemVer.TryParse(current, out _))
             return "0.0.1";
 
-        return semver.Bump(type).ToString();
+        try
+        {
+            return VersionCalculator.Next(current, type, config.VersionScheme ?? VersionCalculator.SemVerScheme, DateTime.UtcNow);
+        }
+        catch (ArgumentException)
+        {
+            return "(invalid bump type)";
+        }
     }
 
-    private void ShowDryRun(List<ReleaseStep> steps, string version, BumpType bumpType, string commandName = "release")
+    private void ShowDryRun(List<ReleaseStep> steps, string version, BumpType bumpType, ProjectConfig config, string commandName = "release")
     {
         var title = char.ToUpper(commandName[0]) + commandName[1..];
         AnsiConsole.MarkupLine($"[bold]ANDO {title} Workflow (dry run)[/]");
@@ -566,7 +604,7 @@ public class ReleaseCommand
         {
             stepNum++;
             var detail = step.Id == "bump"
-                ? $" ({version} → {CalculateNextVersion(version, bumpType)})"
+                ? $" ({version} → {CalculateNextVersion(version, bumpType, config)})"
                 : "";
             AnsiConsole.MarkupLine($"  {stepNum}. {step.Label}{detail}");
         }

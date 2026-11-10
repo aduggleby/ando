@@ -50,6 +50,17 @@ public class CliGitOperations
     }
 
     /// <summary>
+    /// Porcelain status, optionally ignoring ANDO's own build.csando.log and .ando/ files.
+    /// </summary>
+    public async Task<string> GetStatusAsync(bool excludeAndoFiles)
+    {
+        if (!excludeAndoFiles) return await GetStatusAsync();
+        var result = await _runner.RunAsync("git",
+            "status --porcelain -- . \":(exclude)build.csando.log\" \":(exclude).ando\"");
+        return result.Output;
+    }
+
+    /// <summary>
     /// Gets a list of changed files (staged and unstaged).
     /// </summary>
     public async Task<List<string>> GetChangedFilesAsync()
@@ -146,6 +157,84 @@ public class CliGitOperations
                 : result.Output;
             throw new Exception($"Git commit failed: {error}");
         }
+    }
+
+    // Quotes a value for the git argument string; refuses values that cannot be quoted safely
+    // (the runner takes one argument string, so quotes, backslashes and newlines are rejected).
+    private static string Quote(string value)
+    {
+        if (value.Contains('"') || value.Contains('\\') || value.Contains('\n'))
+            throw new ArgumentException(
+                $"Unsupported character (quote, backslash or newline) in git argument: {value}");
+        return $"\"{value}\"";
+    }
+
+    /// <summary>
+    /// Most recent tag reachable from HEAD matching the glob, or null when there is none.
+    /// </summary>
+    public async Task<string?> GetLastTagMatchingAsync(string pattern)
+    {
+        var result = await _runner.RunAsync("git", $"describe --tags --abbrev=0 --match {Quote(pattern)}");
+        return result.ExitCode == 0 && !string.IsNullOrWhiteSpace(result.Output) ? result.Output.Trim() : null;
+    }
+
+    /// <summary>
+    /// Non-merge commits (newest first) as 7-character sha and subject, since the tag
+    /// (all history when null), optionally limited to paths.
+    /// </summary>
+    public async Task<List<(string Sha, string Subject)>> GetCommitLogAsync(string? sinceTag, IEnumerable<string>? paths)
+    {
+        var range = sinceTag == null ? "HEAD" : $"{Quote(sinceTag)}..HEAD";
+        var pathSpec = paths?.Select(Quote).ToList() is { Count: > 0 } list ? $" -- {string.Join(" ", list)}" : "";
+        var result = await _runner.RunAsync("git", $"log {range} --no-merges --abbrev=7 --format=%h%x09%s{pathSpec}");
+        if (result.ExitCode != 0)
+            throw new Exception($"Git log failed: {result.Error}");
+
+        return result.Output
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.TrimEnd('\r').Split('\t', 2))
+            .Where(parts => parts.Length == 2)
+            .Select(parts => (parts[0][..Math.Min(7, parts[0].Length)], parts[1]))
+            .ToList();
+    }
+
+    /// <summary>Commit a tag points at (peeled), or null when the tag does not exist.</summary>
+    public async Task<string?> GetTagCommitAsync(string tag)
+    {
+        var result = await _runner.RunAsync("git", $"rev-parse -q --verify {Quote($"refs/tags/{tag}^{{commit}}")}");
+        return result.ExitCode == 0 ? result.Output.Trim() : null;
+    }
+
+    public async Task<string?> GetHeadCommitAsync()
+    {
+        var result = await _runner.RunAsync("git", "rev-parse HEAD");
+        return result.ExitCode == 0 ? result.Output.Trim() : null;
+    }
+
+    /// <summary>Stages exactly the given paths.</summary>
+    public async Task StagePathsAsync(IEnumerable<string> paths)
+    {
+        var result = await _runner.RunAsync("git", $"add -- {string.Join(" ", paths.Select(Quote))}");
+        if (result.ExitCode != 0)
+            throw new Exception($"Git add failed: {result.Error}");
+    }
+
+    /// <summary>Commits only the given paths (never other staged or modified files).</summary>
+    public async Task CommitPathsAsync(string message, IEnumerable<string> paths)
+    {
+        var result = await _runner.RunAsync("git", $"commit -F - -- {string.Join(" ", paths.Select(Quote))}", stdin: message);
+        if (result.ExitCode != 0)
+        {
+            var error = !string.IsNullOrWhiteSpace(result.Error) ? result.Error : result.Output;
+            throw new Exception($"Git commit failed: {error}");
+        }
+    }
+
+    public async Task CreateAnnotatedTagAsync(string tag, string message)
+    {
+        var result = await _runner.RunAsync("git", $"tag -a {Quote(tag)} -F -", stdin: message);
+        if (result.ExitCode != 0)
+            throw new Exception($"Git tag failed: {result.Error}");
     }
 
     /// <summary>

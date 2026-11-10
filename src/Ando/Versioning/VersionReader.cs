@@ -29,12 +29,14 @@ public class VersionReader
     /// </summary>
     /// <param name="projectPath">Path to the project file.</param>
     /// <param name="type">Type of project.</param>
+    /// <param name="strictMsBuild">Require exactly one PropertyGroup Version (versionFiles mode); throws otherwise.</param>
     /// <returns>Version string, or null if not found.</returns>
     /// <exception cref="InvalidOperationException">Thrown if version format is invalid.</exception>
-    public string? ReadVersion(string projectPath, ProjectType type)
+    public string? ReadVersion(string projectPath, ProjectType type, bool strictMsBuild = false)
     {
         var version = type switch
         {
+            ProjectType.Dotnet when strictMsBuild => MsBuildVersionFile.Read(projectPath),
             ProjectType.Dotnet => ReadCsprojVersion(projectPath),
             ProjectType.Npm => ReadPackageJsonVersion(projectPath),
             _ => null
