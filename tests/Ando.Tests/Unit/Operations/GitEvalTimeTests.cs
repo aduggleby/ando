@@ -244,6 +244,18 @@ public class GitEvalTimeTests : IDisposable
         Should.Throw<InvalidOperationException>(() => CreateGit().ChangedSince("no-such-ref"));
     }
 
+    [Fact]
+    public void CommitTime_IsHeadCommitTimeInUnixSeconds_AndCached()
+    {
+        var git = CreateGit();
+        var expected = long.Parse(Git("log", "-1", "--format=%ct", "HEAD"));
+
+        git.CommitTime.ShouldBe(expected);
+        Write("src/a.txt", "later");
+        Commit("third");
+        git.CommitTime.ShouldBe(expected);
+    }
+
     // ---- Step variants (RevParse, LatestTag, ChangedFiles) -------------------
 
     private async Task<CommandStep> RunStepAsync(CommandStep step)
@@ -312,6 +324,33 @@ public class GitEvalTimeTests : IDisposable
         var step = await RunStepAsync(CreateGit().LatestTag());
 
         step.Value.ShouldBe("");
+    }
+
+    [Fact]
+    public async Task LatestTag_Step_NoMatch_LogsNoWarningOrError()
+    {
+        await RunStepAsync(CreateGit().LatestTag("release-*"));
+
+        _logger.WarningMessages.ShouldBeEmpty();
+        _logger.ErrorMessages.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task LatestTag_Step_RealGitError_FailsStep()
+    {
+        var notARepo = Directory.CreateTempSubdirectory("ando-notrepo-").FullName;
+        try
+        {
+            var step = CreateGit(notARepo).LatestTag();
+
+            (await _registry.Steps[0].Execute()).ShouldBeFalse();
+            _logger.ErrorMessages.ShouldNotBeEmpty();
+            step.Value.ShouldBe("");
+        }
+        finally
+        {
+            Directory.Delete(notARepo, recursive: true);
+        }
     }
 
     [Fact]

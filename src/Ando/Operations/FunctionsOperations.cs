@@ -41,7 +41,8 @@ public class FunctionsOperations(
 {
     /// <summary>
     /// Registers a step to deploy a function app using zip deploy
-    /// (`az functionapp deploy --type zip`). Requires the function app to already exist.
+    /// (`az functionapp deploy --type zip`, which uses OneDeploy). Requires the function app to
+    /// already exist.
     /// Like AppService.DeployZip it passes `--restart false` unless WithRestart() is set,
     /// retries transient failures and reconciles timeouts against the latest deployment log.
     /// </summary>

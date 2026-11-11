@@ -100,6 +100,16 @@ public class GitOperations : OperationsBase
     private string? _shortCommit;
 
     /// <summary>
+    /// Commit time of the commit being built (HEAD, or the commit given with --ref) as Unix
+    /// seconds (`git log -1 --format=%ct HEAD`). Evaluated when the script loads (on the
+    /// host), like Commit, and cached. Useful as a reproducible timestamp, e.g.
+    /// Archive.Zip(src, zip, o => o.WithTimestamp(Git.CommitTime)).
+    /// </summary>
+    public long CommitTime => _commitTime ??= long.Parse(RunGit("log", "-1", "--format=%ct", "HEAD"),
+        System.Globalization.CultureInfo.InvariantCulture);
+    private long? _commitTime;
+
+    /// <summary>
     /// Fails the build before any step runs when tracked files are modified,
     /// staged or deleted, or untracked files that are not ignored exist, under
     /// <paramref name="paths"/> (or anywhere in the repository when none are given).
@@ -187,13 +197,44 @@ public class GitOperations : OperationsBase
     /// <summary>
     /// Registers a step that finds the most recent tag reachable from HEAD matching
     /// <paramref name="pattern"/> (`git describe --tags --abbrev=0 --match &lt;pattern&gt;`); Value is the
-    /// tag, or empty when no tag matches (the step still succeeds; git's "no names found"
-    /// error is allowed). Runs as a step on the host. Git.LastTag is evaluated when the script loads.
+    /// tag. No matching tag is a normal outcome: Value is empty, the step succeeds and nothing is
+    /// logged as a warning. Any other git error (not a repository, bad ref) fails the step. Runs as a
+    /// step on the host; InDirectory/WithEnv on the result are not applied. Git.LastTag is evaluated
+    /// when the script loads.
     /// Usage: var last = Git.LatestTag("v*");  Ando.When(() => last.Value != "", ...);
     /// </summary>
     /// <param name="pattern">Glob the tag must match (default "*").</param>
-    public CommandStep LatestTag(string pattern = "*") =>
-        QueryStep("Git.LatestTag", pattern, "describe", "--tags", "--abbrev=0", "--match", pattern, "HEAD").AllowFailure();
+    public CommandStep LatestTag(string pattern = "*")
+    {
+        var step = new CommandStep("Git.LatestTag", Registry.DefaultCommandTimeoutMs);
+        Registry.Register("Git.LatestTag", () => Task.Run(() =>
+        {
+            var (exitCode, output, error) = RunGitRaw("describe", "--tags", "--abbrev=0", "--match", pattern, "HEAD");
+            if (exitCode == 0)
+            {
+                step.Set(output);
+                return true;
+            }
+
+            // "No names found, cannot describe anything." (no tags) and
+            // "No tags can describe '<sha>'." (none match) are expected, not errors.
+            if (NoTagPattern.IsMatch(error))
+            {
+                Logger.Info($"    No tag matches '{pattern}'.");
+                step.Set("");
+                return true;
+            }
+
+            step.Set("", exitCode);
+            Logger.Error($"    git describe failed: {error}");
+            return false;
+        }), pattern);
+        return step;
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex NoTagPattern = new(
+        @"No names found|No tags can describe|cannot describe",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
     /// <summary>
     /// Registers a step that lists files changed between <paramref name="sinceRef"/> and HEAD
