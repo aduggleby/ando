@@ -87,12 +87,12 @@ Ando.Build(web);
 if (deploy)
 {
     // Profiles are automatically passed to sub-builds
-    Ando.Build(api, o => o.WithProfiles("deploy"));
-    Ando.Build(web, o => o.WithProfiles("deploy"));
+    Ando.Build(api, o => o.WithProfile("deploy"));
+    Ando.Build(web, o => o.WithProfile("deploy"));
 
     if (production)
     {
-        Ando.Build(api, o => o.WithProfiles("deploy", "production"));
+        Ando.Build(api, o => o.WithProfile("deploy,production"));
         Ando.Build(web, o => o.WithProfiles("deploy", "production"));
     }
 
@@ -101,6 +101,7 @@ if (deploy)
 ```
 
 Usage:
+
 ```bash
 # Build only
 ando
@@ -144,6 +145,7 @@ if (buildWeb || buildAll)
 ```
 
 Usage:
+
 ```bash
 # Build everything
 ando
@@ -153,25 +155,6 @@ ando -p core
 
 # Build core and api
 ando -p core,api
-```
-
-## Parallel Sub-Builds
-
-Build independent packages in parallel:
-
-```csharp
-var core = Directory("./packages/core");
-var utils = Directory("./packages/utils");
-var api = Directory("./packages/api");
-var web = Directory("./packages/web");
-
-// Build shared packages first (they have no dependencies)
-Ando.BuildParallel(core, utils);
-
-// Then build dependent packages in parallel
-Ando.BuildParallel(api, web);
-
-Log.Info("Parallel build complete");
 ```
 
 ## Share Artifacts Between Packages
@@ -250,8 +233,7 @@ if (publish)
     foreach (var pkg in packages)
     {
         Ando.Build(pkg, o => o
-            .WithProfiles("publish")
-            .WithEnvironment("VERSION", version));
+            .WithProfile("publish"));
     }
 
     // Tag release
@@ -289,12 +271,12 @@ if (deploy)
     Cloudflare.EnsureAuthenticated();
 
     // Deploy .NET to Azure
-    Ando.Build(api, o => o.WithProfiles("deploy"));
-    Ando.Build(worker, o => o.WithProfiles("deploy"));
+    Ando.Build(api, o => o.WithProfile("deploy"));
+    Ando.Build(worker, o => o.WithProfile("deploy"));
 
     // Deploy frontends to Cloudflare
-    Ando.Build(web, o => o.WithProfiles("deploy"));
-    Ando.Build(admin, o => o.WithProfiles("deploy"));
+    Ando.Build(web, o => o.WithProfile("deploy"));
+    Ando.Build(admin, o => o.WithProfile("deploy"));
 
     Log.Info("Full monorepo deployed");
 }
@@ -302,17 +284,14 @@ if (deploy)
 
 ## Key Operations
 
-| Operation | Purpose |
-|-----------|---------|
-| [Ando.Build()](/providers/ando#build) | Run a sub-project's build.csando |
-| [Ando.BuildParallel()](/providers/ando#buildparallel) | Build multiple projects in parallel |
-| [WithProfiles()](/providers/ando#withprofiles) | Pass profiles to sub-build |
-| [WithEnvironment()](/providers/ando#withenvironment) | Pass environment variables |
+| Operation                             | Purpose                                        |
+| ------------------------------------- | ---------------------------------------------- |
+| [Ando.Build()](/providers/ando#build) | Run a sub-project's build.csando               |
+| `WithProfile()`                       | Pass profiles to a sub-build (comma-separated) |
 
 ## Tips
 
 - **Dependency order** - Build shared packages before dependent ones
-- **Parallel when possible** - Independent packages can build in parallel
 - **Share via environment** - Pass paths and config via environment variables
 - **Consistent profiles** - Use the same profile names across sub-projects
 

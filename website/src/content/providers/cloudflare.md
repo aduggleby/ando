@@ -10,17 +10,24 @@ Cloudflare operations require an API token and account ID. Set these as environm
 
 ### Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `CLOUDFLARE_API_TOKEN` | API token with Cloudflare Pages permissions |
-| `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID (found in dashboard URL) |
-| `CLOUDFLARE_PROJECT_NAME` | Optional default project name for Pages operations |
+| Variable                  | Description                                         |
+| ------------------------- | --------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN`    | API token with Cloudflare Pages permissions         |
+| `CLOUDFLARE_ACCOUNT_ID`   | Your Cloudflare account ID (found in dashboard URL) |
+| `CLOUDFLARE_PROJECT_NAME` | Optional default project name for Pages operations  |
 
 ### Interactive Prompting
 
 When running locally without environment variables set, `Cloudflare.EnsureAuthenticated()` will prompt for credentials interactively. The API token input is hidden for security. Credentials are only stored for the current build session and are cleared when the process exits.
 
 `Cloudflare.EnsureAuthenticated()` verifies the API token with Cloudflare's token verification endpoint. `Cloudflare.PagesDeploy()` also registers `Cloudflare.EnsurePagesProject(projectName)` automatically, which checks that the same token can read the target Pages project before Wrangler starts the deployment.
+
+### EnsurePagesProject vs PagesCreateProject
+
+| Operation                                      | What it does                                                                                                                                                                                                | Use it when                                                                                                     |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `Cloudflare.EnsurePagesProject(name)`          | Only **verifies** that the current credentials can read an existing Pages project. It creates nothing and fails if the project does not exist. `PagesDeploy()` registers it automatically before deploying. | You want to fail early, before other steps, if the token cannot reach the project. You rarely call it yourself. |
+| `Cloudflare.PagesCreateProject(name, branch?)` | **Creates** a Pages project (production branch defaults to `main`).                                                                                                                                         | First-time setup. `PagesDeploy()` does not create the project.                                                  |
 
 ### Creating a Cloudflare API Token
 
@@ -35,12 +42,12 @@ When running locally without environment variables set, `Cloudflare.EnsureAuthen
 
 ### Required Token Permissions
 
-| Permission | Required For |
-|------------|--------------|
-| `Account → Cloudflare Pages → Read` | Verifying Pages project access with `EnsurePagesProject()` |
-| `Account → Cloudflare Pages → Edit` | Deploying to Cloudflare Pages |
-| `Zone → Cache Purge → Purge` | Purging cache with `PurgeCache()` |
-| `Zone → Zone → Read` | Resolving domain names to Zone IDs (for `PurgeCache("example.com")`) |
+| Permission                          | Required For                                                         |
+| ----------------------------------- | -------------------------------------------------------------------- |
+| `Account → Cloudflare Pages → Read` | Verifying Pages project access with `EnsurePagesProject()`           |
+| `Account → Cloudflare Pages → Edit` | Deploying to Cloudflare Pages                                        |
+| `Zone → Cache Purge → Purge`        | Purging cache with `PurgeCache()`                                    |
+| `Zone → Zone → Read`                | Resolving domain names to Zone IDs (for `PurgeCache("example.com")`) |
 
 ### Finding Your Account ID
 
@@ -74,9 +81,9 @@ Cloudflare.PurgeCache("my-website.com");
 
 ### Cloudflare.PagesDeploy Options
 
-| Option | Description |
-|--------|-------------|
-| `WithProjectName(string)` | Cloudflare Pages project name. Must match an existing project in your Cloudflare account. Can also be set via `CLOUDFLARE_PROJECT_NAME` environment variable. |
-| `WithBranch(string)` | Git branch name for the deployment. Used by Cloudflare to determine if this is a production or preview deployment. Production branch deploys to the main URL. |
-| `WithCommitHash(string)` | Git commit hash to associate with the deployment. Displayed in Cloudflare dashboard for tracking which code version is deployed. |
-| `WithCommitMessage(string)` | Git commit message for the deployment. Displayed in Cloudflare dashboard alongside the commit hash. |
+| Option                      | Description                                                                                                                                                   |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WithProjectName(string)`   | Cloudflare Pages project name. Must match an existing project in your Cloudflare account. Can also be set via `CLOUDFLARE_PROJECT_NAME` environment variable. |
+| `WithBranch(string)`        | Git branch name for the deployment. Used by Cloudflare to determine if this is a production or preview deployment. Production branch deploys to the main URL. |
+| `WithCommitHash(string)`    | Git commit hash to associate with the deployment. Displayed in Cloudflare dashboard for tracking which code version is deployed.                              |
+| `WithCommitMessage(string)` | Git commit message for the deployment. Displayed in Cloudflare dashboard alongside the commit hash.                                                           |

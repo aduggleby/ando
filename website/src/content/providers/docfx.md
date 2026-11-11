@@ -16,6 +16,8 @@ DocFX is installed as a dotnet global tool. The `Docfx.Install()` operation hand
 Docfx.Install();
 ```
 
+`Docfx.IsInstalled()` is **not a step**. It is evaluated when the script loads, on the host, and reports whether DocFX is installed as a dotnet global tool on the host. It does not appear in `--dry-run`, and it does not look inside the build container. `Docfx.Install()` is the step that installs DocFX in the container.
+
 ## Generating Documentation
 
 The typical workflow is:
@@ -132,15 +134,15 @@ public void Build(ProjectRef project, Action<BuildOptions>? options = null)
 
 Key XML documentation tags:
 
-| Tag | Description |
-|-----|-------------|
-| `<summary>` | Brief description of the member |
-| `<param>` | Parameter description |
-| `<returns>` | Return value description |
-| `<remarks>` | Additional notes |
-| `<example>` | Usage example |
-| `<see cref=""/>` | Cross-reference to another member |
-| `<inheritdoc/>` | Inherit documentation from base class |
+| Tag              | Description                           |
+| ---------------- | ------------------------------------- |
+| `<summary>`      | Brief description of the member       |
+| `<param>`        | Parameter description                 |
+| `<returns>`      | Return value description              |
+| `<remarks>`      | Additional notes                      |
+| `<example>`      | Usage example                         |
+| `<see cref=""/>` | Cross-reference to another member     |
+| `<inheritdoc/>`  | Inherit documentation from base class |
 
 ## Tips
 

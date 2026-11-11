@@ -103,6 +103,7 @@ if (deploy)
 ```
 
 Usage:
+
 ```bash
 # Build and deploy to staging
 ando -p deploy
@@ -283,21 +284,28 @@ Npm.Test(frontend);
 Npm.Build(frontend);
 
 // Build Docker image (Dockerfile serves dist/ via nginx)
-Docker.Build(frontend, $"{registry}/my-spa:{version}");
+Docker.Install();
 
 if (deploy)
 {
     GitHub.EnsureAuthenticated();
 
-    // Push to registry
-    Docker.Push($"{registry}/my-spa:{version}");
-    Docker.Push($"{registry}/my-spa:latest");
+    // Build and push atomically to the registry
+    Docker.Build("Dockerfile", o => o
+        .WithTag($"{registry}/my-spa:{version}")
+        .WithTag($"{registry}/my-spa:latest")
+        .WithPush());
 
     Log.Info($"Pushed container image {version}");
+}
+else
+{
+    Docker.Build("Dockerfile", o => o.WithTag($"{registry}/my-spa:{version}"));
 }
 ```
 
 Example `Dockerfile`:
+
 ```dockerfile
 FROM node:20-alpine AS builder
 WORKDIR /app
@@ -314,13 +322,13 @@ EXPOSE 80
 
 ## Key Operations
 
-| Operation | Purpose |
-|-----------|---------|
-| [Npm.Ci()](/providers/npm#ci) | Install dependencies (CI mode) |
-| [Npm.Build()](/providers/npm#build) | Build for production |
-| [Npm.Test()](/providers/npm#test) | Run unit tests |
-| [Cloudflare.PagesDeploy()](/providers/cloudflare#pagesdeploy) | Deploy to Cloudflare |
-| [Playwright.Test()](/providers/playwright#test) | Run E2E tests |
+| Operation                                                     | Purpose                        |
+| ------------------------------------------------------------- | ------------------------------ |
+| [Npm.Ci()](/providers/npm#ci)                                 | Install dependencies (CI mode) |
+| [Npm.Build()](/providers/npm#build)                           | Build for production           |
+| [Npm.Test()](/providers/npm#test)                             | Run unit tests                 |
+| [Cloudflare.PagesDeploy()](/providers/cloudflare#pagesdeploy) | Deploy to Cloudflare           |
+| [Playwright.Test()](/providers/playwright#test)               | Run E2E tests                  |
 
 ## Tips
 

@@ -15,7 +15,7 @@ https://andobuild.com/llms.txt
 
 This contains:
 - All CLI commands and options
-- Global variables (Root, Env, Dotnet, Npm, etc.)
+- Globals (Root, Temp, Env, Directory, DefineProfile, Log) and the operation objects (Dotnet, Npm, etc.)
 - All operations by provider (Dotnet, Npm, Azure, Docker, GitHub, etc.)
 - Options for each operation
 - Common patterns and complete examples

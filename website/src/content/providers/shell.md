@@ -6,7 +6,7 @@ provider: Shell
 
 ## Overview
 
-`Shell.Run` and `Shell.Bash` register a step that runs a command in the build container, in order with the other steps. Use them for tools that have no ANDO operation. The step fails the build on a non-zero exit code unless you call `AllowFailure()`.
+`Shell.Run` and `Shell.Bash` register a step that runs a command in the build container, in order with the other steps. They are the escape hatch for one-off commands that have no ANDO operation. When a first-party operation exists (`Dotnet.*`, `Npm.*`, `Http.Get`, `Git.*`, `Docker.Build` and so on), use it instead: it understands the tool's options, installs prerequisites and reports better errors. The step fails the build on a non-zero exit code unless you call `AllowFailure()`.
 
 Both return a `CommandStep`. Its output can be read at execution time by later steps (see the Ando provider page, "Step model").
 

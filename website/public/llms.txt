@@ -65,24 +65,26 @@ ANDO requires Docker to run builds in isolated containers. If Docker is not avai
 
 ## CLI Commands
 
+Listed in the order of `ando help`. Commands marked (AI) need Claude and are not deterministic; see "Optional AI-assisted commands" below.
+
 - `ando` or `ando run` - Run the build script in a Docker container
-- `ando commit` - Commit all changes with AI-generated message using Claude
-- `ando bump [patch|minor|major]` - Bump version across all projects in build.csando (default: patch). Changelog is generated from commits since the matching version tag (vX.Y.Z or X.Y.Z), falling back to the most recent tag if no exact match exists.
+- `ando verify` - Check build script for errors without executing
+- `ando commit` (AI) - Commit all changes with AI-generated message using Claude
+- `ando bump [patch|minor|major]` - (Deterministic with `changelog: template`; `--changelog claude` is AI.) Bump version across all projects in build.csando (default: patch). Changelog is generated from commits since the matching version tag (vX.Y.Z or X.Y.Z), falling back to the most recent tag if no exact match exists.
   - Opt-in release mode (no AI): flags `--changelog template|claude|none`, `--set <version>`, `--suggest` (prints minor if a feat commit exists since the last tag, else patch; last output line), `--dry-run`, `--no-commit`, `--tag` (annotated `<tagPrefix><version>` on the release commit, never pushed; refused before anything is written if the tag already exists; not with `--no-commit`). Unknown flags are rejected.
   - ando.config settings: `versionFiles` (replaces build.csando detection; the single PropertyGroup-child `<Version>` in .props/.csproj/.targets (PackageReference Version children kept; 0 or >1 refused) or "version" in package.json; validated before hooks; all must match), `versionScheme` (`semver` | `year-minor-patch` = YYYY.MINOR.PATCH; new year gives <year>.1.0; major rejected), `changelog` (`template`|`claude`|`none`), `changelogPaths` (git pathspecs passed after `--` to `git log` unmodified, so exclusions work: `["src","services","infra",":!src/website"]`), `changelogFile` (default CHANGELOG.md), `unreleasedHeading` (default `Unreleased`; matched case-insensitively, `## [Unreleased]` also matches), `keepUnreleased` (default false), `commitMessage` (`{version}` placeholder, default "Bump version to {version}"), `tagPrefix` (default `v`), `tagPattern` (default `v*`), `requireClean`. Template placement: the new `## <version> (<date>)` section goes immediately before the first `## ` heading (outside fenced code blocks), so the title, any YAML frontmatter and intro text stay above it; with no `## ` heading it is appended after the existing content. If a `## <unreleasedHeading>` section exists it is converted into the release instead: its heading becomes `## <version> (<date>)`, its hand-written lines stay first, then the generated groups and the review marker; with `keepUnreleased` a new empty Unreleased heading (written as before, e.g. `## [Unreleased]`) stays above. `--dry-run` prints exactly the section that would be written.
   - Template changelog: commits since the last tag matching tagPattern, grouped Features (feat) / Fixes (fix) / Other, lines `- <subject> (<sha7>)`, chore(release) and commitMessage-matching release commits skipped, written as `## <version> (<date>)` ending with `<!-- edit before committing -->`, placed before the first `## ` heading (or converted from the Unreleased section, see above).
   - Template/none mode or `requireClean: true`: refuses a dirty tree, never runs `ando commit` or Claude, commits only the files bump changed by explicit path. `ando release`/`ando ship` refuse a dirty tree in this mode (exit 1, no steps run) and show versions per versionFiles/versionScheme.
   - Example ando.config: `{"versionFiles":["Directory.Build.props"],"versionScheme":"year-minor-patch","changelog":"template","changelogPaths":["src","services","infra"],"commitMessage":"chore(release): {version}","tagPrefix":"v","tagPattern":"v*"}`
-- `ando docs` - Update documentation using Claude (syncs version badges in docs files, then analyzes changes and updates relevant docs)
-- `ando release` - Interactive release workflow (commit, docs, bump, push, publish). Steps are contextually enabled: commit skipped if no uncommitted changes, bump skipped if no changes since last tag, push skipped if no remote tracking.
+- `ando docs` (AI) - Update documentation using Claude (syncs version badges in docs files, then analyzes changes and updates relevant docs)
+- `ando release` (AI) - Interactive release workflow (commit, docs, bump, push, publish). Steps are contextually enabled: commit skipped if no uncommitted changes, bump skipped if no changes since last tag, push skipped if no remote tracking.
 - `ando release --all` - Run all applicable release steps non-interactively
 - `ando release --dry-run` - Preview what release would do
-- `ando ship` - Ship workflow (commit, bump, docs, push) without the publish step. Same as release but skips building/publishing artifacts.
+- `ando ship` (AI) - Ship workflow (commit, bump, docs, push) without the publish step. Same as release but skips building/publishing artifacts.
 - `ando ship --all` - Run all applicable ship steps non-interactively
 - `ando ship --dry-run` - Preview what ship would do
-- `ando verify` - Check build script for errors without executing
 - `ando clean` - Remove artifacts, temp files, and containers (removing container clears caches). ANDO automatically recreates the warm container when the requested build image differs from the running one, so changing the build image no longer requires a manual clean. Still clean (or use `--cold`) after upgrading ANDO or changing other container-affecting config, since the warm container persists the build environment between runs.
-- `ando help` - Show available commands
+- `ando help`, `ando -h` or `ando --help` - Show available commands and options
 - `ando --version` or `ando -v` - Show version number
 
 Unknown commands show an error with the help text (e.g., `ando foo` displays "Unknown command: foo" and lists available commands).
@@ -118,7 +120,7 @@ Values of environment variables whose names contain SECRET, PASSWORD, PASSWD, TO
 
 ### Docker-in-Docker (DIND) Detection
 
-ANDO automatically detects when your build script uses operations requiring DIND (Docker.Build, Docker.Push, Docker.Install, GitHub.PushImage, Playwright.Test). This detection also scans child builds invoked via `Ando.Build()`. If DIND is needed but not enabled, ANDO prompts:
+ANDO automatically detects when your build script uses operations requiring DIND (Docker.Build, Docker.Install, GitHub.PushImage, Playwright.Test). This detection also scans child builds invoked via `Ando.Build()`. If DIND is needed but not enabled, ANDO prompts:
 - (Y)es - Enable DIND for this run only
 - (A)lways - Enable DIND and save to ando.config
 - Esc - Cancel the build
@@ -221,12 +223,15 @@ Checklist: identical `Encryption__Key` on both (every secret is decrypted as a c
 
 When ANDO starts a build, it copies project files into the Docker container. If the project is a git repository and `git` is available, ANDO uses `git ls-files` to respect `.gitignore` rules — ignored files (build outputs, node_modules, etc.) are automatically excluded. If not a git repo (or git unavailable), ANDO falls back to excluding a fixed set of directories: .git, node_modules, bin, obj, and .ando/cache.
 
-### Claude Integration
+### Optional AI-assisted commands
 
-Several ANDO commands use Claude CLI for AI-powered features:
+`ando commit`, `ando docs`, `ando release`, `ando ship` and the `--changelog claude` mode of `ando bump` call the Claude CLI. They need Claude installed and their output is NOT deterministic (commit messages, documentation edits and changelog entries can differ on every run; review them):
 - `ando commit` - Generates commit messages from diffs
-- `ando bump` - Generates changelog entries and updates changelog files
 - `ando docs` - Reviews commits since last tag and updates documentation
+- `ando release` and `ando ship` - Run `ando commit` and `ando docs` as workflow steps
+- `ando bump --changelog claude` - Generates changelog entries and updates changelog files
+
+Deterministic, AI-free path: `ando bump` with `changelog: template` in ando.config (or `--changelog template`) builds the changelog from commit messages without AI. `ando run` never uses Claude.
 
 Requirements: Claude CLI must be installed (`npm install -g @anthropic-ai/claude-code`)
 
@@ -392,7 +397,7 @@ Full documentation: https://andobuild.com/hooks
 ## Key Facts
 
 - File: `build.csando` (C# code, no .cs extension)
-- Execution: All builds run in Docker containers
+- Execution: All builds run in Docker containers. Operations register steps that run in the container, with these exceptions: `Git.*` operations and `Ando.Build` run on the host (`Ando.Build` starts a child `ando` build with its own container), and the evaluation-time members `Git.Commit`, `Git.ShortCommit`, `Git.ChangedSince`, `Git.LastTag`, `Docker.IsAvailable` and `Docfx.IsInstalled` are not steps at all (see "Evaluated when the script loads" under All Operations)
 - No `using` statements needed - namespaces are pre-imported
 - Operations register steps that execute in order, after the whole script has been evaluated
 - The image `mcr.microsoft.com/dotnet/sdk:10.0` (Ubuntu 24.04) has curl, tar, openssl, git and bash but not `zip` or `unzip`. `AppService.DeployFolder` installs zip itself and `Bun.Install` installs unzip.
@@ -403,7 +408,7 @@ Build scripts are C# code executed via Roslyn scripting. Everything in the scrip
 
 ### Global Functions (NOT on the Ando object)
 
-These are standalone functions, NOT methods on the `Ando` object:
+The bare globals are `Root`, `Temp`, `Directory()`, `Env()`, `DefineProfile()` and `Log`, plus the operation objects (`Dotnet`, `Npm`, `Git`, and so on; see "Operation Objects"). `Directory()`, `Env()` and `DefineProfile()` are standalone functions, NOT methods on the `Ando` object:
 
 ```csharp
 // CORRECT - these are global functions:
@@ -741,7 +746,7 @@ Steps that return `StepOutput` or `CommandStep` can be read only at execution ti
 
 `StepOutput` members: `Value` (trimmed stdout, or the response body for HTTP steps), `ExitCode`, `StatusCode` (HTTP steps only, otherwise throws), `HasValue`, and `Json(path)`. `Json` reads a dotted path with optional array indexes, for example `show.Json("siteConfig.ipSecurityRestrictions[0].name")`. Property names match case-insensitively. It returns the string value, raw JSON text for objects and arrays, or null when the path is missing or the value is JSON null.
 
-`CommandStep` (returned by `Shell.Run`, `Shell.Bash`, `Azure.Cli`, `AppService.Show`, `AppService.GetHostName`, `AppService.AccessRestrictions`) is a `StepOutput` with fluent configuration, applied when the step runs:
+`CommandStep` (returned by `Shell.Run`, `Shell.Bash`, `Azure.Cli`, `AppService.Show`, `AppService.GetHostName`, `AppService.AccessRestrictions`, the same `Functions.*` operations, and `Git.RevParse`, `Git.LatestTag`, `Git.ChangedFiles`) is a `StepOutput` with fluent configuration, applied when the step runs:
 - `InDirectory(path)` - Working directory; relative paths are relative to /workspace.
 - `WithTimeout(TimeSpan)` - Default 5 minutes or `Ando.CommandTimeout`.
 - `WithEnv(name, value)` - Environment variable for this command only.
@@ -830,20 +835,31 @@ Ando.Defer(() =>
 
 ## All Operations
 
-### Ando
-- Directory(path?) - Creates a reference to a directory
-- Root - The root path of the project (where build.csando is located)
+### Globals
+Bare globals, NOT members of the Ando object (write `Env("X")`, never `Ando.Env("X")`). Page: https://andobuild.com/providers/globals.md
+- Root - The root path of the project (where build.csando is located). A BuildPath; use Directory(".") where a DirectoryRef is needed.
 - Temp - Temporary files directory (root/.ando/tmp)
-- Env(name, required?) - Get environment variable. Throws if not set by default. Pass required: false to return null.
+- Directory(path = ".") - Creates a DirectoryRef
+- Env(name, required = true) - Get environment variable. Throws if not set by default. Pass required: false to return null.
+- DefineProfile(name) - Define a build profile; returns a Profile that converts to bool
+- Log.Info(message), Log.Warning(message), Log.Error(message), Log.Debug(message) - Log messages (these are steps and print in step order)
+- The operation objects (Dotnet, Npm, Git, ...) are also globals, listed under Operation Objects above.
+
+### Ando
 - Ando.UseImage(image) - Set the Docker image for the build container
 - Ando.CopyArtifactsToHost(containerPath, hostPath) - Copy files from container to host after build
 - Ando.CopyZippedArtifactsToHost(containerPath, hostPath) - Create archive and copy from container to host. Supports .tar.gz (default) and .zip. If hostPath is a directory, creates artifacts.tar.gz.
-- Ando.Build(directory, options?) - Run a nested build in a subdirectory (new container, isolated context)
+- Ando.Build(directory, options?) - Run a nested build in a subdirectory (new container, isolated context). Its step runs ON THE HOST and starts a separate child `ando` build process, which creates its own container: the exception to "steps run in the container".
 - Ando.Block, Ando.Finally, Ando.Defer, Ando.When, Ando.Require, Ando.Cancelled, Ando.Confirm, Ando.Report, Ando.CommandTimeout, Ando.CopyToContainer, Ando.InvocationRoot, Ando.SourceRoot, Ando.WriteManifest, Ando.ImportArtifacts - Step model, gates and artifact import; see "Step model and deployment gates"
-- Log.Info(message) - Log informational message
-- Log.Warning(message) - Log warning message
-- Log.Error(message) - Log error message
-- Log.Debug(message) - Log debug message
+
+### Tool installation
+Six installers put a tool into the build container (skipped when already present). Page: https://andobuild.com/tools.md
+- Bun.Install(version = "latest", sha256 = null) - see Bun
+- Node.Install(version = "22") - see Node
+- Docker.Install() - see Docker
+- Dotnet.SdkInstall(version = "9.0") - see Dotnet
+- Docfx.Install() - see Docfx
+- Playwright.Install(DirectoryRef directory) - see Playwright
 
 ### Node
 - Node.Install(version?) - Install Node.js globally (default: v22)
@@ -872,7 +888,7 @@ Ando.Defer(() =>
 
 ### Azure
 - Azure.EnsureAuthenticated(clientId?, clientSecret?, tenantId?, requireServicePrincipal?) - Authenticate using best available method. Pass explicit SP credentials to avoid env reliance, and requireServicePrincipal: true (or set ANDO_REQUIRE_SERVICE_PRINCIPAL) to force SP auth and never fall back to an existing az login session. Default unchanged (fallback allowed)
-- Azure.EnsureLoggedIn() - Verify logged in to Azure CLI
+- Azure.EnsureLoggedIn() - DEPRECATED (compile warning): use Azure.EnsureAuthenticated() instead. Verify logged in to Azure CLI
 - Azure.ShowAccount() - Display current account info
 - Azure.LoginWithServicePrincipal(clientId?, secret?, tenantId?) - Login with SP. Credentials reach the container through environment variables, never on the `docker exec` command line; with a client secret, `az login` still receives the secret as an argument inside the container for the few seconds the login runs (visible to host `ps`). If `AZURE_CLIENT_CERTIFICATE_PATH` is set (a PEM file with key and certificate inside the build container, for example after `Ando.CopyToContainer`), the certificate is used instead of the secret (needs an az version with `--certificate`, e.g. 2.67+; the auto-installed az is current). Certificate login is the only way to keep the credential out of every argv
 - Azure.LoginWithManagedIdentity(clientId?) - Login with managed identity
@@ -896,24 +912,32 @@ BicepDeployment objects provide typed access to deployment outputs:
 
 ### Cloudflare
 - Cloudflare.EnsureAuthenticated() - Verify the Cloudflare API token with Cloudflare's token verification endpoint
-- Cloudflare.EnsurePagesProject(projectName) - Verify credentials can read a Pages project
+- Cloudflare.EnsurePagesProject(projectName) - Only VERIFIES that the credentials can read an existing Pages project (creates nothing; fails if the project does not exist). PagesDeploy registers it automatically, so call it yourself only to fail early. To create a project use PagesCreateProject.
 - Cloudflare.PagesDeploy(directory, projectName, options?) - Deploy to Pages; automatically verifies project access first
 - Cloudflare.PagesListProjects() - List all Pages projects
-- Cloudflare.PagesCreateProject(name, branch?) - Create a Pages project
+- Cloudflare.PagesCreateProject(name, branch?) - CREATES a Pages project (first-time setup; PagesDeploy does not create it). To only verify access to an existing project use EnsurePagesProject.
 - Cloudflare.PagesListDeployments(projectName?) - List deployments
 - Cloudflare.PurgeCache(zoneIdOrDomain?) - Purge entire cache
 
 ### Functions
-- Functions.DeployZip(name, zipPath, rg?, options?) - Deploy via zip deploy
-- Functions.Publish(name, projectPath?, options?) - Publish using func CLI
+Functions and AppService have the same operations with the same signatures and behavior (DeployZip, DeployWithSwap, SwapSlots, Restart, Start, Stop, Show, GetHostName, AccessRestrictions, TemporaryAccessRule, ListSlots, CreateSlot, DeleteSlot); only the az subcommand differs. Use Functions for Azure Functions apps (`az functionapp`) and AppService for web apps (`az webapp`); passing the wrong resource type fails. Only here: Functions.Publish (func CLI); AppService.DeployFolder.
+- Functions.DeployZip(name, zipPath, rg?, options?) - Zip deploy: `az functionapp deploy --name N [--resource-group RG] --src-path ZIP --type zip [--slot S] --restart false|true --async false|true [--timeout ms] --output none` (earlier versions used config-zip). Retries transient 5xx/connection errors 3 times; after a timeout it checks `az functionapp log deployment show`. Default timeout 20 minutes. Options: WithDeploymentSlot (--slot), WithNoWait() (--async true), WithRestart() (--restart true; default false because OneDeploy restarts by default), WithTimeout(TimeSpan). Example: `Functions.DeployZip(app, "out/func.zip", rg, o => o.WithDeploymentSlot("release").WithRestart().WithTimeout(TimeSpan.FromMinutes(30)));`
+- Functions.Publish(name, projectPath?, options?) - Publish using the func CLI (`func azure functionapp publish`)
 - Functions.DeployWithSwap(name, zipPath, slot?, rg?) - Deploy then swap
-- Functions.SwapSlots(name, sourceSlot, rg?, targetSlot?) - Swap slots
-- Functions.Restart(name, rg?, slot?) - Restart function app
-- Functions.Start(name, rg?, slot?) - Start function app
-- Functions.Stop(name, rg?, slot?) - Stop function app
-- Functions.Show(name, rg?) - Show function app information
+- Functions.SwapSlots(name, sourceSlot, rg?, targetSlot?) - Swap slots. Returns a CommandStep. Default timeout 30 minutes.
+- Functions.Restart(name, rg?, slot?) - Restart function app. Returns a CommandStep.
+- Functions.Start(name, rg?, slot?) - Start function app. Returns a CommandStep.
+- Functions.Stop(name, rg?, slot?) - Stop function app. Returns a CommandStep.
+- Functions.Show(name, rg = null, slot = null) - Returns a quiet CommandStep with the `az functionapp show` JSON. Read fields with `Json("state")` at execution time.
+- Functions.GetHostName(name, rg = null, slot = null) - Returns a CommandStep whose Value is the default host name (`az functionapp show --query defaultHostName -o tsv`). Example: `var h = Functions.GetHostName(app, rg, "release"); Http.WaitForHealthy(() => $"https://{h.Value}/api/health");`
+- Functions.AccessRestrictions(name, rg = null, slot = null) - Returns a quiet CommandStep with the `az functionapp config access-restriction show` JSON.
+- Functions.TemporaryAccessRule(name, resourceGroup, slot = null, ruleName = "ando-deploy", ip = null, priority = 50) - Adds an Allow rule for one IPv4 address (default: this machine's public IPv4) and removes it in a finally step ("Functions.RemoveAccessRule") when the enclosing block or run ends. Same behavior as AppService.TemporaryAccessRule.
+- Functions.ListSlots(name, rg = null) - List deployment slots
+- Functions.CreateSlot(name, slot, rg = null, configurationSource = null) - Create a slot
+- Functions.DeleteSlot(name, slot, rg = null) - Delete a slot
 
 ### AppService
+Same operations, signatures and behavior as Functions (DeployZip, DeployWithSwap, SwapSlots, Restart, Start, Stop, Show, GetHostName, AccessRestrictions, TemporaryAccessRule, ListSlots, CreateSlot, DeleteSlot); only the az subcommand differs. Use AppService for web apps (`az webapp`) and Functions for Azure Functions apps (`az functionapp`).
 - AppService.DeployZip(name, zipPath, rg?, options?) - Deploy via zip deploy
 - AppService.DeployFolder(name, folderPath, rg?, options?) - Zip a published folder (contents at root) and deploy
 - AppService.DeployWithSwap(name, zipPath, slot?, rg?) - Deploy then swap
@@ -947,7 +971,7 @@ Health check option details: `ConsecutiveSuccesses(n)` needs n passing checks in
 
 ### Docker
 - Docker.Install() - Install Docker CLI in container (required for Docker.Build with --dind). Automatically handled on the CI server; recommended in scripts for portability.
-- Docker.IsAvailable() - Check if Docker CLI and daemon are accessible (returns bool immediately, not a step)
+- Docker.IsAvailable() - EVALUATED WHEN THE SCRIPT LOADS, on the host; not a step (absent from --dry-run, runs before the container exists). Returns a bool: whether the Docker CLI and daemon are accessible.
 - Docker.Build(dockerfile, options?) - Build Docker image using buildx. Supports single or multi-platform builds with optional push to registry. **Recommended**: Use WithPush() for atomic build+push to ensure both version and latest tags point to the same manifest. Auto-handles ghcr.io auth when pushing.
 
 #### GHCR Publishing Rules (Read This First)
@@ -973,7 +997,7 @@ Truth table:
 
 ### Docfx
 - Docfx.Install() - Install DocFX as a dotnet global tool (skips if already installed)
-- Docfx.IsInstalled() - Check if DocFX is installed (returns bool immediately, not a step)
+- Docfx.IsInstalled() - EVALUATED WHEN THE SCRIPT LOADS, on the host; not a step (absent from --dry-run, runs before the container exists). Returns a bool: whether DocFX is installed as a dotnet global tool on the host.
 - Docfx.GenerateDocs(configPath?) - Generate API documentation from docfx.json (runs metadata + build)
 - Docfx.CopyToDirectory(sourceDir, targetDir) - Copy generated docs to target directory
 - Docfx.BuildAndCopy(configPath, outputDir, targetDir) - Generate docs, copy, and cleanup in one step
@@ -998,18 +1022,25 @@ To run the suite once per database, give each variant an npm script that sets an
 
 ### Git
 - Git.Tag(tagName, options?) - Create a git tag (annotated by default)
-- Git.Push(options?) - Push current branch to remote
-- Git.PushTags(remote?) - Push tags to remote, skipping tags that already exist remotely (default: origin). Tags are pushed individually.
-- Git.Commit - Full SHA of the commit being built (HEAD, or the commit given with `--ref`). Property, evaluation time.
-- Git.ShortCommit - Short SHA of the commit being built. Property, evaluation time.
-- Git.RequireClean(params string[] paths) - Throws before any step runs if tracked files are modified, staged or deleted, or non-ignored untracked files exist, under the paths (whole repository if none). Always passes with `--ref`. `.ando/runs/` is ignored, so run records never trip it.
-- Git.ChangedSince(sinceRef, params string[] paths) - True if any file under the paths differs between sinceRef and the commit being built (committed changes only). Evaluation time.
-- Git.LastTag(pattern = "*") - Most recent tag reachable from the commit being built that matches the glob (for example `"v*"`), or null. Evaluation time.
+- Git.Push(options?) - Push the current branch to the remote. Does not push tags (use Git.PushTags).
+- Git.PushTags(remote?) - Push tags (not the branch; use Git.Push) to the remote, skipping tags that already exist remotely (default: origin). Tags are pushed individually.
+
+Evaluated when the script loads (on the host, NOT steps; absent from --dry-run, they run before the container exists and do not see changes made by earlier steps):
+- Git.Commit - Full SHA of the commit being built (HEAD, or the commit given with `--ref`). Property. Step-based counterpart: Git.RevParse.
+- Git.ShortCommit - Short SHA of the commit being built. Property. Step-based counterpart: Git.RevParse(shortSha: true).
+- Git.RequireClean(params string[] paths) - Also evaluated at script load. Throws before any step runs if tracked files are modified, staged or deleted, or non-ignored untracked files exist, under the paths (whole repository if none). Always passes with `--ref`. `.ando/runs/` is ignored, so run records never trip it.
+- Git.ChangedSince(sinceRef, params string[] paths) - True if any file under the paths differs between sinceRef and the commit being built (committed changes only). Step-based counterpart: Git.ChangedFiles.
+- Git.LastTag(pattern = "*") - Most recent tag reachable from the commit being built that matches the glob (for example `"v*"`), or null. Step-based counterpart: Git.LatestTag.
 
 Git.Commit, ShortCommit, RequireClean, ChangedSince and LastTag run git on the host while the script is evaluated, so their values can be used directly in `if` and string interpolation.
 
+Step variants (these ARE steps: they run on the host in the source root, the --ref worktree when set, in order with the other steps like Git.Tag/Git.Push, and appear in --dry-run). Each returns a CommandStep whose Value is the trimmed stdout; read it at execution time (Ando.When, Ando.Defer, Ando.Report, Func<> overloads), not at the top level of the script:
+- Git.RevParse(string rev = "HEAD", bool shortSha = false) - Step "Git.RevParse": `git rev-parse [--short] <rev>`. Example: `var sha = Git.RevParse(shortSha: true);` Eager counterparts: Git.Commit, Git.ShortCommit.
+- Git.LatestTag(string pattern = "*") - Step "Git.LatestTag": `git describe --tags --abbrev=0 --match <pattern> HEAD`. If no tag matches, Value is empty and the build continues (allowed failure). Example: `var t = Git.LatestTag("v*");` Eager counterpart: Git.LastTag.
+- Git.ChangedFiles(string sinceRef, params string[] paths) - Step "Git.ChangedFiles": `git diff --name-only <sinceRef> HEAD -- <paths>`. Value is a newline-separated list, empty when nothing changed; an unknown ref fails the step. Example: `var c = Git.ChangedFiles(t.Value, "src/Worker"); Ando.When(() => c.Value != "", () => Log.Info("Worker changed"));` Eager counterpart: Git.ChangedSince.
+
 ### Shell
-- Shell.Run(command, params string[] args) - Run a command in the build container. Arguments are passed as a list, with no shell parsing. Fails on non-zero exit unless `AllowFailure()`. Returns a CommandStep.
+- Shell.Run(command, params string[] args) - Escape hatch for one-off commands that have no ANDO operation; prefer a first-party operation when one exists. Run a command in the build container. Arguments are passed as a list, with no shell parsing. Fails on non-zero exit unless `AllowFailure()`. Returns a CommandStep.
 - Shell.Bash(script) - Run a script with `bash -euo pipefail -c` in the build container (pipes, redirection, sourcing). Returns a CommandStep.
 
 Note: hook scripts have a different `Shell` global (`Shell.RunAsync`). The `Shell.Run` and `Shell.Bash` described here are for build.csando.
@@ -1145,10 +1176,16 @@ Note: Annotated tags require a git identity (user.name/user.email). The ANDO CI 
 
 AppService.DeployZip is resilient to flaky Azure uploads: if the deploy command times out it reconciles against the latest Kudu deployment status (treating a completed deployment as success), and it retries transient failures (5xx, Service Unavailable, connection resets) with backoff up to 3 attempts within the WithTimeout budget.
 
-### Functions.DeployZip / Publish Options
-- WithDeploymentSlot(string) - Deploy to specific slot
+### Functions.DeployZip Options
+- WithDeploymentSlot(string) - Deploy to specific slot (--slot)
+- WithNoWait() - Don't wait for completion (--async true)
+- WithRestart() - Restart after deploy (--restart true; default --restart false)
+- WithTimeout(TimeSpan) - Maximum wait before reconciling and retrying; passed to az as --timeout (default 20 minutes)
+
+### Functions.Publish Options
+- WithDeploymentSlot(string) - Publish to specific slot
 - WithConfiguration(string) - Build configuration
-- WithForceRestart() - Force restart after deployment
+- WithForceRestart() - Force restart after publishing
 - WithNoWait() - Don't wait for completion
 
 ### Ando.Build Options
@@ -1208,6 +1245,7 @@ All pages are available in markdown format for LLM consumption:
 - https://andobuild.com/index.md - Homepage and overview
 - https://andobuild.com/about.md - About ANDO
 - https://andobuild.com/cli.md - CLI reference
+- https://andobuild.com/tools.md - Tool installation: Bun, Node.js, Docker, .NET SDK, DocFX and Playwright installers
 - https://andobuild.com/hooks.md - Pre-build and post-build hooks
 - https://andobuild.com/llm-prompt.md - LLM prompt for adding ANDO to projects
 - https://andobuild.com/skills.md - Downloadable quick-start skill file for LLMs
@@ -1217,7 +1255,7 @@ All pages are available in markdown format for LLM consumption:
 - https://andobuild.com/license.md - License information
 
 ### Provider Documentation
-- https://andobuild.com/providers/ando.md - Core operations (Log, Artifacts, step model: Block, Finally, Defer, When, Require, Confirm, Report)
+- https://andobuild.com/providers/ando.md - The Ando object: build configuration, artifacts, nested builds, step model (Block, Finally, Defer, When, Require, Confirm, Report)
 - https://andobuild.com/providers/appservice.md - Azure App Service deployments
 - https://andobuild.com/providers/azure.md - Azure CLI authentication and az commands
 - https://andobuild.com/providers/bicep.md - Azure Bicep deployments
@@ -1228,6 +1266,7 @@ All pages are available in markdown format for LLM consumption:
 - https://andobuild.com/providers/dotnet.md - .NET build, test, publish
 - https://andobuild.com/providers/ef.md - Entity Framework Core migrations
 - https://andobuild.com/providers/functions.md - Azure Functions deployments
+- https://andobuild.com/providers/globals.md - Bare globals: Root, Temp, Env, Directory, DefineProfile, Log
 - https://andobuild.com/providers/git.md - Git version control operations
 - https://andobuild.com/providers/github.md - GitHub releases and container registry
 - https://andobuild.com/providers/http.md - HTTP health-check gating (wait for an endpoint to be healthy)

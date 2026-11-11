@@ -343,7 +343,7 @@ Project settings can lower or raise an individual project's timeout within the s
 
 ### Docker-in-Docker Builds
 
-When a build requires DIND mode (e.g., `Docker.Build`, `Docker.Push`), the server automatically installs the Docker CLI inside the build container if it is not already present. This supports Alpine and Debian/Ubuntu-based images. You do not need to call `Docker.Install()` in your build script when running on the CI server — though it is harmless to include.
+When a build requires DIND mode (e.g., `Docker.Build`), the server automatically installs the Docker CLI inside the build container if it is not already present. This supports Alpine and Debian/Ubuntu-based images. You do not need to call `Docker.Install()` in your build script when running on the CI server — though it is harmless to include.
 
 ### Git Identity in Build Containers
 

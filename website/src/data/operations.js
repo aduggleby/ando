@@ -23,23 +23,23 @@ export function getSourceUrl(sourceFile) {
 }
 
 export const operations = [
-  // Top-level operations (globals available in build.csando)
+  // Globals available in build.csando (bare names, not members of the Ando object; see providers/globals.md)
   {
-    group: "Ando",
+    group: "Globals",
     name: "Root",
     desc: 'The root path of the project (where build.csando is located). Returns <code>BuildPath</code>, not <code>DirectoryRef</code>. Use for path construction and string arguments. For operations requiring <code>DirectoryRef</code> (Npm, Cloudflare, etc.), use <code>Directory(".")</code> instead. Supports path combining with the <code>/</code> operator.',
     examples: ['var output = Root / "dist";', "Dotnet.Publish(app, o => o.Output(output));"],
     sourceFile: "Scripting/ScriptGlobals.cs",
   },
   {
-    group: "Ando",
+    group: "Globals",
     name: "Temp",
     desc: "Temporary files directory (root/.ando/tmp). Supports path combining with the `/` operator. Use for caches, intermediate files, etc.",
     examples: ['var cache = Temp / "cache";', 'var intermediate = Temp / "build-output";'],
     sourceFile: "Scripting/ScriptGlobals.cs",
   },
   {
-    group: "Ando",
+    group: "Globals",
     name: "Env",
     desc: "Gets an environment variable. <strong>Global function</strong> — call as <code>Env()</code>, not <code>Ando.Env()</code>. By default throws if not set. Pass <code>required: false</code> to return null. The second parameter is a <code>bool</code>, not a default value — use null-coalescing (<code>??</code>) for defaults.",
     examples: [
@@ -50,7 +50,7 @@ export const operations = [
     sourceFile: "Scripting/ScriptGlobals.cs",
   },
   {
-    group: "Ando",
+    group: "Globals",
     name: "Directory",
     desc: 'Creates a <code>DirectoryRef</code> — required by operations that need a working directory (Npm, Cloudflare, Playwright, Ando.Build). <strong>Global function</strong> — call as <code>Directory()</code>. Note: <code>Root</code> returns <code>BuildPath</code>, not <code>DirectoryRef</code>. Use <code>Directory(".")</code> when an operation needs a reference to the project root. Supports path combining with the <code>/</code> operator.',
     examples: [
@@ -63,7 +63,7 @@ export const operations = [
   },
   // DefineProfile (before Ando.* operations)
   {
-    group: "Ando",
+    group: "Globals",
     name: "DefineProfile",
     desc: "Defines a build profile that can be activated via CLI. Takes a <strong>single argument</strong> (the profile name). Returns a <code>Profile</code> object with implicit <code>bool</code> conversion — use directly in <code>if</code> statements. There is no <code>HasProfile()</code> or <code>Profile()</code> function. Use <code>-p</code> or <code>--profile</code> CLI flag to activate.",
     examples: [
@@ -104,8 +104,8 @@ export const operations = [
   },
   {
     group: "Ando",
-    name: "Build",
-    desc: "Run a nested build script. Accepts a directory (runs build.csando in that directory) or a specific .csando file path. The child build runs in its own isolated container with its own environment file (`.env.ando` or `.env`) and context.",
+    name: "Ando.Build",
+    desc: 'Run a nested build script. Accepts a directory (runs build.csando in that directory) or a specific .csando file path. The child build runs in its own isolated container with its own environment file (`.env.ando` or `.env`) and context. <strong>Runs on the host, not in the container:</strong> this step starts a separate child <code>ando</code> build process, which creates its own container. It is the exception to "steps run in the container".',
     examples: [
       'Ando.Build(Directory("./website"));',
       'Ando.Build(Directory("./website") / "deploy.csando");',
@@ -222,7 +222,7 @@ export const operations = [
   },
   // Log operation (top-level with methods)
   {
-    group: "Ando",
+    group: "Globals",
     name: "Log",
     desc: "Logging operations for outputting messages during the build. Has four methods: `Log.Info()` (visible at Normal verbosity), `Log.Warning()` (visible at Minimal+), `Log.Error()` (always visible), and `Log.Debug()` (only at Detailed verbosity).",
     examples: [
@@ -392,8 +392,8 @@ export const operations = [
   {
     group: "Azure",
     name: "Azure.EnsureLoggedIn",
-    desc: "Verify the user is logged in to Azure CLI. Fails if not authenticated.",
-    examples: ["Azure.EnsureLoggedIn();"],
+    desc: "<strong>Deprecated</strong> (compile warning): use <code>Azure.EnsureAuthenticated()</code> instead. Verify the user is logged in to Azure CLI. Fails if not authenticated.",
+    examples: ["// Deprecated, use Azure.EnsureAuthenticated()\nAzure.EnsureLoggedIn();"],
     sourceFile: "Operations/AzureOperations.cs",
   },
   {
@@ -505,7 +505,7 @@ export const operations = [
   {
     group: "Cloudflare",
     name: "Cloudflare.EnsurePagesProject",
-    desc: "Verify that the current Cloudflare credentials can read a specific Pages project. `PagesDeploy()` registers this check automatically before deploying.",
+    desc: 'Verify that the current Cloudflare credentials can read a specific Pages project. It only checks; it never creates anything and fails if the project does not exist. <code>PagesDeploy()</code> registers this check automatically before deploying, so call it yourself only to fail early. To create a project use <a href="/providers/cloudflare#pagescreateproject"><code>PagesCreateProject</code></a>.',
     examples: ['Cloudflare.EnsurePagesProject("my-site");'],
     sourceFile: "Operations/CloudflareOperations.cs",
   },
@@ -530,7 +530,7 @@ export const operations = [
   {
     group: "Cloudflare",
     name: "Cloudflare.PagesCreateProject",
-    desc: "Create a new Cloudflare Pages project.",
+    desc: 'Create a new Cloudflare Pages project. Use it for first-time setup; <code>PagesDeploy()</code> does not create the project. To only verify that credentials can read an existing project, use <a href="/providers/cloudflare#ensurepagesproject"><code>EnsurePagesProject</code></a>.',
     examples: ['Cloudflare.PagesCreateProject("my-site");', 'Cloudflare.PagesCreateProject("my-site", "develop");'],
     sourceFile: "Operations/CloudflareOperations.cs",
   },
@@ -558,17 +558,17 @@ export const operations = [
   {
     group: "Functions",
     name: "Functions.DeployZip",
-    desc: "Deploy a function app using zip deploy.",
+    desc: 'Deploy a function app with zip deploy: <code>az functionapp deploy --name N [--resource-group RG] --src-path ZIP --type zip [--slot S] --restart false|true --async false|true [--timeout ms] --output none</code>. The app must already exist. Without <code>WithRestart()</code> ANDO passes <code>--restart false</code> (OneDeploy restarts by default, which could start a stopped slot). Transient 5xx and connection errors are retried 3 times; after a timeout ANDO checks <code>az functionapp log deployment show</code>. Default timeout 20 minutes. Options: <code>WithDeploymentSlot</code> (<code>--slot</code>), <code>WithNoWait()</code> (<code>--async true</code>), <code>WithRestart()</code> (<code>--restart true</code>), <code>WithTimeout(TimeSpan)</code>. Same name as <a href="/providers/appservice#deployzip"><code>AppService.DeployZip</code></a>: same behavior, only the az subcommand differs (<code>az functionapp</code> here, <code>az webapp</code> there).',
     examples: [
       'Functions.DeployZip("my-func", "./publish.zip");',
-      'Functions.DeployZip("my-func", "./publish.zip", "my-rg", o => o\n  .WithDeploymentSlot("staging"));',
+      'Functions.DeployZip(app, "out/func.zip", rg, o => o\n  .WithDeploymentSlot("release")\n  .WithRestart()\n  .WithTimeout(TimeSpan.FromMinutes(30)));',
     ],
     sourceFile: "Operations/FunctionsOperations.cs",
   },
   {
     group: "Functions",
     name: "Functions.Publish",
-    desc: "Publish using Azure Functions Core Tools.",
+    desc: "Publish using Azure Functions Core Tools (<code>func azure functionapp publish</code>). The <code>func</code> CLI must be available. AppService has no equivalent; use <code>AppService.DeployFolder</code> there.",
     examples: [
       'Functions.Publish("my-func");',
       'Functions.Publish("my-func", "./src/MyFunc", o => o\n  .WithDeploymentSlot("staging")\n  .WithConfiguration("Release"));',
@@ -578,7 +578,7 @@ export const operations = [
   {
     group: "Functions",
     name: "Functions.DeployWithSwap",
-    desc: "Deploy to a slot then swap to production (zero-downtime).",
+    desc: 'Deploy to a slot then swap to production (zero-downtime). Same name as <a href="/providers/appservice#deploywithswap"><code>AppService.DeployWithSwap</code></a>: same behavior, only the az subcommand differs (<code>az functionapp</code> here, <code>az webapp</code> there).',
     examples: [
       'Functions.DeployWithSwap("my-func", "./publish.zip");',
       'Functions.DeployWithSwap("my-func", "./publish.zip", "staging", "my-rg");',
@@ -588,7 +588,7 @@ export const operations = [
   {
     group: "Functions",
     name: "Functions.SwapSlots",
-    desc: "Swap deployment slots.",
+    desc: 'Swap deployment slots. Returns a <code>CommandStep</code> (chain <code>.WithTimeout(...)</code>). The default timeout is 30 minutes, or <code>Ando.CommandTimeout</code> when that is longer; an explicit <code>.WithTimeout</code> always wins. Same name as <a href="/providers/appservice#swapslots"><code>AppService.SwapSlots</code></a>: same behavior, only the az subcommand differs (<code>az functionapp</code> here, <code>az webapp</code> there).',
     examples: [
       'Functions.SwapSlots("my-func", "staging");',
       'Functions.SwapSlots("my-func", "staging", "my-rg", "production");',
@@ -598,35 +598,88 @@ export const operations = [
   {
     group: "Functions",
     name: "Functions.Restart",
-    desc: "Restart a function app.",
+    desc: 'Restart a function app. Returns a <code>CommandStep</code>. Same name as <a href="/providers/appservice#restart"><code>AppService.Restart</code></a>: same behavior, only the az subcommand differs (<code>az functionapp</code> here, <code>az webapp</code> there).',
     examples: ['Functions.Restart("my-func");', 'Functions.Restart("my-func", "my-rg", "staging");'],
     sourceFile: "Operations/FunctionsOperations.cs",
   },
   {
     group: "Functions",
     name: "Functions.Show",
-    desc: "Show function app information (<code>az functionapp show</code>).",
-    examples: ['Functions.Show("my-func");', 'Functions.Show("my-func", "my-rg");'],
+    desc: "Reads the function app's (or slot's) <code>az functionapp show</code> JSON. Returns a <code>CommandStep</code>; the output is quiet. Read fields at execution time with <code>Json(path)</code>. Signature: <code>Show(name, rg = null, slot = null)</code>. Same name as <a href=\"/providers/appservice#show\"><code>AppService.Show</code></a>: same behavior, only the az subcommand differs (<code>az functionapp</code> here, <code>az webapp</code> there).",
+    examples: [
+      'var show = Functions.Show("my-func", "my-rg", "release");\nAndo.Require(() => show.Json("state") == "Running", "Slot is not running");',
+    ],
     sourceFile: "Operations/FunctionsOperations.cs",
   },
   {
     group: "Functions",
     name: "Functions.Start",
-    desc: "Start a function app.",
+    desc: 'Start a function app. Returns a <code>CommandStep</code>. Same name as <a href="/providers/appservice#start"><code>AppService.Start</code></a>: same behavior, only the az subcommand differs (<code>az functionapp</code> here, <code>az webapp</code> there).',
     examples: ['Functions.Start("my-func");', 'Functions.Start("my-func", slot: "staging");'],
     sourceFile: "Operations/FunctionsOperations.cs",
   },
   {
     group: "Functions",
     name: "Functions.Stop",
-    desc: "Stop a function app.",
-    examples: ['Functions.Stop("my-func");', 'Functions.Stop("my-func", slot: "staging");'],
+    desc: 'Stop a function app. Returns a <code>CommandStep</code>. Same name as <a href="/providers/appservice#stop"><code>AppService.Stop</code></a>: same behavior, only the az subcommand differs (<code>az functionapp</code> here, <code>az webapp</code> there).',
+    examples: ['Functions.Stop("my-func");', 'Functions.Stop("my-func", "my-rg", "release");'],
+    sourceFile: "Operations/FunctionsOperations.cs",
+  },
+  {
+    group: "Functions",
+    name: "Functions.GetHostName",
+    desc: "Reads the app's (or slot's) default host name with <code>az functionapp show --query defaultHostName -o tsv</code>. Returns a <code>CommandStep</code>. Signature: <code>GetHostName(name, rg = null, slot = null)</code>. Same name as <a href=\"/providers/appservice#gethostname\"><code>AppService.GetHostName</code></a>: same behavior, only the az subcommand differs (<code>az functionapp</code> here, <code>az webapp</code> there).",
+    examples: [
+      'var h = Functions.GetHostName(app, rg, "release");\nHttp.WaitForHealthy(() => $"https://{h.Value}/api/health");',
+    ],
+    sourceFile: "Operations/FunctionsOperations.cs",
+  },
+  {
+    group: "Functions",
+    name: "Functions.AccessRestrictions",
+    desc: "Reads the app's (or slot's) access restrictions (<code>az functionapp config access-restriction show</code>). Returns a quiet <code>CommandStep</code> with JSON. Signature: <code>AccessRestrictions(name, rg = null, slot = null)</code>. Same name as <a href=\"/providers/appservice#accessrestrictions\"><code>AppService.AccessRestrictions</code></a>: same behavior, only the az subcommand differs (<code>az functionapp</code> here, <code>az webapp</code> there).",
+    examples: [
+      'var rules = Functions.AccessRestrictions("my-func", "my-rg", "release");\nAndo.When(() => rules.Json("ipSecurityRestrictionsDefaultAction") == "Deny", () => Log.Info("restricted"));',
+    ],
+    sourceFile: "Operations/FunctionsOperations.cs",
+  },
+  {
+    group: "Functions",
+    name: "Functions.TemporaryAccessRule",
+    desc: 'Adds an Allow access rule for one IPv4 address to the function app or slot and removes it again when the enclosing block (or the run) ends, whatever happened. The removal is a finally step (<code>Functions.RemoveAccessRule</code>), followed by a check that the rule is gone. A rule with the same name is replaced. Without <code>ip</code>, uses this machine\'s public IPv4; a bare address gets <code>/32</code>. Signature: <code>TemporaryAccessRule(name, resourceGroup, slot = null, ruleName = "ando-deploy", ip = null, priority = 50)</code>. Call it directly in the <code>Ando.Block</code> that needs it: inside <code>Ando.When</code> or <code>Ando.Defer</code> the rule is removed when that body ends. Same name as <a href="/providers/appservice#temporaryaccessrule"><code>AppService.TemporaryAccessRule</code></a>: same behavior, only the az subcommand differs (<code>az functionapp</code> here, <code>az webapp</code> there).',
+    examples: [
+      'Ando.Block("deploy", () =>\n{\n  Functions.TemporaryAccessRule("my-func", "my-rg", "release", "deploy-gate");\n  Functions.DeployZip("my-func", "out/func.zip", "my-rg", o => o.WithDeploymentSlot("release"));\n});',
+    ],
+    sourceFile: "Operations/FunctionsOperations.cs",
+  },
+  {
+    group: "Functions",
+    name: "Functions.ListSlots",
+    desc: 'List deployment slots for a function app. Signature: <code>ListSlots(name, rg = null)</code>. Same name as <a href="/providers/appservice#listslots"><code>AppService.ListSlots</code></a>: same behavior, only the az subcommand differs (<code>az functionapp</code> here, <code>az webapp</code> there).',
+    examples: ['Functions.ListSlots("my-func");', 'Functions.ListSlots("my-func", "my-rg");'],
+    sourceFile: "Operations/FunctionsOperations.cs",
+  },
+  {
+    group: "Functions",
+    name: "Functions.CreateSlot",
+    desc: 'Create a deployment slot, optionally cloning configuration from another slot. Signature: <code>CreateSlot(name, slot, rg = null, configurationSource = null)</code>. Same name as <a href="/providers/appservice#createslot"><code>AppService.CreateSlot</code></a>: same behavior, only the az subcommand differs (<code>az functionapp</code> here, <code>az webapp</code> there).',
+    examples: [
+      'Functions.CreateSlot("my-func", "staging");',
+      'Functions.CreateSlot("my-func", "staging", "my-rg", "production");',
+    ],
+    sourceFile: "Operations/FunctionsOperations.cs",
+  },
+  {
+    group: "Functions",
+    name: "Functions.DeleteSlot",
+    desc: 'Delete a deployment slot. Signature: <code>DeleteSlot(name, slot, rg = null)</code>. Same name as <a href="/providers/appservice#deleteslot"><code>AppService.DeleteSlot</code></a>: same behavior, only the az subcommand differs (<code>az functionapp</code> here, <code>az webapp</code> there).',
+    examples: ['Functions.DeleteSlot("my-func", "staging");', 'Functions.DeleteSlot("my-func", "staging", "my-rg");'],
     sourceFile: "Operations/FunctionsOperations.cs",
   },
   {
     group: "AppService",
     name: "AppService.DeployZip",
-    desc: "Deploy an app service using zip deploy.",
+    desc: 'Deploy an app service using zip deploy. Same name as <a href=\"/providers/functions#deployzip\"><code>Functions.DeployZip</code></a>: same behavior, only the az subcommand differs (<code>az webapp</code> here, <code>az functionapp</code> there).',
     examples: [
       'AppService.DeployZip("my-app", "./publish.zip");',
       'AppService.DeployZip("my-app", "./publish.zip", "my-rg", o => o\n  .WithDeploymentSlot("staging"));',
@@ -646,7 +699,7 @@ export const operations = [
   {
     group: "AppService",
     name: "AppService.DeployWithSwap",
-    desc: "Deploy to a slot then swap to production (zero-downtime).",
+    desc: 'Deploy to a slot then swap to production (zero-downtime). Same name as <a href=\"/providers/functions#deploywithswap\"><code>Functions.DeployWithSwap</code></a>: same behavior, only the az subcommand differs (<code>az webapp</code> here, <code>az functionapp</code> there).',
     examples: [
       'AppService.DeployWithSwap("my-app", "./publish.zip");',
       'AppService.DeployWithSwap("my-app", "./publish.zip", "staging", "my-rg");',
@@ -656,7 +709,7 @@ export const operations = [
   {
     group: "AppService",
     name: "AppService.SwapSlots",
-    desc: "Swap deployment slots. Returns a <code>CommandStep</code> (chain <code>.WithTimeout(...)</code>). The default timeout is 30 minutes, or <code>Ando.CommandTimeout</code> when that is longer; an explicit <code>.WithTimeout</code> always wins.",
+    desc: 'Swap deployment slots. Returns a <code>CommandStep</code> (chain <code>.WithTimeout(...)</code>). The default timeout is 30 minutes, or <code>Ando.CommandTimeout</code> when that is longer; an explicit <code>.WithTimeout</code> always wins. Same name as <a href=\"/providers/functions#swapslots\"><code>Functions.SwapSlots</code></a>: same behavior, only the az subcommand differs (<code>az webapp</code> here, <code>az functionapp</code> there).',
     examples: [
       'AppService.SwapSlots("my-app", "staging");',
       'AppService.SwapSlots("my-app", "staging", "my-rg", "production");',
@@ -667,7 +720,7 @@ export const operations = [
   {
     group: "AppService",
     name: "AppService.CreateSlot",
-    desc: "Create a new deployment slot.",
+    desc: 'Create a new deployment slot. Same name as <a href="/providers/functions#createslot"><code>Functions.CreateSlot</code></a>: same behavior, only the az subcommand differs (<code>az webapp</code> here, <code>az functionapp</code> there).',
     examples: [
       'AppService.CreateSlot("my-app", "staging");',
       'AppService.CreateSlot("my-app", "staging", "my-rg", "production");',
@@ -677,42 +730,42 @@ export const operations = [
   {
     group: "AppService",
     name: "AppService.DeleteSlot",
-    desc: "Delete a deployment slot.",
+    desc: 'Delete a deployment slot. Same name as <a href="/providers/functions#deleteslot"><code>Functions.DeleteSlot</code></a>: same behavior, only the az subcommand differs (<code>az webapp</code> here, <code>az functionapp</code> there).',
     examples: ['AppService.DeleteSlot("my-app", "staging");', 'AppService.DeleteSlot("my-app", "staging", "my-rg");'],
     sourceFile: "Operations/AppServiceOperations.cs",
   },
   {
     group: "AppService",
     name: "AppService.ListSlots",
-    desc: "List deployment slots for an app service.",
+    desc: 'List deployment slots for an app service. Same name as <a href="/providers/functions#listslots"><code>Functions.ListSlots</code></a>: same behavior, only the az subcommand differs (<code>az webapp</code> here, <code>az functionapp</code> there).',
     examples: ['AppService.ListSlots("my-app");', 'AppService.ListSlots("my-app", "my-rg");'],
     sourceFile: "Operations/AppServiceOperations.cs",
   },
   {
     group: "AppService",
     name: "AppService.Restart",
-    desc: "Restart an app service. Returns a <code>CommandStep</code>.",
+    desc: 'Restart an app service. Returns a <code>CommandStep</code>. Same name as <a href=\"/providers/functions#restart\"><code>Functions.Restart</code></a>: same behavior, only the az subcommand differs (<code>az webapp</code> here, <code>az functionapp</code> there).',
     examples: ['AppService.Restart("my-app");', 'AppService.Restart("my-app", "my-rg", "staging");'],
     sourceFile: "Operations/AppServiceOperations.cs",
   },
   {
     group: "AppService",
     name: "AppService.Start",
-    desc: "Start an app service. Returns a <code>CommandStep</code>.",
+    desc: 'Start an app service. Returns a <code>CommandStep</code>. Same name as <a href=\"/providers/functions#start\"><code>Functions.Start</code></a>: same behavior, only the az subcommand differs (<code>az webapp</code> here, <code>az functionapp</code> there).',
     examples: ['AppService.Start("my-app");', 'AppService.Start("my-app", slot: "staging");'],
     sourceFile: "Operations/AppServiceOperations.cs",
   },
   {
     group: "AppService",
     name: "AppService.Stop",
-    desc: "Stop an app service. Returns a <code>CommandStep</code>.",
+    desc: 'Stop an app service. Returns a <code>CommandStep</code>. Same name as <a href=\"/providers/functions#stop\"><code>Functions.Stop</code></a>: same behavior, only the az subcommand differs (<code>az webapp</code> here, <code>az functionapp</code> there).',
     examples: ['AppService.Stop("my-app");', 'AppService.Stop("my-app", slot: "staging");'],
     sourceFile: "Operations/AppServiceOperations.cs",
   },
   {
     group: "AppService",
     name: "AppService.Show",
-    desc: "Reads the app's (or slot's) <code>az webapp show</code> JSON. Returns a <code>CommandStep</code>; the output is quiet. Read fields at execution time with <code>Json(path)</code>.",
+    desc: "Reads the app's (or slot's) <code>az webapp show</code> JSON. Returns a <code>CommandStep</code>; the output is quiet. Read fields at execution time with <code>Json(path)</code>. Same name as <a href=\"/providers/functions#show\"><code>Functions.Show</code></a>: same behavior, only the az subcommand differs (<code>az webapp</code> here, <code>az functionapp</code> there).",
     examples: [
       'var show = AppService.Show("my-app", "my-rg", "release");\nAndo.Require(() => show.Json("state") == "Running", "Slot is not running");',
     ],
@@ -721,7 +774,7 @@ export const operations = [
   {
     group: "AppService",
     name: "AppService.GetHostName",
-    desc: "Reads the app's (or slot's) default host name, for example <code>myapp-release.azurewebsites.net</code>. Returns a <code>CommandStep</code>.",
+    desc: "Reads the app's (or slot's) default host name, for example <code>myapp-release.azurewebsites.net</code>. Returns a <code>CommandStep</code>. Same name as <a href=\"/providers/functions#gethostname\"><code>Functions.GetHostName</code></a>: same behavior, only the az subcommand differs (<code>az webapp</code> here, <code>az functionapp</code> there).",
     examples: [
       'var host = AppService.GetHostName("my-app", "my-rg", "release");\nHttp.WaitForHealthy(() => $"https://{host.Value}/healthz");',
     ],
@@ -730,7 +783,7 @@ export const operations = [
   {
     group: "AppService",
     name: "AppService.AccessRestrictions",
-    desc: "Reads the app's (or slot's) access restrictions (<code>az webapp config access-restriction show</code>). Returns a quiet <code>CommandStep</code> with JSON.",
+    desc: "Reads the app's (or slot's) access restrictions (<code>az webapp config access-restriction show</code>). Returns a quiet <code>CommandStep</code> with JSON. Same name as <a href=\"/providers/functions#accessrestrictions\"><code>Functions.AccessRestrictions</code></a>: same behavior, only the az subcommand differs (<code>az webapp</code> here, <code>az functionapp</code> there).",
     examples: [
       'var rules = AppService.AccessRestrictions("my-app", "my-rg", "release");\nAndo.When(() => rules.Json("ipSecurityRestrictionsDefaultAction") == "Deny", () => Log.Info("restricted"));',
     ],
@@ -739,7 +792,7 @@ export const operations = [
   {
     group: "AppService",
     name: "AppService.TemporaryAccessRule",
-    desc: 'Adds an Allow access rule for one IPv4 address to the app or slot and removes it again when the enclosing block (or the run) ends, whatever happened. The removal is a finally step, followed by a check that the rule is gone. A rule with the same name is replaced. Without <code>ip</code>, uses this machine\'s public IPv4; a bare address gets <code>/32</code>. Signature: <code>TemporaryAccessRule(appName, resourceGroup, slot = null, ruleName = "ando-deploy", ip = null, priority = 50)</code>. Call it directly in the <code>Ando.Block</code> that needs it: inside <code>Ando.When</code> or <code>Ando.Defer</code> the rule is removed when that body ends.',
+    desc: 'Adds an Allow access rule for one IPv4 address to the app or slot and removes it again when the enclosing block (or the run) ends, whatever happened. The removal is a finally step, followed by a check that the rule is gone. A rule with the same name is replaced. Without <code>ip</code>, uses this machine\'s public IPv4; a bare address gets <code>/32</code>. Signature: <code>TemporaryAccessRule(appName, resourceGroup, slot = null, ruleName = "ando-deploy", ip = null, priority = 50)</code>. Call it directly in the <code>Ando.Block</code> that needs it: inside <code>Ando.When</code> or <code>Ando.Defer</code> the rule is removed when that body ends. Same name as <a href="/providers/functions#temporaryaccessrule"><code>Functions.TemporaryAccessRule</code></a>: same behavior, only the az subcommand differs (<code>az webapp</code> here, <code>az functionapp</code> there).',
     examples: [
       'Ando.Block("deploy", () =>\n{\n  AppService.TemporaryAccessRule("my-app", "my-rg", "release", "deploy-gate");\n  AppService.DeployFolder("my-app", "dist/api", "my-rg", o => o.WithDeploymentSlot("release"));\n});',
     ],
@@ -816,28 +869,28 @@ export const operations = [
   {
     group: "Git",
     name: "Git.Push",
-    desc: "Pushes the current branch to the remote repository. <strong>Runs on host</strong> (not in container).",
+    desc: 'Pushes the current branch to the remote repository; it does not push tags (use <a href="/providers/git#pushtags"><code>Git.PushTags</code></a> for that). <strong>Runs on host</strong> (not in container).',
     examples: ["Git.Push();", 'Git.Push(o => o.ToRemote("upstream"));', "Git.Push(o => o.WithUpstream()); // -u flag"],
     sourceFile: "Operations/GitOperations.cs",
   },
   {
     group: "Git",
     name: "Git.PushTags",
-    desc: "Pushes tags to the remote repository, skipping tags that already exist on the remote. Tags are pushed individually for safety. <strong>Runs on host</strong> (not in container).",
+    desc: 'Pushes tags (not the branch; use <a href="/providers/git#push"><code>Git.Push</code></a> for the current branch) to the remote repository, skipping tags that already exist on the remote. Tags are pushed individually for safety. <strong>Runs on host</strong> (not in container).',
     examples: ["Git.PushTags();", 'Git.PushTags("upstream");'],
     sourceFile: "Operations/GitOperations.cs",
   },
   {
     group: "Git",
     name: "Git.Commit",
-    desc: "Full SHA of the commit being built: HEAD, or the commit given with <code>ando run --ref</code>. A property read while the script is evaluated. <strong>Runs on host</strong>.",
+    desc: '<strong>Evaluated when the script loads, on the host.</strong> It is not a step: it does not appear in <code>--dry-run</code> and runs before the container exists. Full SHA of the commit being built: HEAD, or the commit given with <code>ando run --ref</code>. Property (not a method). For a step that runs in order with the other steps, use <a href="/providers/git#revparse"><code>Git.RevParse</code></a>.',
     examples: ["var commit = Git.Commit;", 'Ando.WriteManifest(Root / "artifacts", "1.4.0", Git.Commit);'],
     sourceFile: "Operations/GitOperations.cs",
   },
   {
     group: "Git",
     name: "Git.ShortCommit",
-    desc: "Short SHA of the commit being built. A property read while the script is evaluated. <strong>Runs on host</strong>.",
+    desc: '<strong>Evaluated when the script loads, on the host.</strong> It is not a step: it does not appear in <code>--dry-run</code> and runs before the container exists. Short SHA of the commit being built. Property (not a method). For a step that runs in order with the other steps, use <a href="/providers/git#revparse"><code>Git.RevParse</code></a> with <code>shortSha: true</code>.',
     examples: ['Log.Info($"Building {Git.ShortCommit}");'],
     sourceFile: "Operations/GitOperations.cs",
   },
@@ -851,7 +904,7 @@ export const operations = [
   {
     group: "Git",
     name: "Git.ChangedSince",
-    desc: "Returns true if any file under the paths differs between <code>sinceRef</code> and the commit being built (committed changes only). Checks the whole repository when no paths are given. Evaluation time, <strong>runs on host</strong>.",
+    desc: '<strong>Evaluated when the script loads, on the host.</strong> It is not a step: it does not appear in <code>--dry-run</code> and runs before the container exists. Returns true if any file under the paths differs between <code>sinceRef</code> and the commit being built (committed changes only). Checks the whole repository when no paths are given. Step-based counterpart: <a href="/providers/git#changedfiles"><code>Git.ChangedFiles</code></a>.',
     examples: [
       'if (Git.ChangedSince(Git.LastTag("v*") ?? "HEAD~1", "src/Worker", "services/signing"))\n{\n  Log.Info("Worker changed");\n}',
     ],
@@ -860,8 +913,31 @@ export const operations = [
   {
     group: "Git",
     name: "Git.LastTag",
-    desc: "Returns the most recent tag reachable from the commit being built that matches the glob pattern (default <code>*</code>), or <code>null</code> when there is none. Evaluation time, <strong>runs on host</strong>.",
+    desc: '<strong>Evaluated when the script loads, on the host.</strong> It is not a step: it does not appear in <code>--dry-run</code> and runs before the container exists. Returns the most recent tag reachable from the commit being built that matches the glob pattern (default <code>*</code>), or <code>null</code> when there is none. Step-based counterpart: <a href="/providers/git#latesttag"><code>Git.LatestTag</code></a>.',
     examples: ['var last = Git.LastTag("v*");'],
+    sourceFile: "Operations/GitOperations.cs",
+  },
+  {
+    group: "Git",
+    name: "Git.RevParse",
+    desc: 'Resolves a revision with <code>git rev-parse [--short] &lt;rev&gt;</code>. Signature: <code>RevParse(string rev = "HEAD", bool shortSha = false)</code>. A <strong>step</strong> that <strong>runs on the host</strong> in the source root (the <code>--ref</code> worktree when set), in order with the other steps. Returns a <code>CommandStep</code> whose <code>Value</code> is the trimmed SHA; read it at execution time (for example in <code>Ando.Defer</code>, <code>Ando.When</code> or a <code>Func&lt;string&gt;</code> overload). The eager counterparts are <a href="/providers/git#commit"><code>Git.Commit</code></a> and <a href="/providers/git#shortcommit"><code>Git.ShortCommit</code></a>, which are evaluated when the script loads.',
+    examples: ['var sha = Git.RevParse(shortSha: true);\nAndo.Report("commit", () => sha.Value);'],
+    sourceFile: "Operations/GitOperations.cs",
+  },
+  {
+    group: "Git",
+    name: "Git.LatestTag",
+    desc: 'Finds the most recent tag reachable from HEAD that matches a glob with <code>git describe --tags --abbrev=0 --match &lt;pattern&gt; HEAD</code>. Signature: <code>LatestTag(string pattern = "*")</code>. A <strong>step</strong> that <strong>runs on the host</strong> in the source root (the <code>--ref</code> worktree when set). Returns a <code>CommandStep</code> whose <code>Value</code> is the tag. If no tag matches, <code>Value</code> is empty and the build continues (the failure is allowed). The eager counterpart is <a href="/providers/git#lasttag"><code>Git.LastTag</code></a>, evaluated when the script loads.',
+    examples: ['var t = Git.LatestTag("v*");\nAndo.When(() => t.Value != "", () => Log.Info("A release tag exists"));'],
+    sourceFile: "Operations/GitOperations.cs",
+  },
+  {
+    group: "Git",
+    name: "Git.ChangedFiles",
+    desc: 'Lists files changed between a ref and HEAD with <code>git diff --name-only &lt;sinceRef&gt; HEAD -- &lt;paths&gt;</code>. Signature: <code>ChangedFiles(string sinceRef, params string[] paths)</code>. A <strong>step</strong> that <strong>runs on the host</strong> in the source root (the <code>--ref</code> worktree when set). Returns a <code>CommandStep</code> whose <code>Value</code> is a newline-separated list, empty when nothing changed. An unknown ref fails the step. No paths means the whole repository. The eager counterpart is <a href="/providers/git#changedsince"><code>Git.ChangedSince</code></a>, evaluated when the script loads.',
+    examples: [
+      'var t = Git.LatestTag("v*");\nvar c = Git.ChangedFiles(t.Value, "src/Worker");\nAndo.When(() => c.Value != "", () => Log.Info("Worker changed"));',
+    ],
     sourceFile: "Operations/GitOperations.cs",
   },
   // GitHub operations
@@ -907,7 +983,7 @@ export const operations = [
   {
     group: "Docker",
     name: "Docker.IsAvailable",
-    desc: "Check if Docker CLI and daemon are accessible. Executes immediately (not registered as a step) and returns a boolean. Useful for conditional logic in build scripts.",
+    desc: "<strong>Evaluated when the script loads, on the host.</strong> It is not a step: it does not appear in <code>--dry-run</code> and runs before the container exists. Check if the Docker CLI and daemon are accessible. Returns a boolean. Useful for conditional logic in build scripts.",
     examples: [
       'if (Docker.IsAvailable()) {\n  Docker.Build("Dockerfile", o => o.WithTag("myapp:latest"));\n} else {\n  Log.Warning("Docker not available, skipping container build");\n}',
     ],
@@ -963,14 +1039,14 @@ export const operations = [
   {
     group: "Docfx",
     name: "Docfx.IsInstalled",
-    desc: "Check if DocFX is installed as a dotnet global tool. Returns true if available, false otherwise.",
+    desc: "<strong>Evaluated when the script loads, on the host.</strong> It is not a step: it does not appear in <code>--dry-run</code> and runs before the container exists. Check if DocFX is installed as a dotnet global tool on the host. Returns true if available, false otherwise.",
     examples: ["if (!Docfx.IsInstalled()) {\n  Docfx.Install();\n}"],
     sourceFile: "Operations/DocfxOperations.cs",
   },
   {
     group: "Shell",
     name: "Shell.Run",
-    desc: "Runs a command with arguments in the build container, in order with the other steps. Arguments are passed as a list with no shell parsing. Fails on a non-zero exit code unless <code>AllowFailure()</code>. Returns a <code>CommandStep</code> (<code>Value</code>, <code>ExitCode</code>, <code>Json(path)</code>; fluent <code>InDirectory</code>, <code>WithTimeout</code>, <code>WithEnv</code>, <code>AllowFailure</code>, <code>Quiet</code>). Signature: <code>Run(string command, params string[] args)</code>.",
+    desc: "Runs a command with arguments in the build container, in order with the other steps. Arguments are passed as a list with no shell parsing. Fails on a non-zero exit code unless <code>AllowFailure()</code>. Returns a <code>CommandStep</code> (<code>Value</code>, <code>ExitCode</code>, <code>Json(path)</code>; fluent <code>InDirectory</code>, <code>WithTimeout</code>, <code>WithEnv</code>, <code>AllowFailure</code>, <code>Quiet</code>). Signature: <code>Run(string command, params string[] args)</code>. This is the escape hatch for one-off commands that have no ANDO operation. Prefer a first-party operation (<code>Dotnet.*</code>, <code>Npm.*</code>, <code>Http.Get</code>, <code>Git.*</code> and so on) when one exists.",
     examples: ['Shell.Run("zip", "-qr", "../web.zip", ".").InDirectory("artifacts/web");'],
     sourceFile: "Operations/ShellCommandOperations.cs",
   },
@@ -1011,7 +1087,7 @@ export function getAllOperationsSorted() {
 }
 
 // Get operations grouped by provider, sorted alphabetically
-// Note: Ando group preserves array order (top-level, then Ando.*, then Log.*)
+// Note: Ando and Globals groups preserve array order
 export function getOperationsGroupedByProvider() {
   const grouped = {};
   for (const op of operations) {
@@ -1020,9 +1096,9 @@ export function getOperationsGroupedByProvider() {
     }
     grouped[op.group].push(op);
   }
-  // Sort operations within each group by name, except Ando which preserves array order
+  // Sort operations within each group by name, except Ando and Globals, which preserve array order
   for (const group of Object.keys(grouped)) {
-    if (group !== "Ando") {
+    if (group !== "Ando" && group !== "Globals") {
       grouped[group].sort((a, b) => a.name.localeCompare(b.name));
     }
   }

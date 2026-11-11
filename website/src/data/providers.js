@@ -1,6 +1,7 @@
 // Provider metadata for navigation and linking (Ando first, then alphabetically by label; the homepage uses this order too)
 export const providers = [
   { id: "Ando", href: "/providers/ando", label: "Ando" },
+  { id: "Globals", href: "/providers/globals", label: "Globals" },
   { id: "AppService", href: "/providers/appservice", label: "Azure App Service" },
   { id: "Bicep", href: "/providers/bicep", label: "Azure Bicep" },
   { id: "Azure", href: "/providers/azure", label: "Azure CLI" },

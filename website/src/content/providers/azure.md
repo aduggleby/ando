@@ -64,8 +64,9 @@ Authenticate and create a resource group.
 Azure.LoginWithServicePrincipal();
 Azure.SetSubscription();
 
-// For local dev: ensure already logged in
-Azure.EnsureLoggedIn();
+// For local dev: Azure.EnsureAuthenticated() reuses an existing az session
+// (Azure.EnsureLoggedIn() is deprecated and gives a compile warning)
+Azure.EnsureAuthenticated();
 
 // Create resource group
 Azure.CreateResourceGroup("my-app-rg", "eastus");

@@ -7,6 +7,7 @@ provider: Docker
 ## Recommended: Atomic Build and Push
 
 **Best practice**: Use `Docker.Build` with `WithPush()` to build and push in a single atomic operation. This ensures:
+
 - Both version and latest tags point to the same manifest
 - No cache staleness issues between build and push
 - Multi-platform support works correctly
@@ -20,6 +21,10 @@ Docker.Build("./Dockerfile", o => o
     .WithTag("ghcr.io/myorg/myapp:latest")
     .WithPush());
 ```
+
+## Docker.IsAvailable
+
+`Docker.IsAvailable()` is **not a step**. It is evaluated when the script loads, on the host: it checks that the Docker CLI and daemon are reachable from the machine running `ando`, before the build container exists. It does not appear in `--dry-run`.
 
 ## Basic Usage
 
@@ -133,16 +138,16 @@ Docker.Build("Dockerfile", o => o.WithTag("myapp:dev"));
 
 ### Docker.Build Options
 
-| Option | Description |
-|--------|-------------|
-| `WithTag(string)` | Add an image tag. Can be called multiple times for multiple tags. Use full registry path for push (e.g., "ghcr.io/org/app:v1"). |
-| `WithPlatform(string)` | Single target platform (e.g., "linux/amd64"). Clears any existing platforms. |
-| `WithPlatforms(params string[])` | Multiple target platforms for multi-arch builds (e.g., "linux/amd64", "linux/arm64"). |
-| `WithContext(string)` | Build context directory. This is the root directory for COPY instructions in the Dockerfile. Defaults to the Dockerfile's parent directory. |
-| `WithBuildArg(key, value)` | Pass a build-time variable to the Dockerfile. Access in Dockerfile with `ARG key` and `${key}`. Common uses: version numbers, build timestamps, feature flags. |
-| `WithPush()` | **Recommended**: Push images to registry atomically during build. Ensures all tags point to the same manifest. Required for multi-platform builds. |
-| `WithNoCache()` | Disable build cache entirely. Forces all layers to rebuild. Use when debugging caching issues or ensuring a clean build. |
-| `WithoutLoad()` | Disable loading image into local docker. Useful when only pushing to a registry. |
+| Option                           | Description                                                                                                                                                    |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WithTag(string)`                | Add an image tag. Can be called multiple times for multiple tags. Use full registry path for push (e.g., "ghcr.io/org/app:v1").                                |
+| `WithPlatform(string)`           | Single target platform (e.g., "linux/amd64"). Clears any existing platforms.                                                                                   |
+| `WithPlatforms(params string[])` | Multiple target platforms for multi-arch builds (e.g., "linux/amd64", "linux/arm64").                                                                          |
+| `WithContext(string)`            | Build context directory. This is the root directory for COPY instructions in the Dockerfile. Defaults to the Dockerfile's parent directory.                    |
+| `WithBuildArg(key, value)`       | Pass a build-time variable to the Dockerfile. Access in Dockerfile with `ARG key` and `${key}`. Common uses: version numbers, build timestamps, feature flags. |
+| `WithPush()`                     | **Recommended**: Push images to registry atomically during build. Ensures all tags point to the same manifest. Required for multi-platform builds.             |
+| `WithNoCache()`                  | Disable build cache entirely. Forces all layers to rebuild. Use when debugging caching issues or ensuring a clean build.                                       |
+| `WithoutLoad()`                  | Disable loading image into local docker. Useful when only pushing to a registry.                                                                               |
 
 ## Notes
 

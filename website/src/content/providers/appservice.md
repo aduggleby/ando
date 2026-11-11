@@ -4,6 +4,18 @@ description: Deploy and manage Azure App Service web applications.
 provider: AppService
 ---
 
+## AppService or Functions?
+
+`AppService` and `Functions` have the same operations with the same signatures and behavior: `DeployZip`, `DeployWithSwap`, `SwapSlots`, `Restart`, `Start`, `Stop`, `Show`, `GetHostName`, `AccessRestrictions`, `TemporaryAccessRule`, `ListSlots`, `CreateSlot` and `DeleteSlot`. Only the `az` subcommand differs, so pick by the resource you deploy to:
+
+|           | `AppService`                                          | `Functions`                             |
+| --------- | ----------------------------------------------------- | --------------------------------------- |
+| Targets   | App Service web apps (`az webapp`)                    | Azure Functions apps (`az functionapp`) |
+| Only here | `DeployFolder` (zips a publish folder and deploys it) | `Publish`                               |
+| Page      | this page                                             | [Functions](/providers/functions)       |
+
+Passing a function app name to the wrong provider fails because the `az` command does not find the resource.
+
 ## Example
 
 Deploy a web app with zero-downtime using deployment slots.
@@ -35,12 +47,12 @@ AppService.DeployFolder("my-web-app", Root / "publish", "my-rg", o => o
 
 ### AppService.DeployZip Options
 
-| Option                       | Description                                                                                                                                                                                        |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WithDeploymentSlot(string)` | Deploy to a specific slot instead of production. Common slots: "staging", "dev", "canary". Slots have their own URLs and can be swapped with production.                                           |
-| `WithNoWait()`               | Pass `--async true` to `az webapp deploy`. Azure CLI 2.87 still polls the deployment status in some cases, so the step may not return immediately. By default the deploy is synchronous (`--async false`). |
-| `WithRestart()`              | Pass `--restart true` to `az webapp deploy`, so the app restarts after the deployment. Without it ANDO passes `--restart false`, because `az webapp deploy` restarts the site by default, which could start a slot you stopped on purpose.                           |
-| `WithTimeout(TimeSpan)`      | Maximum time to wait for the zip deploy command before reconciling and retrying. Also passed to az as `--timeout`. Must be greater than zero. Default `20` minutes.                                                                  |
+| Option                       | Description                                                                                                                                                                                                                                |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `WithDeploymentSlot(string)` | Deploy to a specific slot instead of production. Common slots: "staging", "dev", "canary". Slots have their own URLs and can be swapped with production.                                                                                   |
+| `WithNoWait()`               | Pass `--async true` to `az webapp deploy`. Azure CLI 2.87 still polls the deployment status in some cases, so the step may not return immediately. By default the deploy is synchronous (`--async false`).                                 |
+| `WithRestart()`              | Pass `--restart true` to `az webapp deploy`, so the app restarts after the deployment. Without it ANDO passes `--restart false`, because `az webapp deploy` restarts the site by default, which could start a slot you stopped on purpose. |
+| `WithTimeout(TimeSpan)`      | Maximum time to wait for the zip deploy command before reconciling and retrying. Also passed to az as `--timeout`. Must be greater than zero. Default `20` minutes.                                                                        |
 
 ## Resilient zip deploy
 

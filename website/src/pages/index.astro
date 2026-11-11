@@ -159,7 +159,13 @@ Cloudflare.PurgeCache("example.com");`;
   <section id="ops" class="mb-10 md:mb-16">
     <h2 class="mb-2 text-xl font-bold text-zinc-900 sm:text-2xl dark:text-white">All Operations</h2>
     <p class="mb-4 text-zinc-500 sm:mb-6 dark:text-zinc-400">
-      Each operation registers a deterministic step and runs inside the container.
+      Each operation registers a deterministic step and runs inside the container. Exceptions are labeled: Git
+      operations and <code>Ando.Build</code> run on the host, and a few queries (such as <code>Git.Commit</code>) are
+      evaluated when the script loads instead of running as steps.
+    </p>
+    <p class="mb-4 text-zinc-500 sm:mb-6 dark:text-zinc-400">
+      Installers for Bun, Node.js, Docker, the .NET SDK, DocFX and Playwright are listed on the
+      <a href="/tools" class="text-cyan-600 hover:underline dark:text-cyan-400">Tool installation</a> page.
     </p>
     <div class="mb-4">
       <input

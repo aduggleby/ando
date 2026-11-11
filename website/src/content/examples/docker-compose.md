@@ -64,24 +64,28 @@ var deploy = DefineProfile("deploy");
 var registry = "ghcr.io/myorg";
 var version = Git.GetVersion();
 
-// Build images with registry prefix
-Docker.Build("./src/Api", $"{registry}/myapp-api:{version}");
-Docker.Build("./src/Worker", $"{registry}/myapp-worker:{version}");
-
-// Also tag as latest
-Docker.Tag($"{registry}/myapp-api:{version}", $"{registry}/myapp-api:latest");
-Docker.Tag($"{registry}/myapp-worker:{version}", $"{registry}/myapp-worker:latest");
+Docker.Install();
 
 if (deploy)
 {
-    // Push to registry
+    // Build and push atomically (version and latest point to the same manifest)
     GitHub.EnsureAuthenticated();
-    Docker.Push($"{registry}/myapp-api:{version}");
-    Docker.Push($"{registry}/myapp-api:latest");
-    Docker.Push($"{registry}/myapp-worker:{version}");
-    Docker.Push($"{registry}/myapp-worker:latest");
+    Docker.Build("./src/Api/Dockerfile", o => o
+        .WithTag($"{registry}/myapp-api:{version}")
+        .WithTag($"{registry}/myapp-api:latest")
+        .WithPush());
+    Docker.Build("./src/Worker/Dockerfile", o => o
+        .WithTag($"{registry}/myapp-worker:{version}")
+        .WithTag($"{registry}/myapp-worker:latest")
+        .WithPush());
 
     Log.Info($"Pushed images with version {version}");
+}
+else
+{
+    // Local build only
+    Docker.Build("./src/Api/Dockerfile", o => o.WithTag($"{registry}/myapp-api:{version}"));
+    Docker.Build("./src/Worker/Dockerfile", o => o.WithTag($"{registry}/myapp-worker:{version}"));
 }
 ```
 
@@ -120,6 +124,7 @@ if (deploy)
 ```
 
 Usage:
+
 ```bash
 # Deploy to staging
 ando -p deploy
@@ -235,7 +240,7 @@ if (test)
 ## Example docker-compose.yml
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   api:
@@ -280,13 +285,12 @@ volumes:
 
 ## Key Operations
 
-| Operation | Purpose |
-|-----------|---------|
-| [Docker.Build()](/providers/docker#build) | Build a Docker image |
-| [Docker.ComposeUp()](/providers/docker#composeup) | Start compose services |
-| [Docker.ComposeDown()](/providers/docker#composedown) | Stop compose services |
+| Operation                                             | Purpose                |
+| ----------------------------------------------------- | ---------------------- |
+| [Docker.Build()](/providers/docker#build)             | Build a Docker image   |
+| [Docker.ComposeUp()](/providers/docker#composeup)     | Start compose services |
+| [Docker.ComposeDown()](/providers/docker#composedown) | Stop compose services  |
 | [Docker.ComposeExec()](/providers/docker#composeexec) | Run command in service |
-| [Docker.Push()](/providers/docker#push) | Push image to registry |
 
 ## Tips
 

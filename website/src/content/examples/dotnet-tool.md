@@ -77,7 +77,7 @@ This script uses `DefineProfile` for conditional execution. By default it builds
 
 | Operation | Purpose |
 |-----------|---------|
-| [DefineProfile()](/providers/ando#defineprofile) | Creates a profile for conditional execution |
+| [DefineProfile()](/providers/globals#defineprofile) | Creates a profile for conditional execution |
 | [Dotnet.Publish()](/providers/dotnet#publish) | Creates self-contained executables |
 | [Nuget.Pack()](/providers/nuget#pack) | Creates a NuGet package |
 | [Nuget.Push()](/providers/nuget#push) | Publishes to NuGet.org |
