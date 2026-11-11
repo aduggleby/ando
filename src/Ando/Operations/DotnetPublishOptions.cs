@@ -54,6 +54,16 @@ public class DotnetPublishOptions
     /// <summary>Skip build before publishing.</summary>
     public bool NoBuild { get; private set; }
 
+    /// <summary>Suppress the .NET startup banner (adds --nologo).</summary>
+    public bool NoLogo { get; private set; }
+
+    /// <summary>Adds --nologo to the publish command.</summary>
+    public DotnetPublishOptions WithNoLogo()
+    {
+        NoLogo = true;
+        return this;
+    }
+
     /// <summary>Sets the output directory using a BuildPath.</summary>
     public DotnetPublishOptions Output(BuildPath path)
     {

@@ -25,6 +25,7 @@ using Ando.Logging;
 using Ando.References;
 using Ando.Steps;
 using Ando.Utilities;
+using Ando.Versioning;
 using Ando.Workflow;
 
 namespace Ando.Operations;
@@ -37,7 +38,8 @@ public class DotnetOperations(
     StepRegistry registry,
     IBuildLogger logger,
     Func<ICommandExecutor> executorFactory,
-    DotnetSdkEnsurer? sdkEnsurer = null)
+    DotnetSdkEnsurer? sdkEnsurer = null,
+    RunSession? session = null)
     : OperationsBase(registry, logger, executorFactory)
 {
     private readonly DotnetSdkEnsurer? _sdkEnsurer = sdkEnsurer;
@@ -51,6 +53,33 @@ public class DotnetOperations(
     /// </summary>
     /// <param name="path">Path to the .csproj file.</param>
     public ProjectRef Project(string path) => ProjectRef.From(path);
+
+    /// <summary>
+    /// Reads the literal &lt;Version&gt; property from an MSBuild props/csproj file, on the host,
+    /// when the script loads (not as a step). Uses the same parser as `ando bump`: the file must
+    /// have exactly one &lt;Version&gt; element directly inside a &lt;PropertyGroup&gt;. It does not
+    /// evaluate MSBuild (no imports, conditions or property references such as $(Other)).
+    /// A relative path is resolved against the source root (the --ref worktree when set).
+    /// Throws a clear error when the file is missing, the version is empty or there is not
+    /// exactly one &lt;Version&gt;.
+    /// Usage: var version = Dotnet.ReadVersion();  // Directory.Build.props
+    /// </summary>
+    /// <param name="path">Path to the file (default "Directory.Build.props").</param>
+    public string ReadVersion(string path = "Directory.Build.props")
+    {
+        var full = Path.GetFullPath(path, session?.SourceRoot ?? Environment.CurrentDirectory);
+        if (!File.Exists(full))
+        {
+            throw new FileNotFoundException($"Dotnet.ReadVersion: version file not found: {full}");
+        }
+
+        var version = MsBuildVersionFile.Read(full);
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            throw new InvalidOperationException($"Dotnet.ReadVersion: the <Version> in {full} is empty.");
+        }
+        return version;
+    }
 
     /// <summary>
     /// Registers a 'dotnet restore' step to restore NuGet packages.
@@ -123,7 +152,8 @@ public class DotnetOperations(
                 .AddIf(options.SelfContained == true, "--self-contained")
                 .AddIf(options.SelfContained == false, "--no-self-contained")
                 .AddIfNotNull("-r", options.Runtime)
-                .AddFlag(options.SingleFile, "-p:PublishSingleFile=true"),
+                .AddFlag(options.SingleFile, "-p:PublishSingleFile=true")
+                .AddFlag(options.NoLogo, "--nologo"),
             GetEnsurer(),
             project.Name);
     }

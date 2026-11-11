@@ -311,4 +311,80 @@ public class DotnetOperationsTests
 
         _logger.WarningMessages.ShouldContain(m => m.Contains("dotnet-ef"));
     }
+
+    [Fact]
+    public async Task Publish_ExactCommand_DefaultsToNothingImplicit()
+    {
+        CreateDotnet().Publish(ProjectRef.From("./src/MyApp/MyApp.csproj"));
+
+        await _registry.Steps[0].Execute();
+
+        _executor.LastCommand!.CommandLine.ShouldBe("dotnet publish ./src/MyApp/MyApp.csproj");
+    }
+
+    [Fact]
+    public async Task Publish_ReleaseOutputNoLogo_MatchesExpectedCommandLine()
+    {
+        CreateDotnet().Publish(ProjectRef.From("src/Web/Web.csproj"), o => o
+            .WithConfiguration(Configuration.Release).Output("artifacts/web").WithNoLogo());
+
+        await _registry.Steps[0].Execute();
+
+        // Output() makes the path absolute on the host; the container executor translates it.
+        var output = new Ando.Context.BuildPath("artifacts/web").Value;
+        _executor.LastCommand!.CommandLine.ShouldBe($"dotnet publish src/Web/Web.csproj -c Release -o {output} --nologo");
+    }
+
+    [Fact]
+    public async Task Publish_NonZeroExit_FailsStep()
+    {
+        _executor.SimulateFailure = true;
+        CreateDotnet().Publish(ProjectRef.From("src/Web/Web.csproj"));
+
+        (await _registry.Steps[0].Execute()).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task OtherDotnetSteps_ExactCommands()
+    {
+        var dotnet = CreateDotnet();
+        var project = ProjectRef.From("src/App/App.csproj");
+        dotnet.Restore(project, o => { o.NoCache = true; o.WithRuntime("linux-x64"); });
+        dotnet.Build(project, o => { o.Configuration = Configuration.Release; o.NoRestore = true; });
+        dotnet.Test(project, o => { o.Configuration = Configuration.Release; o.NoBuild = true; o.Filter = "Category=Unit"; });
+
+        foreach (var step in _registry.Steps) await step.Execute();
+
+        _executor.ExecutedCommands.Select(c => c.CommandLine).ToArray().ShouldBe([
+            "dotnet restore src/App/App.csproj --no-cache -r linux-x64",
+            "dotnet build src/App/App.csproj -c Release --no-restore",
+            "dotnet test src/App/App.csproj -c Release --no-build --filter Category=Unit"
+        ]);
+    }
+
+    [Fact]
+    public void ReadVersion_ReadsLiteralVersionRelativeToSourceRoot()
+    {
+        var root = Directory.CreateTempSubdirectory("ando-readversion-").FullName;
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "Directory.Build.props"),
+                "<Project><PropertyGroup><Version>1.2.3</Version></PropertyGroup></Project>");
+            File.WriteAllText(Path.Combine(root, "empty.props"),
+                "<Project><PropertyGroup><Version> </Version></PropertyGroup></Project>");
+            File.WriteAllText(Path.Combine(root, "two.props"),
+                "<Project><PropertyGroup><Version>1</Version></PropertyGroup><PropertyGroup><Version>2</Version></PropertyGroup></Project>");
+            var dotnet = new DotnetOperations(_registry, _logger, () => _executor, null, new RunSession { SourceRoot = root });
+
+            dotnet.ReadVersion().ShouldBe("1.2.3");
+            Should.Throw<InvalidOperationException>(() => dotnet.ReadVersion("empty.props")).Message.ShouldContain("empty");
+            Should.Throw<InvalidOperationException>(() => dotnet.ReadVersion("two.props")).Message.ShouldContain("expected exactly one");
+            Should.Throw<FileNotFoundException>(() => dotnet.ReadVersion("missing.props")).Message.ShouldContain("missing.props");
+            _registry.Steps.ShouldBeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
 }
