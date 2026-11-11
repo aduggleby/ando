@@ -83,6 +83,8 @@ public class GitOperations : OperationsBase
 
     /// <summary>
     /// Full SHA of the commit being built (HEAD, or the commit given with --ref).
+    /// Evaluated when the script loads (on the host), not as a step. For a value that is
+    /// read in step order, use <see cref="RevParse"/>.
     /// Usage: var commit = Git.Commit;
     /// </summary>
     public string Commit => _commit ??= RunGit("rev-parse", "HEAD");
@@ -90,6 +92,8 @@ public class GitOperations : OperationsBase
 
     /// <summary>
     /// Short SHA (7+ characters) of the commit being built.
+    /// Evaluated when the script loads (on the host), not as a step. For a value that is
+    /// read in step order, use <see cref="RevParse"/> with shortSha: true.
     /// Usage: Log.Info($"Building {Git.ShortCommit}");
     /// </summary>
     public string ShortCommit => _shortCommit ??= RunGit("rev-parse", "--short", "HEAD");
@@ -132,6 +136,8 @@ public class GitOperations : OperationsBase
     /// Whether any file under <paramref name="paths"/> differs between
     /// <paramref name="sinceRef"/> and the commit being built (committed changes
     /// only). With no paths, checks the whole repository.
+    /// Evaluated when the script loads (on the host), not as a step. For the file list in
+    /// step order, use <see cref="ChangedFiles"/>.
     /// Usage: if (Git.ChangedSince(Git.LastTag("v*"), "src/Worker", "services/signing")) { ... }
     /// </summary>
     public bool ChangedSince(string sinceRef, params string[] paths)
@@ -148,12 +154,65 @@ public class GitOperations : OperationsBase
     /// <summary>
     /// The most recent tag reachable from the commit being built that matches
     /// <paramref name="pattern"/> (glob, e.g. "v*"), or null when there is none.
+    /// Evaluated when the script loads (on the host), not as a step. For the tag in step
+    /// order (e.g. after a Git.Tag step), use <see cref="LatestTag"/>.
     /// Usage: var last = Git.LastTag("v*");
     /// </summary>
     public string? LastTag(string pattern = "*")
     {
         var (exitCode, output, _) = RunGitRaw("describe", "--tags", "--abbrev=0", "--match", pattern, "HEAD");
         return exitCode == 0 && !string.IsNullOrWhiteSpace(output) ? output : null;
+    }
+
+    // =========================================================================
+    // Step variants of the git queries. They run in order with the other steps,
+    // on the HOST like Tag/Push (git credentials and .git live there), in the
+    // source root (the --ref worktree when set). Value is the trimmed stdout.
+    // =========================================================================
+
+    private CommandStep QueryStep(string stepName, string context, params string[] args) =>
+        ShellCommandOperations.RegisterCommandStep(Registry, Logger, () => _hostExecutor, stepName, "git", args, context);
+
+    /// <summary>
+    /// Registers a step that resolves a revision (`git rev-parse [--short] &lt;rev&gt;`); Value is the SHA.
+    /// Runs as a step on the host, in order with the other steps. Git.Commit and Git.ShortCommit
+    /// are evaluated when the script loads instead.
+    /// Usage: var sha = Git.RevParse(shortSha: true);  Docker.Build(...).WithTag(() => sha.Value);
+    /// </summary>
+    /// <param name="rev">Revision to resolve (default "HEAD").</param>
+    /// <param name="shortSha">True to return the abbreviated SHA.</param>
+    public CommandStep RevParse(string rev = "HEAD", bool shortSha = false) =>
+        QueryStep("Git.RevParse", rev, shortSha ? ["rev-parse", "--short", rev] : ["rev-parse", rev]);
+
+    /// <summary>
+    /// Registers a step that finds the most recent tag reachable from HEAD matching
+    /// <paramref name="pattern"/> (`git describe --tags --abbrev=0 --match &lt;pattern&gt;`); Value is the
+    /// tag, or empty when no tag matches (the step still succeeds; git's "no names found"
+    /// error is allowed). Runs as a step on the host. Git.LastTag is evaluated when the script loads.
+    /// Usage: var last = Git.LatestTag("v*");  Ando.When(() => last.Value != "", ...);
+    /// </summary>
+    /// <param name="pattern">Glob the tag must match (default "*").</param>
+    public CommandStep LatestTag(string pattern = "*") =>
+        QueryStep("Git.LatestTag", pattern, "describe", "--tags", "--abbrev=0", "--match", pattern, "HEAD").AllowFailure();
+
+    /// <summary>
+    /// Registers a step that lists files changed between <paramref name="sinceRef"/> and HEAD
+    /// (`git diff --name-only &lt;sinceRef&gt; HEAD -- &lt;paths&gt;`); Value is the newline-separated list,
+    /// empty when nothing changed. Runs as a step on the host. Git.ChangedSince is evaluated
+    /// when the script loads.
+    /// Usage: var changed = Git.ChangedFiles(last.Value, "src/Worker");
+    /// </summary>
+    /// <param name="sinceRef">Commit, tag or branch to compare against.</param>
+    /// <param name="paths">Optional paths to limit the comparison; none means the whole repository.</param>
+    public CommandStep ChangedFiles(string sinceRef, params string[] paths)
+    {
+        var args = new List<string> { "diff", "--name-only", sinceRef, "HEAD" };
+        if (paths.Length > 0)
+        {
+            args.Add("--");
+            args.AddRange(paths);
+        }
+        return QueryStep("Git.ChangedFiles", sinceRef, [.. args]);
     }
 
     private string RunGit(params string[] args)

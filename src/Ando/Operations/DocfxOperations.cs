@@ -42,6 +42,7 @@ public class DocfxOperations(
 {
     /// <summary>
     /// Checks if DocFX is installed as a dotnet global tool.
+    /// Evaluated when the script loads (on the host), not as a step; there is no step variant.
     /// </summary>
     /// <returns>True if DocFX is available, false otherwise.</returns>
     public bool IsInstalled()

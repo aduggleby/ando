@@ -2,7 +2,8 @@
 // GitEvalTimeTests.cs
 //
 // Summary: Tests for the evaluation-time git helpers (Commit, ShortCommit,
-// RequireClean, ChangedSince, LastTag) against a real temporary git repository.
+// RequireClean, ChangedSince, LastTag) and their step variants (RevParse, LatestTag,
+// ChangedFiles) against a real temporary git repository.
 // =============================================================================
 
 using System.Diagnostics;
@@ -32,8 +33,10 @@ public class GitEvalTimeTests : IDisposable
 
     public void Dispose() => Directory.Delete(_repo, recursive: true);
 
+    private readonly StepRegistry _registry = new();
+
     private GitOperations CreateGit(string? sourceRoot = null) =>
-        new(new StepRegistry(), _logger, () => new MockExecutor(), new RunSession { SourceRoot = sourceRoot ?? _repo });
+        new(_registry, _logger, () => new MockExecutor(), new RunSession { SourceRoot = sourceRoot ?? _repo });
 
     private string Git(params string[] args)
     {
@@ -239,5 +242,102 @@ public class GitEvalTimeTests : IDisposable
     public void ChangedSince_UnknownRef_Throws()
     {
         Should.Throw<InvalidOperationException>(() => CreateGit().ChangedSince("no-such-ref"));
+    }
+
+    // ---- Step variants (RevParse, LatestTag, ChangedFiles) -------------------
+
+    private async Task<CommandStep> RunStepAsync(CommandStep step)
+    {
+        (await _registry.Steps[^1].Execute()).ShouldBeTrue();
+        return step;
+    }
+
+    [Fact]
+    public async Task RevParse_Step_ResolvesHeadLikeCommit()
+    {
+        var git = CreateGit();
+        var step = await RunStepAsync(git.RevParse());
+
+        _registry.Steps[0].Name.ShouldBe("Git.RevParse");
+        step.Value.ShouldBe(git.Commit);
+    }
+
+    [Fact]
+    public async Task RevParse_Step_ShortAndExplicitRev()
+    {
+        var git = CreateGit();
+        var shortStep = await RunStepAsync(git.RevParse(shortSha: true));
+        shortStep.Value.ShouldBe(git.ShortCommit);
+
+        var tagStep = await RunStepAsync(git.RevParse("v1.0.0"));
+        tagStep.Value.ShouldBe(Git("rev-parse", "v1.0.0"));
+    }
+
+    [Fact]
+    public async Task RevParse_Step_RunsInOrder_SeeingCommitsMadeBetweenScriptLoadAndStep()
+    {
+        var step = CreateGit().RevParse();
+        var before = Git("rev-parse", "HEAD");
+        Write("src/a.txt", "newer");
+        Commit("third");
+
+        await RunStepAsync(step);
+
+        step.Value.ShouldNotBe(before);
+        step.Value.ShouldBe(Git("rev-parse", "HEAD"));
+    }
+
+    [Fact]
+    public async Task LatestTag_Step_ReturnsMatchingTag()
+    {
+        var step = await RunStepAsync(CreateGit().LatestTag("v*"));
+
+        _registry.Steps[0].Name.ShouldBe("Git.LatestTag");
+        step.Value.ShouldBe("v1.0.0");
+    }
+
+    [Fact]
+    public async Task LatestTag_Step_NoMatchingTag_SucceedsWithEmptyValue()
+    {
+        var step = await RunStepAsync(CreateGit().LatestTag("release-*"));
+
+        step.Value.ShouldBe("");
+    }
+
+    [Fact]
+    public async Task LatestTag_Step_NoTagsAtAll_SucceedsWithEmptyValue()
+    {
+        Git("tag", "-d", "v1.0.0");
+
+        var step = await RunStepAsync(CreateGit().LatestTag());
+
+        step.Value.ShouldBe("");
+    }
+
+    [Fact]
+    public async Task ChangedFiles_Step_ListsChangedPaths()
+    {
+        var all = await RunStepAsync(CreateGit().ChangedFiles("v1.0.0"));
+        all.Value.ShouldBe("docs/b.txt");
+
+        var docs = await RunStepAsync(CreateGit().ChangedFiles("v1.0.0", "docs"));
+        docs.Value.ShouldBe("docs/b.txt");
+    }
+
+    [Fact]
+    public async Task ChangedFiles_Step_NothingChanged_IsEmpty()
+    {
+        var step = await RunStepAsync(CreateGit().ChangedFiles("v1.0.0", "src"));
+
+        _registry.Steps[0].Name.ShouldBe("Git.ChangedFiles");
+        step.Value.ShouldBe("");
+    }
+
+    [Fact]
+    public async Task ChangedFiles_Step_UnknownRef_FailsStep()
+    {
+        CreateGit().ChangedFiles("no-such-ref");
+
+        (await _registry.Steps[0].Execute()).ShouldBeFalse();
     }
 }

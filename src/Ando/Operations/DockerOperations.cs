@@ -49,7 +49,7 @@ public class DockerOperations(
     /// <summary>
     /// Checks if Docker CLI is available and the Docker daemon is accessible.
     /// Use this to conditionally skip operations that require Docker.
-    /// This executes immediately (not registered as a step).
+    /// Evaluated when the script loads (on the host), not as a step; there is no step variant.
     /// </summary>
     /// <returns>True if Docker is available and working, false otherwise.</returns>
     public bool IsAvailable()

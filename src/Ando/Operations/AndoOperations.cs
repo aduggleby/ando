@@ -121,6 +121,8 @@ public class AndoOperations
     /// <summary>
     /// Runs a build script in the specified directory or file.
     /// The child build runs in a new isolated container with its own .env and context.
+    /// This step itself runs on the host: it starts a child `ando build` process, which
+    /// creates its own build container.
     /// </summary>
     /// <param name="directory">
     /// Directory containing the build.csando file, or a path to a specific .csando file.
