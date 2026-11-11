@@ -27,8 +27,9 @@ Dotnet.Publish(FuncApp, o => o
   .Output(Root / "publish")
   .WithConfiguration(Configuration.Release));
 
-// Create zip for deployment
-Artifact.Zip(Root / "publish", Root / "func.zip");
+// Create zip for deployment (no ANDO operation zips a folder yet, so use zip;
+// it must be installed in the image, e.g. apt-get install zip)
+Shell.Run("zip", "-qr", "../func.zip", ".").InDirectory("publish");
 
 // Deploy with zero-downtime swap
 Functions.DeployWithSwap("my-func-app", Root / "func.zip");

@@ -76,20 +76,14 @@ var frontend = Directory("./");
 Node.Install();
 Npm.Ci(frontend);
 
-// Set environment for build
-if (production)
-{
-    Environment.SetEnvironmentVariable("VITE_API_URL", "https://api.example.com");
-    Environment.SetEnvironmentVariable("VITE_ENV", "production");
-}
-else
-{
-    Environment.SetEnvironmentVariable("VITE_API_URL", "https://api-staging.example.com");
-    Environment.SetEnvironmentVariable("VITE_ENV", "staging");
-}
+// Values for the build. Npm.Build cannot set environment variables, so this build step
+// uses Shell.Run (put the variables in .env.ando if you prefer Npm.Build).
+var apiUrl = production ? "https://api.example.com" : "https://api-staging.example.com";
+var envName = production ? "production" : "staging";
 
-// Build with environment variables
-Npm.Build(frontend);
+Shell.Run("npm", "run", "build")
+    .WithEnv("VITE_API_URL", apiUrl)
+    .WithEnv("VITE_ENV", envName);
 
 if (deploy)
 {
@@ -128,14 +122,11 @@ Npm.Build(frontend);
 
 if (deploy)
 {
-    Azure.EnsureAuthenticated();
-
-    // Deploy to Azure Static Web Apps
-    Azure.StaticWebAppsDeploy(
-        frontend / "dist",
-        "my-static-app",
-        Env("AZURE_STATIC_WEB_APPS_API_TOKEN")
-    );
+    // No ANDO operation exists for Static Web Apps, so run the SWA CLI.
+    // The deployment token is passed through the environment, not the command line.
+    Shell.Run("npx", "--yes", "@azure/static-web-apps-cli", "deploy", "dist", "--env", "production")
+        .InDirectory("frontend")
+        .WithEnv("SWA_CLI_DEPLOYMENT_TOKEN", Env("AZURE_STATIC_WEB_APPS_API_TOKEN")!);
 
     Log.Info("Deployed to Azure Static Web Apps");
 }
@@ -157,11 +148,12 @@ Npm.Build(frontend);
 
 if (deploy)
 {
-    // Sync to S3
-    Aws.S3Sync(frontend / "dist", "s3://my-spa-bucket");
+    // No ANDO operation exists for AWS, so run the AWS CLI (it must be installed in the
+    // container; AWS credentials come from the environment)
+    Shell.Run("aws", "s3", "sync", "dist", "s3://my-spa-bucket", "--delete");
 
     // Invalidate CloudFront cache
-    Aws.CloudFrontInvalidate("E1234567890", "/*");
+    Shell.Run("aws", "cloudfront", "create-invalidation", "--distribution-id", "E1234567890", "--paths", "/*");
 
     Log.Info("Deployed to AWS S3 + CloudFront");
 }
@@ -194,7 +186,7 @@ if (deploy)
     // Deploy API to Azure
     Azure.EnsureAuthenticated();
     Dotnet.Publish(api, o => o.Output(Root / "publish" / "api"));
-    AppService.DeployZip("my-api", Root / "publish" / "api");
+    AppService.DeployFolder("my-api", Root / "publish" / "api");
 
     // Deploy frontend to Cloudflare
     Cloudflare.EnsureAuthenticated();
@@ -221,10 +213,9 @@ Npm.Build(frontend);
 
 if (e2e || deploy)
 {
-    // Start preview server and run E2E tests
-    Playwright.Test(frontend, o => o
-        .WithProject("chromium")
-        .WithBaseUrl("http://localhost:4173"));
+    // The Playwright config (playwright.config.ts) starts the preview server and sets the base URL
+    Playwright.Install(frontend);
+    Playwright.Test(frontend, o => o.Project = "chromium");
 
     Log.Info("E2E tests passed");
 }
@@ -249,11 +240,11 @@ var monorepo = Directory("./");
 Node.Install();
 Npm.Ci(monorepo);
 
-// Build all packages using Turborepo
+// Build all packages using Turborepo ("build": "turbo build")
 Npm.Run(monorepo, "build");
 
-// Or build specific app
-Npm.Run(monorepo, "build", "--filter=web");
+// Or build a specific app with a script such as "build:web": "turbo build --filter=web"
+// Npm.Run(monorepo, "build:web");
 
 if (deploy)
 {
@@ -275,7 +266,7 @@ var deploy = DefineProfile("deploy");
 
 var frontend = Directory("./");
 var registry = "ghcr.io/myorg";
-var version = Git.GetVersion();
+var version = Git.LastTag("v*")?.TrimStart('v') ?? "0.0.0";
 
 // Build frontend
 Node.Install();
@@ -288,9 +279,7 @@ Docker.Install();
 
 if (deploy)
 {
-    GitHub.EnsureAuthenticated();
-
-    // Build and push atomically to the registry
+    // Build and push atomically to the registry (ghcr.io login is automatic with GITHUB_TOKEN)
     Docker.Build("Dockerfile", o => o
         .WithTag($"{registry}/my-spa:{version}")
         .WithTag($"{registry}/my-spa:latest")

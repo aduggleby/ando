@@ -86,14 +86,14 @@ Ando.Build(web);
 // Deploy all if profile is active
 if (deploy)
 {
-    // Profiles are automatically passed to sub-builds
+    // A child build inherits the profiles of the parent unless WithProfile is used
     Ando.Build(api, o => o.WithProfile("deploy"));
     Ando.Build(web, o => o.WithProfile("deploy"));
 
     if (production)
     {
         Ando.Build(api, o => o.WithProfile("deploy,production"));
-        Ando.Build(web, o => o.WithProfiles("deploy", "production"));
+        Ando.Build(web, o => o.WithProfile("deploy,production"));
     }
 
     Log.Info("All packages deployed");
@@ -169,7 +169,7 @@ var artifactsDir = Root / "artifacts";
 var core = Directory("./packages/core");
 var api = Directory("./packages/api");
 
-// Set shared artifact location via environment
+// Set shared artifact location via the environment (child builds inherit it)
 Environment.SetEnvironmentVariable("ARTIFACTS_DIR", artifactsDir.ToString());
 
 // Build core (outputs to artifacts)
@@ -189,7 +189,7 @@ Dotnet.Restore(project);
 Dotnet.Build(project);
 
 // Output package to shared location
-Dotnet.Pack(project, o => o.Output(artifactsDir));
+Nuget.Pack(project, o => o.Output(artifactsDir));
 ```
 
 ```csharp
@@ -198,10 +198,9 @@ Dotnet.Pack(project, o => o.Output(artifactsDir));
 var project = Dotnet.Project("./src/Api/Api.csproj");
 var artifactsDir = Env("ARTIFACTS_DIR");
 
-// Restore from shared artifacts
-Dotnet.Restore(project, o => o
-    .WithSource(artifactsDir));
-
+// The packages in the shared directory are consumed through a local NuGet source
+// configured in this project's nuget.config; Dotnet.Restore has no source option.
+Dotnet.Restore(project);
 Dotnet.Build(project);
 ```
 
@@ -227,7 +226,7 @@ foreach (var pkg in packages)
 
 if (publish)
 {
-    var version = Git.GetVersion();
+    var version = Git.LastTag("v*")?.TrimStart('v') ?? "0.0.0";
 
     // Publish each package
     foreach (var pkg in packages)

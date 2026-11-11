@@ -29,9 +29,13 @@ my-app/
 └── build.csando
 ```
 
+## How Compose fits in
+
+ANDO builds and pushes images with `Docker.Build`. It has no Docker Compose operation, so the compose commands below use `Shell.Run`, the escape hatch for tools without an ANDO operation. They need the `--dind` flag (`ando run --dind`), `Docker.Install()` first, and a `docker compose` plugin in the build container image.
+
 ## Basic Multi-Container Build
 
-Build multiple images and run with Docker Compose:
+Build multiple images and run them with Docker Compose:
 
 ```csharp
 var api = Dotnet.Project("./src/Api/Api.csproj");
@@ -45,31 +49,30 @@ Dotnet.Build(api);
 Dotnet.Build(worker);
 
 // Build Docker images
-Docker.Build("./src/Api", "myapp-api:latest");
-Docker.Build("./src/Worker", "myapp-worker:latest");
+Docker.Install();
+Docker.Build("./src/Api/Dockerfile", o => o.WithTag("myapp-api:latest"));
+Docker.Build("./src/Worker/Dockerfile", o => o.WithTag("myapp-worker:latest"));
 
 // Run with Docker Compose
-Docker.ComposeUp();
+Shell.Run("docker", "compose", "up", "-d");
 
 Log.Info("Application started with Docker Compose");
 ```
 
 ## Build and Push to Registry
 
-Build images and push to a container registry:
+Build images and push them to a container registry. `WithPush()` builds and pushes in one step, so the version and `latest` tags point to the same manifest:
 
 ```csharp
 var deploy = DefineProfile("deploy");
 
 var registry = "ghcr.io/myorg";
-var version = Git.GetVersion();
+var version = Git.LastTag("v*")?.TrimStart('v') ?? "0.0.0";
 
 Docker.Install();
 
 if (deploy)
 {
-    // Build and push atomically (version and latest point to the same manifest)
-    GitHub.EnsureAuthenticated();
     Docker.Build("./src/Api/Dockerfile", o => o
         .WithTag($"{registry}/myapp-api:{version}")
         .WithTag($"{registry}/myapp-api:latest")
@@ -89,6 +92,8 @@ else
 }
 ```
 
+See [Container Registry](/examples/container-github-registry) for registry authentication.
+
 ## Environment-Specific Compose Files
 
 Use different compose files for different environments:
@@ -97,26 +102,21 @@ Use different compose files for different environments:
 var deploy = DefineProfile("deploy");
 var production = DefineProfile("production");
 
-// Build images
-Docker.Build("./src/Api", "myapp-api:latest");
-Docker.Build("./src/Worker", "myapp-worker:latest");
+Docker.Install();
+Docker.Build("./src/Api/Dockerfile", o => o.WithTag("myapp-api:latest"));
+Docker.Build("./src/Worker/Dockerfile", o => o.WithTag("myapp-worker:latest"));
 
 if (deploy)
 {
     if (production)
     {
         // Production: use override file
-        Docker.ComposeUp(o => o
-            .WithFile("docker-compose.yml")
-            .WithFile("docker-compose.prod.yml")
-            .WithDetach());
+        Shell.Run("docker", "compose", "-f", "docker-compose.yml", "-f", "docker-compose.prod.yml", "up", "-d");
     }
     else
     {
         // Development/staging
-        Docker.ComposeUp(o => o
-            .WithFile("docker-compose.yml")
-            .WithDetach());
+        Shell.Run("docker", "compose", "-f", "docker-compose.yml", "up", "-d");
     }
 
     Log.Info("Compose stack deployed");
@@ -127,10 +127,10 @@ Usage:
 
 ```bash
 # Deploy to staging
-ando -p deploy
+ando -p deploy --dind
 
 # Deploy to production
-ando -p deploy,production
+ando -p deploy,production --dind
 ```
 
 ## With Database and Dependencies
@@ -140,29 +140,20 @@ Full stack with database, cache, and application services:
 ```csharp
 var deploy = DefineProfile("deploy");
 
-// Build application images
-Docker.Build("./src/Api", "myapp-api:latest");
-Docker.Build("./src/Worker", "myapp-worker:latest");
+Docker.Install();
+Docker.Build("./src/Api/Dockerfile", o => o.WithTag("myapp-api:latest"));
+Docker.Build("./src/Worker/Dockerfile", o => o.WithTag("myapp-worker:latest"));
 
 if (deploy)
 {
-    // Start infrastructure first
-    Docker.ComposeUp(o => o
-        .WithServices("postgres", "redis")
-        .WithDetach()
-        .WithWait());
-
-    // Wait for database to be ready
-    Docker.ComposeExec("postgres", "pg_isready -U postgres", o => o
-        .WithRetry(30, 1000));
+    // Start infrastructure first and wait for the health checks defined in docker-compose.yml
+    Shell.Run("docker", "compose", "up", "-d", "--wait", "postgres", "redis");
 
     // Run migrations
-    Docker.ComposeRun("api", "dotnet ef database update");
+    Shell.Run("docker", "compose", "run", "--rm", "api", "dotnet", "ef", "database", "update");
 
     // Start application services
-    Docker.ComposeUp(o => o
-        .WithServices("api", "worker")
-        .WithDetach());
+    Shell.Run("docker", "compose", "up", "-d", "api", "worker");
 
     Log.Info("Full stack deployed");
 }
@@ -170,72 +161,65 @@ if (deploy)
 
 ## Health Checks and Rollback
 
-Deploy with health checks and automatic rollback:
+Deploy and roll back when the health check fails. `Ando.Block` runs its `OnFailure` steps when a step inside it fails:
 
 ```csharp
 var deploy = DefineProfile("deploy");
 
-var version = Git.GetVersion();
+var version = Git.LastTag("v*")?.TrimStart('v') ?? "0.0.0";
 
-Docker.Build("./src/Api", $"myapp-api:{version}");
+Docker.Install();
+Docker.Build("./src/Api/Dockerfile", o => o.WithTag($"myapp-api:{version}"));
 
 if (deploy)
 {
-    // Pull current image as backup
-    Docker.Pull("myapp-api:current");
-    Docker.Tag("myapp-api:current", "myapp-api:rollback");
-
-    // Tag new version as current
-    Docker.Tag($"myapp-api:{version}", "myapp-api:current");
-
-    // Deploy
-    Docker.ComposeUp(o => o.WithDetach().WithRemoveOrphans());
-
-    // Health check
-    var healthy = Docker.ComposeHealthCheck("api", timeout: 60);
-
-    if (!healthy)
+    Ando.Block("deploy", () =>
     {
-        Log.Error("Health check failed, rolling back...");
-        Docker.Tag("myapp-api:rollback", "myapp-api:current");
-        Docker.ComposeUp(o => o.WithDetach());
-        throw new Exception("Deployment failed health check");
-    }
+        // Keep the running image as a rollback target, then promote the new one
+        Shell.Run("docker", "tag", "myapp-api:current", "myapp-api:rollback").AllowFailure();
+        Shell.Run("docker", "tag", $"myapp-api:{version}", "myapp-api:current");
 
-    Log.Info($"Deployed version {version} successfully");
+        Shell.Run("docker", "compose", "up", "-d", "--wait", "--remove-orphans");
+    })
+    .OnFailure(() =>
+    {
+        Log.Warning("Deploy failed, rolling back...");
+        Shell.Run("docker", "tag", "myapp-api:rollback", "myapp-api:current");
+        Shell.Run("docker", "compose", "up", "-d");
+    });
+
+    Log.Info($"Deployed version {version}");
 }
 ```
 
+`--wait` makes `docker compose up` fail when a service's health check does not pass, which triggers the `OnFailure` steps. The block still fails the build after the rollback ran.
+
 ## Compose for Testing
 
-Run integration tests with Docker Compose:
+Run integration tests against Docker Compose services:
 
 ```csharp
 var test = DefineProfile("test");
 
-// Build test dependencies
-Docker.Build("./src/Api", "myapp-api:test");
+Docker.Install();
+Docker.Build("./src/Api/Dockerfile", o => o.WithTag("myapp-api:test"));
 
 if (test)
 {
-    // Start test infrastructure
-    Docker.ComposeUp(o => o
-        .WithFile("docker-compose.test.yml")
-        .WithDetach()
-        .WithWait());
+    Ando.Block("integration", () =>
+    {
+        Shell.Run("docker", "compose", "-f", "docker-compose.test.yml", "up", "-d", "--wait");
 
-    // Run tests against compose services
-    Dotnet.Test(Dotnet.Project("./tests/Integration.Tests/Integration.Tests.csproj"), o => o
-        .WithEnvironment("API_URL", "http://localhost:5000"));
-
-    // Cleanup
-    Docker.ComposeDown(o => o
-        .WithFile("docker-compose.test.yml")
-        .WithVolumes());
+        // The tests call the services started above
+        Dotnet.Test(Dotnet.Project("./tests/Integration.Tests/Integration.Tests.csproj"));
+    })
+    .Finally(() => Shell.Run("docker", "compose", "-f", "docker-compose.test.yml", "down", "--volumes"));
 
     Log.Info("Integration tests complete");
 }
 ```
+
+`Dotnet.Test` has no way to set environment variables for one run. Have the tests read the compose service URL from `appsettings` or from an environment variable set in `.env.ando`.
 
 ## Example docker-compose.yml
 
@@ -285,12 +269,12 @@ volumes:
 
 ## Key Operations
 
-| Operation                                             | Purpose                |
-| ----------------------------------------------------- | ---------------------- |
-| [Docker.Build()](/providers/docker#build)             | Build a Docker image   |
-| [Docker.ComposeUp()](/providers/docker#composeup)     | Start compose services |
-| [Docker.ComposeDown()](/providers/docker#composedown) | Stop compose services  |
-| [Docker.ComposeExec()](/providers/docker#composeexec) | Run command in service |
+| Operation                                     | Purpose                                                     |
+| --------------------------------------------- | ----------------------------------------------------------- |
+| [Docker.Install()](/providers/docker#install) | Install the Docker CLI in the container                     |
+| [Docker.Build()](/providers/docker#build)     | Build (and optionally push) a Docker image                  |
+| [Shell.Run()](/providers/shell#run)           | Run `docker compose` commands (no Compose operation exists) |
+| [Ando.Block()](/providers/ando#block)         | Roll back with `OnFailure`, clean up with `Finally`         |
 
 ## Tips
 

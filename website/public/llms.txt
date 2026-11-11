@@ -1218,6 +1218,11 @@ AppService.DeployZip is resilient to flaky Azure uploads: if the deploy command 
 | `Npm.Ci(Root)` | CS1503: cannot convert 'BuildPath' to 'DirectoryRef' | Use `Npm.Ci(Directory("."))` |
 | `Profile("name")` | CS0119: 'Profile' is a type | Use `DefineProfile("name")` to create profiles |
 | `try { AppService.SwapSlots(...); } finally { AppService.Stop(...); }` | No error; the `finally` code runs while the script is evaluated, not after the steps | Use `Ando.Block(...).Finally(...)` or `Ando.Finally(...)` |
+| `Git.GetVersion()`, `Git.BumpVersion()`, `Git.CommitCount()`, `Git.ShortSha()` | CS1061: 'GitOperations' does not contain a definition | Use `Git.LastTag("v*")`, `Git.ShortCommit`, `Git.RevParse(...)`; bump versions with `ando bump` |
+| `Dotnet.Pack(...)` | CS1061: 'DotnetOperations' does not contain 'Pack' | Use `Nuget.Pack(project, o => o.WithVersion(...))` |
+| `Dotnet.Build(project, o => o.WithProperty("Version", v))` | CS1061: 'DotnetBuildOptions' does not contain 'WithProperty' | Set MSBuild properties in the project file or `Directory.Build.props`; `Nuget.Pack` has `WithVersion` |
+| `Docker.Push(...)`, `Docker.Tag(...)`, `Docker.Build(dir, "tag")`, `Docker.ComposeUp()` | CS1061 / CS1501 | Use `Docker.Build("Dockerfile", o => o.WithTag("...").WithPush())`; run `docker compose` with `Shell.Run("docker", "compose", ...)` |
+| `Cloudflare.WorkersDeploy(...)` | CS1061: 'CloudflareOperations' does not contain 'WorkersDeploy' | Run Wrangler through an npm script: `Npm.Run(dir, "deploy")` |
 | `if (show.Value == "x") { ... }` at the top level | InvalidOperationException: output not available yet | Read outputs inside `Ando.When(() => ..., ...)` or `Ando.Defer(() => ...)` |
 
 ## API Documentation

@@ -34,144 +34,101 @@ my-library/
 
 ## Basic Documentation Build
 
-Generate API documentation from your .NET project:
+Generate API documentation from your .NET project. `Docfx.GenerateDocs` runs `docfx metadata` and `docfx build` with the given configuration file:
 
 ```csharp
 var project = Dotnet.Project("./src/MyLibrary/MyLibrary.csproj");
 
-// Build project (generates XML documentation)
+// Build project (the project file enables GenerateDocumentationFile, see Tips)
 Dotnet.Restore(project);
-Dotnet.Build(project, o => o
-    .WithConfiguration(Configuration.Release)
-    .WithProperty("GenerateDocumentationFile", "true"));
+Dotnet.Build(project, o => o.Configuration = Configuration.Release);
 
-// Generate API documentation
-Docfx.Metadata("./docfx.json");
-Docfx.Build("./docfx.json");
+// Generate API documentation (metadata + build)
+Docfx.Install();
+Docfx.GenerateDocs("./docfx.json");
 
-Log.Info("Documentation generated in ./docs/_site");
+// Copy the generated site to the host
+Ando.CopyArtifactsToHost("_site", "./site");
+
+Log.Info("Documentation generated in ./site");
 ```
 
-## With Conceptual Documentation
+## Generate and Copy in One Step
 
-Combine API docs with markdown articles:
+`Docfx.BuildAndCopy` generates the documentation, copies it to a target directory and removes intermediate files:
 
 ```csharp
-var project = Dotnet.Project("./src/MyLibrary/MyLibrary.csproj");
+Docfx.Install();
+Docfx.BuildAndCopy("./docfx.json", "_site", "./docs/site");
 
-Dotnet.Restore(project);
-Dotnet.Build(project, o => o
-    .WithConfiguration(Configuration.Release)
-    .WithProperty("GenerateDocumentationFile", "true"));
-
-// Generate metadata from assemblies
-Docfx.Metadata("./docfx.json");
-
-// Build complete documentation site
-Docfx.Build("./docfx.json", o => o
-    .WithOutput(Root / "docs" / "_site"));
-
-// Copy additional assets if needed
-Ando.CopyArtifactsToHost("docs/_site", "./site");
-
-Log.Info("Full documentation site ready");
+Ando.CopyArtifactsToHost("docs/site", "./docs/site");
 ```
 
-## Deploy to GitHub Pages
+## Deploy the Documentation Site
 
-Generate and deploy documentation to GitHub Pages:
+ANDO has no GitHub Pages operation. Generate the site, copy it into the folder your hosting uses, and deploy that folder with the matching provider. For Cloudflare Pages:
 
 ```csharp
 var deploy = DefineProfile("deploy");
 
 var project = Dotnet.Project("./src/MyLibrary/MyLibrary.csproj");
 
-// Build library
 Dotnet.Restore(project);
-Dotnet.Build(project, o => o
-    .WithConfiguration(Configuration.Release)
-    .WithProperty("GenerateDocumentationFile", "true"));
+Dotnet.Build(project, o => o.Configuration = Configuration.Release);
 
-// Generate documentation
-Docfx.Metadata("./docfx.json");
-Docfx.Build("./docfx.json");
+Docfx.Install();
+Docfx.GenerateDocs("./docfx.json");
 
 if (deploy)
 {
-    // Deploy to GitHub Pages
-    GitHub.PagesPublish(Root / "docs" / "_site");
+    Cloudflare.EnsureAuthenticated();
+    Cloudflare.PagesDeploy(Directory("./_site"), "my-library-docs");
 
-    Log.Info("Documentation deployed to GitHub Pages");
+    Log.Info("Documentation deployed");
 }
 ```
 
 ## Versioned Documentation
 
-Maintain documentation for multiple versions:
+Keep each version in its own folder:
 
 ```csharp
 var deploy = DefineProfile("deploy");
 
 var project = Dotnet.Project("./src/MyLibrary/MyLibrary.csproj");
-var version = Git.GetVersion();
+var version = project.Version; // read from the project file
 
 Dotnet.Restore(project);
-Dotnet.Build(project, o => o
-    .WithConfiguration(Configuration.Release)
-    .WithProperty("GenerateDocumentationFile", "true")
-    .WithProperty("Version", version));
+Dotnet.Build(project, o => o.Configuration = Configuration.Release);
 
-// Generate docs with version in output path
-Docfx.Metadata("./docfx.json");
-Docfx.Build("./docfx.json", o => o
-    .WithOutput(Root / "docs" / "_site" / version));
+Docfx.Install();
+
+// Generate and copy into a folder named after the version
+Docfx.BuildAndCopy("./docfx.json", "_site", $"./docs/site/{version}");
 
 if (deploy)
 {
-    // Also update "latest" symlink/copy
-    Docfx.Build("./docfx.json", o => o
-        .WithOutput(Root / "docs" / "_site" / "latest"));
+    Ando.CopyArtifactsToHost($"docs/site/{version}", $"./docs/site/{version}");
 
-    GitHub.PagesPublish(Root / "docs" / "_site");
-
-    Log.Info($"Deployed docs for version {version}");
+    Log.Info($"Built docs for version {version}");
 }
 ```
 
-## Serve Locally for Preview
+## Preview Locally
 
-Serve documentation locally during development:
+ANDO has no operation that serves documentation. Generate the site and copy it to the host, then serve the folder with any static file server:
 
 ```csharp
-var serve = DefineProfile("serve");
-
-var project = Dotnet.Project("./src/MyLibrary/MyLibrary.csproj");
-
-Dotnet.Restore(project);
-Dotnet.Build(project, o => o
-    .WithProperty("GenerateDocumentationFile", "true"));
-
-Docfx.Metadata("./docfx.json");
-
-if (serve)
-{
-    // Build and serve with live reload
-    Docfx.Serve("./docfx.json");
-}
-else
-{
-    // Just build
-    Docfx.Build("./docfx.json");
-}
+Docfx.Install();
+Docfx.GenerateDocs("./docfx.json");
+Ando.CopyArtifactsToHost("_site", "./site");
 ```
 
 Usage:
-```bash
-# Build docs only
-ando
 
-# Build and serve locally
-ando -p serve
+```bash
+ando
+# then, for example: python3 -m http.server --directory site
 ```
 
 ## Multi-Project Documentation
@@ -183,22 +140,19 @@ var coreProject = Dotnet.Project("./src/Core/Core.csproj");
 var apiProject = Dotnet.Project("./src/Api/Api.csproj");
 var clientProject = Dotnet.Project("./src/Client/Client.csproj");
 
-// Build all projects with XML docs
+// Build all projects (each project file enables GenerateDocumentationFile)
 Dotnet.Restore(coreProject);
 Dotnet.Restore(apiProject);
 Dotnet.Restore(clientProject);
 
-Dotnet.Build(coreProject, o => o
-    .WithProperty("GenerateDocumentationFile", "true"));
-Dotnet.Build(apiProject, o => o
-    .WithProperty("GenerateDocumentationFile", "true"));
-Dotnet.Build(clientProject, o => o
-    .WithProperty("GenerateDocumentationFile", "true"));
+Dotnet.Build(coreProject);
+Dotnet.Build(apiProject);
+Dotnet.Build(clientProject);
 
 // Generate combined documentation
 // docfx.json should reference all three projects
-Docfx.Metadata("./docfx.json");
-Docfx.Build("./docfx.json");
+Docfx.Install();
+Docfx.GenerateDocs("./docfx.json");
 
 Log.Info("Multi-project documentation generated");
 ```
@@ -219,13 +173,8 @@ Log.Info("Multi-project documentation generated");
     }
   ],
   "build": {
-    "content": [
-      { "files": ["api/**.yml", "api/index.md"] },
-      { "files": ["articles/**.md", "toc.yml", "index.md"] }
-    ],
-    "resource": [
-      { "files": ["images/**"] }
-    ],
+    "content": [{ "files": ["api/**.yml", "api/index.md"] }, { "files": ["articles/**.md", "toc.yml", "index.md"] }],
+    "resource": [{ "files": ["images/**"] }],
     "dest": "_site",
     "template": ["default", "modern"]
   }
@@ -234,15 +183,17 @@ Log.Info("Multi-project documentation generated");
 
 ## Key Operations
 
-| Operation | Purpose |
-|-----------|---------|
-| [Docfx.Metadata()](/providers/docfx#metadata) | Generate API metadata from source |
-| [Docfx.Build()](/providers/docfx#build) | Build documentation site |
-| [Docfx.Serve()](/providers/docfx#serve) | Serve docs locally with live reload |
+| Operation                                                   | Purpose                                 |
+| ----------------------------------------------------------- | --------------------------------------- |
+| [Docfx.Install()](/providers/docfx#install)                 | Install DocFX as a dotnet global tool   |
+| [Docfx.GenerateDocs()](/providers/docfx#generatedocs)       | Run `docfx metadata` and `docfx build`  |
+| [Docfx.CopyToDirectory()](/providers/docfx#copytodirectory) | Copy the generated site                 |
+| [Docfx.BuildAndCopy()](/providers/docfx#buildandcopy)       | Generate, copy and clean up in one step |
+| [Docfx.Cleanup()](/providers/docfx#cleanup)                 | Remove intermediate files               |
 
 ## Tips
 
-- **XML comments** - Enable `GenerateDocumentationFile` in your `.csproj`
+- **XML comments** - Enable `<GenerateDocumentationFile>true</GenerateDocumentationFile>` in your `.csproj` (`Dotnet.Build` cannot set MSBuild properties)
 - **Triple-slash comments** - Document all public APIs with `///` comments
 - **Examples in docs** - Use `<example>` tags in XML comments
 - **Custom templates** - DocFX supports custom themes and templates

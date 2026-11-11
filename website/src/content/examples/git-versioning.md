@@ -1,6 +1,6 @@
 ---
 title: Git Versioning
-description: Automatically version your releases using Git tags and semantic versioning.
+description: Version your releases with Git tags and semantic versioning.
 category: .NET
 tags:
   - git
@@ -11,38 +11,36 @@ tags:
 
 ## Overview
 
-Git tags provide a reliable way to version your software. This example shows how to use ANDO's Git provider to implement semantic versioning, auto-increment versions, and create tagged releases.
+Git tags provide a reliable way to version your software. This example shows how to read the latest tag, name pre-release builds, create and push tags, and attach artifacts to a GitHub release with ANDO's Git, Nuget and GitHub providers.
+
+`Git.LastTag()` is evaluated when the script loads, on the host, so its result can be used in plain C# (`if`, string interpolation). To bump the version in your project files and write the changelog, use the `ando bump` command instead of computing it in the build script.
 
 ## Basic Version from Git Tag
 
-Get the current version from the latest Git tag:
+Read the latest `v*` tag and use it for a NuGet package version:
 
 ```csharp
-var version = Git.GetVersion();
+// "v1.2.3" -> "1.2.3"; null when no tag exists yet
+var version = Git.LastTag("v*")?.TrimStart('v') ?? "0.0.0";
 
 Log.Info($"Current version: {version}");
 
-// Use version in build
 var project = Dotnet.Project("./src/MyApp/MyApp.csproj");
 
 Dotnet.Restore(project);
-Dotnet.Build(project, o => o.WithProperty("Version", version));
+Dotnet.Build(project);
 ```
 
-## Auto-Increment Version
+`Dotnet.Build` has no option to set MSBuild properties, so the `Version` of an assembly comes from the project file. Packages can take the version from the tag (see below).
 
-Bump the version based on commit messages or manually:
+## Tag and Push a Release
+
+Create the tag from a version you computed in C# and push it:
 
 ```csharp
 var release = DefineProfile("release");
-var major = DefineProfile("major");
-var minor = DefineProfile("minor");
 
 var project = Dotnet.Project("./src/MyApp/MyApp.csproj");
-
-// Get current version from tags
-var currentVersion = Git.GetVersion();
-Log.Info($"Current version: {currentVersion}");
 
 Dotnet.Restore(project);
 Dotnet.Build(project);
@@ -50,71 +48,45 @@ Dotnet.Test(Dotnet.Project("./tests/MyApp.Tests/MyApp.Tests.csproj"));
 
 if (release)
 {
-    // Determine version bump type
-    string newVersion;
-    if (major)
-    {
-        newVersion = Git.BumpVersion("major");
-    }
-    else if (minor)
-    {
-        newVersion = Git.BumpVersion("minor");
-    }
-    else
-    {
-        newVersion = Git.BumpVersion("patch");
-    }
+    // Next patch version from the latest tag (plain C#, evaluated when the script loads)
+    var current = Version.Parse(Git.LastTag("v*")?.TrimStart('v') ?? "0.0.0");
+    var next = new Version(current.Major, current.Minor, current.Build + 1);
 
-    Log.Info($"New version: {newVersion}");
-
-    // Create and push tag
-    Git.Tag($"v{newVersion}");
+    Git.Tag($"v{next}");
     Git.Push();
     Git.PushTags();
 
-    Log.Info($"Released version {newVersion}");
+    Log.Info($"Released version {next}");
 }
 ```
 
 Usage:
+
 ```bash
-# Patch release (1.0.0 -> 1.0.1)
 ando -p release
-
-# Minor release (1.0.1 -> 1.1.0)
-ando -p release,minor
-
-# Major release (1.1.0 -> 2.0.0)
-ando -p release,major
 ```
 
 ## Version in NuGet Package
 
-Include Git version in NuGet package:
+`Nuget.Pack` accepts a version and a pre-release suffix:
 
 ```csharp
 var publish = DefineProfile("publish");
 
 var project = Dotnet.Project("./src/MyLibrary/MyLibrary.csproj");
-var version = Git.GetVersion();
+var version = Git.LastTag("v*")?.TrimStart('v') ?? "0.0.0";
 
 Dotnet.Restore(project);
-Dotnet.Build(project, o => o.WithProperty("Version", version));
+Dotnet.Build(project);
 Dotnet.Test(Dotnet.Project("./tests/MyLibrary.Tests/MyLibrary.Tests.csproj"));
 
 if (publish)
 {
-    // Pack with version from Git
-    Dotnet.Pack(project, o => o
-        .WithConfiguration(Configuration.Release)
-        .WithProperty("Version", version)
+    Nuget.EnsureAuthenticated();
+    Nuget.Pack(project, o => o
+        .WithVersion(version)
         .Output(Root / "packages"));
-
-    // Push to NuGet
-    Nuget.Push(
-        Root / "packages" / $"MyLibrary.{version}.nupkg",
-        Env("NUGET_API_KEY")
-    );
+    Nuget.Push(project);
 
     Log.Info($"Published MyLibrary {version} to NuGet");
 }
@@ -122,44 +94,32 @@ if (publish)
 
 ## Pre-release Versions
 
-Handle pre-release versions for CI builds:
+Name CI builds with a suffix and the short commit:
 
 ```csharp
 var release = DefineProfile("release");
 
 var project = Dotnet.Project("./src/MyApp/MyApp.csproj");
-
-// Get base version from tags
-var baseVersion = Git.GetVersion();
-var commitCount = Git.CommitCount();
-var shortSha = Git.ShortSha();
-
-// Build version string
-string version;
-if (release)
-{
-    // Release build: use clean version
-    version = baseVersion;
-}
-else
-{
-    // CI build: add pre-release suffix
-    version = $"{baseVersion}-ci.{commitCount}+{shortSha}";
-}
-
-Log.Info($"Building version: {version}");
+var baseVersion = Git.LastTag("v*")?.TrimStart('v') ?? "0.0.0";
 
 Dotnet.Restore(project);
-Dotnet.Build(project, o => o.WithProperty("Version", version));
+Dotnet.Build(project);
+
+// Release build: clean version. CI build: pre-release suffix with the short commit.
+var version = release ? baseVersion : $"{baseVersion}-ci.{Git.ShortCommit}";
+Log.Info($"Building version: {version}");
+
+Nuget.Pack(project, o => o.WithVersion(version).Output(Root / "packages"));
 ```
 
 Example versions:
+
 - Release: `1.2.3`
-- CI build: `1.2.3-ci.47+a1b2c3d`
+- CI build: `1.2.3-ci.a1b2c3d`
 
 ## GitHub Release with Changelog
 
-Create a GitHub release with auto-generated changelog:
+Create a GitHub release with generated notes and uploaded files (`path#name` renames an uploaded file):
 
 ```csharp
 var release = DefineProfile("release");
@@ -172,13 +132,8 @@ Dotnet.Test(Dotnet.Project("./tests/MyApp.Tests/MyApp.Tests.csproj"));
 
 if (release)
 {
-    // Bump and tag
-    var newVersion = Git.BumpVersion("patch");
-    Git.Tag($"v{newVersion}");
-    Git.Push();
-    Git.PushTags();
+    var tag = "v1.2.3";
 
-    // Build release artifacts
     Dotnet.Publish(project, o => o
         .WithConfiguration(Configuration.Release)
         .WithRuntime("win-x64")
@@ -189,81 +144,81 @@ if (release)
         .WithRuntime("linux-x64")
         .Output(Root / "publish" / "linux-x64"));
 
-    // Create GitHub release
-    GitHub.CreateRelease($"v{newVersion}", o => o
-        .WithTitle($"Release {newVersion}")
-        .WithGenerateNotes()
-        .WithAsset(Root / "publish" / "win-x64", "myapp-win-x64.zip")
-        .WithAsset(Root / "publish" / "linux-x64", "myapp-linux-x64.zip"));
+    Git.Tag(tag);
+    Git.Push();
+    Git.PushTags();
 
-    Log.Info($"Created GitHub release v{newVersion}");
+    GitHub.CreateRelease(o => o
+        .WithTag(tag)
+        .WithTitle($"Release {tag}")
+        .WithGeneratedNotes()
+        .WithFiles(
+            "publish/win-x64/MyApp.exe#myapp-win-x64.exe",
+            "publish/linux-x64/MyApp#myapp-linux-x64"));
+
+    Log.Info($"Created GitHub release {tag}");
 }
 ```
 
 ## Monorepo Versioning
 
-Version multiple packages independently:
+Version several packages independently with their own tag prefix, and build only what changed:
 
 ```csharp
-var releaseCore = DefineProfile("release-core");
-var releaseApi = DefineProfile("release-api");
-
 var coreProject = Dotnet.Project("./src/Core/Core.csproj");
 var apiProject = Dotnet.Project("./src/Api/Api.csproj");
 
-// Each package has its own version tag prefix
-var coreVersion = Git.GetVersion("core-v");
-var apiVersion = Git.GetVersion("api-v");
-
-Log.Info($"Core: {coreVersion}, API: {apiVersion}");
+var coreTag = Git.LastTag("core-v*");
+var apiTag = Git.LastTag("api-v*");
 
 Dotnet.Restore(coreProject);
 Dotnet.Restore(apiProject);
-Dotnet.Build(coreProject, o => o.WithProperty("Version", coreVersion));
-Dotnet.Build(apiProject, o => o.WithProperty("Version", apiVersion));
 
-if (releaseCore)
+// Build a package when it changed since its last tag (or has no tag yet)
+if (coreTag == null || Git.ChangedSince(coreTag, "src/Core"))
 {
-    var newVersion = Git.BumpVersion("patch", "core-v");
-    Git.Tag($"core-v{newVersion}");
-    Git.PushTags();
-    Log.Info($"Released Core {newVersion}");
+    Dotnet.Build(coreProject);
+    Log.Info($"Core changed since {coreTag ?? "the start"}");
 }
 
-if (releaseApi)
+if (apiTag == null || Git.ChangedSince(apiTag, "src/Api"))
 {
-    var newVersion = Git.BumpVersion("patch", "api-v");
-    Git.Tag($"api-v{newVersion}");
-    Git.PushTags();
-    Log.Info($"Released API {newVersion}");
+    Dotnet.Build(apiProject);
+    Log.Info($"API changed since {apiTag ?? "the start"}");
 }
 ```
 
-Usage:
-```bash
-# Release core package
-ando -p release-core
+## Step-based Alternatives
 
-# Release API package
-ando -p release-api
+`Git.LastTag`, `Git.Commit`, `Git.ShortCommit` and `Git.ChangedSince` are evaluated when the script loads. When the value must be read in order with other steps, or must show up in `--dry-run`, use the step variants and read `Value` at execution time:
+
+```csharp
+var tag = Git.LatestTag("v*");
+var sha = Git.RevParse(shortSha: true);
+var changed = Git.ChangedFiles("HEAD~1", "src");
+
+Ando.When(() => changed.Value != "", () => Log.Info($"Changed since {tag.Value} at {sha.Value}"));
 ```
 
 ## Key Operations
 
-| Operation | Purpose |
-|-----------|---------|
-| [Git.GetVersion()](/providers/git#getversion) | Get version from latest tag |
-| [Git.BumpVersion()](/providers/git#bumpversion) | Increment semantic version |
-| [Git.Tag()](/providers/git#tag) | Create a Git tag |
-| [Git.Push()](/providers/git#push) | Push commits to remote |
-| [Git.PushTags()](/providers/git#pushtags) | Push tags to remote |
-| [Git.CommitCount()](/providers/git#commitcount) | Count commits since tag |
-| [Git.ShortSha()](/providers/git#shortsha) | Get short commit SHA |
+| Operation                                                                                                                                 | Purpose                                                             |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [Git.LastTag()](/providers/git#lasttag)                                                                                                   | Latest tag matching a glob (evaluated when the script loads)        |
+| [Git.ShortCommit](/providers/git#shortcommit)                                                                                             | Short commit SHA (evaluated when the script loads)                  |
+| [Git.ChangedSince()](/providers/git#changedsince)                                                                                         | True if paths changed since a ref (evaluated when the script loads) |
+| [Git.LatestTag()](/providers/git#latesttag), [Git.RevParse()](/providers/git#revparse), [Git.ChangedFiles()](/providers/git#changedfiles) | Step-based counterparts                                             |
+| [Git.Tag()](/providers/git#tag)                                                                                                           | Create a Git tag                                                    |
+| [Git.Push()](/providers/git#push)                                                                                                         | Push the current branch                                             |
+| [Git.PushTags()](/providers/git#pushtags)                                                                                                 | Push tags to remote                                                 |
+| [Nuget.Pack()](/providers/nuget#pack)                                                                                                     | Pack with `WithVersion`                                             |
+| [GitHub.CreateRelease()](/providers/github#createrelease)                                                                                 | Create a release with notes and files                               |
 
 ## Tips
 
 - **Tag format** - Use `v` prefix consistently (e.g., `v1.2.3`)
 - **Semantic versioning** - Follow semver for predictable version bumps
+- **Bumping project files** - `ando bump` updates the version in your project files and writes the changelog
 - **Pre-release builds** - Include commit info for traceability
 - **Protect tags** - Configure branch protection to prevent tag deletion
 

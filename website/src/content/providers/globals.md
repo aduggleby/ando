@@ -107,7 +107,7 @@ if (release) {
 if (publish) {
   Nuget.EnsureAuthenticated();
   Nuget.Pack(app);
-  Nuget.Push(app, o => o.SkipDuplicate());
+  Nuget.Push(app); // skips packages that already exist by default
 }
 
 // CLI usage:
