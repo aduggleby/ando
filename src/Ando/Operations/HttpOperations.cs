@@ -177,9 +177,15 @@ public class HttpOperations(StepRegistry registry, IBuildLogger logger, Func<ICo
                     return $"{url} returned {(int)response.StatusCode}, expected {options.ExpectedStatus}";
                 }
 
-                if (options.ExpectedJson.Count > 0)
+                if (options.ExpectedJson.Count > 0 || options.Expectations.Any)
                 {
                     var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                    var mismatch = options.Expectations.Check(response.Content.Headers.ContentType?.ToString(), body);
+                    if (mismatch != null)
+                    {
+                        return $"{url} {mismatch}";
+                    }
+
                     var output = new StepOutput("Http.WaitForHealthy");
                     output.Set(body);
                     foreach (var (path, expected) in options.ExpectedJson)
@@ -221,15 +227,34 @@ public class HttpOperations(StepRegistry registry, IBuildLogger logger, Func<ICo
     /// <paramref name="allowAnyStatus"/> is true.
     /// Usage: var health = Http.Get("https://eu.example.com/healthz"); Ando.Report("eu.healthz", health);
     /// </summary>
-    public StepOutput Get(string url, bool allowAnyStatus = false) => Get(() => url, allowAnyStatus, url);
+    public StepOutput Get(string url, bool allowAnyStatus = false) => Get(() => url, allowAnyStatus, url, null);
 
     /// <summary>Sends a GET request to a URL computed at execution time.</summary>
-    public StepOutput Get(Func<string> url, bool allowAnyStatus = false) => Get(url, allowAnyStatus, null);
+    public StepOutput Get(Func<string> url, bool allowAnyStatus = false) => Get(url, allowAnyStatus, null, null);
+
+    /// <summary>
+    /// Like <c>Get(url)</c>, with response expectations: the step also fails when the content
+    /// type does not start with the expected prefix, or the body lacks an expected string or
+    /// does not match an expected regex. The failure message shows what was received
+    /// (content type and the first 200 characters of the body). The body stays available as Value.
+    /// Usage: Http.Get("https://example.com/", o => o.ExpectContentType("text/html").ExpectBodyContains("&lt;title&gt;"));
+    /// </summary>
+    public StepOutput Get(string url, Action<HttpGetOptions> configure) => Get(() => url, configure, url);
+
+    /// <summary>Like <c>Get(url, configure)</c> for a URL computed at execution time.</summary>
+    public StepOutput Get(Func<string> url, Action<HttpGetOptions> configure) => Get(url, configure, null);
+
+    private StepOutput Get(Func<string> url, Action<HttpGetOptions> configure, string? context)
+    {
+        var options = new HttpGetOptions();
+        configure(options);
+        return Get(url, options.AllowAnyStatusCode, context, options.Expectations);
+    }
 
     /// <summary>Request timeout for <c>Get</c> (settable for tests).</summary>
     internal TimeSpan GetTimeout { get; set; } = TimeSpan.FromSeconds(30);
 
-    private StepOutput Get(Func<string> getUrl, bool allowAnyStatus, string? context)
+    private StepOutput Get(Func<string> getUrl, bool allowAnyStatus, string? context, HttpResponseExpectations? expectations)
     {
         var output = new StepOutput("Http.Get");
         Registry.Register("Http.Get", async () =>
@@ -255,12 +280,19 @@ public class HttpOperations(StepRegistry registry, IBuildLogger logger, Func<ICo
             output.Set(body, statusCode: status);
             Logger.Info($"    GET {url} -> {status}");
 
-            if (allowAnyStatus || response.IsSuccessStatusCode)
+            if (!allowAnyStatus && !response.IsSuccessStatusCode)
             {
-                return true;
+                Logger.Error($"    GET {url} returned {status}.");
+                return false;
             }
-            Logger.Error($"    GET {url} returned {status}.");
-            return false;
+
+            var mismatch = expectations?.Check(response.Content.Headers.ContentType?.ToString(), body);
+            if (mismatch != null)
+            {
+                Logger.Error($"    GET {url} returned {status}, but {mismatch}");
+                return false;
+            }
+            return true;
         }, context);
         return output;
     }

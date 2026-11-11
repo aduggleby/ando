@@ -89,6 +89,32 @@ public class HttpHealthCheckOptions
     public IReadOnlyList<KeyValuePair<string, string>> ExpectedJson => _expectedJson;
     private readonly List<KeyValuePair<string, string>> _expectedJson = [];
 
+    internal HttpResponseExpectations Expectations { get; } = new();
+
+    /// <summary>
+    /// Requires the Content-Type header to start with <paramref name="prefix"/> (case-insensitive),
+    /// e.g. "text/html". A mismatch is a failed check and shows what was received.
+    /// </summary>
+    public HttpHealthCheckOptions ExpectContentType(string prefix)
+    {
+        Expectations.ExpectContentType(prefix);
+        return this;
+    }
+
+    /// <summary>Requires the response body to contain <paramref name="text"/> (case-sensitive).</summary>
+    public HttpHealthCheckOptions ExpectBodyContains(string text)
+    {
+        Expectations.ExpectBodyContains(text);
+        return this;
+    }
+
+    /// <summary>Requires the response body to match the regular expression <paramref name="pattern"/> (.NET syntax).</summary>
+    public HttpHealthCheckOptions ExpectBodyMatches(string pattern)
+    {
+        Expectations.ExpectBodyMatches(pattern);
+        return this;
+    }
+
     /// <summary>
     /// Requires this many successful checks in a row (a failure resets the count).
     /// With several URLs, one check means every URL passed.
