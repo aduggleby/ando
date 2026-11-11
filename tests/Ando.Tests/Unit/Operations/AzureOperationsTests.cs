@@ -322,4 +322,51 @@ public class AzureOperationsTests
             }
         }
     }
+
+    [Fact]
+    public async Task InstallCli_RegistersBashStepWithExactVersion()
+    {
+        var azure = CreateAzure();
+
+        var step = azure.InstallCli("2.90.0");
+        await _registry.Steps[0].Execute();
+
+        Assert.NotNull(step);
+        Assert.Equal("Azure.InstallCli", _registry.Steps[0].Name);
+        Assert.Equal("2.90.0", _registry.Steps[0].Context);
+        var cmd = _executor.LastCommand!;
+        Assert.Equal("bash", cmd.Command);
+        Assert.Equal(new[] { "-c", AzureOperations.InstallCliScript, "ando-azure-install-cli", "2.90.0" }, cmd.Args);
+    }
+
+    [Theory]
+    [InlineData("latest")]
+    [InlineData("2.90")]
+    [InlineData("2.90.0-1")]
+    [InlineData("")]
+    public void InstallCli_RejectsNonExactVersions(string version)
+    {
+        Assert.Throws<ArgumentException>(() => CreateAzure().InstallCli(version));
+    }
+
+    [Fact]
+    public void InstallCliScript_UsesSignedRepoPinnedPackageAndHold()
+    {
+        var script = AzureOperations.InstallCliScript;
+        Assert.Contains("/etc/apt/keyrings/microsoft.gpg", script);
+        Assert.Contains("Signed-By: /etc/apt/keyrings/microsoft.gpg", script);
+        Assert.Contains("VERSION_CODENAME", script);
+        Assert.Contains("package=\"$version-1~$codename\"", script);
+        Assert.Contains("azure-cli=$package", script);
+        Assert.Contains("apt-mark hold azure-cli", script);
+        Assert.Contains("is not available from packages.microsoft.com", script);
+        Assert.Contains("az version", script);
+    }
+
+    [Fact]
+    public void AutomaticAzInstallScript_NeverReplacesAnExistingAz()
+    {
+        // The auto-install runs only when az is missing, so it cannot change a version pinned by Azure.InstallCli.
+        Assert.StartsWith("set -eu; command -v az >/dev/null 2>&1 && exit 0;", Ando.Execution.ContainerExecutor.AzureCliInstallScript);
+    }
 }

@@ -50,6 +50,75 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
     // Environment variable the Azure CLI uses to locate its profile directory.
     internal const string EnvAzureConfigDir = "AZURE_CONFIG_DIR";
 
+    // Positional argument: $1 exact azure-cli version, e.g. 2.90.0.
+    internal const string InstallCliScript = """
+        set -euo pipefail
+        version=$1
+        if command -v az >/dev/null 2>&1; then
+          current=$(az version --query '"azure-cli"' --output tsv 2>/dev/null || true)
+          if [ "$current" = "$version" ]; then echo "Azure CLI $version is already installed; skipping."; exit 0; fi
+        fi
+        command -v apt-get >/dev/null 2>&1 || { echo "Azure.InstallCli needs a Debian or Ubuntu image (apt-get not found)." >&2; exit 1; }
+        export DEBIAN_FRONTEND=noninteractive
+        . /etc/os-release
+        codename=${VERSION_CODENAME:-}
+        [ -n "$codename" ] || { echo "Azure.InstallCli: VERSION_CODENAME is not set in /etc/os-release." >&2; exit 1; }
+        apt-get update -qq
+        apt-get install -y -qq ca-certificates curl gnupg
+        mkdir -p /etc/apt/keyrings
+        curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor --yes -o /etc/apt/keyrings/microsoft.gpg
+        chmod go+r /etc/apt/keyrings/microsoft.gpg
+        cat > /etc/apt/sources.list.d/azure-cli.sources <<EOF
+        Types: deb
+        URIs: https://packages.microsoft.com/repos/azure-cli/
+        Suites: $codename
+        Components: main
+        Architectures: $(dpkg --print-architecture)
+        Signed-By: /etc/apt/keyrings/microsoft.gpg
+        EOF
+        apt-get update -qq
+        package="$version-1~$codename"
+        if ! apt-cache madison azure-cli | awk '{print $3}' | grep -Fxq "$package"; then
+          echo "Azure.InstallCli: azure-cli=$package is not available from packages.microsoft.com. Available versions:" >&2
+          apt-cache madison azure-cli | awk '{print $3}' | head -n 15 >&2
+          exit 1
+        fi
+        apt-get install -y -qq --allow-downgrades "azure-cli=$package"
+        # Hold the package so no later apt command upgrades or replaces this version.
+        apt-mark hold azure-cli >/dev/null
+        installed=$(az version --query '"azure-cli"' --output tsv)
+        [ "$installed" = "$version" ] || { echo "Azure.InstallCli: expected azure-cli $version but found $installed." >&2; exit 1; }
+        echo "Installed Azure CLI $installed:"
+        az version
+        """;
+
+    /// <summary>
+    /// Registers a step that installs exactly this Azure CLI version from Microsoft's signed apt
+    /// repository (packages.microsoft.com; key in /etc/apt/keyrings, suite from /etc/os-release),
+    /// i.e. the package `azure-cli=&lt;version&gt;-1~&lt;codename&gt;`, in the build container. Needs a Debian
+    /// or Ubuntu image. The step fails clearly, listing available versions, when that version is
+    /// not published. It skips the install when az already reports exactly this version, logs
+    /// `az version` after installing, and holds the apt package so nothing upgrades it.
+    /// The automatic az install ANDO performs before the first az command only runs when az is
+    /// missing, so it never installs or replaces a version after this step. Put this step before
+    /// the first Azure/AppService/Functions/Bicep step; a latest az installed automatically
+    /// earlier in the run is replaced (downgraded) by this step.
+    /// Usage: Azure.InstallCli("2.90.0");
+    /// </summary>
+    /// <param name="version">Exact azure-cli version, for example "2.90.0".</param>
+    public CommandStep InstallCli(string version)
+    {
+        if (!System.Text.RegularExpressions.Regex.IsMatch(version, @"^\d+\.\d+\.\d+$"))
+        {
+            throw new ArgumentException(
+                $"Azure.InstallCli needs an exact version such as \"2.90.0\", not \"{version}\".", nameof(version));
+        }
+
+        return ShellCommandOperations.RegisterCommandStep(Registry, Logger, ExecutorFactory, "Azure.InstallCli", "bash",
+            ["-c", InstallCliScript, "ando-azure-install-cli", version], version,
+            Math.Max(20 * 60 * 1000, Registry.DefaultCommandTimeoutMs ?? 0));
+    }
+
     /// <summary>
     /// Registers a step to verify the user is logged in to Azure.
     /// Fails the build if not authenticated.
