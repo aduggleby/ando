@@ -397,7 +397,7 @@ Full documentation: https://andobuild.com/hooks
 ## Key Facts
 
 - File: `build.csando` (C# code, no .cs extension)
-- Execution: All builds run in Docker containers. Operations register steps that run in the container, with these exceptions: `Git.*` operations and `Ando.Build` run on the host (`Ando.Build` starts a child `ando` build with its own container), and the evaluation-time members `Git.Commit`, `Git.ShortCommit`, `Git.ChangedSince`, `Git.LastTag`, `Docker.IsAvailable` and `Docfx.IsInstalled` are not steps at all (see "Evaluated when the script loads" under All Operations)
+- Execution: All builds run in Docker containers. Operations register steps that run in the container, with these exceptions: `Git.*` operations and `Ando.Build` run on the host (`Ando.Build` starts a child `ando` build with its own container), and the evaluation-time members `Git.Commit`, `Git.ShortCommit`, `Git.CommitTime`, `Git.ChangedSince`, `Git.LastTag`, `Dotnet.ReadVersion`, `Docker.IsAvailable` and `Docfx.IsInstalled` are not steps at all (see "Evaluated when the script loads" under All Operations)
 - No `using` statements needed - namespaces are pre-imported
 - Operations register steps that execute in order, after the whole script has been evaluated
 - The image `mcr.microsoft.com/dotnet/sdk:10.0` (Ubuntu 24.04) has curl, tar, openssl, git and bash but not `zip` or `unzip`. `AppService.DeployFolder` installs zip itself and `Bun.Install` installs unzip.
@@ -530,6 +530,8 @@ if (publish) {
 | Git | GitOperations | Git version control operations (tag, push). |
 | GitHub | GitHubOperations | GitHub releases, PRs, and container registry. |
 | Ando | AndoOperations | Build configuration, artifacts, and nested builds. |
+| Archive | ArchiveOperations | Deterministic zip and tar.gz archives (`Archive.Zip`, `Archive.TarGz`). |
+| Files | FilesOperations | Copy files and directories in the container (`Files.Copy`). |
 | Log | LogOperations | Logging (Info, Warning, Error, Debug). |
 | Playwright | PlaywrightOperations | Playwright E2E testing. Requires DirectoryRef arguments. |
 
@@ -823,12 +825,12 @@ Ando.When(
     () => Log.Info("release slot is running"),
     () => Log.Warning("release slot is not running"));
 
-var probe = Shell.Run("curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "https://example.com").AllowFailure();
+var probe = Shell.Run("test", "-f", "dist/index.html").AllowFailure();
 Ando.Defer(() =>
 {
     if (probe.ExitCode != 0)
     {
-        Log.Warning("curl failed");
+        Log.Warning("dist/index.html is missing");
     }
 });
 ```
@@ -866,11 +868,12 @@ Six installers put a tool into the build container (skipped when already present
 
 ### Dotnet
 - Dotnet.SdkInstall(version?) - Install .NET SDK globally (default: 9.0). Use for base images without .NET.
+- Dotnet.ReadVersion(path = "Directory.Build.props") - EVALUATED WHEN THE SCRIPT LOADS, on the host; not a step. Returns the version string, relative to the source root (the --ref worktree when set). The file needs exactly one `<Version>` directly in a `<PropertyGroup>`; the literal property is read (no MSBuild evaluation, imports, conditions or `$(...)`); throws on a missing file or an empty/ambiguous version. Example: `var version = Dotnet.ReadVersion();`
 - Dotnet.Project(path) - Create a .NET project reference from a .csproj path. Returns ProjectRef with Path, Name, Directory, and Version properties.
-- Dotnet.Restore(project) - Restore NuGet packages
-- Dotnet.Build(project) - Compile a project
-- Dotnet.Test(project) - Run unit tests
-- Dotnet.Publish(project, options?) - Create deployment artifacts
+- Dotnet.Restore(project) - Restore NuGet packages: `dotnet restore <proj> [--no-cache] [-r <rid>]`
+- Dotnet.Build(project) - Compile a project: `dotnet build <proj> [-c <cfg>] [--no-restore]` (no -c unless set: Release is NOT the default)
+- Dotnet.Test(project) - Run unit tests: `dotnet test <proj> [-c <cfg>] [--no-restore] [--no-build] [--filter <f>]`
+- Dotnet.Publish(project, options?) - Create deployment artifacts: `dotnet publish <proj> [-c <cfg>] [-o <absolute out>] [--no-restore] [--no-build] [--self-contained | --no-self-contained] [-r <rid>] [-p:PublishSingleFile=true] [--nologo]`; output paths are made absolute; Release is NOT the default. Exactly `dotnet publish p -c Release -o out --nologo`: `Dotnet.Publish(p, o => o.WithConfiguration(Configuration.Release).Output("out").WithNoLogo())`
 - Dotnet.Tool(name, version?) - Reference a .NET CLI tool
 
 ### Ef
@@ -887,6 +890,7 @@ Six installers put a tool into the build container (skipped when already present
 - Npm.Build(directory) - Run npm run build. Uses the standard 5-minute command timeout.
 
 ### Azure
+- Azure.InstallCli(version) - Installer: installs exactly this azure-cli version (`X.Y.Z`) from Microsoft's signed apt repo (key /etc/apt/keyrings/microsoft.gpg, codename from /etc/os-release; package `azure-cli=<v>-1~<codename>`). Skips if az already reports that version; fails and lists the 15 newest available versions if the version is not published; installs with --allow-downgrades, runs `apt-mark hold azure-cli`, logs `az version`. The automatic az install never replaces it. Put it BEFORE the first Azure/AppService/Functions/Bicep step (an az installed automatically earlier is replaced). Debian/Ubuntu images only. Example: `Azure.InstallCli("2.90.0");`
 - Azure.EnsureAuthenticated(clientId?, clientSecret?, tenantId?, requireServicePrincipal?) - Authenticate using best available method. Pass explicit SP credentials to avoid env reliance, and requireServicePrincipal: true (or set ANDO_REQUIRE_SERVICE_PRINCIPAL) to force SP auth and never fall back to an existing az login session. Default unchanged (fallback allowed)
 - Azure.EnsureLoggedIn() - DEPRECATED (compile warning): use Azure.EnsureAuthenticated() instead. Verify logged in to Azure CLI
 - Azure.ShowAccount() - Display current account info
@@ -958,8 +962,11 @@ DeployZip and DeployFolder support `WithDeploymentSlot`. Deploys use `az webapp 
 - Http.WaitForHealthy(url, options?) - Poll a URL until it returns the expected status (default 200) or the timeout elapses; gates a deploy on a health check. Options: WithExpectedStatus(int), WithTimeoutSeconds(int), WithIntervalSeconds(int), WithRequestTimeoutSeconds(int), ConsecutiveSuccesses(int), MinGapSeconds(int), ExpectJson(path, expected)
 - Http.WaitForHealthy(IEnumerable<string> urls, options?) - Poll several URLs together; a check passes only when every URL passes.
 - Http.WaitForHealthy(Func<string> url, options?) and Http.WaitForHealthy(Func<IEnumerable<string>> urls, options?) - URLs computed at execution time, for example from `AppService.GetHostName(...).Value`.
+- Http.Get(url, Action<HttpGetOptions> configure) and Http.Get(Func<string> url, Action<HttpGetOptions> configure) - GET with options: `AllowAnyStatus()`, `ExpectContentType(prefix)`, `ExpectBodyContains(text)`, `ExpectBodyMatches(regex)`. Example: `Http.Get("https://x/", o => o.ExpectContentType("text/html").ExpectBodyContains("<title>"));`
 - Http.Get(url, allowAnyStatus = false) and Http.Get(Func<string> url, allowAnyStatus = false) - GET request. Returns a StepOutput: `Value` is the body, `StatusCode` the status. Fails on a non-2xx status unless allowAnyStatus is true.
 - Http.PublicIpV4() - Returns a StepOutput whose Value is this machine's public IPv4 address.
+
+Response expectations (HttpHealthCheckOptions for WaitForHealthy and HttpGetOptions for Get): `ExpectContentType(prefix)` (case-insensitive prefix of Content-Type), `ExpectBodyContains(text)` (ordinal), `ExpectBodyMatches(regex)` (.NET regex, 2 second timeout). On a mismatch Get fails the step (Value still has the body); WaitForHealthy treats it as a failed check whose message shows the content type and the first 200 characters of the body.
 
 Health check option details: `ConsecutiveSuccesses(n)` needs n passing checks in a row (a failure resets the count; with several URLs one check means all URLs passed). `MinGapSeconds(s)` waits at least s seconds between counted passing checks. `ExpectJson(path, expected)` requires the JSON body to have that dotted-path value (numbers and booleans compare by their JSON text); it applies to every URL of the call, so use a separate call for URLs that return something else. Polling runs on the host.
 
@@ -968,6 +975,18 @@ Health check option details: `ConsecutiveSuccesses(n)` needs n passing checks in
 - Nuget.Pack(project, options?) - Create NuGet package (default: Release config, outputs to bin/Release)
 - Nuget.Push(project, options?) - Push packages from bin/Release/*.nupkg (default: nuget.org, skips duplicates)
 - Nuget.Push(path, options?) - Push package from path/glob (default: nuget.org, skips duplicates)
+
+### Archive
+Deterministic archives; steps run in the container and return a CommandStep whose Value is the SHA-256 (hex) of the archive. Page: https://andobuild.com/providers/archive.md
+- Archive.Zip(sourceDir, zipPath, options?) - Create a zip
+- Archive.TarGz(sourceDir, tarGzPath, options?) - Create a tar.gz
+- Options: `WithTimestamp(long unixSeconds)` (default 315532800 = 1980-01-01 UTC; Zip rejects earlier values and stores 2-second resolution) and `WithCompressionLevel(1..9)` (default 6).
+- Byte-identical output for the same tree and image: entries sorted by path (LC_ALL=C), directory entries included, no ./ prefix; every mtime set to the timestamp; dirs 755, files 755 if any execute bit is set else 644; zip -X (no extra fields, no uid/gid); tar --format=gnu --sort=name, owner/group 0:0 numeric, gzip -n. Symlinks, special files and newline file names are rejected; the output may not be inside the source; the source is never modified (staged in a temp copy); zip/tar/gzip are installed with apt if missing. Identity holds for the same zip/gzip builds (same image).
+- Example: `Archive.Zip("artifacts/web", "artifacts/web.zip", o => o.WithTimestamp(Git.CommitTime));`
+
+### Files
+Page: https://andobuild.com/providers/files.md
+- Files.Copy(source, destination, optional = false) - Step in the container (relative paths are relative to /workspace). File source: copied to the destination path (overwrite); a destination ending in "/" puts the file into that directory under its own name. Directory source: its CONTENTS are copied into the destination, like `cp -a src/. dst/` (created if missing, merged, same-named files overwritten, the source directory name is not added). Parent directories are created; cp -a keeps modes, times and symlinks. A missing source fails ("source not found"); with optional: true it is skipped with an info log. Example: `Files.Copy("public", "artifacts/web", optional: true);`
 
 ### Docker
 - Docker.Install() - Install Docker CLI in container (required for Docker.Build with --dind). Automatically handled on the CI server; recommended in scripts for portability.
@@ -1028,11 +1047,12 @@ To run the suite once per database, give each variant an npm script that sets an
 Evaluated when the script loads (on the host, NOT steps; absent from --dry-run, they run before the container exists and do not see changes made by earlier steps):
 - Git.Commit - Full SHA of the commit being built (HEAD, or the commit given with `--ref`). Property. Step-based counterpart: Git.RevParse.
 - Git.ShortCommit - Short SHA of the commit being built. Property. Step-based counterpart: Git.RevParse(shortSha: true).
+- Git.CommitTime - Commit time of the commit being built as a `long` of unix seconds. Property, cached. Example: `o.WithTimestamp(Git.CommitTime)`.
 - Git.RequireClean(params string[] paths) - Also evaluated at script load. Throws before any step runs if tracked files are modified, staged or deleted, or non-ignored untracked files exist, under the paths (whole repository if none). Always passes with `--ref`. `.ando/runs/` is ignored, so run records never trip it.
 - Git.ChangedSince(sinceRef, params string[] paths) - True if any file under the paths differs between sinceRef and the commit being built (committed changes only). Step-based counterpart: Git.ChangedFiles.
 - Git.LastTag(pattern = "*") - Most recent tag reachable from the commit being built that matches the glob (for example `"v*"`), or null. Step-based counterpart: Git.LatestTag.
 
-Git.Commit, ShortCommit, RequireClean, ChangedSince and LastTag run git on the host while the script is evaluated, so their values can be used directly in `if` and string interpolation.
+Git.Commit, ShortCommit, CommitTime, RequireClean, ChangedSince and LastTag run git on the host while the script is evaluated, so their values can be used directly in `if` and string interpolation.
 
 Step variants (these ARE steps: they run on the host in the source root, the --ref worktree when set, in order with the other steps like Git.Tag/Git.Push, and appear in --dry-run). Each returns a CommandStep whose Value is the trimmed stdout; read it at execution time (Ando.When, Ando.Defer, Ando.Report, Func<> overloads), not at the top level of the script:
 - Git.RevParse(string rev = "HEAD", bool shortSha = false) - Step "Git.RevParse": `git rev-parse [--short] <rev>`. Example: `var sha = Git.RevParse(shortSha: true);` Eager counterparts: Git.Commit, Git.ShortCommit.
@@ -1098,6 +1118,7 @@ Activate with CLI: `ando -p release` or `ando -p publish,release`
 - AsSingleFile(bool) - Bundle into single executable
 - SkipRestore() - Skip restore before publishing
 - SkipBuild() - Skip build before publishing
+- WithNoLogo() - Pass --nologo
 
 ### Nuget.Pack Options
 - Output(path) - Output directory for .nupkg
@@ -1262,6 +1283,7 @@ All pages are available in markdown format for LLM consumption:
 ### Provider Documentation
 - https://andobuild.com/providers/ando.md - The Ando object: build configuration, artifacts, nested builds, step model (Block, Finally, Defer, When, Require, Confirm, Report)
 - https://andobuild.com/providers/appservice.md - Azure App Service deployments
+- https://andobuild.com/providers/archive.md - Deterministic zip and tar.gz archives
 - https://andobuild.com/providers/azure.md - Azure CLI authentication and az commands
 - https://andobuild.com/providers/bicep.md - Azure Bicep deployments
 - https://andobuild.com/providers/bun.md - Bun installation
@@ -1270,6 +1292,7 @@ All pages are available in markdown format for LLM consumption:
 - https://andobuild.com/providers/docker.md - Docker image building
 - https://andobuild.com/providers/dotnet.md - .NET build, test, publish
 - https://andobuild.com/providers/ef.md - Entity Framework Core migrations
+- https://andobuild.com/providers/files.md - Copy files and directories in the container
 - https://andobuild.com/providers/functions.md - Azure Functions deployments
 - https://andobuild.com/providers/globals.md - Bare globals: Root, Temp, Env, Directory, DefineProfile, Log
 - https://andobuild.com/providers/git.md - Git version control operations

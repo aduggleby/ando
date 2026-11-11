@@ -19,9 +19,9 @@ GitHub Container Registry (ghcr.io) provides free container hosting for public r
 
 GitHub operations require authentication. ANDO checks these sources in order:
 
-| Method | Description |
-|--------|-------------|
-| `GITHUB_TOKEN` | Environment variable (preferred for CI/CD) |
+| Method          | Description                                 |
+| --------------- | ------------------------------------------- |
+| `GITHUB_TOKEN`  | Environment variable (preferred for CI/CD)  |
 | `gh auth login` | Uses token from gh CLI if logged in locally |
 
 For CI/CD, use the built-in `GITHUB_TOKEN` in GitHub Actions. For local development, run `gh auth login` once.
@@ -33,6 +33,7 @@ Your token needs the `write:packages` scope to push images. Create a token at [g
 ## Recommended: Atomic Build and Push
 
 **Best practice**: Use `Docker.Build` with `WithPush()` to build and push in a single atomic operation. This ensures:
+
 - Both version and latest tags point to the same manifest
 - No cache staleness issues between build and push
 - Multi-platform support works correctly
@@ -117,6 +118,7 @@ Docker.Build("Dockerfile", o => o
 ```
 
 Access in Dockerfile:
+
 ```dockerfile
 ARG VERSION
 ARG BUILD_NUMBER
@@ -157,6 +159,7 @@ if (publish)
 ```
 
 Usage:
+
 ```bash
 # Build and test only
 ando
@@ -176,7 +179,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
   build-and-push:
@@ -201,7 +204,7 @@ jobs:
 
 Combine container push with GitHub releases:
 
-```csharp
+````csharp
 var release = DefineProfile("release");
 var project = Dotnet.Project("./src/MyApp/MyApp.csproj");
 var version = project.Version;
@@ -239,15 +242,16 @@ if (release)
 
 ```bash
 docker pull ghcr.io/my-org/myapp:{version}
-```
+````
 
 ## What's Changed
 
 See commit history for changes.
 ")
-        .WithGeneratedNotes());
+.WithGeneratedNotes());
 }
-```
+
+````
 
 ## Single Platform Builds
 
@@ -259,7 +263,7 @@ Docker.Build("Dockerfile", o => o
     .WithPlatform("linux/amd64")
     .WithTag($"ghcr.io/my-org/myapp:{version}")
     .WithPush());
-```
+````
 
 ## Local Development (Build Only)
 
@@ -284,6 +288,7 @@ Docker.Build("Dockerfile", o => o
 ```
 
 Use `WithNoCache()` when:
+
 - Debugging build issues
 - Ensuring dependencies are updated
 - Building release versions
@@ -292,18 +297,18 @@ Use `WithNoCache()` when:
 
 ### Docker.Build Options
 
-| Option | Description |
-|--------|-------------|
-| `WithTag(string)` | Add image tag (can call multiple times). Use full registry path for push (e.g., `ghcr.io/org/app:v1`) |
-| `WithPlatform(string)` | Single target platform (e.g., "linux/amd64") |
-| `WithPlatforms(params string[])` | Multiple target platforms for multi-arch builds (e.g., "linux/amd64", "linux/arm64") |
-| `WithContext(string)` | Build context directory |
-| `WithBuildArg(key, value)` | Pass build argument |
-| `WithPush()` | Push images to registry after building (recommended) |
-| `WithNoCache()` | Disable build cache |
+| Option                           | Description                                                                                           |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `WithTag(string)`                | Add image tag (can call multiple times). Use full registry path for push (e.g., `ghcr.io/org/app:v1`) |
+| `WithPlatform(string)`           | Single target platform (e.g., "linux/amd64")                                                          |
+| `WithPlatforms(params string[])` | Multiple target platforms for multi-arch builds (e.g., "linux/amd64", "linux/arm64")                  |
+| `WithContext(string)`            | Build context directory                                                                               |
+| `WithBuildArg(key, value)`       | Pass build argument                                                                                   |
+| `WithPush()`                     | Push images to registry after building (recommended)                                                  |
+| `WithNoCache()`                  | Disable build cache                                                                                   |
 
 ## See Also
 
 - [Docker Provider](/providers/docker) - Docker operations reference
 - [GitHub Provider](/providers/github) - GitHub operations reference
-- [GitHub Releases Recipe](/recipes/github-releases) - Creating GitHub releases
+- [GitHub Releases Recipe](/examples/github-releases) - Creating GitHub releases

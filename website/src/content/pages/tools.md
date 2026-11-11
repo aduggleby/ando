@@ -1,6 +1,6 @@
 ---
 title: Tool installation
-description: The six installer operations that put Bun, Node.js, Docker, the .NET SDK, DocFX and Playwright into the build container.
+description: The installer operations that put Bun, Node.js, Docker, the .NET SDK, DocFX, a pinned Azure CLI and Playwright into the build container.
 ---
 
 ## Overview
@@ -11,14 +11,15 @@ Most operations install what they need on their own (`Npm.*` installs Node.js, `
 
 Installers have no shared provider: each one lives on the page of its tool, linked below.
 
-| Installer                                             | Signature                                                   | What it does                                                                                                                    |
-| ----------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| [`Bun.Install`](/providers/bun#install)               | `Install(string version = "latest", string? sha256 = null)` | Installs Bun into `/usr/local/bin`. With `sha256` the release zip is downloaded and verified. Needs a Debian or Ubuntu image.   |
-| [`Node.Install`](/providers/node#install)             | `Install(string version = "22")`                            | Installs Node.js (with npm) globally. The version is the major version.                                                         |
-| [`Docker.Install`](/providers/docker#install)         | `Install()`                                                 | Installs the Docker CLI. Required before `Docker.Build` with `--dind`; a no-op if Docker is already present.                    |
-| [`Dotnet.SdkInstall`](/providers/dotnet#sdkinstall)   | `SdkInstall(string version = "9.0")`                        | Installs the .NET SDK. Use for base images without .NET.                                                                        |
-| [`Docfx.Install`](/providers/docfx#install)           | `Install()`                                                 | Installs DocFX as a dotnet global tool (needs the .NET SDK).                                                                    |
-| [`Playwright.Install`](/providers/playwright#install) | `Install(DirectoryRef directory)`                           | Installs Playwright browsers and system dependencies with `npx playwright install --with-deps`, in the given project directory. |
+| Installer                                             | Signature                                                   | What it does                                                                                                                                |
+| ----------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`Bun.Install`](/providers/bun#install)               | `Install(string version = "latest", string? sha256 = null)` | Installs Bun into `/usr/local/bin`. With `sha256` the release zip is downloaded and verified. Needs a Debian or Ubuntu image.               |
+| [`Node.Install`](/providers/node#install)             | `Install(string version = "22")`                            | Installs Node.js (with npm) globally. The version is the major version.                                                                     |
+| [`Docker.Install`](/providers/docker#install)         | `Install()`                                                 | Installs the Docker CLI. Required before `Docker.Build` with `--dind`; a no-op if Docker is already present.                                |
+| [`Dotnet.SdkInstall`](/providers/dotnet#sdkinstall)   | `SdkInstall(string version = "9.0")`                        | Installs the .NET SDK. Use for base images without .NET.                                                                                    |
+| [`Docfx.Install`](/providers/docfx#install)           | `Install()`                                                 | Installs DocFX as a dotnet global tool (needs the .NET SDK).                                                                                |
+| [`Azure.InstallCli`](/providers/azure#installcli)     | `InstallCli(string version)`                                | Installs an exact Azure CLI version (`X.Y.Z`) from Microsoft's signed apt repository and holds the package. Needs a Debian or Ubuntu image. |
+| [`Playwright.Install`](/providers/playwright#install) | `Install(DirectoryRef directory)`                           | Installs Playwright browsers and system dependencies with `npx playwright install --with-deps`, in the given project directory.             |
 
 ## Example
 
@@ -37,4 +38,5 @@ Playwright.Test(e2e);
 ## Notes
 
 - Calling `Node.Install()` or `Dotnet.SdkInstall()` turns off the automatic installation for later operations, so the version you pick is the one they use.
+- Copying and packing files are not installers: see [Files.Copy](/providers/files#copy) and [Archive.Zip](/providers/archive#zip) / [Archive.TarGz](/providers/archive#targz).
 - `Docfx.IsInstalled()` and `Docker.IsAvailable()` are not installers: they are checks evaluated when the script loads, on the host. See the [DocFX](/providers/docfx) and [Docker](/providers/docker) pages.

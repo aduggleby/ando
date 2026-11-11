@@ -2,6 +2,7 @@
 export const providers = [
   { id: "Ando", href: "/providers/ando", label: "Ando" },
   { id: "Globals", href: "/providers/globals", label: "Globals" },
+  { id: "Archive", href: "/providers/archive", label: "Archive" },
   { id: "AppService", href: "/providers/appservice", label: "Azure App Service" },
   { id: "Bicep", href: "/providers/bicep", label: "Azure Bicep" },
   { id: "Azure", href: "/providers/azure", label: "Azure CLI" },
@@ -12,6 +13,7 @@ export const providers = [
   { id: "Docker", href: "/providers/docker", label: "Docker" },
   { id: "Dotnet", href: "/providers/dotnet", label: "Dotnet" },
   { id: "Ef", href: "/providers/ef", label: "Entity Framework Core" },
+  { id: "Files", href: "/providers/files", label: "Files" },
   { id: "Git", href: "/providers/git", label: "Git" },
   { id: "GitHub", href: "/providers/github", label: "GitHub" },
   { id: "Http", href: "/providers/http", label: "HTTP" },

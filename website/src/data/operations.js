@@ -260,32 +260,40 @@ export const operations = [
   },
   {
     group: "Dotnet",
+    name: "Dotnet.ReadVersion",
+    desc: '<strong>Evaluated when the script loads, on the host.</strong> It is not a step: it does not appear in <code>--dry-run</code> and runs before the container exists. Reads the version from a props file. Signature: <code>string ReadVersion(string path = "Directory.Build.props")</code>, relative to the source root (the <code>--ref</code> worktree when set). The file needs exactly one <code>&lt;Version&gt;</code> directly in a <code>&lt;PropertyGroup&gt;</code>. It reads the literal property: no MSBuild evaluation, imports, conditions or <code>$(...)</code>. Throws on a missing file or an empty or ambiguous version. For the version of one project file, use the <code>Version</code> property of <a href="/providers/dotnet#project"><code>Dotnet.Project</code></a>.',
+    examples: ["var version = Dotnet.ReadVersion();", 'var version = Dotnet.ReadVersion("src/Directory.Build.props");'],
+    sourceFile: "Operations/DotnetOperations.cs",
+  },
+  {
+    group: "Dotnet",
     name: "Dotnet.Restore",
-    desc: "Restore NuGet packages for a project. Automatically installs .NET SDK if not present.",
+    desc: "Restore NuGet packages for a project. Runs <code>dotnet restore &lt;proj&gt; [--no-cache] [-r &lt;rid&gt;]</code>. Automatically installs .NET SDK if not present.",
     examples: ["Dotnet.Restore(App);", "Dotnet.Restore(App, o => o.NoCache = true);"],
     sourceFile: "Operations/DotnetOperations.cs",
   },
   {
     group: "Dotnet",
     name: "Dotnet.Build",
-    desc: "Compile a project with optional configuration. Automatically installs .NET SDK if not present.",
+    desc: "Compile a project. Runs <code>dotnet build &lt;proj&gt; [-c &lt;cfg&gt;] [--no-restore]</code>. No configuration flag is passed unless you set one, so the .NET default (Debug) applies. Automatically installs .NET SDK if not present.",
     examples: ["Dotnet.Build(App);", "Dotnet.Build(App, o => o.Configuration = Configuration.Release);"],
     sourceFile: "Operations/DotnetOperations.cs",
   },
   {
     group: "Dotnet",
     name: "Dotnet.Test",
-    desc: "Run unit tests for a project. Automatically installs .NET SDK if not present.",
+    desc: "Run unit tests for a project. Runs <code>dotnet test &lt;proj&gt; [-c &lt;cfg&gt;] [--no-restore] [--no-build] [--filter &lt;f&gt;]</code>. Automatically installs .NET SDK if not present.",
     examples: ["Dotnet.Test(Tests);", 'Dotnet.Test(Tests, o => o.Filter = "Category=Unit");'],
     sourceFile: "Operations/DotnetOperations.cs",
   },
   {
     group: "Dotnet",
     name: "Dotnet.Publish",
-    desc: "Create deployment artifacts with full publish options. Automatically installs .NET SDK if not present.",
+    desc: "Create deployment artifacts. Runs <code>dotnet publish &lt;proj&gt; [-c &lt;cfg&gt;] [-o &lt;absolute out&gt;] [--no-restore] [--no-build] [--self-contained | --no-self-contained] [-r &lt;rid&gt;] [-p:PublishSingleFile=true] [--nologo]</code>; output paths are made absolute. Release is <strong>not</strong> the default: pass <code>WithConfiguration(Configuration.Release)</code> for <code>-c Release</code>. Options: <code>Output</code>, <code>WithConfiguration</code>, <code>WithRuntime</code>, <code>AsSelfContained</code>, <code>AsSingleFile</code>, <code>SkipRestore</code>, <code>SkipBuild</code>, <code>WithNoLogo</code> (<code>--nologo</code>). Automatically installs .NET SDK if not present.",
     examples: [
       "Dotnet.Publish(App);",
       'Dotnet.Publish(App, o => o\n  .Output(Root / "dist")\n  .WithConfiguration(Configuration.Release)\n  .WithRuntime("linux-x64")\n  .AsSelfContained()\n  .AsSingleFile());',
+      '// Exactly: dotnet publish p -c Release -o out --nologo\nDotnet.Publish(p, o => o.WithConfiguration(Configuration.Release).Output("out").WithNoLogo());',
     ],
     sourceFile: "Operations/DotnetOperations.cs",
   },
@@ -377,6 +385,13 @@ export const operations = [
     desc: "Install Playwright browsers via `npx playwright install`. Call this after npm install and before running tests. Automatically installs Node.js if not present.",
     examples: ['var e2e = Directory("./tests/E2E");\nNpm.Ci(e2e);\nPlaywright.Install(e2e);\nPlaywright.Test(e2e);'],
     sourceFile: "Operations/PlaywrightOperations.cs",
+  },
+  {
+    group: "Azure",
+    name: "Azure.InstallCli",
+    desc: 'Installs exactly this Azure CLI version in the build container (an installer; see <a href="/tools">Tool installation</a>). Signature: <code>InstallCli(string version)</code>, with <code>version</code> exactly <code>X.Y.Z</code>. Skips when <code>az</code> already reports that version. Otherwise it adds Microsoft\'s signed apt repository (key in <code>/etc/apt/keyrings/microsoft.gpg</code>, codename from <code>/etc/os-release</code>) and checks that <code>azure-cli=&lt;version&gt;-1~&lt;codename&gt;</code> exists; if it does not, the step fails and lists the 15 newest available versions. It installs with <code>--allow-downgrades</code>, runs <code>apt-mark hold azure-cli</code> and logs <code>az version</code>. The automatic az install never replaces it. Put it before the first <code>Azure</code>, <code>AppService</code>, <code>Functions</code> or <code>Bicep</code> step: an az that was installed automatically earlier in the run is replaced. Needs a Debian or Ubuntu image. Returns a <code>CommandStep</code>.',
+    examples: ['Azure.InstallCli("2.90.0");\nAzure.EnsureAuthenticated();'],
+    sourceFile: "Operations/AzureOperations.cs",
   },
   {
     group: "Azure",
@@ -677,6 +692,25 @@ export const operations = [
     sourceFile: "Operations/FunctionsOperations.cs",
   },
   {
+    group: "Archive",
+    name: "Archive.Zip",
+    desc: "Creates a deterministic zip of a directory. Signature: <code>Zip(string sourceDir, string zipPath, Action&lt;ArchiveOptions&gt;? configure = null)</code>. Options: <code>WithTimestamp(long unixSeconds)</code> (default 315532800, 1980-01-01 UTC; <code>Zip</code> rejects earlier values and stores 2-second resolution) and <code>WithCompressionLevel(int 1..9)</code> (default 6). Use <code>Git.CommitTime</code> as the timestamp to tie the archive to the commit. The output is byte-identical for the same source tree and the same image: entries are sorted by path (<code>LC_ALL=C</code>) with directory entries included and no <code>./</code> prefix, every modification time is set to the timestamp, directories get mode 755, and files get 755 when any execute bit is set, else 644. Zip uses <code>zip -X</code> (no extra fields, no uid/gid); tar uses <code>--format=gnu --sort=name</code> with owner and group 0:0 numeric, then <code>gzip -n</code>. Symlinks, special files and file names containing a newline are rejected, and the output may not sit inside the source directory. The source tree is never modified (it is staged in a temporary copy). <code>zip</code>, <code>tar</code> and <code>gzip</code> are installed with apt if missing (Debian and Ubuntu images). Identity holds for the same zip and gzip builds, that is, the same image. Returns a <code>CommandStep</code> whose <code>Value</code> is the SHA-256 (hex) of the archive. Runs in the container.",
+    examples: [
+      'Archive.Zip("artifacts/web", "artifacts/web.zip", o => o.WithTimestamp(Git.CommitTime));',
+      'var sha = Archive.Zip("publish", "out/func.zip");\nAndo.Report("func.zip sha256", () => sha.Value);',
+    ],
+    sourceFile: "Operations/ArchiveOperations.cs",
+  },
+  {
+    group: "Archive",
+    name: "Archive.TarGz",
+    desc: "Creates a deterministic <code>.tar.gz</code> of a directory. Signature: <code>TarGz(string sourceDir, string tarGzPath, Action&lt;ArchiveOptions&gt;? configure = null)</code>. Options: <code>WithTimestamp(long unixSeconds)</code> (default 315532800, 1980-01-01 UTC; the timestamp is applied to every entry) and <code>WithCompressionLevel(int 1..9)</code> (default 6). Use <code>Git.CommitTime</code> as the timestamp to tie the archive to the commit. The output is byte-identical for the same source tree and the same image: entries are sorted by path (<code>LC_ALL=C</code>) with directory entries included and no <code>./</code> prefix, every modification time is set to the timestamp, directories get mode 755, and files get 755 when any execute bit is set, else 644. Zip uses <code>zip -X</code> (no extra fields, no uid/gid); tar uses <code>--format=gnu --sort=name</code> with owner and group 0:0 numeric, then <code>gzip -n</code>. Symlinks, special files and file names containing a newline are rejected, and the output may not sit inside the source directory. The source tree is never modified (it is staged in a temporary copy). <code>zip</code>, <code>tar</code> and <code>gzip</code> are installed with apt if missing (Debian and Ubuntu images). Identity holds for the same zip and gzip builds, that is, the same image. Returns a <code>CommandStep</code> whose <code>Value</code> is the SHA-256 (hex) of the archive. Runs in the container.",
+    examples: [
+      'Archive.TarGz("artifacts/app", "artifacts/app.tar.gz", o => o.WithTimestamp(Git.CommitTime).WithCompressionLevel(9));',
+    ],
+    sourceFile: "Operations/ArchiveOperations.cs",
+  },
+  {
     group: "AppService",
     name: "AppService.DeployZip",
     desc: 'Deploy an app service using zip deploy. Same name as <a href=\"/providers/functions#deployzip\"><code>Functions.DeployZip</code></a>: same behavior, only the az subcommand differs (<code>az webapp</code> here, <code>az functionapp</code> there).',
@@ -801,7 +835,7 @@ export const operations = [
   {
     group: "Http",
     name: "Http.WaitForHealthy",
-    desc: "Poll a URL until it returns the expected status code (default 200) or the timeout elapses. Runs in-process on the build host, so it needs no curl in the image. Use it to gate a deploy on a health check, for example before swapping a slot into production. Overloads take a <code>string</code>, an <code>IEnumerable&lt;string&gt;</code> (every URL must pass), a <code>Func&lt;string&gt;</code> or a <code>Func&lt;IEnumerable&lt;string&gt;&gt;</code> (computed at execution time). Extra options: <code>ConsecutiveSuccesses(n)</code> needs n passing checks in a row (a failure resets the count), <code>MinGapSeconds(s)</code> waits at least s seconds between counted passes, and <code>ExpectJson(path, expected)</code> requires a dotted-path value in the JSON body. <code>ExpectJson</code> applies to every URL of the call.",
+    desc: "Poll a URL until it returns the expected status code (default 200) or the timeout elapses. Runs in-process on the build host, so it needs no curl in the image. Use it to gate a deploy on a health check, for example before swapping a slot into production. Overloads take a <code>string</code>, an <code>IEnumerable&lt;string&gt;</code> (every URL must pass), a <code>Func&lt;string&gt;</code> or a <code>Func&lt;IEnumerable&lt;string&gt;&gt;</code> (computed at execution time). Extra options: <code>ConsecutiveSuccesses(n)</code> needs n passing checks in a row (a failure resets the count), <code>MinGapSeconds(s)</code> waits at least s seconds between counted passes, and <code>ExpectJson(path, expected)</code> requires a dotted-path value in the JSON body. <code>ExpectJson</code> applies to every URL of the call. Response expectations (on <code>HttpHealthCheckOptions</code> and, for <code>Get</code>, on <code>HttpGetOptions</code>): <code>ExpectContentType(prefix)</code> (case-insensitive prefix of the <code>Content-Type</code>), <code>ExpectBodyContains(text)</code> (ordinal) and <code>ExpectBodyMatches(regex)</code> (.NET regex syntax, 2 second timeout). On a mismatch <code>Http.Get</code> fails the step (<code>Value</code> still holds the body) and <code>WaitForHealthy</code> treats it as a failed check whose message shows the content type and the first 200 characters of the body.",
     examples: [
       'Http.WaitForHealthy(() => $"https://{host.Value}/healthz", o => o\n  .ConsecutiveSuccesses(3)\n  .MinGapSeconds(10)\n  .ExpectJson("version", "1.4.0"));',
       'Http.WaitForHealthy(new[] { "https://a.example.com/healthz", "https://a.example.com/healthz/db" });',
@@ -813,10 +847,12 @@ export const operations = [
   {
     group: "Http",
     name: "Http.Get",
-    desc: "Sends a GET request (from the build host) and keeps the response. Returns a <code>StepOutput</code>: <code>Value</code> is the body and <code>StatusCode</code> the status code. Fails on a non-2xx status unless <code>allowAnyStatus</code> is true. Signatures: <code>Get(string url, bool allowAnyStatus = false)</code> and <code>Get(Func&lt;string&gt; url, bool allowAnyStatus = false)</code>.",
+    desc: "Sends a GET request (from the build host) and keeps the response. Returns a <code>StepOutput</code>: <code>Value</code> is the body and <code>StatusCode</code> the status code. Fails on a non-2xx status unless <code>allowAnyStatus</code> is true. Signatures: <code>Get(string url, bool allowAnyStatus = false)</code>, <code>Get(Func&lt;string&gt; url, bool allowAnyStatus = false)</code>, and the option overloads <code>Get(string url, Action&lt;HttpGetOptions&gt; configure)</code> and <code>Get(Func&lt;string&gt; url, Action&lt;HttpGetOptions&gt; configure)</code>. <code>HttpGetOptions</code> has <code>AllowAnyStatus()</code> and the response expectations. Response expectations (on <code>HttpHealthCheckOptions</code> and, for <code>Get</code>, on <code>HttpGetOptions</code>): <code>ExpectContentType(prefix)</code> (case-insensitive prefix of the <code>Content-Type</code>), <code>ExpectBodyContains(text)</code> (ordinal) and <code>ExpectBodyMatches(regex)</code> (.NET regex syntax, 2 second timeout). On a mismatch <code>Http.Get</code> fails the step (<code>Value</code> still holds the body) and <code>WaitForHealthy</code> treats it as a failed check whose message shows the content type and the first 200 characters of the body.",
     examples: [
       'var health = Http.Get("https://eu.example.com/healthz");\nAndo.Report("eu.healthz", health);',
       'var probe = Http.Get(() => $"https://{host.Value}/healthz", allowAnyStatus: true);\nAndo.Require(() => probe.StatusCode < 500, "Server error");',
+      'Http.Get("https://x/", o => o.ExpectContentType("text/html").ExpectBodyContains("<title>"));',
+      'Http.Get("https://x/version", o => o.AllowAnyStatus().ExpectBodyMatches(@"^\\d+\\.\\d+\\.\\d+$"));',
     ],
     sourceFile: "Operations/HttpOperations.cs",
   },
@@ -856,6 +892,16 @@ export const operations = [
   },
   // Git operations - ALL run on HOST (not in container)
   {
+    group: "Files",
+    name: "Files.Copy",
+    desc: 'Copies a file or directory in the build container (a step; relative paths are relative to <code>/workspace</code>). Signature: <code>Copy(string source, string destination, bool optional = false)</code>. <strong>File source:</strong> copied to the destination path (overwritten if it exists); if the destination ends with <code>/</code>, the file goes into that directory under its own name. <strong>Directory source:</strong> its contents are copied into the destination, like <code>cp -a src/. dst/</code>: the destination is created if missing, existing contents merge, same-named files are overwritten, and the source directory name is not added (copying <code>a</code> to <code>b</code> gives <code>b/x</code>, not <code>b/a/x</code>). Missing parent directories are created. <code>cp -a</code> preserves modes, times and symlinks. A missing source fails the step ("source not found"); with <code>optional: true</code> it is skipped with an info log. To copy between host and container, use <a href="/providers/ando#copytocontainer"><code>Ando.CopyToContainer</code></a> and <a href="/providers/ando#copyartifactstohost"><code>Ando.CopyArtifactsToHost</code></a>.',
+    examples: [
+      'Files.Copy("config/prod.json", "artifacts/web/config.json");',
+      'Files.Copy("public", "artifacts/web", optional: true);',
+    ],
+    sourceFile: "Operations/FilesOperations.cs",
+  },
+  {
     group: "Git",
     name: "Git.Tag",
     desc: "Creates a git tag. By default creates annotated tags. <strong>Runs on host</strong> (not in container).",
@@ -892,6 +938,13 @@ export const operations = [
     name: "Git.ShortCommit",
     desc: '<strong>Evaluated when the script loads, on the host.</strong> It is not a step: it does not appear in <code>--dry-run</code> and runs before the container exists. Short SHA of the commit being built. Property (not a method). For a step that runs in order with the other steps, use <a href="/providers/git#revparse"><code>Git.RevParse</code></a> with <code>shortSha: true</code>.',
     examples: ['Log.Info($"Building {Git.ShortCommit}");'],
+    sourceFile: "Operations/GitOperations.cs",
+  },
+  {
+    group: "Git",
+    name: "Git.CommitTime",
+    desc: "<strong>Evaluated when the script loads, on the host.</strong> It is not a step: it does not appear in <code>--dry-run</code> and runs before the container exists. The commit time of the commit being built (HEAD, or the commit given with <code>ando run --ref</code>) as a <code>long</code> of unix seconds. Cached; property (not a method). Use it as a reproducible timestamp, for example <code>Archive.Zip(.., o => o.WithTimestamp(Git.CommitTime))</code>.",
+    examples: ['Archive.Zip("artifacts/web", "artifacts/web.zip", o => o.WithTimestamp(Git.CommitTime));'],
     sourceFile: "Operations/GitOperations.cs",
   },
   {

@@ -58,7 +58,7 @@ if (deploy)
 {
     // Deploy API to Azure
     Azure.EnsureAuthenticated();
-    AppService.DeployZip("my-api", Root / "publish" / "api");
+    AppService.DeployFolder("my-api", Root / "publish" / "api");
 
     // Deploy frontend to Cloudflare
     Cloudflare.EnsureAuthenticated();
@@ -102,7 +102,8 @@ if (deploy)
     Log.Info("Database migrations applied");
 
     // 2. Deploy API with slot swap
-    AppService.DeployWithSwap("my-api", Root / "publish" / "api", "staging");
+    Archive.Zip(Root / "publish" / "api", Root / "api.zip");
+    AppService.DeployWithSwap("my-api", Root / "api.zip", "staging");
     Log.Info("API deployed");
 
     // 3. Deploy frontend
@@ -141,7 +142,8 @@ Npm.Build(frontend);
 if (deployApi || deployAll)
 {
     Azure.EnsureAuthenticated();
-    AppService.DeployWithSwap("my-api", Root / "publish" / "api", "staging");
+    Archive.Zip(Root / "publish" / "api", Root / "api.zip");
+    AppService.DeployWithSwap("my-api", Root / "api.zip", "staging");
     Log.Info("API deployed");
 }
 
@@ -156,6 +158,7 @@ if (deployFrontend || deployAll)
 ```
 
 Usage:
+
 ```bash
 # Build only
 ando
@@ -208,7 +211,7 @@ if (deploy)
 
     Azure.EnsureAuthenticated();
     Dotnet.Publish(api, o => o.Output(Root / "publish" / "api"));
-    AppService.DeployZip(appName, Root / "publish" / "api");
+    AppService.DeployFolder(appName, Root / "publish" / "api");
 
     Cloudflare.EnsureAuthenticated();
     Cloudflare.PagesDeploy(frontend / "dist", pagesProject);
@@ -216,6 +219,7 @@ if (deploy)
 ```
 
 Usage:
+
 ```bash
 # Deploy to staging
 ando -p deploy
@@ -264,7 +268,8 @@ if (deploy)
     Ef.DatabaseUpdate(dbContext, Env("CONNECTION_STRING"));
 
     // Deploy API
-    AppService.DeployWithSwap("my-api", Root / "publish" / "api", "staging");
+    Archive.Zip(Root / "publish" / "api", Root / "api.zip");
+    AppService.DeployWithSwap("my-api", Root / "api.zip", "staging");
 
     // Deploy frontend
     Cloudflare.EnsureAuthenticated();
@@ -280,12 +285,12 @@ Ando.CopyArtifactsToHost("publish", "./dist");
 
 ## Key Operations
 
-| Operation | Purpose |
-|-----------|---------|
-| [Dotnet.Publish()](/providers/dotnet#publish) | Build .NET for deployment |
-| [Npm.Build()](/providers/npm#build) | Build frontend assets |
-| [AppService.DeployZip()](/providers/appservice#deployzip) | Deploy to Azure App Service |
-| [Cloudflare.PagesDeploy()](/providers/cloudflare#pagesdeploy) | Deploy to Cloudflare Pages |
+| Operation                                                     | Purpose                     |
+| ------------------------------------------------------------- | --------------------------- |
+| [Dotnet.Publish()](/providers/dotnet#publish)                 | Build .NET for deployment   |
+| [Npm.Build()](/providers/npm#build)                           | Build frontend assets       |
+| [AppService.DeployZip()](/providers/appservice#deployzip)     | Deploy to Azure App Service |
+| [Cloudflare.PagesDeploy()](/providers/cloudflare#pagesdeploy) | Deploy to Cloudflare Pages  |
 
 ## See Also
 

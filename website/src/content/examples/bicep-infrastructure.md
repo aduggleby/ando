@@ -63,7 +63,7 @@ if (deploy)
 
     // Deploy application
     Dotnet.Publish(project, o => o.Output(Root / "publish"));
-    AppService.DeployZip(appServiceName, Root / "publish");
+    AppService.DeployFolder(appServiceName, Root / "publish");
 }
 ```
 
@@ -102,7 +102,7 @@ if (deploy)
     // Continue with app deployment
     var appName = deployment.Output("appServiceName");
     Dotnet.Publish(project, o => o.Output(Root / "publish"));
-    AppService.DeployZip(appName, Root / "publish");
+    AppService.DeployFolder(appName, Root / "publish");
 }
 ```
 
@@ -140,7 +140,8 @@ if (deploy)
 
     // 4. Deploy application
     var appName = deployment.Output("appServiceName");
-    AppService.DeployWithSwap(appName, Root / "publish", "staging");
+    Archive.Zip(Root / "publish", Root / "publish.zip");
+    AppService.DeployWithSwap(appName, Root / "publish.zip", "staging");
 
     Log.Info("Deployment complete!");
 }
@@ -175,6 +176,7 @@ if (deploy)
 ```
 
 Usage:
+
 ```bash
 # Preview changes only
 ando -p preview
@@ -210,12 +212,12 @@ if (deploy)
 
 ## Key Operations
 
-| Operation | Purpose |
-|-----------|---------|
-| [Bicep.DeployToResourceGroup()](/providers/bicep#deploytoresourcegroup) | Deploy to a resource group |
-| [Bicep.DeployToSubscription()](/providers/bicep#deploytosubscription) | Deploy at subscription scope |
-| [Bicep.WhatIf()](/providers/bicep#whatif) | Preview deployment changes |
-| [deployment.Output()](/providers/bicep#output) | Get deployment output value |
+| Operation                                                               | Purpose                      |
+| ----------------------------------------------------------------------- | ---------------------------- |
+| [Bicep.DeployToResourceGroup()](/providers/bicep#deploytoresourcegroup) | Deploy to a resource group   |
+| [Bicep.DeployToSubscription()](/providers/bicep#deploytosubscription)   | Deploy at subscription scope |
+| [Bicep.WhatIf()](/providers/bicep#whatif)                               | Preview deployment changes   |
+| `deployment.Output()`                                                   | Get deployment output value  |
 
 ## Tips
 

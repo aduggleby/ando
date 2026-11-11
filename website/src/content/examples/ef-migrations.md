@@ -126,11 +126,12 @@ if (deploy)
 {
     Dotnet.Publish(project, o => o.Output(Root / "publish"));
     Azure.EnsureAuthenticated();
-    AppService.DeployZip("my-webapp", Root / "publish");
+    AppService.DeployFolder("my-webapp", Root / "publish");
 }
 ```
 
 Usage:
+
 ```bash
 # Run migrations only
 ando -p migrate
@@ -170,7 +171,8 @@ if (deploy)
         .Output(Root / "publish"));
 
     // 3. Deploy with zero-downtime swap
-    AppService.DeployWithSwap("my-webapp", Root / "publish", "staging");
+    Archive.Zip(Root / "publish", Root / "publish.zip");
+    AppService.DeployWithSwap("my-webapp", Root / "publish.zip", "staging");
 
     Log.Info("Deployment complete!");
 }
@@ -178,11 +180,11 @@ if (deploy)
 
 ## Key Operations
 
-| Operation | Purpose |
-|-----------|---------|
-| [Ef.DbContextFrom()](/providers/ef#dbcontextfrom) | Reference a DbContext in a project |
-| [Ef.DatabaseUpdate()](/providers/ef#databaseupdate) | Apply pending migrations |
-| [Ef.Script()](/providers/ef#script) | Generate SQL migration script |
+| Operation                                           | Purpose                            |
+| --------------------------------------------------- | ---------------------------------- |
+| [Ef.DbContextFrom()](/providers/ef#dbcontextfrom)   | Reference a DbContext in a project |
+| [Ef.DatabaseUpdate()](/providers/ef#databaseupdate) | Apply pending migrations           |
+| [Ef.Script()](/providers/ef#script)                 | Generate SQL migration script      |
 
 ## Tips
 

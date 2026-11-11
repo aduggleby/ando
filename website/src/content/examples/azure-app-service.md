@@ -15,7 +15,7 @@ Azure App Service provides a fully managed platform for hosting web applications
 
 ## Basic Deployment
 
-The simplest deployment zips your published app and deploys it directly:
+The simplest deployment deploys your published folder directly. Use `AppService.DeployZip` when you already have a zip, and `Archive.Zip` to create a reproducible one:
 
 ```csharp
 var project = Dotnet.Project("./src/WebApp/WebApp.csproj");
@@ -27,13 +27,9 @@ Dotnet.Publish(project, o => o
     .WithConfiguration(Configuration.Release)
     .Output(Root / "publish"));
 
-// Create deployment zip
-var zipPath = Root / "deploy.zip";
-// The publish folder gets zipped automatically by AppService.DeployZip
-
-// Authenticate and deploy
+// Authenticate and deploy (DeployFolder zips the publish folder itself)
 Azure.EnsureAuthenticated();
-AppService.DeployZip("my-webapp", Root / "publish");
+AppService.DeployFolder("my-webapp", Root / "publish");
 ```
 
 ## Blue-Green Deployment with Slots
@@ -60,13 +56,15 @@ if (deploy)
     Azure.EnsureAuthenticated();
 
     // Deploy to staging slot, then swap to production
-    AppService.DeployWithSwap("my-webapp", publishPath, "staging");
+    Archive.Zip(publishPath, Root / "publish.zip");
+    AppService.DeployWithSwap("my-webapp", Root / "publish.zip", "staging");
 
     Log.Info("Deployment complete - swapped staging to production");
 }
 ```
 
 The `DeployWithSwap` operation:
+
 1. Deploys to the staging slot
 2. Warms up the staging slot
 3. Swaps staging with production
@@ -80,7 +78,7 @@ For more control over the swap process:
 Azure.EnsureAuthenticated();
 
 // Deploy to staging
-AppService.DeployZip("my-webapp", publishPath, o => o
+AppService.DeployFolder("my-webapp", publishPath, configure: o => o
     .WithDeploymentSlot("staging"));
 
 // Run smoke tests against staging
@@ -101,7 +99,7 @@ Specify a resource group for apps not in your default:
 Azure.EnsureAuthenticated();
 Azure.SetSubscription("my-subscription-id");
 
-AppService.DeployZip("my-webapp", publishPath,
+AppService.DeployFolder("my-webapp", publishPath,
     resourceGroup: "my-resource-group");
 ```
 
@@ -136,7 +134,8 @@ if (deploy)
     Ef.DatabaseUpdate(dbContext, Env("CONNECTION_STRING"));
 
     // Deploy with slot swap
-    AppService.DeployWithSwap("my-webapp", publishPath, "staging");
+    Archive.Zip(publishPath, Root / "publish.zip");
+    AppService.DeployWithSwap("my-webapp", Root / "publish.zip", "staging");
 
     Log.Info("Deployment complete!");
 }
@@ -144,12 +143,12 @@ if (deploy)
 
 ## Key Operations
 
-| Operation | Purpose |
-|-----------|---------|
-| [Azure.EnsureAuthenticated()](/providers/azure#ensureauthenticated) | Authenticate with Azure |
-| [AppService.DeployZip()](/providers/appservice#deployzip) | Deploy via zip deployment |
-| [AppService.DeployWithSwap()](/providers/appservice#deploywithswap) | Deploy to slot and swap |
-| [AppService.SwapSlots()](/providers/appservice#swapslots) | Swap deployment slots |
+| Operation                                                           | Purpose                   |
+| ------------------------------------------------------------------- | ------------------------- |
+| [Azure.EnsureAuthenticated()](/providers/azure#ensureauthenticated) | Authenticate with Azure   |
+| [AppService.DeployZip()](/providers/appservice#deployzip)           | Deploy via zip deployment |
+| [AppService.DeployWithSwap()](/providers/appservice#deploywithswap) | Deploy to slot and swap   |
+| [AppService.SwapSlots()](/providers/appservice#swapslots)           | Swap deployment slots     |
 
 ## See Also
 

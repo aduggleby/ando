@@ -17,7 +17,7 @@ These names are available in every `build.csando` script without a prefix or imp
 | `DefineProfile()` | function          | Defines a build profile and returns a `Profile`.                   |
 | `Log`             | operations object | `Log.Info`, `Log.Warning`, `Log.Error`, `Log.Debug`.               |
 
-The other globals are the operation objects, one per provider: `Ando`, `AppService`, `Azure`, `Bicep`, `Bun`, `Cloudflare`, `Docfx`, `Docker`, `Dotnet`, `Ef`, `Functions`, `Git`, `GitHub`, `Http`, `Node`, `Npm`, `Nuget`, `Playwright` and `Shell`.
+The other globals are the operation objects, one per provider: `Ando`, `AppService`, `Archive`, `Azure`, `Bicep`, `Bun`, `Cloudflare`, `Docfx`, `Docker`, `Dotnet`, `Ef`, `Files`, `Functions`, `Git`, `GitHub`, `Http`, `Node`, `Npm`, `Nuget`, `Playwright` and `Shell`.
 
 Globals are evaluated while the script loads. `Env()`, `Directory()`, `DefineProfile()`, `Root` and `Temp` do not register steps. `Log.*` calls are steps: they print when their turn in the step order comes.
 

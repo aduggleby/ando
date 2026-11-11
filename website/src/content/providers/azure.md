@@ -4,6 +4,22 @@ description: Manage Azure resources and authentication using the Azure CLI.
 provider: Azure
 ---
 
+## Pinning the Azure CLI version
+
+`Azure.InstallCli("2.90.0")` installs exactly that `azure-cli` version in the build container (see also [Tool installation](/tools)). The version must be exactly `X.Y.Z`.
+
+- It skips the install when `az` already reports that version.
+- Otherwise it adds Microsoft's signed apt repository (key `/etc/apt/keyrings/microsoft.gpg`, codename from `/etc/os-release`) and checks that `azure-cli=<version>-1~<codename>` exists. If it does not, the step fails and lists the 15 newest available versions.
+- It installs with `--allow-downgrades`, runs `apt-mark hold azure-cli` and logs `az version`.
+- The automatic `az` install never replaces it.
+- Put it **before** the first Azure, AppService, Functions or Bicep step: an `az` that was installed automatically earlier in the run is replaced (downgraded) by this step.
+- It needs a Debian or Ubuntu image.
+
+```csharp
+Azure.InstallCli("2.90.0");
+Azure.EnsureAuthenticated();
+```
+
 ## Authentication
 
 Azure operations require authentication via the Azure CLI. Choose the method that fits your environment.

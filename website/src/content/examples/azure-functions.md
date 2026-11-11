@@ -30,7 +30,8 @@ Dotnet.Publish(project, o => o
 
 // Authenticate and deploy
 Azure.EnsureAuthenticated();
-Functions.DeployZip("my-function-app", publishPath);
+Archive.Zip(publishPath, Root / "publish.zip");
+Functions.DeployZip("my-function-app", Root / "publish.zip");
 ```
 
 ## Deployment with Staging Slot
@@ -59,7 +60,8 @@ if (deploy)
     Azure.EnsureAuthenticated();
 
     // Deploy to staging, then swap
-    Functions.DeployWithSwap("my-function-app", publishPath, "staging");
+    Archive.Zip(publishPath, Root / "publish.zip");
+    Functions.DeployWithSwap("my-function-app", Root / "publish.zip", "staging");
 
     Log.Info("Functions deployed and swapped to production");
 }
@@ -95,7 +97,9 @@ Specify resource group for non-default apps:
 Azure.EnsureAuthenticated();
 Azure.SetSubscription("my-subscription-id");
 
-Functions.DeployZip("my-function-app", publishPath,
+Archive.Zip(publishPath, Root / "publish.zip");
+
+Functions.DeployZip("my-function-app", Root / "publish.zip",
     resourceGroup: "my-resource-group");
 ```
 
@@ -116,7 +120,8 @@ Dotnet.Publish(project, o => o
     .Output(publishPath));
 
 Azure.EnsureAuthenticated();
-Functions.DeployZip("my-function-app", publishPath);
+Archive.Zip(publishPath, Root / "publish.zip");
+Functions.DeployZip("my-function-app", Root / "publish.zip");
 ```
 
 ## Full Example with Multiple Function Apps
@@ -150,8 +155,10 @@ if (deploy)
     Azure.EnsureAuthenticated();
 
     // Deploy both function apps
-    Functions.DeployZip("my-http-functions", Root / "publish" / "http");
-    Functions.DeployZip("my-timer-functions", Root / "publish" / "timer");
+    Archive.Zip(Root / "publish" / "http", Root / "http.zip");
+    Functions.DeployZip("my-http-functions", Root / "http.zip");
+    Archive.Zip(Root / "publish" / "timer", Root / "timer.zip");
+    Functions.DeployZip("my-timer-functions", Root / "timer.zip");
 
     Log.Info("All function apps deployed");
 }
@@ -159,12 +166,12 @@ if (deploy)
 
 ## Key Operations
 
-| Operation | Purpose |
-|-----------|---------|
-| [Azure.EnsureAuthenticated()](/providers/azure#ensureauthenticated) | Authenticate with Azure |
-| [Functions.DeployZip()](/providers/functions#deployzip) | Deploy via zip deployment |
-| [Functions.DeployWithSwap()](/providers/functions#deploywithswap) | Deploy to slot and swap |
-| [Functions.Publish()](/providers/functions#publish) | Deploy using func CLI |
+| Operation                                                           | Purpose                   |
+| ------------------------------------------------------------------- | ------------------------- |
+| [Azure.EnsureAuthenticated()](/providers/azure#ensureauthenticated) | Authenticate with Azure   |
+| [Functions.DeployZip()](/providers/functions#deployzip)             | Deploy via zip deployment |
+| [Functions.DeployWithSwap()](/providers/functions#deploywithswap)   | Deploy to slot and swap   |
+| [Functions.Publish()](/providers/functions#publish)                 | Deploy using func CLI     |
 
 ## See Also
 

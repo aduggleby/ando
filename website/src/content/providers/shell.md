@@ -15,8 +15,7 @@ Hook scripts have a different `Shell` global (`Shell.RunAsync`). The operations 
 ## Example
 
 ```csharp
-// Zip a folder and use a helper script as a gate
-Shell.Run("zip", "-qr", "../web.zip", ".").InDirectory("artifacts/web");
+// Use a helper script as a gate (zipping and copying have Archive.Zip and Files.Copy)
 Shell.Bash("source scripts/lib/deploy-gates.sh && require_spa_build artifacts/web");
 
 // Read the output later, at execution time

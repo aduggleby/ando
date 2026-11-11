@@ -27,9 +27,8 @@ Dotnet.Publish(WebApp, o => o
   .Output(Root / "publish")
   .WithConfiguration(Configuration.Release));
 
-// Create zip for deployment (no ANDO operation zips a folder yet, so use zip;
-// it must be installed in the image, e.g. apt-get install zip)
-Shell.Run("zip", "-qr", "../app.zip", ".").InDirectory("publish");
+// Create a reproducible zip for deployment
+Archive.Zip("publish", "app.zip", o => o.WithTimestamp(Git.CommitTime));
 
 // Deploy to staging slot, then swap to production
 AppService.DeployWithSwap("my-web-app", Root / "app.zip");

@@ -19,14 +19,15 @@ GitHub Packages provides a NuGet registry alongside your repository. This recipe
 
 Publishing to GitHub Packages requires a personal access token (PAT) or GitHub Actions token with the `write:packages` scope.
 
-| Environment Variable | Description |
-|---------------------|-------------|
-| `GITHUB_TOKEN` | Token for GitHub Packages authentication |
-| `NUGET_API_KEY` | Alternative: can use same token |
+| Environment Variable | Description                              |
+| -------------------- | ---------------------------------------- |
+| `GITHUB_TOKEN`       | Token for GitHub Packages authentication |
+| `NUGET_API_KEY`      | Alternative: can use same token          |
 
 ### GitHub Packages Feed URL
 
 The feed URL format is:
+
 ```
 https://nuget.pkg.github.com/{OWNER}/index.json
 ```
@@ -162,6 +163,7 @@ if (publish)
 ```
 
 Usage:
+
 ```bash
 # Build, test, and create package
 ando
@@ -222,7 +224,7 @@ name: NuGet Package
 on:
   push:
     branches: [main]
-    tags: ['v*']
+    tags: ["v*"]
   pull_request:
     branches: [main]
 
@@ -270,6 +272,7 @@ To consume packages from GitHub Packages, add a `nuget.config` to your project:
 ```
 
 Or authenticate via environment:
+
 ```bash
 dotnet nuget add source https://nuget.pkg.github.com/OWNER/index.json \
   --name github \
@@ -320,6 +323,7 @@ if (pushNuGet)
 ```
 
 Usage:
+
 ```bash
 # Push to GitHub Packages only
 ando -p publish-github
@@ -396,29 +400,29 @@ Nuget.Push(project, o => o
 
 ### Nuget.Pack Options
 
-| Option | Description |
-|--------|-------------|
-| `Output(path)` | Output directory for .nupkg |
-| `WithConfiguration(Configuration)` | Build configuration |
-| `WithVersion(string)` | Override package version |
-| `WithVersionSuffix(string)` | Pre-release suffix (e.g., "beta.1") |
-| `WithSymbols(bool)` | Include .snupkg for debugging |
-| `WithSource(bool)` | Include source in symbols |
-| `SkipRestore()` | Skip restore before packing |
-| `SkipBuild()` | Skip build before packing |
+| Option                             | Description                         |
+| ---------------------------------- | ----------------------------------- |
+| `Output(path)`                     | Output directory for .nupkg         |
+| `WithConfiguration(Configuration)` | Build configuration                 |
+| `WithVersion(string)`              | Override package version            |
+| `WithVersionSuffix(string)`        | Pre-release suffix (e.g., "beta.1") |
+| `WithSymbols(bool)`                | Include .snupkg for debugging       |
+| `WithSource(bool)`                 | Include source in symbols           |
+| `SkipRestore()`                    | Skip restore before packing         |
+| `SkipBuild()`                      | Skip build before packing           |
 
 ### Nuget.Push Options
 
-| Option | Description |
-|--------|-------------|
-| `ToSource(string)` | NuGet feed URL |
-| `ToNuGetOrg()` | Push to nuget.org |
-| `WithApiKey(string)` | API key for authentication |
+| Option                 | Description                            |
+| ---------------------- | -------------------------------------- |
+| `ToSource(string)`     | NuGet feed URL                         |
+| `ToNuGetOrg()`         | Push to nuget.org                      |
+| `WithApiKey(string)`   | API key for authentication             |
 | `SkipDuplicates(bool)` | Skip if version exists (default: true) |
-| `WithoutSymbols(bool)` | Don't push .snupkg |
+| `WithoutSymbols(bool)` | Don't push .snupkg                     |
 
 ## See Also
 
 - [NuGet Provider](/providers/nuget) - NuGet operations reference
 - [Dotnet Provider](/providers/dotnet) - .NET build operations
-- [GitHub Releases Recipe](/recipes/github-releases) - Creating GitHub releases
+- [GitHub Releases Recipe](/examples/github-releases) - Creating GitHub releases

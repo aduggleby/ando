@@ -59,6 +59,9 @@ Http.WaitForHealthy(
 | `WithRequestTimeoutSeconds(int)`           | Per-request timeout for each poll. Default `10`.                                                                                                                                                                                                                               |
 | `ConsecutiveSuccesses(int)`                | Number of passing checks in a row required. A failure resets the count. With several URLs, one check means every URL passed. Default `1`.                                                                                                                                      |
 | `MinGapSeconds(int)`                       | Minimum seconds between two counted passing checks. `ConsecutiveSuccesses(3).MinGapSeconds(11)` means three passes spread over at least 22 seconds. Default `0`.                                                                                                               |
+| `ExpectContentType(string prefix)`         | Requires the `Content-Type` to start with `prefix` (case-insensitive), for example `text/html`.                                                                                                                                                                                |
+| `ExpectBodyContains(string text)`          | Requires the body to contain `text` (ordinal comparison).                                                                                                                                                                                                                      |
+| `ExpectBodyMatches(string regex)`          | Requires the body to match the .NET regular expression (2 second timeout).                                                                                                                                                                                                     |
 | `ExpectJson(string path, string expected)` | Requires the response body to be JSON with `expected` at the dotted `path` (such as `version` or `build.commit`). Numbers and booleans compare by their JSON text. Applies to every URL of the call; use a separate call for URLs that return something else. Can be repeated. |
 
 ## Http.Get
@@ -69,6 +72,16 @@ Http.WaitForHealthy(
 var health = Http.Get("https://eu.example.com/healthz");
 Ando.Report("eu.healthz", health);
 ```
+
+### Response expectations
+
+`Http.Get` has overloads that take a configuration lambda, `Get(string url, Action<HttpGetOptions> configure)` and `Get(Func<string> url, Action<HttpGetOptions> configure)`. `HttpGetOptions` has `AllowAnyStatus()` and the same three expectations as `WaitForHealthy`: `ExpectContentType(prefix)` (case-insensitive prefix), `ExpectBodyContains(text)` (ordinal) and `ExpectBodyMatches(regex)` (.NET syntax, 2 second timeout).
+
+```csharp
+Http.Get("https://x/", o => o.ExpectContentType("text/html").ExpectBodyContains("<title>"));
+```
+
+When an expectation is not met, `Http.Get` fails the step (`Value` still holds the body) and `WaitForHealthy` counts it as a failed check, with a message that shows the content type and the first 200 characters of the body. This catches a host that answers `200` with an error page or a default placeholder.
 
 ## Http.PublicIpV4
 
