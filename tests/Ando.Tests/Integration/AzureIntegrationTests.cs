@@ -18,6 +18,9 @@ using Ando.Operations;
 using Ando.Steps;
 using Ando.Tests.TestFixtures;
 
+// EnsureLoggedIn is obsolete but stays covered until it is removed.
+#pragma warning disable CS0618
+
 namespace Ando.Tests.Integration;
 
 [Trait("Category", "Integration")]

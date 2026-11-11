@@ -63,7 +63,7 @@ public class ScriptGlobals
 
     /// <summary>
     /// Azure CLI authentication and account operations.
-    /// Usage: Azure.EnsureLoggedIn(), Azure.SetSubscription("...")
+    /// Usage: Azure.EnsureAuthenticated(), Azure.SetSubscription("...")
     /// </summary>
     public AzureOperations Azure { get; }
 
@@ -169,14 +169,6 @@ public class ScriptGlobals
     public BunOperations Bun { get; }
 
     /// <summary>
-    /// Legacy .NET SDK installation operations.
-    /// Use Dotnet.SdkInstall() instead for new scripts.
-    /// Usage: DotnetSdk.Install() or DotnetSdk.Install("9.0")
-    /// </summary>
-    [Obsolete("Use Dotnet.SdkInstall() instead.")]
-    public DotnetSdkOperations DotnetSdk { get; }
-
-    /// <summary>
     /// Creates a directory reference from a path.
     /// Usage: var frontend = Directory("./frontend");
     /// Usage: var current = Directory(); // defaults to "."
@@ -245,7 +237,6 @@ public class ScriptGlobals
 
         // Legacy backward compatibility.
 #pragma warning disable CS0618 // Suppress obsolete warning for internal initialization
-        DotnetSdk = buildContext.Operations.DotnetSdk;
 #pragma warning restore CS0618
     }
 }

@@ -98,28 +98,3 @@ public class NpmOperations(
             GetEnsurer(), directory.Name, directory.Path);
     }
 }
-
-/// <summary>
-/// Node.js tool management for installing specific versions.
-/// </summary>
-public static class NodeToolExtensions
-{
-    /// <summary>
-    /// Ensures a specific Node.js version is available.
-    /// In container execution, this downloads and installs Node.js.
-    /// </summary>
-    public static NodeTool Use(string version) => new(version);
-
-    /// <summary>
-    /// Uses the latest LTS version of Node.js.
-    /// </summary>
-    public static NodeTool UseLatestLts() => new("lts");
-}
-
-/// <summary>
-/// Represents a Node.js installation with a specific version.
-/// </summary>
-public class NodeTool(string version)
-{
-    public string Version => version;
-}

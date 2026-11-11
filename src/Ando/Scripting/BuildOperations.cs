@@ -105,10 +105,6 @@ public class BuildOperations
     /// <summary>Bun installation operations.</summary>
     public BunOperations Bun { get; }
 
-    /// <summary>Legacy .NET SDK installation operations. Use Dotnet.SdkInstall() instead.</summary>
-    [Obsolete("Use Dotnet.SdkInstall() instead.")]
-    public DotnetSdkOperations DotnetSdk { get; }
-
     /// <summary>
     /// Creates all operation instances.
     /// </summary>
@@ -162,7 +158,6 @@ public class BuildOperations
 
         // Legacy backward compatibility wrapper.
 #pragma warning disable CS0618 // Suppress obsolete warning for internal initialization
-        DotnetSdk = new DotnetSdkOperations(Dotnet);
 #pragma warning restore CS0618
     }
 }

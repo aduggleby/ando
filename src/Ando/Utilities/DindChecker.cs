@@ -72,7 +72,6 @@ public class DindChecker
     private static readonly HashSet<string> DindRequiredOperations = new(StringComparer.OrdinalIgnoreCase)
     {
         "Docker.Build",
-        "Docker.Push",
         "Docker.Install",
         "GitHub.PushImage",
         "Playwright.Test"
@@ -87,7 +86,7 @@ public class DindChecker
     // Regex pattern to find DIND-requiring operation calls in script text.
     // Used for scanning child build scripts without executing them.
     private static readonly Regex DindOperationPattern = new(
-        @"\b(Docker\.Build|Docker\.Push|Docker\.Install|GitHub\.PushImage|Playwright\.Test)\s*\(",
+        @"\b(Docker\.Build|Docker\.Install|GitHub\.PushImage|Playwright\.Test)\s*\(",
         RegexOptions.Compiled);
 
     /// <summary>

@@ -7,7 +7,7 @@
 // - Returns NotRequired when no DIND operations exist
 // - Returns EnabledViaFlag when --dind flag is provided
 // - Returns EnabledViaConfig when ando.config has dind:true
-// - Correctly detects Docker.Build, Docker.Push, Docker.Install, GitHub.PushImage,
+// - Correctly detects Docker.Build, Docker.Install, GitHub.PushImage,
 //   Playwright.Test operations
 // - ShouldEnableDind returns correct values for each result type
 // - GetDindOperations finds DIND-requiring operations
@@ -123,20 +123,6 @@ public class DindCheckerTests : IDisposable
     }
 
     [Fact]
-    public void GetDindOperations_DetectsDockerPush()
-    {
-        // Arrange
-        var registry = new StepRegistry();
-        registry.Register("Docker.Push", () => Task.FromResult(true));
-
-        // Act
-        var ops = DindChecker.GetDindOperations(registry);
-
-        // Assert
-        ops.ShouldContain("Docker.Push");
-    }
-
-    [Fact]
     public void GetDindOperations_DetectsGitHubPushImage()
     {
         // Arrange
@@ -156,7 +142,7 @@ public class DindCheckerTests : IDisposable
         // Arrange
         var registry = new StepRegistry();
         registry.Register("Docker.Build", () => Task.FromResult(true));
-        registry.Register("Docker.Push", () => Task.FromResult(true));
+        registry.Register("Docker.Install", () => Task.FromResult(true));
         registry.Register("Dotnet.Build", () => Task.FromResult(true));
 
         // Act
@@ -165,7 +151,7 @@ public class DindCheckerTests : IDisposable
         // Assert
         ops.Count.ShouldBe(2);
         ops.ShouldContain("Docker.Build");
-        ops.ShouldContain("Docker.Push");
+        ops.ShouldContain("Docker.Install");
     }
 
     [Fact]

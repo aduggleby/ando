@@ -146,6 +146,13 @@ ANDO is a typed C# build system using Roslyn scripting. Build scripts (`build.cs
 - **Step Registration Pattern**: Operations (Dotnet, Ef) register steps in a registry, WorkflowRunner executes them
 - **Docker Isolation**: All builds run in containers via `DockerManager` and `ContainerExecutor`
 
+## Operations API Design
+
+- Operations that overlap (e.g. `Cloudflare.EnsurePagesProject` vs `PagesCreateProject`, `Git.Push` vs `Git.PushTags`) are kept on purpose. Each must be documented clearly in `website/src/data/operations.js`, its provider page and `website/public/llms.txt`, saying what it does and how it differs from its neighbor.
+- Prefer explicit first-party operations over sending users to `Shell.Run`/`Shell.Bash`: when a common task needs a shell escape hatch, add a typed operation instead. `Shell.Run`/`Shell.Bash` stay as the escape hatch for one-off commands.
+- Queries that are useful both at script load and in step order come as a pair: an eagerly evaluated member (e.g. `Git.Commit`, `Git.LastTag`, evaluated on the host when the script loads) and a step variant returning `CommandStep` (e.g. `Git.RevParse`, `Git.LatestTag`). Say which one it is in the XML docs.
+- `AppService.*` (`az webapp`) and `Functions.*` (`az functionapp`) share their step builders in `AzureSiteOperationsBase`; change behavior there so both stay in parity.
+
 ## Directory Structure
 
 ```
@@ -359,13 +366,13 @@ Run `npm run build` in the website directory to verify documentation builds corr
    - Checks for `--dind` flag, `ando.config` with `dind: true`, or `ANDO_DIND=1` environment variable
    - **Child builds inherit DIND** - When parent enables DIND, it sets `ANDO_DIND=1` in both the container environment AND the host process environment. The host process env is needed because `Ando.Build` step functions run on the host (they spawn child `ando` processes). This prevents child builds from re-prompting for DIND.
    - Prompts user with options: (Y)es for this run, (a)lways (saves to ando.config), Esc to cancel
-   - Current DIND operations: Docker.Build, Docker.Push, Docker.Install, GitHub.PushImage, Playwright.Test
+   - Current DIND operations: Docker.Build, Docker.Install, GitHub.PushImage, Playwright.Test
 
 3. **DIND Operations Registry** - When adding new operations that require Docker-in-Docker:
    - Add the operation name to `DindRequiredOperations` in `src/Ando/Utilities/DindChecker.cs`
    - **Also add the operation to `DindOperationPattern` regex** in the same file (for child build scanning)
    - Operations requiring DIND include any that need to run `docker` commands inside the build container
-   - Examples: Docker.Build, Docker.Push, Docker.Install, GitHub.PushImage, Playwright.Test (uses docker-compose for E2E tests)
+   - Examples: Docker.Build, Docker.Install, GitHub.PushImage, Playwright.Test (uses docker-compose for E2E tests)
 
 ## Documentation Standards
 

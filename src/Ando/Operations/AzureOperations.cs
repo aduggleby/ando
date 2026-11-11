@@ -53,7 +53,10 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
     /// <summary>
     /// Registers a step to verify the user is logged in to Azure.
     /// Fails the build if not authenticated.
+    /// Obsolete: use <see cref="EnsureAuthenticated"/>. Scripts that still call this get a
+    /// compiler warning only (Roslyn script warnings never fail a build); behavior is unchanged.
     /// </summary>
+    [Obsolete("Use Azure.EnsureAuthenticated() instead.")]
     public void EnsureLoggedIn()
     {
         RegisterCommand("Azure.EnsureLoggedIn", "az",
