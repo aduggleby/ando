@@ -101,11 +101,11 @@ public class GitOperations : OperationsBase
 
     /// <summary>
     /// Commit time of the commit being built (HEAD, or the commit given with --ref) as Unix
-    /// seconds (`git log -1 --format=%ct HEAD`). Evaluated when the script loads (on the
+    /// seconds (`git show -s --no-show-signature --format=%ct HEAD`, so log.showSignature cannot break the value). Evaluated when the script loads (on the
     /// host), like Commit, and cached. Useful as a reproducible timestamp, e.g.
     /// Archive.Zip(src, zip, o => o.WithTimestamp(Git.CommitTime)).
     /// </summary>
-    public long CommitTime => _commitTime ??= long.Parse(RunGit("log", "-1", "--format=%ct", "HEAD"),
+    public long CommitTime => _commitTime ??= long.Parse(RunGit("show", "-s", "--no-show-signature", "--format=%ct", "HEAD"),
         System.Globalization.CultureInfo.InvariantCulture);
     private long? _commitTime;
 
@@ -186,7 +186,9 @@ public class GitOperations : OperationsBase
     /// <summary>
     /// Registers a step that resolves a revision (`git rev-parse [--short] &lt;rev&gt;`); Value is the SHA.
     /// Runs as a step on the host, in order with the other steps. Git.Commit and Git.ShortCommit
-    /// are evaluated when the script loads instead.
+    /// are evaluated when the script loads instead. Of the CommandStep fluent methods, WithTimeout,
+    /// WithEnv, Quiet and AllowFailure are honored; InDirectory must not be used (it resolves to a
+    /// container path, but git runs on the host in the source root).
     /// Usage: var sha = Git.RevParse(shortSha: true);  Docker.Build(...).WithTag(() => sha.Value);
     /// </summary>
     /// <param name="rev">Revision to resolve (default "HEAD").</param>
@@ -199,8 +201,9 @@ public class GitOperations : OperationsBase
     /// <paramref name="pattern"/> (`git describe --tags --abbrev=0 --match &lt;pattern&gt;`); Value is the
     /// tag. No matching tag is a normal outcome: Value is empty, the step succeeds and nothing is
     /// logged as a warning. Any other git error (not a repository, bad ref) fails the step. Runs as a
-    /// step on the host; InDirectory/WithEnv on the result are not applied. Git.LastTag is evaluated
-    /// when the script loads.
+    /// step on the host. This step ignores the CommandStep fluent methods WithTimeout, InDirectory,
+    /// WithEnv, Quiet and AllowFailure (it already treats "no tag" as success and a real git
+    /// error as failure). Git.LastTag is evaluated when the script loads.
     /// Usage: var last = Git.LatestTag("v*");  Ando.When(() => last.Value != "", ...);
     /// </summary>
     /// <param name="pattern">Glob the tag must match (default "*").</param>
@@ -239,8 +242,10 @@ public class GitOperations : OperationsBase
     /// <summary>
     /// Registers a step that lists files changed between <paramref name="sinceRef"/> and HEAD
     /// (`git diff --name-only &lt;sinceRef&gt; HEAD -- &lt;paths&gt;`); Value is the newline-separated list,
-    /// empty when nothing changed. Runs as a step on the host. Git.ChangedSince is evaluated
-    /// when the script loads.
+    /// empty when nothing changed. Runs as a step on the host; WithTimeout, WithEnv, Quiet and
+    /// AllowFailure are honored, InDirectory must not be used (git runs on the host in the source
+    /// root, InDirectory resolves a container path). Git.ChangedSince is evaluated when the
+    /// script loads.
     /// Usage: var changed = Git.ChangedFiles(last.Value, "src/Worker");
     /// </summary>
     /// <param name="sinceRef">Commit, tag or branch to compare against.</param>

@@ -179,6 +179,102 @@ public sealed class ArchiveAndFilesOperationsTests : IDisposable
         rejected.Err.ShouldContain("symlinks are not supported");
     }
 
+    // ---- Archive: awkward names, hardlinks, symlink floods, output checks ----
+
+    private string MakeAwkwardTree(string name, bool hardlink)
+    {
+        var root = Path.Combine(_tmp, name);
+        Directory.CreateDirectory(Path.Combine(root, "-dir"));
+        File.WriteAllText(Path.Combine(root, "-x"), "dash");
+        File.WriteAllText(Path.Combine(root, "a b.txt"), "space");
+        File.WriteAllText(Path.Combine(root, "t\\u"), "backslash");
+        File.WriteAllText(Path.Combine(root, "-dir", "base.txt"), "shared");
+        var copy = Path.Combine(root, "-dir", "copy.txt");
+        if (hardlink)
+        {
+            Bash("ln -- \"$1\" \"$2\"", Path.Combine(root, "-dir", "base.txt"), copy).Exit.ShouldBe(0);
+        }
+        else
+        {
+            File.WriteAllText(copy, "shared");
+        }
+        return root;
+    }
+
+    [SkippableTheory]
+    [InlineData("zip", "a.zip")]
+    [InlineData("targz", "a.tar.gz")]
+    public void Archive_DashSpaceBackslashNamesAndHardlinks_AreByteIdenticalToCopies(string kind, string file)
+    {
+        Skip.IfNot(Has("zip") && Has("tar") && Has("gzip") && Has("sha256sum"), "zip, tar, gzip or sha256sum missing");
+        var linked = MakeAwkwardTree("linked", hardlink: true);
+        var copied = MakeAwkwardTree("copied", hardlink: false);
+
+        var rl = Bash(ArchiveOperations.Script, linked, Path.Combine(_tmp, "ol", file), "315532800", "6", kind);
+        var rc = Bash(ArchiveOperations.Script, copied, Path.Combine(_tmp, "oc", file), "315532800", "6", kind);
+
+        rl.Exit.ShouldBe(0, rl.Err);
+        rc.Exit.ShouldBe(0, rc.Err);
+        rl.Out.ShouldBe(rc.Out);
+        if (kind == "targz")
+        {
+            var listing = Bash("tar --quoting-style=literal -tzf \"$1\"", Path.Combine(_tmp, "ol", file)).Out.Split('\n');
+            listing.ShouldContain("-x");
+            listing.ShouldContain("t\\u");
+            listing.ShouldContain("a b.txt");
+        }
+    }
+
+    [SkippableFact]
+    public void Archive_ManySymlinks_FailsWithClearMessageNotSigpipe()
+    {
+        Skip.IfNot(Has("zip") && Has("sha256sum"), "zip or sha256sum missing");
+        var src = Path.Combine(_tmp, "many");
+        Directory.CreateDirectory(src);
+        File.WriteAllText(Path.Combine(src, "real"), "x");
+        Bash("for i in $(seq 1 4000); do ln -s real \"$1/l$i\"; done", src).Exit.ShouldBe(0);
+
+        var result = Bash(ArchiveOperations.Script, src, Path.Combine(_tmp, "out", "m.zip"), "315532800", "6", "zip");
+
+        result.Exit.ShouldBe(1);
+        result.Err.ShouldContain("symlinks are not supported");
+    }
+
+    [SkippableFact]
+    public void Archive_OutputInsideSourceThroughSymlink_IsRejected()
+    {
+        Skip.IfNot(Has("zip") && Has("sha256sum") && Has("realpath"), "zip, sha256sum or realpath missing");
+        var src = Path.Combine(_tmp, "srcdir");
+        Directory.CreateDirectory(src);
+        File.WriteAllText(Path.Combine(src, "f"), "x");
+        File.CreateSymbolicLink(Path.Combine(_tmp, "alias"), src);
+
+        var result = Bash(ArchiveOperations.Script, src, Path.Combine(_tmp, "alias", "out.zip"), "315532800", "6", "zip");
+
+        result.Exit.ShouldBe(1);
+        result.Err.ShouldContain("must not be the source directory or inside it");
+    }
+
+    [Fact]
+    public void Zip_RequiresZipExtensionAndRejectsOutputInsideSource()
+    {
+        Should.Throw<ArgumentException>(() => Archive().Zip("a", "a.tar")).Message.ShouldContain(".zip");
+        Should.Throw<ArgumentException>(() => Archive().Zip("a", "a/out.zip")).Message.ShouldContain("inside it");
+        Should.Throw<ArgumentException>(() => Archive().Zip("artifacts/web", "artifacts/web/")).Message.ShouldContain(".zip");
+        Should.Throw<ArgumentException>(() => Archive().TarGz("a", "a")).Message.ShouldContain("source directory");
+        Should.Throw<ArgumentException>(() => Archive().TarGz("/w/a", "/w/a/out.tar.gz"));
+        Archive().Zip("a", "a.zip");
+    }
+
+    [Fact]
+    public void Script_ReadsTarListNulSeparatedAndDereferencesHardlinks()
+    {
+        ArchiveOperations.Script.ShouldContain("--hard-dereference");
+        ArchiveOperations.Script.ShouldContain("--null --verbatim-files-from -T");
+        ArchiveOperations.Script.ShouldContain("sort -z");
+        ArchiveOperations.Script.ShouldNotContain("| head");
+    }
+
     [Fact]
     public void FilesCopy_FileToFile_CreatesParentAndOverwrites()
     {
@@ -191,6 +287,28 @@ public sealed class ArchiveAndFilesOperationsTests : IDisposable
 
         File.ReadAllText(Path.Combine(_tmp, "o", "out.txt")).ShouldBe("new");
         File.ReadAllText(Path.Combine(_tmp, "deep/er/out.txt")).ShouldBe("new");
+    }
+
+    [Fact]
+    public void FilesCopy_FileToExistingDirectoryWithoutSlash_CopiesIntoIt()
+    {
+        File.WriteAllText(Path.Combine(_tmp, "in.txt"), "x");
+        Directory.CreateDirectory(Path.Combine(_tmp, "existing"));
+
+        Bash(FilesOperations.CopyScript, Path.Combine(_tmp, "in.txt"), Path.Combine(_tmp, "existing"), "0").Exit.ShouldBe(0);
+
+        File.ReadAllText(Path.Combine(_tmp, "existing", "in.txt")).ShouldBe("x");
+        File.Exists(Path.Combine(_tmp, "existing", "existing")).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void FilesCopy_FileToNonExistingPathWithoutSlash_IsTheTargetFile()
+    {
+        File.WriteAllText(Path.Combine(_tmp, "in.txt"), "x");
+
+        Bash(FilesOperations.CopyScript, Path.Combine(_tmp, "in.txt"), Path.Combine(_tmp, "newname"), "0").Exit.ShouldBe(0);
+
+        File.ReadAllText(Path.Combine(_tmp, "newname")).ShouldBe("x");
     }
 
     [Fact]

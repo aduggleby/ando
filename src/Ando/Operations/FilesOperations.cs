@@ -40,15 +40,19 @@ public class FilesOperations(StepRegistry registry, IBuildLogger logger, Func<IC
         else
           case "$dst" in
             */) mkdir -p -- "$dst"; cp -a -- "$src" "$dst" ;;
-            *) mkdir -p -- "$(dirname -- "$dst")"; cp -a -- "$src" "$dst" ;;
+            *)
+              if [ -d "$dst" ]; then cp -a -- "$src" "$dst"/
+              else mkdir -p -- "$(dirname -- "$dst")"; cp -a -- "$src" "$dst"; fi ;;
           esac
         fi
         """;
 
     /// <summary>
     /// Registers a step that copies a file or directory in the build container. Semantics:
-    /// - File source: <paramref name="destination"/> is the target file path (overwritten if it
-    ///   exists); if it ends with "/" the file is copied into that directory under its own name.
+    /// - File source: if <paramref name="destination"/> ends with "/" or is an existing directory,
+    ///   the file is copied INTO that directory under its own name (the directory is created for
+    ///   a trailing "/"); otherwise <paramref name="destination"/> is the target file path
+    ///   (overwritten if it exists) and its parent directories are created.
     /// - Directory source: the CONTENTS of the directory are copied recursively into
     ///   <paramref name="destination"/> (like `cp -a src/. dst/`). The destination is created if
     ///   missing; if it exists the trees merge and same-named files are overwritten. The source

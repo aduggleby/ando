@@ -50,44 +50,65 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
     // Environment variable the Azure CLI uses to locate its profile directory.
     internal const string EnvAzureConfigDir = "AZURE_CONFIG_DIR";
 
-    // Positional argument: $1 exact azure-cli version, e.g. 2.90.0.
+    // Positional arguments: $1 exact azure-cli version, e.g. 2.90.0; $2 optional os-release path (tests).
     internal const string InstallCliScript = """
         set -euo pipefail
         version=$1
+        osrelease=${2:-/etc/os-release}
+        fail() { echo "Azure.InstallCli: azure-cli $version is not available: $1" >&2; exit 1; }
         if command -v az >/dev/null 2>&1; then
           current=$(az version --query '"azure-cli"' --output tsv 2>/dev/null || true)
           if [ "$current" = "$version" ]; then echo "Azure CLI $version is already installed; skipping."; exit 0; fi
         fi
-        command -v apt-get >/dev/null 2>&1 || { echo "Azure.InstallCli needs a Debian or Ubuntu image (apt-get not found)." >&2; exit 1; }
+        command -v apt-get >/dev/null 2>&1 || fail "this step needs a Debian or Ubuntu image (apt-get not found)."
         export DEBIAN_FRONTEND=noninteractive
-        . /etc/os-release
+        . "$osrelease"
         codename=${VERSION_CODENAME:-}
-        [ -n "$codename" ] || { echo "Azure.InstallCli: VERSION_CODENAME is not set in /etc/os-release." >&2; exit 1; }
-        apt-get update -qq
-        apt-get install -y -qq ca-certificates curl gnupg
+        [ -n "$codename" ] || fail "VERSION_CODENAME is not set in $osrelease."
+        apt-get update -qq || fail "apt-get update failed before the Microsoft repository was added."
+        apt-get install -y -qq ca-certificates curl gnupg || fail "could not install curl and gnupg."
+
+        # Microsoft publishes the azure-cli repository only for some suites. Probe first, then fall back
+        # like Microsoft's InstallAzureCLIDeb: Debian to bookworm, Ubuntu (and derivatives) to UBUNTU_CODENAME or jammy.
+        repo=https://packages.microsoft.com/repos/azure-cli
+        suite=$codename
+        if ! curl -fsSI "$repo/dists/$suite/Release" >/dev/null 2>&1; then
+          case " ${ID:-} ${ID_LIKE:-} " in
+            *" ubuntu "*) fallback=${UBUNTU_CODENAME:-jammy} ;;
+            *" debian "*) fallback=bookworm ;;
+            *) fallback= ;;
+          esac
+          if [ -z "$fallback" ] || [ "$fallback" = "$suite" ] || ! curl -fsSI "$repo/dists/$fallback/Release" >/dev/null 2>&1; then
+            fail "packages.microsoft.com publishes no azure-cli repository for '$codename'${fallback:+ or the fallback '$fallback'}. Available versions: unknown (no usable repository for this distribution)."
+          fi
+          echo "Azure.InstallCli: no azure-cli repository for '$codename'; using '$fallback' packages instead."
+          suite=$fallback
+        fi
+
         mkdir -p /etc/apt/keyrings
-        curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor --yes -o /etc/apt/keyrings/microsoft.gpg
+        curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor --yes -o /etc/apt/keyrings/microsoft.gpg \
+          || fail "could not download the Microsoft signing key."
         chmod go+r /etc/apt/keyrings/microsoft.gpg
         cat > /etc/apt/sources.list.d/azure-cli.sources <<EOF
         Types: deb
-        URIs: https://packages.microsoft.com/repos/azure-cli/
-        Suites: $codename
+        URIs: $repo/
+        Suites: $suite
         Components: main
         Architectures: $(dpkg --print-architecture)
         Signed-By: /etc/apt/keyrings/microsoft.gpg
         EOF
-        apt-get update -qq
-        package="$version-1~$codename"
+        apt-get update -qq || fail "apt-get update failed for the Microsoft repository (suite '$suite'). Available versions: unknown."
+        package="$version-1~$suite"
         if ! apt-cache madison azure-cli | awk '{print $3}' | grep -Fxq "$package"; then
-          echo "Azure.InstallCli: azure-cli=$package is not available from packages.microsoft.com. Available versions:" >&2
-          apt-cache madison azure-cli | awk '{print $3}' | head -n 15 >&2
+          echo "Azure.InstallCli: azure-cli $version is not available (looked for azure-cli=$package on packages.microsoft.com). Available versions:" >&2
+          (set +o pipefail; apt-cache madison azure-cli | awk '{print $3}' | sed 15q) >&2
           exit 1
         fi
-        apt-get install -y -qq --allow-downgrades "azure-cli=$package"
+        apt-get install -y -qq --allow-downgrades "azure-cli=$package" || fail "apt-get could not install azure-cli=$package."
         # Hold the package so no later apt command upgrades or replaces this version.
         apt-mark hold azure-cli >/dev/null
         installed=$(az version --query '"azure-cli"' --output tsv)
-        [ "$installed" = "$version" ] || { echo "Azure.InstallCli: expected azure-cli $version but found $installed." >&2; exit 1; }
+        [ "$installed" = "$version" ] || fail "expected azure-cli $version after the install but found $installed."
         echo "Installed Azure CLI $installed:"
         az version
         """;

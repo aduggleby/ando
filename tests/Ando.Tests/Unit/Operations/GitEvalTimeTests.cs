@@ -256,6 +256,14 @@ public class GitEvalTimeTests : IDisposable
         git.CommitTime.ShouldBe(expected);
     }
 
+    [Fact]
+    public void CommitTime_IgnoresLogShowSignatureConfig()
+    {
+        Git("config", "log.showSignature", "true");
+
+        CreateGit().CommitTime.ShouldBe(long.Parse(Git("show", "-s", "--no-show-signature", "--format=%ct", "HEAD")));
+    }
+
     // ---- Step variants (RevParse, LatestTag, ChangedFiles) -------------------
 
     private async Task<CommandStep> RunStepAsync(CommandStep step)

@@ -8,8 +8,9 @@
 // and function app management.
 //
 // Architecture:
-// - Zip deploy uses `az functionapp deploy --type zip` (shared with AppService via
-//   AzureSiteOperationsBase: restart default false, retries, timeout reconciliation)
+// - Zip deploy uses `az functionapp deployment source config-zip` by default (all plans) and
+//   `az functionapp deploy --type zip` (OneDeploy) with WithOneDeploy(); both share the retry
+//   logic with AppService via AzureSiteOperationsBase
 // - Publish uses `func azure functionapp publish` (Functions Core Tools)
 // - Slot deployments use the --slot parameter
 // - Authentication relies on prior Azure.Login* steps
@@ -40,24 +41,41 @@ public class FunctionsOperations(
     : AzureSiteOperationsBase(registry, logger, executorFactory, "functionapp", "Functions", "Functions", delayAsync)
 {
     /// <summary>
-    /// Registers a step to deploy a function app using zip deploy
-    /// (`az functionapp deploy --type zip`, which uses OneDeploy). Requires the function app to
+    /// Registers a step to deploy a function app using zip deploy. Requires the function app to
     /// already exist.
-    /// Like AppService.DeployZip it passes `--restart false` unless WithRestart() is set,
-    /// retries transient failures and reconciles timeouts against the latest deployment log.
+    /// Default: `az functionapp deployment source config-zip`, which supports every plan
+    /// (dedicated and Premium, Linux Consumption via storage upload plus WEBSITE_RUN_FROM_PACKAGE,
+    /// and Flex Consumption). It takes the slot and, with WithTimeout, `--timeout` in seconds.
+    /// With WithOneDeploy(): `az functionapp deploy --type zip` (OneDeploy, preview; posts to
+    /// /api/publish; dedicated, Premium and Flex, not guaranteed on Linux Consumption), which also
+    /// takes `--restart false|true` (default false, set with WithRestart()), `--async`
+    /// (WithNoWait()) and `--timeout` in milliseconds.
+    /// WithRestart() and WithNoWait() without WithOneDeploy() throw an
+    /// <see cref="InvalidOperationException"/> when this method is called, because config-zip cannot
+    /// honor them (failing is clearer than silently switching deployment mechanism).
+    /// Transient failures (5xx, connection reset) are retried on both paths; a timed-out OneDeploy is
+    /// reconciled against the latest deployment log, a timed-out config-zip simply fails.
     /// </summary>
     /// <param name="functionAppName">Name of the Azure Function App.</param>
     /// <param name="zipPath">Path to the deployment zip file.</param>
     /// <param name="resourceGroup">Optional resource group name. If null, Azure CLI will determine it.</param>
-    /// <param name="configure">Optional deployment options (slot, restart, no-wait, timeout).</param>
+    /// <param name="configure">Optional deployment options (slot, timeout, WithOneDeploy, restart, no-wait).</param>
     public void DeployZip(string functionAppName, string zipPath,
         string? resourceGroup = null, Action<FunctionsDeployOptions>? configure = null)
     {
         var options = new FunctionsDeployOptions();
         configure?.Invoke(options);
 
+        if (!options.OneDeploy && (options.Restart || options.NoWait))
+        {
+            throw new InvalidOperationException(
+                "Functions.DeployZip: WithRestart() and WithNoWait() need WithOneDeploy(); the default " +
+                "`az functionapp deployment source config-zip` has no restart or async option.");
+        }
+
         RegisterZipDeploy(functionAppName, zipPath, resourceGroup,
-            new SiteZipDeploy(options.DeploymentSlot, options.Restart, options.NoWait, options.TimeoutMs, options.TimeoutExplicit));
+            new SiteZipDeploy(options.DeploymentSlot, options.Restart, options.NoWait, options.TimeoutMs,
+                options.TimeoutExplicit, UseConfigZip: !options.OneDeploy));
     }
 
     /// <summary>

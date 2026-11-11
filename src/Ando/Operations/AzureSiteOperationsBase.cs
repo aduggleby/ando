@@ -26,7 +26,13 @@ using Ando.Steps;
 namespace Ando.Operations;
 
 /// <summary>Zip deploy settings shared by AppService and Functions deploy options.</summary>
-internal sealed record SiteZipDeploy(string? Slot, bool Restart, bool NoWait, int TimeoutMs, bool TimeoutExplicit);
+/// <param name="UseConfigZip">
+/// True for `az functionapp deployment source config-zip` (Functions default); false for OneDeploy
+/// (`az webapp deploy` / `az functionapp deploy`). config-zip has no --restart/--async, takes its
+/// --timeout in seconds, and its client-side branches cover Linux Consumption and Flex.
+/// </param>
+internal sealed record SiteZipDeploy(
+    string? Slot, bool Restart, bool NoWait, int TimeoutMs, bool TimeoutExplicit, bool UseConfigZip = false);
 
 /// <summary>
 /// Common `az webapp` / `az functionapp` step builders. Not part of the script API.
@@ -64,7 +70,18 @@ public abstract class AzureSiteOperationsBase(
 
     internal ArgumentBuilder BuildZipDeployArgs(
         string appName, string zipPath, string? resourceGroup, SiteZipDeploy options, string? timeoutMs = null) =>
-        new ArgumentBuilder()
+        options.UseConfigZip
+            ? new ArgumentBuilder()
+                .Add(group, "deployment", "source", "config-zip")
+                .Add("--name", appName)
+                .AddIfNotNull("--resource-group", resourceGroup)
+                .Add("--src", zipPath)
+                .AddIfNotNull("--slot", options.Slot)
+                // config-zip takes seconds (status polling), OneDeploy milliseconds; the caller passes
+                // the matching unit only when a timeout was requested.
+                .AddIfNotNull("--timeout", timeoutMs)
+                .Add("--output", "none")
+            : new ArgumentBuilder()
             .Add(group, "deploy")
             .Add("--name", appName)
             .AddIfNotNull("--resource-group", resourceGroup)
@@ -94,15 +111,31 @@ public abstract class AzureSiteOperationsBase(
                 return false;
             }
 
+            // az gets its own --timeout only when WithTimeout was used: milliseconds for OneDeploy,
+            // seconds for config-zip.
+            string? azTimeout = null;
+            if (options.TimeoutExplicit)
+            {
+                var azMs = Math.Max(1_000, timeoutMs - 10_000);
+                azTimeout = (options.UseConfigZip ? (azMs + 999) / 1000 : azMs).ToString(CultureInfo.InvariantCulture);
+            }
+
             var result = await ExecutorFactory().ExecuteAsync(
                 "az",
-                BuildZipDeployArgs(appName, zipPath, resourceGroup, options,
-                    options.TimeoutExplicit ? Math.Max(1_000, timeoutMs - 10_000).ToString(CultureInfo.InvariantCulture) : null).Build(),
+                BuildZipDeployArgs(appName, zipPath, resourceGroup, options, azTimeout).Build(),
                 new CommandOptions { TimeoutMs = timeoutMs });
 
             if (result.Success)
             {
                 return true;
+            }
+
+            if (IsTimeout(result) && options.UseConfigZip)
+            {
+                // config-zip has no Kudu deployment log on Linux Consumption and Flex, so a timeout cannot
+                // be reconciled reliably there; fail instead of guessing.
+                Logger.Error($"{label} zip deploy timed out.");
+                return false;
             }
 
             if (IsTimeout(result))

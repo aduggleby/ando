@@ -30,9 +30,20 @@ public class FunctionsParityTests
     // ---- DeployZip ----------------------------------------------------------
 
     [Fact]
-    public async Task DeployZip_UsesFunctionappDeployWithRestartFalseByDefault()
+    public async Task DeployZip_DefaultsToConfigZip()
     {
-        CreateFunctions().DeployZip("func", "./publish.zip", "rg");
+        CreateFunctions().DeployZip("func", "./publish.zip", "rg", o => o.WithDeploymentSlot("staging"));
+
+        await RunAsync();
+
+        _executor.LastCommand!.CommandLine.ShouldBe(
+            "az functionapp deployment source config-zip --name func --resource-group rg --src ./publish.zip --slot staging --output none");
+    }
+
+    [Fact]
+    public async Task DeployZip_OneDeploy_UsesFunctionappDeployWithRestartFalseByDefault()
+    {
+        CreateFunctions().DeployZip("func", "./publish.zip", "rg", o => o.WithOneDeploy());
 
         await RunAsync();
 
@@ -43,7 +54,7 @@ public class FunctionsParityTests
     [Fact]
     public async Task DeployZip_WithRestartSlotAndNoWait_PassesFlags()
     {
-        CreateFunctions().DeployZip("func", "./publish.zip", configure: o => o.WithDeploymentSlot("staging").WithRestart().WithNoWait());
+        CreateFunctions().DeployZip("func", "./publish.zip", configure: o => o.WithOneDeploy().WithDeploymentSlot("staging").WithRestart().WithNoWait());
 
         await RunAsync();
 
@@ -54,15 +65,51 @@ public class FunctionsParityTests
     }
 
     [Fact]
-    public async Task DeployZip_WithTimeout_PassesAzTimeoutInMilliseconds()
+    public async Task DeployZip_OneDeploy_WithTimeout_PassesAzTimeoutInMilliseconds()
     {
-        CreateFunctions().DeployZip("func", "./publish.zip", configure: o => o.WithTimeout(TimeSpan.FromMinutes(30)));
+        CreateFunctions().DeployZip("func", "./publish.zip", configure: o => o.WithOneDeploy().WithTimeout(TimeSpan.FromMinutes(30)));
 
         await RunAsync();
 
         var azTimeout = int.Parse(_executor.LastCommand!.GetArgValue("--timeout")!);
         azTimeout.ShouldBeInRange(30 * 60 * 1000 - 20_000, 30 * 60 * 1000 - 10_000 + 1);
         _executor.LastCommand!.Options!.TimeoutMs.ShouldBeLessThanOrEqualTo(30 * 60 * 1000);
+    }
+
+    [Fact]
+    public async Task DeployZip_ConfigZip_WithTimeout_PassesAzTimeoutInSeconds()
+    {
+        CreateFunctions().DeployZip("func", "./publish.zip", configure: o => o.WithTimeout(TimeSpan.FromMinutes(30)));
+
+        await RunAsync();
+
+        var azSeconds = int.Parse(_executor.LastCommand!.GetArgValue("--timeout")!);
+        azSeconds.ShouldBeInRange(30 * 60 - 20, 30 * 60 - 9);
+    }
+
+    [Fact]
+    public void DeployZip_RestartOrNoWaitWithoutOneDeploy_Throws()
+    {
+        var restart = Should.Throw<InvalidOperationException>(() => CreateFunctions().DeployZip("func", "z.zip", configure: o => o.WithRestart()));
+        restart.Message.ShouldContain("WithOneDeploy()");
+        Should.Throw<InvalidOperationException>(() => CreateFunctions().DeployZip("func", "z.zip", configure: o => o.WithNoWait()));
+        _registry.Steps.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task DeployZip_ConfigZip_TransientFailureRetries_TimeoutIsNotReconciled()
+    {
+        _executor.QueuedResults.Enqueue(CommandResult.Failed(1, "503 Service Unavailable"));
+        CreateFunctions().DeployZip("func", "./publish.zip");
+        (await RunAsync()).Success.ShouldBeTrue();
+        _executor.ExecutedCommands.Count.ShouldBe(2);
+
+        _executor.ExecutedCommands.Clear();
+        _executor.QueuedResults.Enqueue(CommandResult.Failed(-1, "Command timed out after 1200000ms"));
+        var registry = new StepRegistry();
+        new FunctionsOperations(registry, _logger, () => _executor, _ => Task.CompletedTask).DeployZip("func", "./publish.zip");
+        (await registry.Steps[0].Execute()).ShouldBeFalse();
+        _executor.ExecutedCommands.ShouldHaveSingleItem();
     }
 
     [Fact]
@@ -100,7 +147,7 @@ public class FunctionsParityTests
     {
         _executor.QueuedResults.Enqueue(CommandResult.Failed(-1, "Command timed out after 1200000ms"));
         _executor.QueuedResults.Enqueue(CommandResult.Ok("""{"status": 4, "message": "Deployment successful", "end_time": "2099-01-01T00:00:00Z"}"""));
-        CreateFunctions().DeployZip("func", "./publish.zip", "rg", o => o.WithDeploymentSlot("staging"));
+        CreateFunctions().DeployZip("func", "./publish.zip", "rg", o => o.WithOneDeploy().WithDeploymentSlot("staging"));
 
         var result = await RunAsync();
 

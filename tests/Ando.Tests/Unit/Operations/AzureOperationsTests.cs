@@ -356,11 +356,61 @@ public class AzureOperationsTests
         Assert.Contains("/etc/apt/keyrings/microsoft.gpg", script);
         Assert.Contains("Signed-By: /etc/apt/keyrings/microsoft.gpg", script);
         Assert.Contains("VERSION_CODENAME", script);
-        Assert.Contains("package=\"$version-1~$codename\"", script);
+        Assert.Contains("package=\"$version-1~$suite\"", script);
         Assert.Contains("azure-cli=$package", script);
         Assert.Contains("apt-mark hold azure-cli", script);
-        Assert.Contains("is not available from packages.microsoft.com", script);
+        Assert.Contains("is not available (looked for azure-cli=$package", script);
         Assert.Contains("az version", script);
+    }
+
+    [Theory]
+    [InlineData("debian", "trixie")]
+    [InlineData("ubuntu", "fakeos")]
+    public void InstallCliScript_UnsupportedSuite_EndsWithClearNotAvailableMessage(string id, string codename)
+    {
+        // Fake apt-get/curl on PATH: the probe of dists/<suite>/Release (and the fallback) returns 404.
+        var dir = Directory.CreateTempSubdirectory("ando-installcli-").FullName;
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "apt-get"), "#!/bin/sh\nexit 0\n");
+            File.WriteAllText(Path.Combine(dir, "curl"), "#!/bin/sh\necho \"$@\" >> \"$0.log\"\nexit 22\n");
+            File.WriteAllText(Path.Combine(dir, "os-release"), $"ID={id}\nVERSION_CODENAME={codename}\n");
+            foreach (var tool in new[] { "apt-get", "curl" })
+            {
+                File.SetUnixFileMode(Path.Combine(dir, tool), UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+
+            var info = new System.Diagnostics.ProcessStartInfo("bash")
+            { RedirectStandardError = true, RedirectStandardOutput = true, UseShellExecute = false };
+            foreach (var a in new[] { "-c", AzureOperations.InstallCliScript, "test", "1.2.3", Path.Combine(dir, "os-release") })
+            {
+                info.ArgumentList.Add(a);
+            }
+            info.Environment["PATH"] = dir + ":/usr/bin:/bin";
+            using var process = System.Diagnostics.Process.Start(info)!;
+            var err = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+
+            Assert.Equal(1, process.ExitCode);
+            Assert.Contains("azure-cli 1.2.3 is not available", err);
+            Assert.Contains($"'{codename}'", err);
+            Assert.Contains("Available versions", err);
+            Assert.Contains($"dists/{codename}/Release", File.ReadAllText(Path.Combine(dir, "curl.log")));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void InstallCliScript_FallsBackLikeMicrosoftsInstaller()
+    {
+        var script = AzureOperations.InstallCliScript;
+        Assert.Contains("dists/$suite/Release", script);
+        Assert.Contains("fallback=bookworm", script);
+        Assert.Contains("fallback=${UBUNTU_CODENAME:-jammy}", script);
+        Assert.Contains("using '$fallback' packages instead", script);
     }
 
     [Fact]

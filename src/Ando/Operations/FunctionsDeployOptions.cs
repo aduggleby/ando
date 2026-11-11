@@ -32,8 +32,11 @@ public class FunctionsDeployOptions
     /// <summary>Don't wait for deployment to complete.</summary>
     internal bool NoWait { get; private set; }
 
-    /// <summary>Restart the app after a zip deploy (default false).</summary>
+    /// <summary>Restart the app after a zip deploy (default false). OneDeploy only.</summary>
     internal bool Restart { get; private set; }
+
+    /// <summary>True when WithOneDeploy was called.</summary>
+    internal bool OneDeploy { get; private set; }
 
     /// <summary>Timeout for the zip deploy command.</summary>
     internal int TimeoutMs { get; private set; } = AppServiceDeployOptions.DefaultZipDeployTimeoutMs;
@@ -72,7 +75,9 @@ public class FunctionsDeployOptions
     }
 
     /// <summary>
-    /// Don't wait for deployment to complete (async deployment).
+    /// Don't wait for deployment to complete (async deployment). For DeployZip this is OneDeploy
+    /// only (`--async true`): DeployZip throws unless WithOneDeploy() is also set. For Publish it
+    /// maps to `--no-build`.
     /// </summary>
     public FunctionsDeployOptions WithNoWait()
     {
@@ -81,8 +86,25 @@ public class FunctionsDeployOptions
     }
 
     /// <summary>
-    /// Restarts the function app after a zip deploy completes. Without this, DeployZip
-    /// passes `--restart false` (OneDeploy restarts by default), so a stopped slot is not
+    /// Deploys the zip with OneDeploy (`az functionapp deploy --type zip`, a preview command that
+    /// posts straight to /api/publish) instead of the default
+    /// `az functionapp deployment source config-zip`. The default's client-side branches support
+    /// every plan: dedicated and Premium (Kudu zip deploy), Linux Consumption (uploads the zip to
+    /// storage and sets WEBSITE_RUN_FROM_PACKAGE) and Flex Consumption. OneDeploy fits dedicated,
+    /// Premium and Flex plans; do not assume it works on Linux Consumption. Required for
+    /// WithRestart() and WithNoWait(). Under OneDeploy `--restart false` is the default.
+    /// Not used by Publish.
+    /// </summary>
+    public FunctionsDeployOptions WithOneDeploy()
+    {
+        OneDeploy = true;
+        return this;
+    }
+
+    /// <summary>
+    /// Restarts the function app after the zip deploy completes. OneDeploy only: DeployZip throws
+    /// unless WithOneDeploy() is also set, because config-zip has no restart option. Without this,
+    /// OneDeploy passes `--restart false` (it restarts by default), so a stopped slot is not
     /// started by the deploy. Not used by Publish.
     /// </summary>
     public FunctionsDeployOptions WithRestart()
@@ -92,7 +114,8 @@ public class FunctionsDeployOptions
     }
 
     /// <summary>
-    /// Sets the maximum time to wait for zip deploy before reconciliation. Not used by Publish.
+    /// Sets the maximum time to wait for the zip deploy. Works on both paths: config-zip gets
+    /// `--timeout` in seconds, OneDeploy in milliseconds. Not used by Publish.
     /// </summary>
     /// <param name="timeout">Timeout duration. Must be greater than zero.</param>
     public FunctionsDeployOptions WithTimeout(TimeSpan timeout)

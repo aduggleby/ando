@@ -18,8 +18,10 @@
 //   directories survive); there is no "./" prefix and no root entry.
 // - zip: -X (no extra fields such as uid/gid or extended timestamps), TZ=UTC
 //   (zip stores local DOS time), fixed -N level. tar: GNU format, --sort=name,
-//   --owner=0 --group=0 --numeric-owner, --mtime, then gzip -n (no name or
-//   mtime in the header) at a fixed level.
+//   --owner=0 --group=0 --numeric-owner, --mtime, --hard-dereference (a
+//   hardlinked tree equals a copied one), a NUL-separated name list read with
+//   --null --verbatim-files-from, then gzip -n (no name or mtime in the
+//   header) at a fixed level.
 // - Symlinks, special files and file names containing a newline are rejected
 //   with a clear message.
 //
@@ -62,15 +64,20 @@ public class ArchiveOperations(StepRegistry registry, IBuildLogger logger, Func<
 
         [ -d "$src" ] || { echo "Archive: source directory not found: $src" >&2; exit 1; }
         src=$(cd "$src" && pwd -P)
-        case "$out" in "$src"/*) echo "Archive: the output $out must not be inside the source directory $src." >&2; exit 1;; esac
+        outc=$(realpath -m -- "$out")
+        case "$outc" in "$src"|"$src"/*) echo "Archive: the output $out must not be the source directory or inside it ($src)." >&2; exit 1;; esac
 
-        links=$(find "$src" -type l | head -n 5)
-        if [ -n "$links" ]; then
+        # Detect with -quit (no pipe, so no SIGPIPE under pipefail), then list a few without pipefail.
+        if [ -n "$(find "$src" -type l -print -quit)" ]; then
           echo "Archive: symlinks are not supported (archives must be self-contained and reproducible). Found:" >&2
-          echo "$links" >&2; exit 1
+          (set +o pipefail; find "$src" -type l | sed 5q) >&2
+          exit 1
         fi
-        special=$(find "$src" ! -type f ! -type d | head -n 5)
-        if [ -n "$special" ]; then echo "Archive: only regular files and directories are supported. Found:" >&2; echo "$special" >&2; exit 1; fi
+        if [ -n "$(find "$src" ! -type f ! -type d -print -quit)" ]; then
+          echo "Archive: only regular files and directories are supported. Found:" >&2
+          (set +o pipefail; find "$src" ! -type f ! -type d | sed 5q) >&2
+          exit 1
+        fi
         if [ -n "$(find "$src" -name $'*\n*' -print -quit)" ]; then echo "Archive: file names containing a newline are not supported." >&2; exit 1; fi
 
         work=$(mktemp -d)
@@ -83,15 +90,18 @@ public class ArchiveOperations(StepRegistry registry, IBuildLogger logger, Func<
         find "$stage" -type f ! -perm /111 -exec chmod 644 {} +
         find "$stage" -exec touch -h -d "@$epoch" {} +
 
-        (cd "$stage" && find . -mindepth 1 | sed 's|^\./||' | sort) > "$work/list"
+        # NUL-separated, byte-sorted list of relative paths: safe for names with spaces, leading
+        # dashes and backslashes. Zip reads the same list newline-separated (newline names are rejected above).
+        (cd "$stage" && find . -mindepth 1 -print0 | sed -z 's|^\./||' | sort -z) > "$work/list0"
+        tr '\0' '\n' < "$work/list0" > "$work/list"
 
         mkdir -p "$(dirname -- "$out")"
         rm -f -- "$out"
         if [ "$kind" = zip ]; then
           (cd "$stage" && zip -X -q "-$level" "$out" -@ < "$work/list") >&2
         else
-          (cd "$stage" && tar --format=gnu --sort=name --no-recursion --owner=0 --group=0 --numeric-owner \
-              --mtime="@$epoch" -cf - -T "$work/list") | gzip -n "-$level" > "$out"
+          (cd "$stage" && tar --format=gnu --sort=name --no-recursion --hard-dereference --owner=0 --group=0 --numeric-owner \
+              --mtime="@$epoch" -cf - --null --verbatim-files-from -T "$work/list0") | gzip -n "-$level" > "$out"
         fi
         sha256sum -- "$out" | cut -d' ' -f1
         """;
@@ -115,6 +125,12 @@ public class ArchiveOperations(StepRegistry registry, IBuildLogger logger, Func<
     {
         var options = new ArchiveOptions();
         configure?.Invoke(options);
+        if (!zipPath.EndsWith(".zip", StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"Archive.Zip: the output path must end with \".zip\" (zip appends it otherwise), got \"{zipPath}\".", nameof(zipPath));
+        }
+        CheckPaths(sourceDir, zipPath);
         if (options.Timestamp < ArchiveOptions.DefaultTimestamp)
         {
             throw new ArgumentOutOfRangeException(nameof(configure),
@@ -141,7 +157,19 @@ public class ArchiveOperations(StepRegistry registry, IBuildLogger logger, Func<
     {
         var options = new ArchiveOptions();
         configure?.Invoke(options);
+        CheckPaths(sourceDir, tarGzPath);
         return Register("Archive.TarGz", "targz", sourceDir, tarGzPath, options);
+    }
+
+    // Registration-time check; the script repeats it on canonical paths (realpath) so a symlinked output cannot bypass it.
+    private static void CheckPaths(string sourceDir, string output)
+    {
+        var src = ContainerPaths.Resolve(sourceDir).TrimEnd('/');
+        var dst = ContainerPaths.Resolve(output).TrimEnd('/');
+        if (dst == src || dst.StartsWith(src + "/", StringComparison.Ordinal))
+        {
+            throw new ArgumentException($"Archive: the output \"{output}\" must not be the source directory or inside it (\"{sourceDir}\").");
+        }
     }
 
     private CommandStep Register(string stepName, string kind, string sourceDir, string output, ArchiveOptions options) =>

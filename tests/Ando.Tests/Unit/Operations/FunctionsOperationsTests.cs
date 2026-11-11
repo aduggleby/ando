@@ -53,14 +53,15 @@ public class FunctionsOperationsTests
         var cmd = _executor.LastCommand!;
         Assert.Equal("az", cmd.Command);
         Assert.Contains("functionapp", cmd.Args);
-        Assert.Contains("deploy", cmd.Args);
-        Assert.DoesNotContain("config-zip", cmd.Args);
+        Assert.Contains("deployment", cmd.Args);
+        Assert.Contains("source", cmd.Args);
+        Assert.Contains("config-zip", cmd.Args);
         Assert.Contains("--name", cmd.Args);
         Assert.Equal("my-func", cmd.GetArgValue("--name"));
-        Assert.Equal("./publish.zip", cmd.GetArgValue("--src-path"));
-        Assert.Equal("zip", cmd.GetArgValue("--type"));
-        Assert.Equal("false", cmd.GetArgValue("--restart"));
-        Assert.Equal("false", cmd.GetArgValue("--async"));
+        Assert.Equal("./publish.zip", cmd.GetArgValue("--src"));
+        Assert.DoesNotContain("--type", cmd.Args);
+        Assert.DoesNotContain("--restart", cmd.Args);
+        Assert.DoesNotContain("--async", cmd.Args);
         Assert.DoesNotContain("--timeout", cmd.Args);
     }
 
@@ -94,7 +95,7 @@ public class FunctionsOperationsTests
     public async Task DeployZip_WithNoWait_IncludesAsyncFlag()
     {
         var functions = CreateFunctions();
-        functions.DeployZip("my-func", "./publish.zip", configure: o => o.WithNoWait());
+        functions.DeployZip("my-func", "./publish.zip", configure: o => o.WithOneDeploy().WithNoWait());
 
         await _registry.Steps[0].Execute();
 
@@ -369,6 +370,7 @@ public class FunctionsOperationsTests
         var functions = CreateFunctions();
         functions.DeployZip("my-func", "./publish.zip", "my-rg", o => o
             .WithDeploymentSlot("staging")
+            .WithOneDeploy()
             .WithNoWait());
 
         await _registry.Steps[0].Execute();
