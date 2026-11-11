@@ -125,7 +125,7 @@ public class ArchiveOperations(StepRegistry registry, IBuildLogger logger, Func<
     {
         var options = new ArchiveOptions();
         configure?.Invoke(options);
-        if (!zipPath.EndsWith(".zip", StringComparison.Ordinal))
+        if (!zipPath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException(
                 $"Archive.Zip: the output path must end with \".zip\" (zip appends it otherwise), got \"{zipPath}\".", nameof(zipPath));

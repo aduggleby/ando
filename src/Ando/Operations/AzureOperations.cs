@@ -74,7 +74,7 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
         suite=$codename
         if ! curl -fsSI "$repo/dists/$suite/Release" >/dev/null 2>&1; then
           case " ${ID:-} ${ID_LIKE:-} " in
-            *" ubuntu "*) fallback=${UBUNTU_CODENAME:-jammy} ;;
+            *" ubuntu "*) fallback=${UBUNTU_CODENAME:-jammy}; if [ "$fallback" = "$suite" ]; then fallback=jammy; fi ;;
             *" debian "*) fallback=bookworm ;;
             *) fallback= ;;
           esac
