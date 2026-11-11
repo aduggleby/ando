@@ -1,14 +1,14 @@
-// Provider metadata for navigation and linking (Ando first, then alphabetically)
+// Provider metadata for navigation and linking (Ando first, then alphabetically by label; the homepage uses this order too)
 export const providers = [
   { id: "Ando", href: "/providers/ando", label: "Ando" },
   { id: "AppService", href: "/providers/appservice", label: "Azure App Service" },
-  { id: "Azure", href: "/providers/azure", label: "Azure CLI" },
   { id: "Bicep", href: "/providers/bicep", label: "Azure Bicep" },
-  { id: "Bun", href: "/providers/bun", label: "Bun" },
+  { id: "Azure", href: "/providers/azure", label: "Azure CLI" },
   { id: "Functions", href: "/providers/functions", label: "Azure Functions" },
+  { id: "Bun", href: "/providers/bun", label: "Bun" },
   { id: "Cloudflare", href: "/providers/cloudflare", label: "Cloudflare" },
-  { id: "Docker", href: "/providers/docker", label: "Docker" },
   { id: "Docfx", href: "/providers/docfx", label: "DocFX" },
+  { id: "Docker", href: "/providers/docker", label: "Docker" },
   { id: "Dotnet", href: "/providers/dotnet", label: "Dotnet" },
   { id: "Ef", href: "/providers/ef", label: "Entity Framework Core" },
   { id: "Git", href: "/providers/git", label: "Git" },

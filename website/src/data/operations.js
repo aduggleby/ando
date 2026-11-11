@@ -12,6 +12,8 @@
 // - sourceFile is the path to the C# source file (relative to src/Ando/)
 // =============================================================================
 
+import { providers as providerList } from "./providers.js";
+
 // GitHub repository URL for source links
 export const GITHUB_REPO = "https://github.com/aduggleby/ando";
 
@@ -602,6 +604,13 @@ export const operations = [
   },
   {
     group: "Functions",
+    name: "Functions.Show",
+    desc: "Show function app information (<code>az functionapp show</code>).",
+    examples: ['Functions.Show("my-func");', 'Functions.Show("my-func", "my-rg");'],
+    sourceFile: "Operations/FunctionsOperations.cs",
+  },
+  {
+    group: "Functions",
     name: "Functions.Start",
     desc: "Start a function app.",
     examples: ['Functions.Start("my-func");', 'Functions.Start("my-func", slot: "staging");'],
@@ -958,6 +967,30 @@ export const operations = [
     examples: ["if (!Docfx.IsInstalled()) {\n  Docfx.Install();\n}"],
     sourceFile: "Operations/DocfxOperations.cs",
   },
+  {
+    group: "Shell",
+    name: "Shell.Run",
+    desc: "Runs a command with arguments in the build container, in order with the other steps. Arguments are passed as a list with no shell parsing. Fails on a non-zero exit code unless <code>AllowFailure()</code>. Returns a <code>CommandStep</code> (<code>Value</code>, <code>ExitCode</code>, <code>Json(path)</code>; fluent <code>InDirectory</code>, <code>WithTimeout</code>, <code>WithEnv</code>, <code>AllowFailure</code>, <code>Quiet</code>). Signature: <code>Run(string command, params string[] args)</code>.",
+    examples: ['Shell.Run("zip", "-qr", "../web.zip", ".").InDirectory("artifacts/web");'],
+    sourceFile: "Operations/ShellCommandOperations.cs",
+  },
+  {
+    group: "Shell",
+    name: "Shell.Bash",
+    desc: "Runs a script with <code>bash -euo pipefail -c</code> in the build container, for pipes, redirection and sourcing helper scripts. Returns a <code>CommandStep</code>. Signature: <code>Bash(string script)</code>.",
+    examples: ['Shell.Bash("source scripts/lib/deploy-gates.sh && require_spa_build artifacts/web");'],
+    sourceFile: "Operations/ShellCommandOperations.cs",
+  },
+  {
+    group: "Bun",
+    name: "Bun.Install",
+    desc: 'Installs Bun into <code>/usr/local/bin</code> so later steps (including MSBuild targets run by <code>Dotnet.Publish</code>) find <code>bun</code> on PATH. Skips the download when the container already has that version. Installs <code>curl</code> and <code>unzip</code> with apt if missing; needs a Debian or Ubuntu image. Signature: <code>Install(string version = "latest", string? sha256 = null)</code>. With <code>sha256</code> (the hash of the release zip for the container architecture, <code>bun-linux-x64.zip</code> or <code>bun-linux-aarch64.zip</code>; the hashes differ) <code>version</code> must be exact, the zip is downloaded from GitHub and verified, and the step fails on a mismatch.',
+    examples: [
+      'Bun.Install("1.2.23");',
+      'Bun.Install("1.2.23", sha256: "cf0ed0a920799d576ffde4e0cae66d732bf23c2530407f26f59c7831dffe1f0e");',
+    ],
+    sourceFile: "Operations/ToolInstallOperations.cs",
+  },
 ];
 
 // Get unique provider names sorted alphabetically
@@ -983,29 +1016,7 @@ export function getOperationsGroupedByProvider() {
   const grouped = {};
   for (const op of operations) {
     if (!grouped[op.group]) {
-      grouped[op.group] = [
-        {
-          group: "Shell",
-          name: "Shell.Run",
-          desc: "Runs a command with arguments in the build container, in order with the other steps. Arguments are passed as a list with no shell parsing. Fails on a non-zero exit code unless <code>AllowFailure()</code>. Returns a <code>CommandStep</code> (<code>Value</code>, <code>ExitCode</code>, <code>Json(path)</code>; fluent <code>InDirectory</code>, <code>WithTimeout</code>, <code>WithEnv</code>, <code>AllowFailure</code>, <code>Quiet</code>). Signature: <code>Run(string command, params string[] args)</code>.",
-          examples: ['Shell.Run("zip", "-qr", "../web.zip", ".").InDirectory("artifacts/web");'],
-          sourceFile: "Operations/ShellCommandOperations.cs",
-        },
-        {
-          group: "Shell",
-          name: "Shell.Bash",
-          desc: "Runs a script with <code>bash -euo pipefail -c</code> in the build container, for pipes, redirection and sourcing helper scripts. Returns a <code>CommandStep</code>. Signature: <code>Bash(string script)</code>.",
-          examples: ['Shell.Bash("source scripts/lib/deploy-gates.sh && require_spa_build artifacts/web");'],
-          sourceFile: "Operations/ShellCommandOperations.cs",
-        },
-        {
-          group: "Bun",
-          name: "Bun.Install",
-          desc: 'Installs Bun into <code>/usr/local/bin</code> so later steps (including MSBuild targets run by <code>Dotnet.Publish</code>) find <code>bun</code> on PATH. Skips the download when the container already has that version. Installs <code>curl</code> and <code>unzip</code> with apt if missing; needs a Debian or Ubuntu image. Signature: <code>Install(string version = "latest", string? sha256 = null)</code>. With <code>sha256</code> (the hash of the release zip for the container architecture, <code>bun-linux-x64.zip</code> or <code>bun-linux-aarch64.zip</code>; the hashes differ) <code>version</code> must be exact, the zip is downloaded from GitHub and verified, and the step fails on a mismatch.',
-          examples: ['Bun.Install("1.2.23");', 'Bun.Install("1.2.23", sha256: "cf0ed0a920799d576ffde4e0cae66d732bf23c2530407f26f59c7831dffe1f0e");'],
-          sourceFile: "Operations/ToolInstallOperations.cs",
-        },
-      ];
+      grouped[op.group] = [];
     }
     grouped[op.group].push(op);
   }
@@ -1015,8 +1026,12 @@ export function getOperationsGroupedByProvider() {
       grouped[group].sort((a, b) => a.name.localeCompare(b.name));
     }
   }
-  // Return as array of [provider, operations] pairs, sorted by provider
-  return Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0]));
+  // Return as array of [provider, operations] pairs, in navigation order (providers.js)
+  const order = (id) => {
+    const i = providerList.findIndex((p) => p.id === id);
+    return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  return Object.entries(grouped).sort((a, b) => order(a[0]) - order(b[0]) || a[0].localeCompare(b[0]));
 }
 
 // Generate anchor ID from operation name (e.g., "Cloudflare.PagesDeploy" -> "pagesdeploy")

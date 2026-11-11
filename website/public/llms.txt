@@ -511,9 +511,9 @@ if (publish) {
 | Ef | EfOperations | Entity Framework Core operations. |
 | Npm | NpmOperations | npm operations (install, run, ci). Requires DirectoryRef arguments. |
 | Node | NodeInstallOperations | Node.js installation. |
+| Bun | BunOperations | Bun installation. |
 | Azure | AzureOperations | Azure CLI authentication and `az` commands (`Azure.Cli`, `Azure.Vm.RunCommand`). |
 | Shell | ShellCommandOperations | Run any command or bash script in the build container (`Shell.Run`, `Shell.Bash`). |
-| Bun | BunOperations | Bun installation. |
 | Bicep | BicepOperations | Azure Bicep deployments. |
 | AppService | AppServiceOperations | Azure App Service deployments. |
 | Http | HttpOperations | HTTP health-check gating (wait for an endpoint to be healthy). |
@@ -911,6 +911,7 @@ BicepDeployment objects provide typed access to deployment outputs:
 - Functions.Restart(name, rg?, slot?) - Restart function app
 - Functions.Start(name, rg?, slot?) - Start function app
 - Functions.Stop(name, rg?, slot?) - Stop function app
+- Functions.Show(name, rg?) - Show function app information
 
 ### AppService
 - AppService.DeployZip(name, zipPath, rg?, options?) - Deploy via zip deploy
