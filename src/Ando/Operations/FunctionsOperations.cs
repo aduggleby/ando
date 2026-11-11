@@ -8,13 +8,14 @@
 // and function app management.
 //
 // Architecture:
-// - Zip deploy uses `az functionapp deployment source config-zip`
+// - Zip deploy uses `az functionapp deploy --type zip` (shared with AppService via
+//   AzureSiteOperationsBase: restart default false, retries, timeout reconciliation)
 // - Publish uses `func azure functionapp publish` (Functions Core Tools)
 // - Slot deployments use the --slot parameter
 // - Authentication relies on prior Azure.Login* steps
 //
 // Design Decisions:
-// - Follows OperationsBase pattern for step registration
+// - Mirrors AppServiceOperations; shared step builders live in AzureSiteOperationsBase
 // - Supports both Azure CLI and Functions Core Tools approaches
 // - Deployment slot is a first-class option for staging deployments
 // - Resource group is optional for CLI commands (uses app's default)
@@ -31,26 +32,31 @@ namespace Ando.Operations;
 /// Provides Azure Functions deployment operations for build scripts.
 /// Methods register steps in the workflow rather than executing immediately.
 /// </summary>
-public class FunctionsOperations(StepRegistry registry, IBuildLogger logger, Func<ICommandExecutor> executorFactory)
-    : OperationsBase(registry, logger, executorFactory)
+public class FunctionsOperations(
+    StepRegistry registry,
+    IBuildLogger logger,
+    Func<ICommandExecutor> executorFactory,
+    Func<TimeSpan, Task>? delayAsync = null)
+    : AzureSiteOperationsBase(registry, logger, executorFactory, "functionapp", "Functions", "Functions", delayAsync)
 {
     /// <summary>
-    /// Registers a step to deploy a function app using zip deploy.
-    /// Requires the function app to already exist in Azure.
+    /// Registers a step to deploy a function app using zip deploy
+    /// (`az functionapp deploy --type zip`). Requires the function app to already exist.
+    /// Like AppService.DeployZip it passes `--restart false` unless WithRestart() is set,
+    /// retries transient failures and reconciles timeouts against the latest deployment log.
     /// </summary>
     /// <param name="functionAppName">Name of the Azure Function App.</param>
     /// <param name="zipPath">Path to the deployment zip file.</param>
     /// <param name="resourceGroup">Optional resource group name. If null, Azure CLI will determine it.</param>
-    /// <param name="configure">Optional configuration for deployment options.</param>
+    /// <param name="configure">Optional deployment options (slot, restart, no-wait, timeout).</param>
     public void DeployZip(string functionAppName, string zipPath,
         string? resourceGroup = null, Action<FunctionsDeployOptions>? configure = null)
     {
         var options = new FunctionsDeployOptions();
         configure?.Invoke(options);
 
-        RegisterCommand("Functions.DeployZip", "az",
-            () => BuildZipDeployArgs(functionAppName, zipPath, resourceGroup, options),
-            functionAppName);
+        RegisterZipDeploy(functionAppName, zipPath, resourceGroup,
+            new SiteZipDeploy(options.DeploymentSlot, options.Restart, options.NoWait, options.TimeoutMs, options.TimeoutExplicit));
     }
 
     /// <summary>
@@ -91,113 +97,107 @@ public class FunctionsOperations(StepRegistry registry, IBuildLogger logger, Fun
     }
 
     /// <summary>
-    /// Registers a step to swap deployment slots.
+    /// Registers a step to swap deployment slots. A swap warms up the slot and can
+    /// take several minutes, so it defaults to a 30 minute timeout (or
+    /// Ando.CommandTimeout when that is longer); .WithTimeout(...) on the result
+    /// overrides both.
     /// </summary>
     /// <param name="functionAppName">Name of the Azure Function App.</param>
     /// <param name="sourceSlot">Source slot name to swap from.</param>
     /// <param name="resourceGroup">Optional resource group name.</param>
     /// <param name="targetSlot">Target slot name (defaults to "production").</param>
-    public void SwapSlots(string functionAppName, string sourceSlot,
-        string? resourceGroup = null, string targetSlot = "production")
-    {
-        RegisterCommand("Functions.SwapSlots", "az",
-            () => new ArgumentBuilder()
-                .Add("functionapp", "deployment", "slot", "swap")
-                .Add("--name", functionAppName)
-                .AddIfNotNull("--resource-group", resourceGroup)
-                .Add("--slot", sourceSlot)
-                .Add("--target-slot", targetSlot)
-                .Add("--output", "none"),
-            $"{sourceSlot} -> {targetSlot}");
-    }
+    public CommandStep SwapSlots(string functionAppName, string sourceSlot,
+        string? resourceGroup = null, string targetSlot = "production") =>
+        SwapSlotsStep(functionAppName, sourceSlot, resourceGroup, targetSlot);
 
-    /// <summary>
-    /// Registers a step to restart a function app.
-    /// </summary>
+    /// <summary>Registers a step to restart a function app.</summary>
     /// <param name="functionAppName">Name of the Azure Function App.</param>
     /// <param name="resourceGroup">Optional resource group name.</param>
     /// <param name="slot">Optional slot name. If null, restarts the production slot.</param>
-    public void Restart(string functionAppName, string? resourceGroup = null, string? slot = null)
-    {
-        RegisterCommand("Functions.Restart", "az",
-            () => new ArgumentBuilder()
-                .Add("functionapp", "restart")
-                .Add("--name", functionAppName)
-                .AddIfNotNull("--resource-group", resourceGroup)
-                .AddIfNotNull("--slot", slot)
-                .Add("--output", "none"),
-            functionAppName);
-    }
+    public CommandStep Restart(string functionAppName, string? resourceGroup = null, string? slot = null) =>
+        ActionStep("restart", functionAppName, resourceGroup, slot);
 
-    /// <summary>
-    /// Registers a step to stop a function app.
-    /// </summary>
+    /// <summary>Registers a step to stop a function app.</summary>
     /// <param name="functionAppName">Name of the Azure Function App.</param>
     /// <param name="resourceGroup">Optional resource group name.</param>
     /// <param name="slot">Optional slot name. If null, stops the production slot.</param>
-    public void Stop(string functionAppName, string? resourceGroup = null, string? slot = null)
-    {
-        RegisterCommand("Functions.Stop", "az",
-            () => new ArgumentBuilder()
-                .Add("functionapp", "stop")
-                .Add("--name", functionAppName)
-                .AddIfNotNull("--resource-group", resourceGroup)
-                .AddIfNotNull("--slot", slot)
-                .Add("--output", "none"),
-            functionAppName);
-    }
+    public CommandStep Stop(string functionAppName, string? resourceGroup = null, string? slot = null) =>
+        ActionStep("stop", functionAppName, resourceGroup, slot);
 
-    /// <summary>
-    /// Registers a step to start a function app.
-    /// </summary>
+    /// <summary>Registers a step to start a function app.</summary>
     /// <param name="functionAppName">Name of the Azure Function App.</param>
     /// <param name="resourceGroup">Optional resource group name.</param>
     /// <param name="slot">Optional slot name. If null, starts the production slot.</param>
-    public void Start(string functionAppName, string? resourceGroup = null, string? slot = null)
-    {
-        RegisterCommand("Functions.Start", "az",
-            () => new ArgumentBuilder()
-                .Add("functionapp", "start")
-                .Add("--name", functionAppName)
-                .AddIfNotNull("--resource-group", resourceGroup)
-                .AddIfNotNull("--slot", slot)
-                .Add("--output", "none"),
-            functionAppName);
-    }
+    public CommandStep Start(string functionAppName, string? resourceGroup = null, string? slot = null) =>
+        ActionStep("start", functionAppName, resourceGroup, slot);
 
     /// <summary>
-    /// Registers a step to show function app information.
+    /// Registers a step that reads the function app's (or slot's) `az functionapp show` JSON.
+    /// Read fields at execution time with Json(), e.g. show.Json("state").
     /// </summary>
     /// <param name="functionAppName">Name of the Azure Function App.</param>
     /// <param name="resourceGroup">Optional resource group name.</param>
-    public void Show(string functionAppName, string? resourceGroup = null)
-    {
-        RegisterCommand("Functions.Show", "az",
-            () => new ArgumentBuilder()
-                .Add("functionapp", "show")
-                .Add("--name", functionAppName)
-                .AddIfNotNull("--resource-group", resourceGroup),
-            functionAppName);
-    }
+    /// <param name="slot">Optional slot name. If null, shows the production slot.</param>
+    public CommandStep Show(string functionAppName, string? resourceGroup = null, string? slot = null) =>
+        ShowStep(functionAppName, resourceGroup, slot);
 
     /// <summary>
-    /// Builds the argument array for zip deploy command.
+    /// Registers a step that reads the function app's (or slot's) default host name, e.g.
+    /// "myfunc-release.azurewebsites.net".
+    /// Usage: var host = Functions.GetHostName(app, rg, "release");
+    ///        Http.WaitForHealthy(() => $"https://{host.Value}/api/health");
     /// </summary>
-    private static ArgumentBuilder BuildZipDeployArgs(
-        string functionAppName,
-        string zipPath,
-        string? resourceGroup,
-        FunctionsDeployOptions options)
-    {
-        return new ArgumentBuilder()
-            .Add("functionapp", "deployment", "source", "config-zip")
-            .Add("--name", functionAppName)
-            .AddIfNotNull("--resource-group", resourceGroup)
-            .Add("--src", zipPath)
-            .AddIfNotNull("--slot", options.DeploymentSlot)
-            .AddFlag(options.NoWait, "--async")
-            .Add("--output", "none");
-    }
+    public CommandStep GetHostName(string functionAppName, string? resourceGroup = null, string? slot = null) =>
+        HostNameStep(functionAppName, resourceGroup, slot);
+
+    /// <summary>
+    /// Registers a step that reads the function app's (or slot's) access restrictions
+    /// (`az functionapp config access-restriction show`).
+    /// Usage: var rules = Functions.AccessRestrictions(app, rg, "release");
+    ///        Ando.When(() => rules.Json("ipSecurityRestrictionsDefaultAction") == "Deny", ...);
+    /// </summary>
+    public CommandStep AccessRestrictions(string functionAppName, string? resourceGroup = null, string? slot = null) =>
+        AccessRestrictionsStep(functionAppName, resourceGroup, slot);
+
+    /// <summary>
+    /// Adds an Allow access rule for one IPv4 address to the function app (or slot) and
+    /// removes it again when the enclosing block (or the run) ends, whatever happened:
+    /// the removal is registered as a finally step, followed by a check that the rule is
+    /// gone. Any existing rule with the same name is replaced. Without
+    /// <paramref name="ip"/>, uses this machine's public IPv4.
+    /// Usage: Functions.TemporaryAccessRule(app, rg, "release", "deploy-gate");
+    /// </summary>
+    /// <param name="functionAppName">Name of the Azure Function App.</param>
+    /// <param name="resourceGroup">Resource group name.</param>
+    /// <param name="slot">Slot name, or null for the production slot.</param>
+    /// <param name="ruleName">Rule name (default "ando-deploy").</param>
+    /// <param name="ip">IPv4 address or CIDR; null looks up this machine's public IPv4.</param>
+    /// <param name="priority">Rule priority (default 50; lower runs first).</param>
+    public void TemporaryAccessRule(string functionAppName, string resourceGroup, string? slot = null,
+        string ruleName = "ando-deploy", string? ip = null, int priority = 50) =>
+        RegisterTemporaryAccessRule(functionAppName, resourceGroup, slot, ruleName, ip, priority);
+
+    /// <summary>Registers a step to list deployment slots for a function app.</summary>
+    /// <param name="functionAppName">Name of the Azure Function App.</param>
+    /// <param name="resourceGroup">Optional resource group name.</param>
+    public void ListSlots(string functionAppName, string? resourceGroup = null) =>
+        RegisterListSlots(functionAppName, resourceGroup);
+
+    /// <summary>Registers a step to create a deployment slot.</summary>
+    /// <param name="functionAppName">Name of the Azure Function App.</param>
+    /// <param name="slotName">Name for the new slot.</param>
+    /// <param name="resourceGroup">Optional resource group name.</param>
+    /// <param name="configurationSource">Optional slot to clone configuration from.</param>
+    public void CreateSlot(string functionAppName, string slotName,
+        string? resourceGroup = null, string? configurationSource = null) =>
+        RegisterCreateSlot(functionAppName, slotName, resourceGroup, configurationSource);
+
+    /// <summary>Registers a step to delete a deployment slot.</summary>
+    /// <param name="functionAppName">Name of the Azure Function App.</param>
+    /// <param name="slotName">Name of the slot to delete.</param>
+    /// <param name="resourceGroup">Optional resource group name.</param>
+    public void DeleteSlot(string functionAppName, string slotName, string? resourceGroup = null) =>
+        RegisterDeleteSlot(functionAppName, slotName, resourceGroup);
 
     /// <summary>
     /// Builds the argument array for func publish command.

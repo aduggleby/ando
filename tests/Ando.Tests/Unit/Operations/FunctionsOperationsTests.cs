@@ -53,13 +53,15 @@ public class FunctionsOperationsTests
         var cmd = _executor.LastCommand!;
         Assert.Equal("az", cmd.Command);
         Assert.Contains("functionapp", cmd.Args);
-        Assert.Contains("deployment", cmd.Args);
-        Assert.Contains("source", cmd.Args);
-        Assert.Contains("config-zip", cmd.Args);
+        Assert.Contains("deploy", cmd.Args);
+        Assert.DoesNotContain("config-zip", cmd.Args);
         Assert.Contains("--name", cmd.Args);
         Assert.Equal("my-func", cmd.GetArgValue("--name"));
-        Assert.Contains("--src", cmd.Args);
-        Assert.Equal("./publish.zip", cmd.GetArgValue("--src"));
+        Assert.Equal("./publish.zip", cmd.GetArgValue("--src-path"));
+        Assert.Equal("zip", cmd.GetArgValue("--type"));
+        Assert.Equal("false", cmd.GetArgValue("--restart"));
+        Assert.Equal("false", cmd.GetArgValue("--async"));
+        Assert.DoesNotContain("--timeout", cmd.Args);
     }
 
     [Fact]
@@ -97,7 +99,7 @@ public class FunctionsOperationsTests
         await _registry.Steps[0].Execute();
 
         var cmd = _executor.LastCommand!;
-        Assert.Contains("--async", cmd.Args);
+        Assert.Equal("true", cmd.GetArgValue("--async"));
     }
 
     [Fact]
@@ -374,6 +376,6 @@ public class FunctionsOperationsTests
         var cmd = _executor.LastCommand!;
         Assert.Contains("--slot", cmd.Args);
         Assert.Equal("staging", cmd.GetArgValue("--slot"));
-        Assert.Contains("--async", cmd.Args);
+        Assert.Equal("true", cmd.GetArgValue("--async"));
     }
 }

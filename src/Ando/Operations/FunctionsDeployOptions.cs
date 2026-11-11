@@ -32,6 +32,15 @@ public class FunctionsDeployOptions
     /// <summary>Don't wait for deployment to complete.</summary>
     internal bool NoWait { get; private set; }
 
+    /// <summary>Restart the app after a zip deploy (default false).</summary>
+    internal bool Restart { get; private set; }
+
+    /// <summary>Timeout for the zip deploy command.</summary>
+    internal int TimeoutMs { get; private set; } = AppServiceDeployOptions.DefaultZipDeployTimeoutMs;
+
+    /// <summary>True when WithTimeout was called; then az gets its own --timeout.</summary>
+    internal bool TimeoutExplicit { get; private set; }
+
     /// <summary>
     /// Sets the deployment slot for the function app.
     /// </summary>
@@ -68,6 +77,33 @@ public class FunctionsDeployOptions
     public FunctionsDeployOptions WithNoWait()
     {
         NoWait = true;
+        return this;
+    }
+
+    /// <summary>
+    /// Restarts the function app after a zip deploy completes. Without this, DeployZip
+    /// passes `--restart false` (OneDeploy restarts by default), so a stopped slot is not
+    /// started by the deploy. Not used by Publish.
+    /// </summary>
+    public FunctionsDeployOptions WithRestart()
+    {
+        Restart = true;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the maximum time to wait for zip deploy before reconciliation. Not used by Publish.
+    /// </summary>
+    /// <param name="timeout">Timeout duration. Must be greater than zero.</param>
+    public FunctionsDeployOptions WithTimeout(TimeSpan timeout)
+    {
+        if (timeout <= TimeSpan.Zero || timeout.TotalMilliseconds > int.MaxValue)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout), "Timeout must be greater than zero and fit within an Int32 millisecond value.");
+        }
+
+        TimeoutMs = Math.Max(1, (int)timeout.TotalMilliseconds);
+        TimeoutExplicit = true;
         return this;
     }
 }
