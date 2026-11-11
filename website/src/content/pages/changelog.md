@@ -3,6 +3,23 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.160
+
+**2026-11-12**
+
+- **Breaking:** `Functions.Show` now returns a quiet `CommandStep` with the `az functionapp show` JSON instead of printing it. Read fields with `Json(path)` at execution time
+- **Breaking:** Remove the `DotnetSdk` global (use `Dotnet.SdkInstall()`), `Npm.Use` and `Npm.UseLatestLts`, and the nonexistent `Docker.Push` (use `Docker.Build` with `WithPush()`)
+- **Deprecated:** `Azure.EnsureLoggedIn()` is obsolete and gives a compile warning; use `Azure.EnsureAuthenticated()`
+- Bring `Functions` to parity with `AppService`: `GetHostName`, `AccessRestrictions`, `TemporaryAccessRule` (finally step `Functions.RemoveAccessRule`), `ListSlots`, `CreateSlot` and `DeleteSlot`; `SwapSlots` (30-minute default timeout), `Restart`, `Stop` and `Start` now return a `CommandStep`; `Functions.DeployZip` retries transient 5xx and connection errors 3 times and has a 20-minute default timeout
+- **Behavior change:** `Functions.DeployZip` and `Functions.DeployWithSwap` deploy with `az functionapp deployment source config-zip` by default, which supports every plan including Linux Consumption and Flex. New `WithOneDeploy()` opts in to `az functionapp deploy --type zip` (preview). `WithRestart()` and `WithNoWait()` now require `WithOneDeploy()` and throw without it; `WithTimeout` works on both paths
+- Add the step variants `Git.RevParse`, `Git.LatestTag` and `Git.ChangedFiles`, which run on the host in order with the other steps; `RevParse` and `ChangedFiles` honor `WithTimeout`, `WithEnv`, `Quiet` and `AllowFailure`. `Git.LatestTag` treats no matching tag as an empty value
+- Add `Git.CommitTime` (unix seconds of the commit being built, evaluated when the script loads) and `Dotnet.ReadVersion` (reads the literal `<Version>` of a props file when the script loads)
+- Add `Archive.Zip` and `Archive.TarGz`: byte-identical archives for the same tree and image, with `WithTimestamp` and `WithCompressionLevel`. They handle names with spaces, quotes and backslashes, reject newline names, symlinks and special files, require a `.zip` path for zip, refuse an output that equals or sits inside the source, and dereference hardlinks
+- Add `Files.Copy` to copy a file or directory in the build container (`optional: true` skips a missing source). A file goes into the destination directory when the destination ends in `/` or is an existing directory
+- Add `Azure.InstallCli` to install an exact Azure CLI version from Microsoft's signed apt repository and hold it. It falls back to bookworm (Debian) or `UBUNTU_CODENAME`/jammy (Ubuntu) when Microsoft has no repository for the codename
+- Add content type and body expectations (`ExpectContentType`, `ExpectBodyContains`, `ExpectBodyMatches`) to `Http.WaitForHealthy` and to new `Http.Get(url, Action<HttpGetOptions>)` overloads, and add `DotnetPublishOptions.WithNoLogo()`
+- Docs: add Globals, Archive and Files pages and a Tool installation page; label operations that are evaluated when the script loads or that run on the host (`Ando.Build`, `Git.*`); explain overlapping operations (`EnsurePagesProject` versus `PagesCreateProject`, `Push` versus `PushTags`, `Functions` versus `AppService`); group the AI-assisted commands and the AI-free `ando bump` template mode; replace examples that used nonexistent API
+
 ## 0.9.159
 
 **2026-11-10**

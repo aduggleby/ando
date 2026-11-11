@@ -6,7 +6,7 @@ provider: Functions
 
 ## Functions or AppService?
 
-`Functions` and `AppService` have the same operations with the same signatures and behavior: `DeployZip`, `DeployWithSwap`, `SwapSlots`, `Restart`, `Start`, `Stop`, `Show`, `GetHostName`, `AccessRestrictions`, `TemporaryAccessRule`, `ListSlots`, `CreateSlot` and `DeleteSlot`. Only the `az` subcommand differs, so pick by the resource you deploy to:
+`Functions` and `AppService` have the same operations with the same signatures: `DeployZip`, `DeployWithSwap`, `SwapSlots`, `Restart`, `Start`, `Stop`, `Show`, `GetHostName`, `AccessRestrictions`, `TemporaryAccessRule`, `ListSlots`, `CreateSlot` and `DeleteSlot`. Apart from the `az` subcommand, the zip deploy differs: `AppService` always uses OneDeploy (`az webapp deploy`), while `Functions.DeployZip` defaults to `config-zip` for plan compatibility and uses OneDeploy only with `WithOneDeploy()`. Pick by the resource you deploy to:
 
 |           | `Functions`                                                              | `AppService`                        |
 | --------- | ------------------------------------------------------------------------ | ----------------------------------- |
@@ -38,12 +38,13 @@ Functions.DeployWithSwap("my-func-app", Root / "func.zip");
 
 ### Functions.DeployZip Options
 
-| Option                       | Description                                                                                                                                                      |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WithDeploymentSlot(string)` | Deploy to a specific slot instead of production (`--slot`).                                                                                                      |
-| `WithNoWait()`               | Pass `--async true`. By default the deployment is awaited (`--async false`).                                                                                     |
-| `WithRestart()`              | Pass `--restart true`. Without it ANDO passes `--restart false`, because OneDeploy restarts the app by default, which could start a slot you stopped on purpose. |
-| `WithTimeout(TimeSpan)`      | Maximum time to wait for the deploy command before reconciling and retrying; also passed to az as `--timeout`. Must be greater than zero. Default 20 minutes.    |
+| Option                       | Description                                                                                                                                                                                                               |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WithDeploymentSlot(string)` | Deploy to a specific slot instead of production (`--slot`).                                                                                                                                                               |
+| `WithOneDeploy()`            | Use OneDeploy (`az functionapp deploy --type zip`, preview) instead of the default `config-zip`. See [Zip deploy](#zip-deploy).                                                                                           |
+| `WithNoWait()`               | **OneDeploy only.** Pass `--async true`. By default the deployment is awaited (`--async false`).                                                                                                                          |
+| `WithRestart()`              | **OneDeploy only.** Pass `--restart true`. Without it ANDO passes `--restart false`, because OneDeploy restarts the app by default, which could start a slot you stopped on purpose.                                      |
+| `WithTimeout(TimeSpan)`      | Maximum time to wait for the deploy command before retrying; also passed to az as `--timeout` (seconds for `config-zip`, milliseconds for OneDeploy). Works on both paths. Must be greater than zero. Default 20 minutes. |
 
 ### Functions.Publish Options
 
@@ -56,13 +57,27 @@ Functions.DeployWithSwap("my-func-app", Root / "func.zip");
 
 ## Zip deploy
 
-`Functions.DeployZip` runs `az functionapp deploy --name N [--resource-group RG] --src-path ZIP --type zip [--slot S] --restart false|true --async false|true [--timeout ms] --output none`. It behaves like `AppService.DeployZip`: transient failures (HTTP 5xx, connection resets) are retried up to 3 times within the timeout budget, and after a timeout ANDO checks `az functionapp log deployment show` and treats a deployment that completed anyway as successful. Earlier versions used `config-zip`.
+`Functions.DeployZip` has two mechanisms.
+
+**Default: `config-zip`.** Runs `az functionapp deployment source config-zip --name N [--resource-group RG] --src ZIP [--slot S] [--timeout <seconds>] --output none`. It supports every plan: dedicated and Premium, Linux Consumption (the zip is uploaded to storage and `WEBSITE_RUN_FROM_PACKAGE` is set) and Flex Consumption. `DeployWithSwap` uses this path.
+
+**Opt-in: `WithOneDeploy()`.** Runs `az functionapp deploy --src-path ZIP --type zip [--slot S] --restart false|true --async false|true [--timeout <ms>]`. This command is in preview and posts to `/api/publish`. It fits dedicated, Premium and Flex plans and is not guaranteed on Linux Consumption. `AppService.DeployZip` always uses OneDeploy (`az webapp deploy`).
+
+- `WithRestart()` and `WithNoWait()` need `WithOneDeploy()`: without it `DeployZip` throws, because `config-zip` has no restart or async option. (**Behavior change:** these two options used to apply without it.)
+- `WithTimeout` and `WithDeploymentSlot` work on both paths.
+- Transient failures (HTTP 5xx, connection resets) are retried up to 3 times on both paths.
+- After a timeout, only OneDeploy checks `az functionapp log deployment show` and treats a deployment that completed anyway as successful. A timed-out `config-zip` fails.
 
 ```csharp
+// Default (all plans)
 Functions.DeployZip(app, "out/func.zip", rg, o => o
     .WithDeploymentSlot("release")
-    .WithRestart()
     .WithTimeout(TimeSpan.FromMinutes(30)));
+
+// OneDeploy (preview): restart after the deploy
+Functions.DeployZip(app, "out/func.zip", rg, o => o
+    .WithOneDeploy()
+    .WithRestart());
 ```
 
 ## Reading app state and gating deploys

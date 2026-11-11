@@ -6,7 +6,7 @@ provider: AppService
 
 ## AppService or Functions?
 
-`AppService` and `Functions` have the same operations with the same signatures and behavior: `DeployZip`, `DeployWithSwap`, `SwapSlots`, `Restart`, `Start`, `Stop`, `Show`, `GetHostName`, `AccessRestrictions`, `TemporaryAccessRule`, `ListSlots`, `CreateSlot` and `DeleteSlot`. Only the `az` subcommand differs, so pick by the resource you deploy to:
+`AppService` and `Functions` have the same operations with the same signatures: `DeployZip`, `DeployWithSwap`, `SwapSlots`, `Restart`, `Start`, `Stop`, `Show`, `GetHostName`, `AccessRestrictions`, `TemporaryAccessRule`, `ListSlots`, `CreateSlot` and `DeleteSlot`. Apart from the `az` subcommand, the zip deploy differs: `AppService` always uses OneDeploy (`az webapp deploy`), while `Functions.DeployZip` defaults to `config-zip` for plan compatibility. Pick by the resource you deploy to:
 
 |           | `AppService`                                          | `Functions`                             |
 | --------- | ----------------------------------------------------- | --------------------------------------- |

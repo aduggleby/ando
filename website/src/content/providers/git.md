@@ -108,6 +108,8 @@ These three are **steps**. They run on the host in the source root (the `--ref` 
 | `Git.LatestTag(string pattern = "*")`                      | `git describe --tags --abbrev=0 --match <pattern> HEAD`. If no tag matches, `Value` is empty and the build continues.                              | `Git.LastTag()`                 |
 | `Git.ChangedFiles(string sinceRef, params string[] paths)` | `git diff --name-only <sinceRef> HEAD -- <paths>`. `Value` is a newline-separated list, empty when nothing changed. An unknown ref fails the step. | `Git.ChangedSince()`            |
 
+Of the `CommandStep` fluent methods, `Git.RevParse` and `Git.ChangedFiles` honor `WithTimeout`, `WithEnv`, `Quiet` and `AllowFailure`. Do not use `InDirectory` on them: it resolves to a container path, but git runs on the host. `Git.LatestTag` ignores all the fluent methods.
+
 Use the eager members when you need the value while the script is evaluated (to decide which steps to register). Use the step variants when the value must reflect the state at that point of the run, or must show up as a step.
 
 ```csharp

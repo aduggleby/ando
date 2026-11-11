@@ -38,8 +38,11 @@ For the same source tree, options and image, the output is byte-identical:
 
 ## Rules and caveats
 
-- Symlinks, special files and file names containing a newline are rejected.
-- The output may not be inside the source directory.
+- File names with dashes, spaces, quotes and backslashes are safe. Names containing a newline are rejected.
+- Symlinks and special files fail with a clear message that lists up to 5 of them.
+- `Archive.Zip` needs a path ending in `.zip`.
+- The output may not equal the source or sit inside it. This is checked on resolved paths.
+- Hardlinks are dereferenced, so the bytes equal those of a copied tree.
 - The source tree is never modified: it is staged in a temporary copy.
 - `zip`, `tar` and `gzip` are installed with apt when missing, so a Debian or Ubuntu image is needed.
 - Identity holds for the same zip and gzip builds, that is, the same image. Different tool builds may compress differently.

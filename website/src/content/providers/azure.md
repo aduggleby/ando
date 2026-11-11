@@ -13,6 +13,8 @@ provider: Azure
 - It installs with `--allow-downgrades`, runs `apt-mark hold azure-cli` and logs `az version`.
 - The automatic `az` install never replaces it.
 - Put it **before** the first Azure, AppService, Functions or Bicep step: an `az` that was installed automatically earlier in the run is replaced (downgraded) by this step.
+- If Microsoft has no repository for the OS codename, it falls back like Microsoft's installer (Debian to `bookworm`, Ubuntu to `UBUNTU_CODENAME` or `jammy`) and logs the fallback.
+- Every failure ends with `azure-cli <version> is not available: ...`.
 - It needs a Debian or Ubuntu image.
 
 ```csharp

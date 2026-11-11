@@ -23,7 +23,7 @@ Files.Copy("public", "artifacts/web", optional: true);
 
 | Source    | Destination                                                                                                                                                                                                                                                                          |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| File      | The target file path. An existing file is overwritten. If the destination ends with `/`, the file is copied into that directory under its own name.                                                                                                                                  |
+| File      | The target file path. An existing file is overwritten. If the destination ends with `/` or is an existing directory, the file is copied into that directory under its own name; otherwise the destination is the target path.                                                        |
 | Directory | The target directory. The contents of the source are copied in, like `cp -a src/. dst/`. The destination is created if missing; existing contents merge and same-named files are overwritten. The source directory name is never added: copying `a` to `b` gives `b/x`, not `b/a/x`. |
 
 A missing source fails the step ("source not found"). With `optional: true` the step succeeds and logs that it was skipped.
