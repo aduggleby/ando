@@ -169,6 +169,18 @@ public class ScriptGlobals
     public BunOperations Bun { get; }
 
     /// <summary>
+    /// Deterministic archives (byte-identical for the same tree).
+    /// Usage: Archive.Zip("artifacts/web", "artifacts/web.zip", o => o.WithTimestamp(Git.CommitTime));
+    /// </summary>
+    public ArchiveOperations Archive { get; }
+
+    /// <summary>
+    /// File operations in the build container.
+    /// Usage: Files.Copy("config/prod.json", "artifacts/web/config.json");
+    /// </summary>
+    public FilesOperations Files { get; }
+
+    /// <summary>
     /// Creates a directory reference from a path.
     /// Usage: var frontend = Directory("./frontend");
     /// Usage: var current = Directory(); // defaults to "."
@@ -233,6 +245,8 @@ public class ScriptGlobals
         Docfx = buildContext.Operations.Docfx;
         Shell = buildContext.Operations.Shell;
         Bun = buildContext.Operations.Bun;
+        Archive = buildContext.Operations.Archive;
+        Files = buildContext.Operations.Files;
         _profileRegistry = buildContext.ProfileRegistry;
 
         // Legacy backward compatibility.

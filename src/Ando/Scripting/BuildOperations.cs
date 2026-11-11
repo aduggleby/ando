@@ -105,6 +105,12 @@ public class BuildOperations
     /// <summary>Bun installation operations.</summary>
     public BunOperations Bun { get; }
 
+    /// <summary>Deterministic zip and tar.gz archives (Archive.Zip, Archive.TarGz).</summary>
+    public ArchiveOperations Archive { get; }
+
+    /// <summary>File operations in the build container (Files.Copy).</summary>
+    public FilesOperations Files { get; }
+
     /// <summary>
     /// Creates all operation instances.
     /// </summary>
@@ -130,7 +136,7 @@ public class BuildOperations
         var nodeEnsurer = new NodeSdkEnsurer(versionResolver, executorFactory, logger);
 
         // Initialize operations with their respective ensurers.
-        Dotnet = new DotnetOperations(registry, logger, executorFactory, dotnetEnsurer);
+        Dotnet = new DotnetOperations(registry, logger, executorFactory, dotnetEnsurer, buildOptions.Session);
         Ef = new EfOperations(registry, logger, executorFactory);
         Npm = new NpmOperations(registry, logger, executorFactory, nodeEnsurer);
         Azure = new AzureOperations(registry, logger, executorFactory);
@@ -155,6 +161,8 @@ public class BuildOperations
         Docfx = new DocfxOperations(registry, logger, executorFactory);
         Shell = new ShellCommandOperations(registry, logger, executorFactory);
         Bun = new BunOperations(registry, logger, executorFactory);
+        Archive = new ArchiveOperations(registry, logger, executorFactory);
+        Files = new FilesOperations(registry, logger, executorFactory);
 
         // Legacy backward compatibility wrapper.
 #pragma warning disable CS0618 // Suppress obsolete warning for internal initialization
