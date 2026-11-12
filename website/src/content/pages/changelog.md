@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.164
+
+**2026-11-12**
+
+- Ando Server now installs the Ando CLI version that matches the server (for example 0.9.164) in the build container instead of NuGet's "latest". Right after a release NuGet's "latest" still pointed at the previous version, so build scripts using new operations failed to compile on the server. If that version is not on NuGet yet, the server falls back to the latest version and logs it
+
 ## 0.9.163
 
 **2026-11-12**

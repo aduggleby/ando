@@ -393,7 +393,7 @@ public partial class BuildOrchestrator
         // Ensure the Ando CLI exists inside the build container.
         // The build container image is user-configurable and typically is a plain .NET SDK image.
         // Install/update the latest Ando .NET tool on every build for correctness over caching.
-        logger.Info("Installing Ando CLI (latest)...");
+        logger.Info($"Installing Ando CLI {GetServerAndoVersion().Split('+')[0]}...");
         var toolOk = await EnsureAndoCliInstalledAsync(containerId, logger, cancellationToken);
         if (!toolOk)
         {

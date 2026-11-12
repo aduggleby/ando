@@ -22,14 +22,37 @@ public partial class BuildOrchestrator
         CancellationToken cancellationToken)
     {
         // Use a fixed tool-path to avoid PATH/global tool issues.
-        // Prefer update (fast when already installed), fall back to install.
-        var shellCmd = "dotnet tool update --tool-path /tmp/ando-tools ando || dotnet tool install --tool-path /tmp/ando-tools ando";
+        // Install the CLI version that matches this server, so build scripts can use every
+        // operation the server was released with. "Latest" on NuGet lags behind a release
+        // for a while after publishing, which made new operations fail to compile.
+        var shellCmd = BuildAndoCliInstallCommand(GetServerAndoVersion());
         var exitCode = await RunDockerExecAsync(
             containerId,
             ["sh", "-c", shellCmd],
             logger,
             cancellationToken);
         return exitCode == 0;
+    }
+
+    /// <summary>
+    /// Shell command that installs the Ando CLI into /tmp/ando-tools. With a release version
+    /// (e.g. "0.9.163" or "0.9.163+abc123") it installs exactly that version and falls back to
+    /// the latest NuGet version only when that version is not available; otherwise it installs
+    /// the latest version.
+    /// </summary>
+    internal static string BuildAndoCliInstallCommand(string serverVersion)
+    {
+        const string latest =
+            "dotnet tool update --tool-path /tmp/ando-tools ando || dotnet tool install --tool-path /tmp/ando-tools ando";
+        var version = serverVersion.Split('+')[0].Trim();
+        if (!System.Text.RegularExpressions.Regex.IsMatch(version, @"^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$"))
+        {
+            return latest;
+        }
+
+        return $"dotnet tool update --tool-path /tmp/ando-tools ando --version {version} " +
+               $"|| dotnet tool install --tool-path /tmp/ando-tools ando --version {version} " +
+               $"|| {{ echo 'Ando CLI {version} (the server version) is not on NuGet yet; installing the latest version.' >&2; {latest}; }}";
     }
 
     private async Task<bool> EnsureDockerCliInstalledAsync(

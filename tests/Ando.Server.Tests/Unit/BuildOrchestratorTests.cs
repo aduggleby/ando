@@ -329,3 +329,33 @@ public class BuildServiceMockTests
         newBuildId.ShouldBe(50);
     }
 }
+
+/// <summary>
+/// Tests for the command that installs the Ando CLI in the build container.
+/// </summary>
+public class AndoCliInstallCommandTests
+{
+    [Theory]
+    [InlineData("0.9.163")]
+    [InlineData("0.9.163+32b6f3a3c0ffee")]
+    public void ReleaseVersion_InstallsThatVersionWithLatestFallback(string serverVersion)
+    {
+        var cmd = BuildOrchestrator.BuildAndoCliInstallCommand(serverVersion);
+
+        cmd.ShouldStartWith("dotnet tool update --tool-path /tmp/ando-tools ando --version 0.9.163 ");
+        cmd.ShouldContain("dotnet tool install --tool-path /tmp/ando-tools ando --version 0.9.163 ");
+        cmd.ShouldContain("not on NuGet yet");
+        cmd.ShouldEndWith("dotnet tool install --tool-path /tmp/ando-tools ando; }");
+        cmd.ShouldNotContain("+32b6f3a3");
+    }
+
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData("")]
+    [InlineData("1.0.0.0; rm -rf /")]
+    public void UnknownVersion_InstallsLatest(string serverVersion)
+    {
+        BuildOrchestrator.BuildAndoCliInstallCommand(serverVersion)
+            .ShouldBe("dotnet tool update --tool-path /tmp/ando-tools ando || dotnet tool install --tool-path /tmp/ando-tools ando");
+    }
+}
