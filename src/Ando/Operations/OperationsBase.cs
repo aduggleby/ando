@@ -75,10 +75,14 @@ public abstract class OperationsBase
         Func<Task>? ensurer,
         string? context,
         string? workingDirectory,
-        Dictionary<string, string>? environment)
+        Dictionary<string, string>? environment,
+        int? minimumTimeoutMs = null)
     {
-        // Ando.CommandTimeout applies to command steps registered after it.
-        var timeoutMs = Registry.DefaultCommandTimeoutMs;
+        // Ando.CommandTimeout applies to command steps registered after it. Long installs
+        // pass a minimum so a cold container doesn't hit the 5-minute default.
+        var timeoutMs = minimumTimeoutMs == null
+            ? Registry.DefaultCommandTimeoutMs
+            : Math.Max(minimumTimeoutMs.Value, Registry.DefaultCommandTimeoutMs ?? 0);
 
         Registry.Register(stepName, async () =>
         {
@@ -149,9 +153,10 @@ public abstract class OperationsBase
         Func<Task>? ensurer,
         string? context = null,
         string? workingDirectory = null,
-        Dictionary<string, string>? environment = null)
+        Dictionary<string, string>? environment = null,
+        int? minimumTimeoutMs = null)
     {
-        RegisterCommandCore(stepName, command, () => args, ensurer, context, workingDirectory, environment);
+        RegisterCommandCore(stepName, command, () => args, ensurer, context, workingDirectory, environment, minimumTimeoutMs);
     }
 
     /// <summary>

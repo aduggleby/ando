@@ -225,6 +225,17 @@ public class PlaywrightOperationsTests
     }
 
     [Fact]
+    public async Task Install_UsesAtLeastTwentyMinuteTimeout()
+    {
+        var playwright = CreatePlaywright();
+
+        playwright.Install(TestDir());
+        await _registry.Steps[0].Execute();
+
+        _executor.LastCommand!.Options!.TimeoutMs.ShouldBe(20 * 60 * 1000);
+    }
+
+    [Fact]
     public void DirectoryRef_SetsContextToDirectoryName()
     {
         var playwright = CreatePlaywright();

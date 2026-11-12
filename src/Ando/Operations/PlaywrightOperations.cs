@@ -97,7 +97,9 @@ public class PlaywrightOperations(
     {
         RegisterCommandWithEnsurer("Playwright.Install", "npx",
             ["playwright", "install", "--with-deps"],
-            GetEnsurer(), directory.Name, directory.Path);
+            GetEnsurer(), directory.Name, directory.Path,
+            // Browsers plus their system packages take longer than 5 minutes in a cold container.
+            minimumTimeoutMs: 20 * 60 * 1000);
     }
 }
 
