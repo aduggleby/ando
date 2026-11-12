@@ -59,6 +59,8 @@ What still uses the directory you ran `ando` from:
 
 `Git.Commit`, `Git.ShortCommit`, `Git.LastTag` and `Git.ChangedSince` refer to the checked-out commit, and `Git.RequireClean` always passes. `--ref` needs a git repository, a commit that exists, and a build script that exists in that commit.
 
+The build container never contains `.git`, in `--ref` runs and normal runs alike (ANDO copies the project without it). So SourceLink, `git describe` and any git command inside the container do not work; ANDO's `Git.*` operations run on the host and do work. `Dotnet.Build`, `Dotnet.Publish`, `Dotnet.Test` (when it builds) and `Nuget.Pack` therefore pass `-p:SourceRevisionId=<full commit>` automatically (the value of `Git.Commit`, HEAD of the source root, the `--ref` commit with `--ref`), so `InformationalVersion` gets `+<sha>`. Outside a git repository nothing is added. Use `WithSourceRevision(sha)` to set it yourself.
+
 ### Confirmations (`--yes`)
 
 `Ando.Confirm(message)` asks `[y/N]` and fails the build if you decline. `--yes` accepts every confirmation. Without `--yes`, a run with no interactive console fails at the first `Ando.Confirm`.

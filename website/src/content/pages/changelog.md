@@ -3,6 +3,14 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.161
+
+**2026-11-12**
+
+- **Behavior change:** `Dotnet.Build`, `Dotnet.Publish`, `Dotnet.Test` (when it builds) and `Nuget.Pack` now pass `-p:SourceRevisionId=<full commit>` on every run, so builds get `+<sha>` in `InformationalVersion`. The build container never contains `.git`, so the SDK could not fill it in before. The value is `Git.Commit` (HEAD of the source root, the commit with `--ref`); outside a git repository nothing is added. New `WithSourceRevision(sha)` on the Dotnet build, test and publish options and on the Nuget pack options sets it explicitly and overrides the automatic value; `NoBuild`/`SkipBuild` runs get no automatic value
+- Fix `Nuget.Pack` `WithVersion` and `WithVersionSuffix`: they passed `-p:PackageVersion` and the value as two arguments, which the SDK rejects (`MSB1009: Project file does not exist`). They now pass one `-p:PackageVersion=<v>` or `-p:VersionSuffix=<v>` argument
+- Docs: state that the build container never has `.git`, so SourceLink, `git describe` and git commands inside the container do not work, while ANDO's `Git.*` operations run on the host
+
 ## 0.9.160
 
 **2026-11-12**

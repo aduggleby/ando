@@ -64,29 +64,32 @@ Log.Info($"Building {version}");
 
 ### Dotnet.Build Options
 
-| Option          | Description                                                                                                                                                             |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Configuration` | Build configuration: `Configuration.Debug` or `Configuration.Release`. Debug includes symbols and disables optimizations. Release enables optimizations for production. |
-| `NoRestore`     | Skip the implicit restore before building. Use when you've already run `Dotnet.Restore()` separately.                                                                   |
+| Option                       | Description                                                                                                                                                                        |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Configuration`              | Build configuration: `Configuration.Debug` or `Configuration.Release`. Debug includes symbols and disables optimizations. Release enables optimizations for production.            |
+| `WithSourceRevision(string)` | Pass `-p:SourceRevisionId=<sha>`. ANDO adds the full commit being built automatically (the container has no `.git`; nothing is added outside a git repository); this overrides it. |
+| `NoRestore`                  | Skip the implicit restore before building. Use when you've already run `Dotnet.Restore()` separately.                                                                              |
 
 ### Dotnet.Test Options
 
-| Option          | Description                                                                                                                     |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `Configuration` | Build configuration for running tests. Tests typically run in Debug for better diagnostics.                                     |
-| `NoRestore`     | Skip restore before testing. Use when dependencies are already restored.                                                        |
-| `NoBuild`       | Skip build before testing. Use when the project is already built. Implies `NoRestore`.                                          |
-| `Filter`        | Test filter expression to run specific tests. Examples: `"Category=Unit"`, `"FullyQualifiedName~MyNamespace"`, `"Name=MyTest"`. |
+| Option                       | Description                                                                                                                                                            |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Configuration`              | Build configuration for running tests. Tests typically run in Debug for better diagnostics.                                                                            |
+| `NoRestore`                  | Skip restore before testing. Use when dependencies are already restored.                                                                                               |
+| `NoBuild`                    | Skip build before testing. Use when the project is already built. Implies `NoRestore`.                                                                                 |
+| `Filter`                     | Test filter expression to run specific tests. Examples: `"Category=Unit"`, `"FullyQualifiedName~MyNamespace"`, `"Name=MyTest"`.                                        |
+| `WithSourceRevision(string)` | Pass `-p:SourceRevisionId=<sha>` when the test builds. ANDO adds the full commit being built automatically (nothing outside a git repository) unless `NoBuild` is set. |
 
 ### Dotnet.Publish Options
 
-| Option                             | Description                                                                                                                                                 |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Output(path)`                     | Output directory for published artifacts. Accepts `BuildPath` or `string`.                                                                                  |
-| `WithConfiguration(Configuration)` | Build configuration. Use `Configuration.Release` for production deployments.                                                                                |
-| `WithRuntime(string)`              | Target runtime identifier. Required for self-contained deployments. Common values: `"linux-x64"`, `"linux-arm64"`, `"win-x64"`, `"osx-x64"`, `"osx-arm64"`. |
-| `AsSelfContained(bool)`            | Include the .NET runtime with the application. Creates a standalone deployment that doesn't require .NET to be installed. Defaults to `true` when called.   |
-| `AsSingleFile(bool)`               | Bundle the entire application into a single executable. Makes deployment simpler but increases startup time slightly.                                       |
-| `SkipRestore()`                    | Skip restore before publishing. Use when dependencies are already restored.                                                                                 |
-| `SkipBuild()`                      | Skip build before publishing. Use when the project is already built.                                                                                        |
-| `WithNoLogo()`                     | Pass `--nologo` to suppress the startup banner.                                                                                                             |
+| Option                             | Description                                                                                                                                                           |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Output(path)`                     | Output directory for published artifacts. Accepts `BuildPath` or `string`.                                                                                            |
+| `WithConfiguration(Configuration)` | Build configuration. Use `Configuration.Release` for production deployments.                                                                                          |
+| `WithRuntime(string)`              | Target runtime identifier. Required for self-contained deployments. Common values: `"linux-x64"`, `"linux-arm64"`, `"win-x64"`, `"osx-x64"`, `"osx-arm64"`.           |
+| `AsSelfContained(bool)`            | Include the .NET runtime with the application. Creates a standalone deployment that doesn't require .NET to be installed. Defaults to `true` when called.             |
+| `AsSingleFile(bool)`               | Bundle the entire application into a single executable. Makes deployment simpler but increases startup time slightly.                                                 |
+| `SkipRestore()`                    | Skip restore before publishing. Use when dependencies are already restored.                                                                                           |
+| `SkipBuild()`                      | Skip build before publishing. Use when the project is already built.                                                                                                  |
+| `WithSourceRevision(string)`       | Pass `-p:SourceRevisionId=<sha>`. ANDO adds the full commit being built automatically (nothing outside a git repository) unless this is set or `SkipBuild()` is used. |
+| `WithNoLogo()`                     | Pass `--nologo` to suppress the startup banner.                                                                                                                       |

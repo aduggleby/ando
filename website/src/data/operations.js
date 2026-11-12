@@ -275,7 +275,7 @@ export const operations = [
   {
     group: "Dotnet",
     name: "Dotnet.Build",
-    desc: "Compile a project. Runs <code>dotnet build &lt;proj&gt; [-c &lt;cfg&gt;] [--no-restore]</code>. No configuration flag is passed unless you set one, so the .NET default (Debug) applies. Automatically installs .NET SDK if not present.",
+    desc: "Compile a project. Runs <code>dotnet build &lt;proj&gt; [-c &lt;cfg&gt;] [--no-restore] [-p:SourceRevisionId=&lt;sha&gt;]</code> (the property is added automatically with the commit being built, since the container has no .git; nothing outside a git repository; <code>WithSourceRevision(sha)</code> overrides it). No configuration flag is passed unless you set one, so the .NET default (Debug) applies. Automatically installs .NET SDK if not present.",
     examples: ["Dotnet.Build(App);", "Dotnet.Build(App, o => o.Configuration = Configuration.Release);"],
     sourceFile: "Operations/DotnetOperations.cs",
   },
@@ -289,7 +289,7 @@ export const operations = [
   {
     group: "Dotnet",
     name: "Dotnet.Publish",
-    desc: "Create deployment artifacts. Runs <code>dotnet publish &lt;proj&gt; [-c &lt;cfg&gt;] [-o &lt;absolute out&gt;] [--no-restore] [--no-build] [--self-contained | --no-self-contained] [-r &lt;rid&gt;] [-p:PublishSingleFile=true] [--nologo]</code>; output paths are made absolute. Release is <strong>not</strong> the default: pass <code>WithConfiguration(Configuration.Release)</code> for <code>-c Release</code>. Options: <code>Output</code>, <code>WithConfiguration</code>, <code>WithRuntime</code>, <code>AsSelfContained</code>, <code>AsSingleFile</code>, <code>SkipRestore</code>, <code>SkipBuild</code>, <code>WithNoLogo</code> (<code>--nologo</code>). Automatically installs .NET SDK if not present.",
+    desc: "Create deployment artifacts. Runs <code>dotnet publish &lt;proj&gt; [-c &lt;cfg&gt;] [-o &lt;absolute out&gt;] [--no-restore] [--no-build] [--self-contained | --no-self-contained] [-r &lt;rid&gt;] [-p:PublishSingleFile=true] [--nologo] [-p:SourceRevisionId=&lt;sha&gt;]</code>; the property is added automatically with the commit being built (the container has no .git; nothing outside a git repository) unless <code>WithSourceRevision(sha)</code> is set or <code>SkipBuild()</code> is used; output paths are made absolute. Release is <strong>not</strong> the default: pass <code>WithConfiguration(Configuration.Release)</code> for <code>-c Release</code>. Options: <code>Output</code>, <code>WithConfiguration</code>, <code>WithRuntime</code>, <code>AsSelfContained</code>, <code>AsSingleFile</code>, <code>SkipRestore</code>, <code>SkipBuild</code>, <code>WithNoLogo</code> (<code>--nologo</code>). Automatically installs .NET SDK if not present.",
     examples: [
       "Dotnet.Publish(App);",
       'Dotnet.Publish(App, o => o\n  .Output(Root / "dist")\n  .WithConfiguration(Configuration.Release)\n  .WithRuntime("linux-x64")\n  .AsSelfContained()\n  .AsSingleFile());',
@@ -874,10 +874,11 @@ export const operations = [
   {
     group: "Nuget",
     name: "Nuget.Pack",
-    desc: "Create a NuGet package from a project. **Defaults:** Release config, output to `bin/Release`.",
+    desc: "Create a NuGet package from a project. **Defaults:** Release config, output to `bin/Release`. ANDO adds `-p:SourceRevisionId=<full commit>` (the container has no .git; nothing outside a git repository) unless you call `WithSourceRevision(sha)` or `SkipBuild()`.",
     examples: [
       'var app = Dotnet.Project("./src/MyLib/MyLib.csproj");\nNuget.Pack(app);',
       'Nuget.Pack(app, o => o.WithVersion("1.0.0"));',
+      "// Adds -p:SourceRevisionId=<sha> explicitly\nNuget.Pack(app, o => o.WithSourceRevision(Git.Commit));",
     ],
     sourceFile: "Operations/NugetOperations.cs",
   },

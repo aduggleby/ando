@@ -34,23 +34,24 @@ Nuget.Push(App);
 
 ### Nuget.Pack Options
 
-| Option | Description |
-|--------|-------------|
-| `Output(path)` | Output directory for the generated .nupkg file. Defaults to `bin/{Configuration}`. |
-| `WithConfiguration(Configuration)` | Build configuration. Use `Configuration.Release` for publishing to nuget.org. |
-| `WithVersion(string)` | Explicit package version, overriding the version in the .csproj. Useful for CI-generated version numbers. |
-| `WithVersionSuffix(string)` | Version suffix for pre-release packages (e.g., "beta", "rc1"). Combined with base version: "1.0.0-beta". |
-| `WithSymbols(bool)` | Generate a symbol package (.snupkg) for source-level debugging. Publish to nuget.org symbol server for public packages. |
-| `WithSource(bool)` | Include source files in the symbol package. Enables stepping into your library code during debugging. |
-| `SkipRestore()` | Skip restore before packing. Use when dependencies are already restored. |
-| `SkipBuild()` | Skip build before packing. Use when the project is already built. |
+| Option                             | Description                                                                                                                                                           |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Output(path)`                     | Output directory for the generated .nupkg file. Defaults to `bin/{Configuration}`.                                                                                    |
+| `WithConfiguration(Configuration)` | Build configuration. Use `Configuration.Release` for publishing to nuget.org.                                                                                         |
+| `WithVersion(string)`              | Explicit package version, overriding the version in the .csproj. Useful for CI-generated version numbers.                                                             |
+| `WithVersionSuffix(string)`        | Version suffix for pre-release packages (e.g., "beta", "rc1"). Combined with base version: "1.0.0-beta".                                                              |
+| `WithSymbols(bool)`                | Generate a symbol package (.snupkg) for source-level debugging. Publish to nuget.org symbol server for public packages.                                               |
+| `WithSource(bool)`                 | Include source files in the symbol package. Enables stepping into your library code during debugging.                                                                 |
+| `WithSourceRevision(string)`       | Pass `-p:SourceRevisionId=<sha>`. ANDO adds the full commit being built automatically (nothing outside a git repository) unless this is set or `SkipBuild()` is used. |
+| `SkipRestore()`                    | Skip restore before packing. Use when dependencies are already restored.                                                                                              |
+| `SkipBuild()`                      | Skip build before packing. Use when the project is already built.                                                                                                     |
 
 ### Nuget.Push Options
 
-| Option | Description |
-|--------|-------------|
-| `ToSource(string)` | NuGet feed URL to push to. Use for private feeds or self-hosted NuGet servers. |
-| `ToNuGetOrg()` | Push to nuget.org (the public NuGet gallery). This is the default destination. |
-| `WithApiKey(string)` | API key for authentication. If not specified, uses `NUGET_API_KEY` environment variable. |
-| `SkipDuplicates(bool)` | Skip push if the version already exists on the feed. Prevents errors when re-running builds. Defaults to `true`. |
+| Option                 | Description                                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `ToSource(string)`     | NuGet feed URL to push to. Use for private feeds or self-hosted NuGet servers.                                      |
+| `ToNuGetOrg()`         | Push to nuget.org (the public NuGet gallery). This is the default destination.                                      |
+| `WithApiKey(string)`   | API key for authentication. If not specified, uses `NUGET_API_KEY` environment variable.                            |
+| `SkipDuplicates(bool)` | Skip push if the version already exists on the feed. Prevents errors when re-running builds. Defaults to `true`.    |
 | `WithoutSymbols(bool)` | Don't push symbol packages (.snupkg). Use if your feed doesn't support symbols or you want to push them separately. |

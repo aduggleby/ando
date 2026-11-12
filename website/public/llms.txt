@@ -106,7 +106,7 @@ Unknown commands show an error with the help text (e.g., `ando foo` displays "Un
 - `--cold` - Use a fresh container and remove it when the run ends (also after a forced exit with a third Ctrl+C)
 - `--image <image>` - Use a custom Docker image
 - `--dind` - Mount Docker socket for Docker-in-Docker builds
-- `--ref <commit|tag>` - Build that commit instead of the working tree. ANDO checks it out into a temporary detached git worktree (under the system temp directory), evaluates the build script from there and copies only those files into the container. Env files (`.env.ando`), `Ando.CopyToContainer` host paths, artifact copies to the host and run records still use the directory you ran `ando` from. The worktree is removed when the run ends. `Git.Commit`, `Git.ShortCommit`, `Git.LastTag` and `Git.ChangedSince` refer to the checked-out commit, and `Git.RequireClean` always passes.
+- `--ref <commit|tag>` - Build that commit instead of the working tree. ANDO checks it out into a temporary detached git worktree (under the system temp directory), evaluates the build script from there and copies only those files into the container. Env files (`.env.ando`), `Ando.CopyToContainer` host paths, artifact copies to the host and run records still use the directory you ran `ando` from. The worktree is removed when the run ends. `Git.Commit`, `Git.ShortCommit`, `Git.LastTag` and `Git.ChangedSince` refer to the checked-out commit, and `Git.RequireClean` always passes. The build container never contains `.git`, in `--ref` runs and normal runs alike (ANDO copies the project without it). So SourceLink, `git describe` and any git command inside the container do not work; ANDO's `Git.*` operations run on the host and do work. `Dotnet.Build`, `Dotnet.Publish`, `Dotnet.Test` (when it builds) and `Nuget.Pack` therefore pass `-p:SourceRevisionId=<full commit>` automatically (the value of `Git.Commit`, HEAD of the source root, the `--ref` commit with `--ref`), so `InformationalVersion` gets `+<sha>`. Outside a git repository nothing is added. Use `WithSourceRevision(sha)` to set it yourself.
 - `--yes` - Accept every `Ando.Confirm` prompt. Without it, a run with no interactive console fails at the first `Ando.Confirm`.
 - `--dry-run` - Evaluate the script and print the registered step tree (nested blocks, `on failure:` and `finally (runs last-registered first):` steps) without running any step or creating a container; exit code 0. `Ando.When` and `Ando.Defer` bodies show as one line because they run at execution time. `ando run` rejects unknown options, so a typo never starts a real run.
 
@@ -871,9 +871,9 @@ Six installers put a tool into the build container (skipped when already present
 - Dotnet.ReadVersion(path = "Directory.Build.props") - EVALUATED WHEN THE SCRIPT LOADS, on the host; not a step. Returns the version string, relative to the source root (the --ref worktree when set). The file needs exactly one `<Version>` directly in a `<PropertyGroup>`; the literal property is read (no MSBuild evaluation, imports, conditions or `$(...)`); throws on a missing file or an empty/ambiguous version. Example: `var version = Dotnet.ReadVersion();`
 - Dotnet.Project(path) - Create a .NET project reference from a .csproj path. Returns ProjectRef with Path, Name, Directory, and Version properties.
 - Dotnet.Restore(project) - Restore NuGet packages: `dotnet restore <proj> [--no-cache] [-r <rid>]`
-- Dotnet.Build(project) - Compile a project: `dotnet build <proj> [-c <cfg>] [--no-restore]` (no -c unless set: Release is NOT the default)
-- Dotnet.Test(project) - Run unit tests: `dotnet test <proj> [-c <cfg>] [--no-restore] [--no-build] [--filter <f>]`
-- Dotnet.Publish(project, options?) - Create deployment artifacts: `dotnet publish <proj> [-c <cfg>] [-o <absolute out>] [--no-restore] [--no-build] [--self-contained | --no-self-contained] [-r <rid>] [-p:PublishSingleFile=true] [--nologo]`; output paths are made absolute; Release is NOT the default. Exactly `dotnet publish p -c Release -o out --nologo`: `Dotnet.Publish(p, o => o.WithConfiguration(Configuration.Release).Output("out").WithNoLogo())`
+- Dotnet.Build(project) - Compile a project: `dotnet build <proj> [-c <cfg>] [--no-restore] [-p:SourceRevisionId=<sha>]` (no -c unless set: Release is NOT the default)
+- Dotnet.Test(project) - Run unit tests: `dotnet test <proj> [-c <cfg>] [--no-restore] [--no-build] [--filter <f>] [-p:SourceRevisionId=<sha>]`
+- Dotnet.Publish(project, options?) - Create deployment artifacts: `dotnet publish <proj> [-c <cfg>] [-o <absolute out>] [--no-restore] [--no-build] [--self-contained | --no-self-contained] [-r <rid>] [-p:PublishSingleFile=true] [--nologo] [-p:SourceRevisionId=<sha>]`; output paths are made absolute; Release is NOT the default. Exactly `dotnet publish p -c Release -o out --nologo`: `Dotnet.Publish(p, o => o.WithConfiguration(Configuration.Release).Output("out").WithNoLogo())`
 - Dotnet.Tool(name, version?) - Reference a .NET CLI tool
 
 ### Ef
@@ -1103,12 +1103,14 @@ Activate with CLI: `ando -p release` or `ando -p publish,release`
 ### Dotnet.Build Options
 - Configuration - Debug or Release
 - NoRestore - Skip implicit restore
+- WithSourceRevision(sha) - Add `-p:SourceRevisionId=<sha>` (overrides the automatic value)
 
 ### Dotnet.Test Options
 - Configuration - Build configuration
 - NoRestore - Skip restore
 - NoBuild - Skip build (implies NoRestore)
 - Filter - Test filter expression (e.g., "Category=Unit", "Name=MyTest")
+- WithSourceRevision(sha) - Add `-p:SourceRevisionId=<sha>` (overrides the automatic value)
 
 ### Dotnet.Publish Options
 - Output(path) - Output directory for artifacts
@@ -1119,12 +1121,14 @@ Activate with CLI: `ando -p release` or `ando -p publish,release`
 - SkipRestore() - Skip restore before publishing
 - SkipBuild() - Skip build before publishing
 - WithNoLogo() - Pass --nologo
+- WithSourceRevision(sha) - Add `-p:SourceRevisionId=<sha>`; ANDO adds the full commit being built automatically (nothing outside a git repository) unless you set this or use NoBuild
 
 ### Nuget.Pack Options
 - Output(path) - Output directory for .nupkg
 - WithConfiguration(Configuration) - Build configuration
 - WithVersion(string) - Explicit package version
 - WithVersionSuffix(string) - Pre-release suffix (e.g., "beta", "rc1")
+- WithSourceRevision(sha) - Add `-p:SourceRevisionId=<sha>`; ANDO adds the full commit being built automatically (nothing outside a git repository) unless you set this or use SkipBuild
 - WithSymbols(bool) - Generate .snupkg for debugging
 - WithSource(bool) - Include source files in symbols
 - SkipRestore() - Skip restore
