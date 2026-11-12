@@ -602,6 +602,8 @@ public class AndoCli : IDisposable
             // Switch the build context to use container execution.
             // All subsequent commands will run via 'docker exec'.
             var containerExecutor = new ContainerExecutor(container.Id, _logger);
+            containerExecutor.AddHostRoot(defaultHostRoot);  // the --ref worktree when set
+            containerExecutor.AddHostRoot(invocationRoot);
             containerExecutor.SetHostRootPath(hostRootPath);  // Enable host-to-container path translation
             context.SetExecutor(containerExecutor);
             context.SetDockerManager(dockerManager, container.Id, hostRootPath);

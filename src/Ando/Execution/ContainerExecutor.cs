@@ -81,6 +81,75 @@ public class ContainerExecutor : CommandExecutorBase
         _hostRootPath = Path.GetFullPath(hostRootPath);
     }
 
+    private readonly List<string> _hostRoots = [];
+
+    /// <summary>
+    /// Registers another host directory whose absolute paths map to the container workspace
+    /// (e.g. the --ref worktree or the directory ando was run from). See <see cref="TranslateArgs"/>.
+    /// </summary>
+    public void AddHostRoot(string hostRoot)
+    {
+        var full = Path.GetFullPath(hostRoot).TrimEnd('/', '\\');
+        if (full.Length > 0 && !_hostRoots.Contains(full))
+        {
+            _hostRoots.Add(full);
+        }
+    }
+
+    /// <summary>
+    /// Makes every path argument a container path. Build scripts create absolute HOST paths (for example
+    /// Dotnet.Publish Output("out/web") becomes a BuildPath, which is resolved against the host directory
+    /// at script load), but commands run inside the container where the project is at /workspace.
+    /// An argument that is an absolute path under a known host root (the project root, the --ref
+    /// worktree, the invocation directory), alone or after a `name=` prefix such as `-p:Prop=`, is
+    /// rewritten to /workspace/&lt;relative&gt;. Relative paths and container-absolute paths pass through
+    /// unchanged (the working directory is /workspace).
+    /// </summary>
+    internal string[] TranslateArgs(string[] args)
+    {
+        var roots = _hostRoots.Select(r => r).ToList();
+        if (_hostRootPath != null)
+        {
+            roots.Add(_hostRootPath.TrimEnd('/', '\\'));
+        }
+        if (roots.Count == 0)
+        {
+            return args;
+        }
+        roots = [.. roots.Where(r => r.Length > 0).Distinct().OrderByDescending(r => r.Length)];
+
+        string Translate(string value)
+        {
+            if (value.Length == 0 || !Path.IsPathRooted(value) || value.StartsWith(_containerRootPath, StringComparison.Ordinal))
+            {
+                return value;
+            }
+            foreach (var root in roots)
+            {
+                if (value == root)
+                {
+                    return _containerRootPath;
+                }
+                if (value.StartsWith(root + "/", StringComparison.Ordinal))
+                {
+                    return _containerRootPath + "/" + value[(root.Length + 1)..];
+                }
+            }
+            return value;
+        }
+
+        return [.. args.Select(arg =>
+        {
+            var whole = Translate(arg);
+            if (whole != arg)
+            {
+                return whole;
+            }
+            var eq = arg.IndexOf('=');
+            return eq > 0 && !arg.StartsWith('/') ? arg[..(eq + 1)] + Translate(arg[(eq + 1)..]) : arg;
+        })];
+    }
+
     /// <summary>
     /// Installs the Azure CLI in the container before the first az command when
     /// the image doesn't include it.
@@ -165,7 +234,7 @@ public class ContainerExecutor : CommandExecutorBase
         // Append container ID and the actual command to execute.
         dockerArgs.Add(_containerId);
         dockerArgs.Add(command);
-        dockerArgs.AddRange(args);
+        dockerArgs.AddRange(TranslateArgs(args));
 
         var startInfo = new ProcessStartInfo { FileName = "docker" };
 
