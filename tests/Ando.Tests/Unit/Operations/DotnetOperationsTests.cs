@@ -452,9 +452,54 @@ public class DotnetOperationsTests
             Directory.Delete(notGit, recursive: true);
         }
 
-        var repoRoot = AppContext.BaseDirectory;
-        var viaGit = new RunSession { SourceRoot = repoRoot }.SourceRevision;
-        viaGit.ShouldNotBeNull();
-        viaGit.Length.ShouldBe(40);
+        var repo = Directory.CreateTempSubdirectory("ando-srcrev-").FullName;
+        try
+        {
+            void Git(params string[] args)
+            {
+                var info = new System.Diagnostics.ProcessStartInfo("git", ["-c", "user.name=T", "-c", "user.email=t@e.com", "-c", "commit.gpgsign=false", .. args])
+                { WorkingDirectory = repo, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+                using var p = System.Diagnostics.Process.Start(info)!;
+                p.StandardOutput.ReadToEnd();
+                p.StandardError.ReadToEnd();
+                p.WaitForExit();
+                p.ExitCode.ShouldBe(0);
+            }
+            Git("init", "-q");
+            File.WriteAllText(Path.Combine(repo, "f"), "x");
+            Git("add", "-A");
+            Git("commit", "-q", "-m", "one");
+
+            var viaGit = new RunSession { SourceRoot = repo }.SourceRevision;
+            viaGit.ShouldNotBeNull();
+            viaGit.Length.ShouldBe(40);
+        }
+        finally
+        {
+            Directory.Delete(repo, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task WithoutSourceRevision_SuppressesAutomaticValue_ExplicitStillWins()
+    {
+        var project = ProjectRef.From("a.csproj");
+        (await RunLastAsync(d => d.Build(project, o => o.WithoutSourceRevision()), Sha)).ShouldBe("dotnet build a.csproj");
+        (await RunLastAsync(d => d.Test(project, o => o.WithoutSourceRevision()), Sha)).ShouldBe("dotnet test a.csproj");
+        (await RunLastAsync(d => d.Publish(project, o => o.WithoutSourceRevision()), Sha)).ShouldBe("dotnet publish a.csproj");
+        (await RunLastAsync(d => d.Publish(project, o => o.WithoutSourceRevision().WithSourceRevision("abc")), Sha))
+            .ShouldBe("dotnet publish a.csproj -p:SourceRevisionId=abc");
+    }
+
+    [Fact]
+    public async Task WithSourceRevision_TrimsAndRejectsBlank()
+    {
+        var project = ProjectRef.From("a.csproj");
+        (await RunLastAsync(d => d.Build(project, o => o.WithSourceRevision("  abc \n")), null)).ShouldBe("dotnet build a.csproj -p:SourceRevisionId=abc");
+        Should.Throw<ArgumentException>(() => new DotnetBuildOptions().WithSourceRevision(" "));
+        Should.Throw<ArgumentException>(() => new DotnetTestOptions().WithSourceRevision(""));
+        Should.Throw<ArgumentException>(() => new DotnetPublishOptions().WithSourceRevision("\t"));
+        Should.Throw<ArgumentException>(() => new NugetPackOptions().WithSourceRevision(" "));
+        new NugetPackOptions().WithSourceRevision(" x ").SourceRevision.ShouldBe("x");
     }
 }

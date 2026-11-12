@@ -80,6 +80,20 @@ public class DotnetPublishOptions
         return this;
     }
 
+    /// <summary>True when WithoutSourceRevision was called.</summary>
+    public bool NoAutomaticSourceRevision { get; private set; }
+
+    /// <summary>
+    /// Suppresses the automatic `-p:SourceRevisionId=&lt;commit&gt;`, so the project's own
+    /// &lt;SourceRevisionId&gt; (or the SDK default) applies. Without this, ANDO's global property
+    /// overrides a project-level SourceRevisionId. An explicit WithSourceRevision still wins.
+    /// </summary>
+    public DotnetPublishOptions WithoutSourceRevision()
+    {
+        NoAutomaticSourceRevision = true;
+        return this;
+    }
+
     /// <summary>Sets the output directory using a BuildPath.</summary>
     public DotnetPublishOptions Output(BuildPath path)
     {

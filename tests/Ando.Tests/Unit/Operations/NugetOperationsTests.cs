@@ -382,4 +382,23 @@ public class NugetOperationsTests
         (await Run(sha, o => o.WithSourceRevision("abc"))).ShouldBe("dotnet pack a.csproj -p:SourceRevisionId=abc");
         (await Run(sha, o => o.SkipBuild())).ShouldBe("dotnet pack a.csproj --no-build");
     }
+
+    [Fact]
+    public async Task Pack_WithRefSet_UsesRefAndWithoutSourceRevisionSuppresses()
+    {
+        const string sha = "0123456789abcdef0123456789abcdef01234567";
+        async Task<string> Run(Action<NugetPackOptions>? configure)
+        {
+            var registry = new StepRegistry();
+            var executor = new MockExecutor();
+            new NugetOperations(registry, _logger, () => executor,
+                new Ando.Workflow.RunSession { Ref = sha, CommitResolver = () => "other" })
+                .Pack(Ando.References.ProjectRef.From("a.csproj"), configure);
+            await registry.Steps[0].Execute();
+            return executor.LastCommand!.CommandLine;
+        }
+
+        (await Run(null)).ShouldBe($"dotnet pack a.csproj -p:SourceRevisionId={sha}");
+        (await Run(o => o.WithoutSourceRevision())).ShouldBe("dotnet pack a.csproj");
+    }
 }

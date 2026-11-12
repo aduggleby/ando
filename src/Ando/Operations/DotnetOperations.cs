@@ -111,7 +111,7 @@ public class DotnetOperations(
                 .Add("build", project.Path)
                 .AddIfNotNull("-c", options.Configuration?.ToString())
                 .AddFlag(options.NoRestore, "--no-restore")
-                .AddIfNotNull(Prop(SourceRevisionFor(options.SourceRevision))),
+                .AddIfNotNull(Prop(options.SourceRevision ?? (options.NoAutomaticSourceRevision ? null : SourceRevisionFor(null)))),
             GetEnsurer(),
             project.Name);
     }
@@ -135,7 +135,7 @@ public class DotnetOperations(
                 .AddFlag(options.NoRestore, "--no-restore")
                 .AddFlag(options.NoBuild, "--no-build")
                 .AddIfNotNull("--filter", options.Filter)
-                .AddIfNotNull(Prop(options.SourceRevision ?? (options.NoBuild ? null : SourceRevisionFor(null)))),
+                .AddIfNotNull(Prop(options.SourceRevision ?? (options.NoBuild || options.NoAutomaticSourceRevision ? null : SourceRevisionFor(null)))),
             GetEnsurer(),
             project.Name);
     }
@@ -160,7 +160,7 @@ public class DotnetOperations(
                 .AddIfNotNull("-r", options.Runtime)
                 .AddFlag(options.SingleFile, "-p:PublishSingleFile=true")
                 .AddFlag(options.NoLogo, "--nologo")
-                .AddIfNotNull(Prop(options.SourceRevision ?? (options.NoBuild ? null : SourceRevisionFor(null)))),
+                .AddIfNotNull(Prop(options.SourceRevision ?? (options.NoBuild || options.NoAutomaticSourceRevision ? null : SourceRevisionFor(null)))),
             GetEnsurer(),
             project.Name);
     }
@@ -291,6 +291,20 @@ public class DotnetBuildOptions
         return this;
     }
 
+    /// <summary>True when WithoutSourceRevision was called.</summary>
+    public bool NoAutomaticSourceRevision { get; private set; }
+
+    /// <summary>
+    /// Suppresses the automatic `-p:SourceRevisionId=&lt;commit&gt;`, so the project's own
+    /// &lt;SourceRevisionId&gt; (or the SDK default) applies. Without this, ANDO's global property
+    /// overrides a project-level SourceRevisionId. An explicit WithSourceRevision still wins.
+    /// </summary>
+    public DotnetBuildOptions WithoutSourceRevision()
+    {
+        NoAutomaticSourceRevision = true;
+        return this;
+    }
+
     /// <summary>Build configuration (Debug or Release).</summary>
     public Configuration? Configuration { get; set; }
 
@@ -309,6 +323,20 @@ public class DotnetTestOptions
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sha);
         SourceRevision = sha.Trim();
+        return this;
+    }
+
+    /// <summary>True when WithoutSourceRevision was called.</summary>
+    public bool NoAutomaticSourceRevision { get; private set; }
+
+    /// <summary>
+    /// Suppresses the automatic `-p:SourceRevisionId=&lt;commit&gt;`, so the project's own
+    /// &lt;SourceRevisionId&gt; (or the SDK default) applies. Without this, ANDO's global property
+    /// overrides a project-level SourceRevisionId. An explicit WithSourceRevision still wins.
+    /// </summary>
+    public DotnetTestOptions WithoutSourceRevision()
+    {
+        NoAutomaticSourceRevision = true;
         return this;
     }
 

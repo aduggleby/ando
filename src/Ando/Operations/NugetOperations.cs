@@ -97,7 +97,7 @@ public class NugetOperations : OperationsBase
                 .AddIfNotNull(options.Version == null ? null : $"-p:PackageVersion={options.Version}")
                 .AddIfNotNull(options.VersionSuffix == null ? null : $"-p:VersionSuffix={options.VersionSuffix}")
                 // The container has no .git; pass the commit so InformationalVersion keeps "+<sha>".
-                .AddIfNotNull(Prop(options.SourceRevision ?? (options.NoBuild ? null : _session?.SourceRevision))),
+                .AddIfNotNull(Prop(options.SourceRevision ?? (options.NoBuild || options.NoAutomaticSourceRevision ? null : _session?.SourceRevision))),
             project.Name);
     }
 

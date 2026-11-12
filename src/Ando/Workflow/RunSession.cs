@@ -97,9 +97,12 @@ public class RunSession
             };
             using var process = System.Diagnostics.Process.Start(info);
             if (process == null) return null;
-            var output = process.StandardOutput.ReadToEnd().Trim();
-            process.StandardError.ReadToEnd();
+            // Read both pipes asynchronously so a full stderr pipe cannot block the process.
+            var stdout = process.StandardOutput.ReadToEndAsync();
+            var stderr = process.StandardError.ReadToEndAsync();
             process.WaitForExit();
+            var output = stdout.Result.Trim();
+            _ = stderr.Result;
             return process.ExitCode == 0 && output.Length > 0 ? output : null;
         }
         catch
