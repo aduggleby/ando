@@ -1005,6 +1005,14 @@ export const operations = [
   },
   {
     group: "Git",
+    name: "Git.Install",
+    summary: "Installs git in the build container when it is missing.",
+    desc: 'Installs git in the <strong>build container</strong> (unlike the other Git operations, which run on the host). Skips with an info log when <code>git</code> is already on PATH; otherwise runs <code>apt-get update &amp;&amp; apt-get install -y --no-install-recommends git ca-certificates</code> (apt) or <code>apk add --no-cache git</code> (apk), fails with an "unsupported image" message when neither exists, and logs <code>git --version</code>. Use it before commands in the container that need git, such as tests that create git repositories.',
+    examples: ["Git.Install();"],
+    sourceFile: "Operations/GitOperations.cs",
+  },
+  {
+    group: "Git",
     name: "Git.Tag",
     summary: "Creates a git tag.",
     desc: "Creates a git tag. By default creates annotated tags. <strong>Runs on host</strong> (not in container).",

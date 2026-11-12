@@ -1041,6 +1041,7 @@ To run the suite once per database, give each variant an npm script that sets an
 
 ### Git
 - Git.Tag(tagName, options?) - Create a git tag (annotated by default)
+- Git.Install() - Step "Git.Install". Runs IN THE BUILD CONTAINER (unlike the other Git operations, which run on the host). Skips with an info log if `git` is on PATH; otherwise `apt-get update && apt-get install -y --no-install-recommends git ca-certificates` (apt) or `apk add --no-cache git` (apk); any other image fails with "unsupported image". Logs `git --version`. Use before container commands that need git, e.g. tests creating git repositories. Example: `Git.Install();`
 - Git.Push(options?) - Push the current branch to the remote. Does not push tags (use Git.PushTags).
 - Git.PushTags(remote?) - Push tags (not the branch; use Git.Push) to the remote, skipping tags that already exist remotely (default: origin). Tags are pushed individually.
 

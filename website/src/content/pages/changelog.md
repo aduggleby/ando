@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.163
+
+**2026-11-12**
+
+- Add `Git.Install()`, which installs git in the build container (apt with `--no-install-recommends`, or apk) and skips when git is already present. Unlike the other `Git.*` operations it runs in the container, not on the host. ANDO's own build uses it because its unit tests create real git repositories and the default image has no git
+
 ## 0.9.162
 
 **2026-11-12**

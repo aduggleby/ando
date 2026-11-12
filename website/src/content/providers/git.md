@@ -120,6 +120,18 @@ var c = Git.ChangedFiles(t.Value, "src/Worker");
 Ando.When(() => c.Value != "", () => Log.Info($"Worker changed since {t.Value}, building {sha.Value}"));
 ```
 
+## Installing git in the build container
+
+`Git.Install()` is different from every other `Git.*` operation: it runs **in the build container**, not on the host. Use it when commands inside the container need git, for example tests that create real git repositories. The default image has no git.
+
+- If `git` is already on `PATH` the step logs that and does nothing.
+- Otherwise it installs with apt (`apt-get update && apt-get install -y --no-install-recommends git ca-certificates`) or with apk (`apk add --no-cache git`). An image with neither fails with an "unsupported image" message.
+- It logs `git --version` when done.
+
+```csharp
+Git.Install();
+```
+
 ## Notes
 
 - Git operations run on the **host machine**, not inside the container, since git credentials are typically configured on the host. The members in "Evaluated when the script loads" additionally run when the script loads, not as steps.
