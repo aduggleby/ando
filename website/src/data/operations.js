@@ -275,7 +275,7 @@ export const operations = [
   {
     group: "Dotnet",
     name: "Dotnet.Build",
-    desc: "Compile a project. Runs <code>dotnet build &lt;proj&gt; [-c &lt;cfg&gt;] [--no-restore] [-p:SourceRevisionId=&lt;sha&gt;]</code> (the property is added automatically with the commit being built, since the container has no .git; nothing outside a git repository; <code>WithSourceRevision(sha)</code> overrides it). No configuration flag is passed unless you set one, so the .NET default (Debug) applies. Automatically installs .NET SDK if not present.",
+    desc: "Compile a project. Runs <code>dotnet build &lt;proj&gt; [-c &lt;cfg&gt;] [--no-restore] [-p:SourceRevisionId=&lt;sha&gt;]</code> (the property is added automatically with the commit being built, since the container has no .git; nothing outside a git repository; <code>WithSourceRevision(sha)</code> overrides it, <code>WithoutSourceRevision()</code> suppresses it; the global property overrides a project-level SourceRevisionId otherwise). No configuration flag is passed unless you set one, so the .NET default (Debug) applies. Automatically installs .NET SDK if not present.",
     examples: ["Dotnet.Build(App);", "Dotnet.Build(App, o => o.Configuration = Configuration.Release);"],
     sourceFile: "Operations/DotnetOperations.cs",
   },
@@ -874,7 +874,7 @@ export const operations = [
   {
     group: "Nuget",
     name: "Nuget.Pack",
-    desc: "Create a NuGet package from a project. **Defaults:** Release config, output to `bin/Release`. ANDO adds `-p:SourceRevisionId=<full commit>` (the container has no .git; nothing outside a git repository) unless you call `WithSourceRevision(sha)` or `SkipBuild()`.",
+    desc: "Create a NuGet package from a project. **Defaults:** Release config, output to `bin/Release`. ANDO adds `-p:SourceRevisionId=<full commit>` (the container has no .git; nothing outside a git repository) unless you call `WithSourceRevision(sha)`, `WithoutSourceRevision()` or `SkipBuild()`. The global property overrides a project-level `<SourceRevisionId>` unless `WithoutSourceRevision()` is used.",
     examples: [
       'var app = Dotnet.Project("./src/MyLib/MyLib.csproj");\nNuget.Pack(app);',
       'Nuget.Pack(app, o => o.WithVersion("1.0.0"));',

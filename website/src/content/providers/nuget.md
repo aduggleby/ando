@@ -43,6 +43,7 @@ Nuget.Push(App);
 | `WithSymbols(bool)`                | Generate a symbol package (.snupkg) for source-level debugging. Publish to nuget.org symbol server for public packages.                                               |
 | `WithSource(bool)`                 | Include source files in the symbol package. Enables stepping into your library code during debugging.                                                                 |
 | `WithSourceRevision(string)`       | Pass `-p:SourceRevisionId=<sha>`. ANDO adds the full commit being built automatically (nothing outside a git repository) unless this is set or `SkipBuild()` is used. |
+| `WithoutSourceRevision()`          | Suppress the automatic `-p:SourceRevisionId`. Without it, ANDO's value overrides a `<SourceRevisionId>` set in the project file.                                      |
 | `SkipRestore()`                    | Skip restore before packing. Use when dependencies are already restored.                                                                                              |
 | `SkipBuild()`                      | Skip build before packing. Use when the project is already built.                                                                                                     |
 

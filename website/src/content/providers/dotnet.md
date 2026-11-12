@@ -68,6 +68,7 @@ Log.Info($"Building {version}");
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Configuration`              | Build configuration: `Configuration.Debug` or `Configuration.Release`. Debug includes symbols and disables optimizations. Release enables optimizations for production.            |
 | `WithSourceRevision(string)` | Pass `-p:SourceRevisionId=<sha>`. ANDO adds the full commit being built automatically (the container has no `.git`; nothing is added outside a git repository); this overrides it. |
+| `WithoutSourceRevision()`    | Suppress the automatic `-p:SourceRevisionId`. Without it, ANDO's value overrides a `<SourceRevisionId>` set in the project file.                                                   |
 | `NoRestore`                  | Skip the implicit restore before building. Use when you've already run `Dotnet.Restore()` separately.                                                                              |
 
 ### Dotnet.Test Options
@@ -79,6 +80,7 @@ Log.Info($"Building {version}");
 | `NoBuild`                    | Skip build before testing. Use when the project is already built. Implies `NoRestore`.                                                                                 |
 | `Filter`                     | Test filter expression to run specific tests. Examples: `"Category=Unit"`, `"FullyQualifiedName~MyNamespace"`, `"Name=MyTest"`.                                        |
 | `WithSourceRevision(string)` | Pass `-p:SourceRevisionId=<sha>` when the test builds. ANDO adds the full commit being built automatically (nothing outside a git repository) unless `NoBuild` is set. |
+| `WithoutSourceRevision()`    | Suppress the automatic `-p:SourceRevisionId`. Without it, ANDO's value overrides a `<SourceRevisionId>` set in the project file.                                       |
 
 ### Dotnet.Publish Options
 
@@ -92,4 +94,5 @@ Log.Info($"Building {version}");
 | `SkipRestore()`                    | Skip restore before publishing. Use when dependencies are already restored.                                                                                           |
 | `SkipBuild()`                      | Skip build before publishing. Use when the project is already built.                                                                                                  |
 | `WithSourceRevision(string)`       | Pass `-p:SourceRevisionId=<sha>`. ANDO adds the full commit being built automatically (nothing outside a git repository) unless this is set or `SkipBuild()` is used. |
+| `WithoutSourceRevision()`          | Suppress the automatic `-p:SourceRevisionId`. Without it, ANDO's value overrides a `<SourceRevisionId>` set in the project file.                                      |
 | `WithNoLogo()`                     | Pass `--nologo` to suppress the startup banner.                                                                                                                       |

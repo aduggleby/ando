@@ -1104,6 +1104,7 @@ Activate with CLI: `ando -p release` or `ando -p publish,release`
 - Configuration - Debug or Release
 - NoRestore - Skip implicit restore
 - WithSourceRevision(sha) - Add `-p:SourceRevisionId=<sha>` (overrides the automatic value)
+- WithoutSourceRevision() - Suppress the automatic -p:SourceRevisionId (ANDO's value otherwise overrides a project-level <SourceRevisionId>)
 
 ### Dotnet.Test Options
 - Configuration - Build configuration
@@ -1111,6 +1112,7 @@ Activate with CLI: `ando -p release` or `ando -p publish,release`
 - NoBuild - Skip build (implies NoRestore)
 - Filter - Test filter expression (e.g., "Category=Unit", "Name=MyTest")
 - WithSourceRevision(sha) - Add `-p:SourceRevisionId=<sha>` (overrides the automatic value)
+- WithoutSourceRevision() - Suppress the automatic -p:SourceRevisionId (ANDO's value otherwise overrides a project-level <SourceRevisionId>)
 
 ### Dotnet.Publish Options
 - Output(path) - Output directory for artifacts
@@ -1122,6 +1124,7 @@ Activate with CLI: `ando -p release` or `ando -p publish,release`
 - SkipBuild() - Skip build before publishing
 - WithNoLogo() - Pass --nologo
 - WithSourceRevision(sha) - Add `-p:SourceRevisionId=<sha>`; ANDO adds the full commit being built automatically (nothing outside a git repository) unless you set this or use NoBuild
+- WithoutSourceRevision() - Suppress the automatic -p:SourceRevisionId (ANDO's value otherwise overrides a project-level <SourceRevisionId>)
 
 ### Nuget.Pack Options
 - Output(path) - Output directory for .nupkg
@@ -1129,6 +1132,7 @@ Activate with CLI: `ando -p release` or `ando -p publish,release`
 - WithVersion(string) - Explicit package version
 - WithVersionSuffix(string) - Pre-release suffix (e.g., "beta", "rc1")
 - WithSourceRevision(sha) - Add `-p:SourceRevisionId=<sha>`; ANDO adds the full commit being built automatically (nothing outside a git repository) unless you set this or use SkipBuild
+- WithoutSourceRevision() - Suppress the automatic -p:SourceRevisionId (ANDO's value otherwise overrides a project-level <SourceRevisionId>)
 - WithSymbols(bool) - Generate .snupkg for debugging
 - WithSource(bool) - Include source files in symbols
 - SkipRestore() - Skip restore
