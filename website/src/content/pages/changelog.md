@@ -8,6 +8,8 @@ description: Release history and changelog for ANDO.
 **2026-11-12**
 
 - Add `Git.Install()`, which installs git in the build container (apt with `--no-install-recommends`, or apk) and skips when git is already present. Unlike the other `Git.*` operations it runs in the container, not on the host. ANDO's own build uses it because its unit tests create real git repositories and the default image has no git
+- Fix `Playwright.Install` failing in a fresh container: it now allows at least 20 minutes (installing browsers and their system packages can take longer than the 5-minute default command timeout)
+- ANDO's own E2E tests now use Playwright 1.65: the browser download of Playwright 1.57 hangs under Node 26.13.1, the new LTS that ANDO installs automatically. If your project pins Playwright 1.57 or older and its `Playwright.Install` hangs at 0%, upgrade Playwright or pin Node with `Node.Install("22")`
 
 ## 0.9.162
 
