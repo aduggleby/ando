@@ -149,7 +149,7 @@ public class BuildOperations
         Node = new NodeInstallOperations(registry, logger, executorFactory, nodeEnsurer);
         NpmGlobal = new NpmInstallOperations(registry, logger, executorFactory, nodeEnsurer);
         Log = new LogOperations(registry);
-        Nuget = new NugetOperations(registry, logger, executorFactory);
+        Nuget = new NugetOperations(registry, logger, executorFactory, buildOptions.Session);
         Ando = new AndoOperations(registry, logger, containerToHostPath, buildOptions, Artifacts, profileRegistry, executorFactory);
 
         // Initialize Git, GitHub, Docker, Playwright, and Docfx operations.

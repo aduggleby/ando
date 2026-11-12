@@ -64,6 +64,22 @@ public class DotnetPublishOptions
         return this;
     }
 
+
+    /// <summary>Explicit SourceRevisionId (full commit SHA); overrides the automatic --ref value.</summary>
+    public string? SourceRevision { get; private set; }
+
+    /// <summary>
+    /// Passes `-p:SourceRevisionId=&lt;sha&gt;` so the assembly's InformationalVersion gets `+&lt;sha&gt;`
+    /// even though the build container has no .git. Overrides the value ANDO adds automatically
+    /// for --ref runs.
+    /// </summary>
+    public DotnetPublishOptions WithSourceRevision(string sha)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sha);
+        SourceRevision = sha.Trim();
+        return this;
+    }
+
     /// <summary>Sets the output directory using a BuildPath.</summary>
     public DotnetPublishOptions Output(BuildPath path)
     {

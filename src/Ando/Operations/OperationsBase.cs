@@ -34,6 +34,10 @@ public abstract class OperationsBase
         ExecutorFactory = executorFactory;
     }
 
+    /// <summary>`-p:SourceRevisionId=&lt;sha&gt;` as one argument, or null when there is no revision.</summary>
+    protected static string? Prop(string? sourceRevision) =>
+        sourceRevision == null ? null : $"-p:SourceRevisionId={sourceRevision}";
+
     /// <summary>
     /// Builds CommandOptions from optional working directory and environment variables.
     /// Centralized to avoid duplication across registration methods.

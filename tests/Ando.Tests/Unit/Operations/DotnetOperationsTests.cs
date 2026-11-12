@@ -387,4 +387,74 @@ public class DotnetOperationsTests
             Directory.Delete(root, recursive: true);
         }
     }
+
+    private async Task<string> RunLastAsync(Action<DotnetOperations> register, string? sha)
+    {
+        _executor.ExecutedCommands.Clear();
+        var registry = new StepRegistry();
+        register(new DotnetOperations(registry, _logger, () => _executor, null, new RunSession { CommitResolver = () => sha }));
+        await registry.Steps[0].Execute();
+        return _executor.LastCommand!.CommandLine;
+    }
+
+    private const string Sha = "0123456789abcdef0123456789abcdef01234567";
+
+    [Fact]
+    public async Task EveryRun_BuildPublishTest_AddSourceRevisionId()
+    {
+        var project = ProjectRef.From("a.csproj");
+        (await RunLastAsync(d => d.Build(project), Sha)).ShouldBe($"dotnet build a.csproj -p:SourceRevisionId={Sha}");
+        (await RunLastAsync(d => d.Publish(project), Sha)).ShouldBe($"dotnet publish a.csproj -p:SourceRevisionId={Sha}");
+        (await RunLastAsync(d => d.Test(project), Sha)).ShouldBe($"dotnet test a.csproj -p:SourceRevisionId={Sha}");
+    }
+
+    [Fact]
+    public async Task TestAndPublishWithNoBuild_AddNothing()
+    {
+        var project = ProjectRef.From("a.csproj");
+        (await RunLastAsync(d => d.Test(project, o => o.NoBuild = true), Sha)).ShouldBe("dotnet test a.csproj --no-build");
+        (await RunLastAsync(d => d.Publish(project, o => o.SkipBuild()), Sha)).ShouldBe("dotnet publish a.csproj --no-build");
+    }
+
+    [Fact]
+    public async Task OutsideGit_AddsNoSourceRevisionId()
+    {
+        var project = ProjectRef.From("a.csproj");
+        (await RunLastAsync(d => d.Build(project), null)).ShouldBe("dotnet build a.csproj");
+        (await RunLastAsync(d => d.Publish(project), null)).ShouldBe("dotnet publish a.csproj");
+    }
+
+    [Fact]
+    public async Task ExplicitSourceRevision_WinsAndIsNotDuplicated()
+    {
+        var project = ProjectRef.From("a.csproj");
+        var build = await RunLastAsync(d => d.Build(project, o => o.WithSourceRevision("abc")), Sha);
+        build.ShouldBe("dotnet build a.csproj -p:SourceRevisionId=abc");
+        var publish = await RunLastAsync(d => d.Publish(project, o => o.WithSourceRevision("abc")), Sha);
+        publish.ShouldBe("dotnet publish a.csproj -p:SourceRevisionId=abc");
+        (await RunLastAsync(d => d.Test(project, o => o.WithSourceRevision("abc")), Sha)).ShouldBe("dotnet test a.csproj -p:SourceRevisionId=abc");
+        // Explicit also works outside git.
+        (await RunLastAsync(d => d.Build(project, o => o.WithSourceRevision("abc")), null)).ShouldBe("dotnet build a.csproj -p:SourceRevisionId=abc");
+    }
+
+    [Fact]
+    public void SourceRevision_RefWinsAndRealGitHeadIsUsedAndOutsideGitIsNull()
+    {
+        new RunSession { Ref = "refsha", CommitResolver = () => "head" }.SourceRevision.ShouldBe("refsha");
+
+        var notGit = Directory.CreateTempSubdirectory("ando-nogit-").FullName;
+        try
+        {
+            new RunSession { SourceRoot = notGit }.SourceRevision.ShouldBeNull();
+        }
+        finally
+        {
+            Directory.Delete(notGit, recursive: true);
+        }
+
+        var repoRoot = AppContext.BaseDirectory;
+        var viaGit = new RunSession { SourceRoot = repoRoot }.SourceRevision;
+        viaGit.ShouldNotBeNull();
+        viaGit.Length.ShouldBe(40);
+    }
 }

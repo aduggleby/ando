@@ -110,10 +110,15 @@ public class DotnetOperations(
             () => new ArgumentBuilder()
                 .Add("build", project.Path)
                 .AddIfNotNull("-c", options.Configuration?.ToString())
-                .AddFlag(options.NoRestore, "--no-restore"),
+                .AddFlag(options.NoRestore, "--no-restore")
+                .AddIfNotNull(Prop(SourceRevisionFor(options.SourceRevision))),
             GetEnsurer(),
             project.Name);
     }
+
+    // Explicit value wins; otherwise the commit being built. The build container never has .git, so the
+    // SDK could not compute SourceRevisionId itself. Null outside a git repository (nothing is added).
+    private string? SourceRevisionFor(string? explicitSha) => explicitSha ?? session?.SourceRevision;
 
     /// <summary>
     /// Registers a 'dotnet test' step to run unit tests.
@@ -129,7 +134,8 @@ public class DotnetOperations(
                 .AddIfNotNull("-c", options.Configuration?.ToString())
                 .AddFlag(options.NoRestore, "--no-restore")
                 .AddFlag(options.NoBuild, "--no-build")
-                .AddIfNotNull("--filter", options.Filter),
+                .AddIfNotNull("--filter", options.Filter)
+                .AddIfNotNull(Prop(options.SourceRevision ?? (options.NoBuild ? null : SourceRevisionFor(null)))),
             GetEnsurer(),
             project.Name);
     }
@@ -153,7 +159,8 @@ public class DotnetOperations(
                 .AddIf(options.SelfContained == false, "--no-self-contained")
                 .AddIfNotNull("-r", options.Runtime)
                 .AddFlag(options.SingleFile, "-p:PublishSingleFile=true")
-                .AddFlag(options.NoLogo, "--nologo"),
+                .AddFlag(options.NoLogo, "--nologo")
+                .AddIfNotNull(Prop(options.SourceRevision ?? (options.NoBuild ? null : SourceRevisionFor(null)))),
             GetEnsurer(),
             project.Name);
     }
@@ -273,6 +280,17 @@ public class DotnetRestoreOptions
 /// <summary>Options for 'dotnet build' command.</summary>
 public class DotnetBuildOptions
 {
+    /// <summary>Explicit SourceRevisionId (full commit SHA); overrides the automatic --ref value.</summary>
+    public string? SourceRevision { get; private set; }
+
+    /// <summary>Passes `-p:SourceRevisionId=&lt;sha&gt;` (see DotnetPublishOptions.WithSourceRevision).</summary>
+    public DotnetBuildOptions WithSourceRevision(string sha)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sha);
+        SourceRevision = sha.Trim();
+        return this;
+    }
+
     /// <summary>Build configuration (Debug or Release).</summary>
     public Configuration? Configuration { get; set; }
 
@@ -283,6 +301,17 @@ public class DotnetBuildOptions
 /// <summary>Options for 'dotnet test' command.</summary>
 public class DotnetTestOptions
 {
+    /// <summary>Explicit SourceRevisionId (full commit SHA); only used when the test builds (no NoBuild).</summary>
+    public string? SourceRevision { get; private set; }
+
+    /// <summary>Passes `-p:SourceRevisionId=&lt;sha&gt;` when `dotnet test` builds.</summary>
+    public DotnetTestOptions WithSourceRevision(string sha)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sha);
+        SourceRevision = sha.Trim();
+        return this;
+    }
+
     /// <summary>Build configuration for tests.</summary>
     public Configuration? Configuration { get; set; }
 

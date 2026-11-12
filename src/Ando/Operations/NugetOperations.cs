@@ -51,9 +51,13 @@ public class NugetOperations : OperationsBase
     // Populated by EnsureAuthenticated() and used by subsequent push commands.
     private string? _apiKey;
 
-    public NugetOperations(StepRegistry registry, IBuildLogger logger, Func<ICommandExecutor> executorFactory)
+    private readonly Ando.Workflow.RunSession? _session;
+
+    public NugetOperations(StepRegistry registry, IBuildLogger logger, Func<ICommandExecutor> executorFactory,
+        Ando.Workflow.RunSession? session = null)
         : base(registry, logger, executorFactory)
     {
+        _session = session;
     }
 
     /// <summary>
@@ -90,8 +94,10 @@ public class NugetOperations : OperationsBase
                 .AddFlag(options.NoBuild, "--no-build")
                 .AddFlag(options.IncludeSymbols, "--include-symbols")
                 .AddFlag(options.IncludeSource, "--include-source")
-                .AddIfNotNull("-p:PackageVersion", options.Version)
-                .AddIfNotNull("-p:VersionSuffix", options.VersionSuffix),
+                .AddIfNotNull(options.Version == null ? null : $"-p:PackageVersion={options.Version}")
+                .AddIfNotNull(options.VersionSuffix == null ? null : $"-p:VersionSuffix={options.VersionSuffix}")
+                // The container has no .git; pass the commit so InformationalVersion keeps "+<sha>".
+                .AddIfNotNull(Prop(options.SourceRevision ?? (options.NoBuild ? null : _session?.SourceRevision))),
             project.Name);
     }
 

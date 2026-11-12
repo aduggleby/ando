@@ -59,6 +59,55 @@ public class RunSession
     /// <summary>The commit being built when running with --ref (full SHA).</summary>
     public string? Ref { get; set; }
 
+    /// <summary>Test hook replacing the `git rev-parse HEAD` lookup behind <see cref="SourceRevision"/>.</summary>
+    internal Func<string?>? CommitResolver { get; set; }
+
+    private string? _sourceRevision;
+    private bool _sourceRevisionResolved;
+
+    /// <summary>
+    /// Full commit SHA of the sources being built, for -p:SourceRevisionId: the --ref commit, otherwise
+    /// HEAD of the source root (the same value Git.Commit returns). Null when it cannot be determined
+    /// (not a git repository, git missing), so builds outside git keep working. Resolved once.
+    /// </summary>
+    internal string? SourceRevision
+    {
+        get
+        {
+            if (Ref != null) return Ref;
+            if (!_sourceRevisionResolved)
+            {
+                _sourceRevision = (CommitResolver ?? ResolveHead)();
+                _sourceRevisionResolved = true;
+            }
+            return _sourceRevision;
+        }
+    }
+
+    private string? ResolveHead()
+    {
+        try
+        {
+            var info = new System.Diagnostics.ProcessStartInfo("git", ["rev-parse", "HEAD"])
+            {
+                WorkingDirectory = SourceRoot ?? Environment.CurrentDirectory,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+            using var process = System.Diagnostics.Process.Start(info);
+            if (process == null) return null;
+            var output = process.StandardOutput.ReadToEnd().Trim();
+            process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            return process.ExitCode == 0 && output.Length > 0 ? output : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     /// <summary>Docker manager for copying files into the build container.</summary>
     public DockerManager? DockerManager { get; set; }
 

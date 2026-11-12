@@ -114,8 +114,9 @@ public class NugetOperationsTests
         await _registry.Steps[0].Execute();
 
         var cmd = _executor.ExecutedCommands[0];
-        Assert.Contains("-p:PackageVersion", cmd.Args);
-        Assert.Contains("2.0.0", cmd.Args);
+        Assert.Contains("-p:PackageVersion=2.0.0", cmd.Args);
+        Assert.DoesNotContain("2.0.0", cmd.Args);  // never a separate value argument
+        Assert.DoesNotContain("-p:PackageVersion", cmd.Args);
     }
 
     [Fact]
@@ -347,5 +348,38 @@ public class NugetOperationsTests
         {
             Environment.SetEnvironmentVariable("NUGET_API_KEY", null);
         }
+    }
+
+    [Fact]
+    public async Task Pack_VersionAndSuffix_AreSingleArguments()
+    {
+        var registry = new StepRegistry();
+        var executor = new MockExecutor();
+        new NugetOperations(registry, _logger, () => executor)
+            .Pack(ProjectRef.From("a.csproj"), o => o.WithVersion("1.2.3").WithVersionSuffix("beta1"));
+        await registry.Steps[0].Execute();
+
+        executor.LastCommand!.CommandLine.ShouldBe("dotnet pack a.csproj -p:PackageVersion=1.2.3 -p:VersionSuffix=beta1");
+    }
+
+    [Fact]
+    public async Task Pack_SourceRevisionId_AutomaticExplicitAndOutsideGit()
+    {
+        const string sha = "0123456789abcdef0123456789abcdef01234567";
+        var project = Ando.References.ProjectRef.From("a.csproj");
+        async Task<string> Run(string? head, Action<NugetPackOptions>? configure)
+        {
+            var registry = new StepRegistry();
+            var executor = new MockExecutor();
+            new NugetOperations(registry, _logger, () => executor,
+                new Ando.Workflow.RunSession { CommitResolver = () => head }).Pack(project, configure);
+            await registry.Steps[0].Execute();
+            return executor.LastCommand!.CommandLine;
+        }
+
+        (await Run(sha, null)).ShouldBe($"dotnet pack a.csproj -p:SourceRevisionId={sha}");
+        (await Run(null, null)).ShouldBe("dotnet pack a.csproj");
+        (await Run(sha, o => o.WithSourceRevision("abc"))).ShouldBe("dotnet pack a.csproj -p:SourceRevisionId=abc");
+        (await Run(sha, o => o.SkipBuild())).ShouldBe("dotnet pack a.csproj --no-build");
     }
 }
