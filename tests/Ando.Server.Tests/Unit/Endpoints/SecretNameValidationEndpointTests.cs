@@ -29,6 +29,7 @@ namespace Ando.Server.Tests.Unit.Endpoints;
 /// <summary>
 /// Tests for secret name validation in <see cref="SetSecretEndpoint"/> and <see cref="BulkImportSecretsEndpoint"/>.
 /// </summary>
+[Collection(Ando.Server.Tests.TestFixtures.FastEndpointsFactoryCollection.Name)]
 public class SecretNameValidationEndpointTests
 {
     private const int ProjectId = 7;
@@ -38,6 +39,8 @@ public class SecretNameValidationEndpointTests
 
     public SecretNameValidationEndpointTests()
     {
+        Ando.Server.Tests.TestFixtures.FastEndpointsFactoryCollection.ResetResolver();
+
         _projectService
             .Setup(s => s.GetProjectForUserAsync(ProjectId, UserId))
             .ReturnsAsync(new Project { Id = ProjectId, OwnerId = UserId });

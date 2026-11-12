@@ -85,6 +85,10 @@ dotnet test tests/Ando.Server.Tests/ --filter "FullyQualifiedName~WebhooksContro
 dotnet test tests/Ando.Server.Tests/ /p:CollectCoverage=true
 ```
 
+### Endpoint Unit Tests with FastEndpoints `Factory.Create`
+
+FastEndpoints keeps one process-wide service resolver and `Factory.Create` only builds it when none is set. The `AndoWebApplicationFactory` tests run in the unit pass too, set that resolver to their host's provider and then dispose the host, so a later `Factory.Create` throws `ObjectDisposedException` ("IServiceProvider"). Every test class that uses `Factory.Create` must join `[Collection(FastEndpointsFactoryCollection.Name)]` (runs after the parallel tests, one at a time) and call `FastEndpointsFactoryCollection.ResetResolver()` in its constructor.
+
 ### Integration Tests
 
 Every container-backed concrete test class (the `_SqlServer` / `_PostgreSql`

@@ -21,8 +21,11 @@ namespace Ando.Server.Tests.Unit.Endpoints;
 /// <summary>
 /// Tests for <see cref="ReadyEndpoint"/>.
 /// </summary>
+[Collection(Ando.Server.Tests.TestFixtures.FastEndpointsFactoryCollection.Name)]
 public class ReadyEndpointTests
 {
+    public ReadyEndpointTests() => Ando.Server.Tests.TestFixtures.FastEndpointsFactoryCollection.ResetResolver();
+
     [Fact]
     public async Task HandleAsync_DatabaseUnreachable_Returns503Unready()
     {

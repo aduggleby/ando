@@ -25,8 +25,11 @@ namespace Ando.Server.Tests.Unit.Endpoints;
 /// <summary>
 /// Tests for <see cref="GetSystemHealthEndpoint"/>.
 /// </summary>
+[Collection(Ando.Server.Tests.TestFixtures.FastEndpointsFactoryCollection.Name)]
 public class GetSystemHealthEndpointTests
 {
+    public GetSystemHealthEndpointTests() => Ando.Server.Tests.TestFixtures.FastEndpointsFactoryCollection.ResetResolver();
+
     [Theory]
     [InlineData(DatabaseProvider.SqlServer)]
     [InlineData(DatabaseProvider.PostgreSql)]
