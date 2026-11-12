@@ -330,9 +330,7 @@ public class DotnetOperationsTests
 
         await _registry.Steps[0].Execute();
 
-        // Output() makes the path absolute on the host; the container executor translates it.
-        var output = new Ando.Context.BuildPath("artifacts/web").Value;
-        _executor.LastCommand!.CommandLine.ShouldBe($"dotnet publish src/Web/Web.csproj -c Release -o {output} --nologo");
+        _executor.LastCommand!.CommandLine.ShouldBe("dotnet publish src/Web/Web.csproj -c Release -o /workspace/artifacts/web --nologo");
     }
 
     [Fact]
@@ -501,5 +499,41 @@ public class DotnetOperationsTests
         Should.Throw<ArgumentException>(() => new DotnetPublishOptions().WithSourceRevision("\t"));
         Should.Throw<ArgumentException>(() => new NugetPackOptions().WithSourceRevision(" "));
         new NugetPackOptions().WithSourceRevision(" x ").SourceRevision.ShouldBe("x");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("0123456789abcdef0123456789abcdef01234567")]
+    public async Task PublishAndPackOutput_ResolvesInTheContainer_NormalAndRefSessions(string? refSha)
+    {
+        var session = new RunSession { Ref = refSha, SourceRoot = refSha == null ? "/home/dev/proj" : "/tmp/ando-ref-abc" };
+        var root = new Ando.Context.PathsContext("/workspace").Root;
+        string Publish(Action<DotnetPublishOptions> o)
+        {
+            var registry = new StepRegistry();
+            var executor = new MockExecutor();
+            new DotnetOperations(registry, _logger, () => executor, null, session)
+                .Publish(ProjectRef.From("a.csproj"), o + (x => x.WithoutSourceRevision()));
+            registry.Steps[0].Execute().GetAwaiter().GetResult();
+            return executor.LastCommand!.CommandLine;
+        }
+        string Pack(Action<NugetPackOptions> o)
+        {
+            var registry = new StepRegistry();
+            var executor = new MockExecutor();
+            new NugetOperations(registry, _logger, () => executor, session)
+                .Pack(ProjectRef.From("a.csproj"), o + (x => x.WithoutSourceRevision()));
+            registry.Steps[0].Execute().GetAwaiter().GetResult();
+            return executor.LastCommand!.CommandLine;
+        }
+
+        Publish(o => o.Output("out/x")).ShouldBe("dotnet publish a.csproj -o /workspace/out/x");
+        Publish(o => o.Output("./out/x")).ShouldBe("dotnet publish a.csproj -o /workspace/out/x");
+        Publish(o => o.Output("/workspace/y")).ShouldBe("dotnet publish a.csproj -o /workspace/y");
+        Publish(o => o.Output(root / "z")).ShouldBe("dotnet publish a.csproj -o /workspace/z");
+        Pack(o => o.Output("out/x")).ShouldBe("dotnet pack a.csproj -o /workspace/out/x");
+        Pack(o => o.Output("/workspace/y")).ShouldBe("dotnet pack a.csproj -o /workspace/y");
+        Pack(o => o.Output(root / "z")).ShouldBe("dotnet pack a.csproj -o /workspace/z");
+        await Task.CompletedTask;
     }
 }

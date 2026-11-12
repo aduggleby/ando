@@ -101,10 +101,11 @@ public class DotnetPublishOptions
         return this;
     }
 
-    /// <summary>Sets the output directory using a string path.</summary>
+    /// <summary>Sets the output directory using a string path in the build container: relative paths are relative to /workspace, absolute paths are used as given.</summary>
     public DotnetPublishOptions Output(string path)
     {
-        OutputPath = new BuildPath(path);
+        // A string is a container path: relative resolves against /workspace, /abs stays as is.
+        OutputPath = new BuildPath(ContainerPaths.Resolve(path));
         return this;
     }
 
