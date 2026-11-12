@@ -38,7 +38,7 @@ Each operation runs one `dotnet` command. Parts in brackets are only added when 
 | `Dotnet.Test`    | `dotnet test <proj> [-c <cfg>] [--no-restore] [--no-build] [--filter <f>]`                                                                                                       |
 | `Dotnet.Publish` | `dotnet publish <proj> [-c <cfg>] [-o /workspace/<out>] [--no-restore] [--no-build] [--self-contained \| --no-self-contained] [-r <rid>] [-p:PublishSingleFile=true] [--nologo]` |
 
-`Dotnet.Publish` resolves `Output(...)` against the project root and runs `-o /workspace/<path>` in the build container. A relative path such as `out/web` ends up at `/workspace/out/web`, in normal and `--ref` runs, so later steps can read the relative `out/web`; a container-absolute path such as `/workspace/out/web` is kept. For example, `dotnet publish p -c Release -o out --nologo` is:
+A relative `Output("out/web")` string resolves against `/workspace` in the build container (normal and `--ref` runs), so the command gets `-o /workspace/out/web` and later steps can read the relative `out/web`. A container-absolute path such as `/workspace/out/web` and a `Root / "web"` path are kept. For example, `dotnet publish p -c Release -o out --nologo` is:
 
 ```csharp
 Dotnet.Publish(p, o => o.WithConfiguration(Configuration.Release).Output("out").WithNoLogo());
@@ -84,15 +84,15 @@ Log.Info($"Building {version}");
 
 ### Dotnet.Publish Options
 
-| Option                             | Description                                                                                                                                                           |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Output(path)`                     | Output directory for published artifacts. Accepts `BuildPath` or `string`.                                                                                            |
-| `WithConfiguration(Configuration)` | Build configuration. Use `Configuration.Release` for production deployments.                                                                                          |
-| `WithRuntime(string)`              | Target runtime identifier. Required for self-contained deployments. Common values: `"linux-x64"`, `"linux-arm64"`, `"win-x64"`, `"osx-x64"`, `"osx-arm64"`.           |
-| `AsSelfContained(bool)`            | Include the .NET runtime with the application. Creates a standalone deployment that doesn't require .NET to be installed. Defaults to `true` when called.             |
-| `AsSingleFile(bool)`               | Bundle the entire application into a single executable. Makes deployment simpler but increases startup time slightly.                                                 |
-| `SkipRestore()`                    | Skip restore before publishing. Use when dependencies are already restored.                                                                                           |
-| `SkipBuild()`                      | Skip build before publishing. Use when the project is already built.                                                                                                  |
-| `WithSourceRevision(string)`       | Pass `-p:SourceRevisionId=<sha>`. ANDO adds the full commit being built automatically (nothing outside a git repository) unless this is set or `SkipBuild()` is used. |
-| `WithoutSourceRevision()`          | Suppress the automatic `-p:SourceRevisionId`. Without it, ANDO's value overrides a `<SourceRevisionId>` set in the project file.                                      |
-| `WithNoLogo()`                     | Pass `--nologo` to suppress the startup banner.                                                                                                                       |
+| Option                             | Description                                                                                                                                                                                   |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Output(path)`                     | Output directory for published artifacts. A `string` is a container path: relative paths resolve against `/workspace`. A `BuildPath` is used as given (`Root / "dist"` is `/workspace/dist`). |
+| `WithConfiguration(Configuration)` | Build configuration. Use `Configuration.Release` for production deployments.                                                                                                                  |
+| `WithRuntime(string)`              | Target runtime identifier. Required for self-contained deployments. Common values: `"linux-x64"`, `"linux-arm64"`, `"win-x64"`, `"osx-x64"`, `"osx-arm64"`.                                   |
+| `AsSelfContained(bool)`            | Include the .NET runtime with the application. Creates a standalone deployment that doesn't require .NET to be installed. Defaults to `true` when called.                                     |
+| `AsSingleFile(bool)`               | Bundle the entire application into a single executable. Makes deployment simpler but increases startup time slightly.                                                                         |
+| `SkipRestore()`                    | Skip restore before publishing. Use when dependencies are already restored.                                                                                                                   |
+| `SkipBuild()`                      | Skip build before publishing. Use when the project is already built.                                                                                                                          |
+| `WithSourceRevision(string)`       | Pass `-p:SourceRevisionId=<sha>`. ANDO adds the full commit being built automatically (nothing outside a git repository) unless this is set or `SkipBuild()` is used.                         |
+| `WithoutSourceRevision()`          | Suppress the automatic `-p:SourceRevisionId`. Without it, ANDO's value overrides a `<SourceRevisionId>` set in the project file.                                                              |
+| `WithNoLogo()`                     | Pass `--nologo` to suppress the startup banner.                                                                                                                                               |

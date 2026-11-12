@@ -34,18 +34,18 @@ Nuget.Push(App);
 
 ### Nuget.Pack Options
 
-| Option                             | Description                                                                                                                                                           |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Output(path)`                     | Output directory for the generated .nupkg file. Defaults to `bin/{Configuration}`.                                                                                    |
-| `WithConfiguration(Configuration)` | Build configuration. Use `Configuration.Release` for publishing to nuget.org.                                                                                         |
-| `WithVersion(string)`              | Explicit package version, overriding the version in the .csproj. Useful for CI-generated version numbers.                                                             |
-| `WithVersionSuffix(string)`        | Version suffix for pre-release packages (e.g., "beta", "rc1"). Combined with base version: "1.0.0-beta".                                                              |
-| `WithSymbols(bool)`                | Generate a symbol package (.snupkg) for source-level debugging. Publish to nuget.org symbol server for public packages.                                               |
-| `WithSource(bool)`                 | Include source files in the symbol package. Enables stepping into your library code during debugging.                                                                 |
-| `WithSourceRevision(string)`       | Pass `-p:SourceRevisionId=<sha>`. ANDO adds the full commit being built automatically (nothing outside a git repository) unless this is set or `SkipBuild()` is used. |
-| `WithoutSourceRevision()`          | Suppress the automatic `-p:SourceRevisionId`. Without it, ANDO's value overrides a `<SourceRevisionId>` set in the project file.                                      |
-| `SkipRestore()`                    | Skip restore before packing. Use when dependencies are already restored.                                                                                              |
-| `SkipBuild()`                      | Skip build before packing. Use when the project is already built.                                                                                                     |
+| Option                             | Description                                                                                                                                                                                                        |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Output(path)`                     | Output directory for the generated .nupkg file. A `string` is a container path: relative paths resolve against `/workspace` (`Output("out/pkg")` runs `-o /workspace/out/pkg`). Defaults to `bin/{Configuration}`. |
+| `WithConfiguration(Configuration)` | Build configuration. Use `Configuration.Release` for publishing to nuget.org.                                                                                                                                      |
+| `WithVersion(string)`              | Explicit package version, overriding the version in the .csproj. Useful for CI-generated version numbers.                                                                                                          |
+| `WithVersionSuffix(string)`        | Version suffix for pre-release packages (e.g., "beta", "rc1"). Combined with base version: "1.0.0-beta".                                                                                                           |
+| `WithSymbols(bool)`                | Generate a symbol package (.snupkg) for source-level debugging. Publish to nuget.org symbol server for public packages.                                                                                            |
+| `WithSource(bool)`                 | Include source files in the symbol package. Enables stepping into your library code during debugging.                                                                                                              |
+| `WithSourceRevision(string)`       | Pass `-p:SourceRevisionId=<sha>`. ANDO adds the full commit being built automatically (nothing outside a git repository) unless this is set or `SkipBuild()` is used.                                              |
+| `WithoutSourceRevision()`          | Suppress the automatic `-p:SourceRevisionId`. Without it, ANDO's value overrides a `<SourceRevisionId>` set in the project file.                                                                                   |
+| `SkipRestore()`                    | Skip restore before packing. Use when dependencies are already restored.                                                                                                                                           |
+| `SkipBuild()`                      | Skip build before packing. Use when the project is already built.                                                                                                                                                  |
 
 ### Nuget.Push Options
 
