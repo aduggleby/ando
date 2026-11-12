@@ -10,6 +10,9 @@
 //   Requires the full server integration + E2E matrix: fails if Docker is unavailable.
 // - docs: Deploy the documentation website to Cloudflare (run `ando docs` first to generate API docs)
 // - e2e: Force server tests and E2E tests to run (even on Ando.Server)
+//   The Ando.Server project for this repo runs `e2e`, not `publish`: the server
+//   verifies every push, and releases (NuGet, GHCR image, GitHub release,
+//   website) are published locally with `ando run -p publish --dind`.
 //
 // Usage:
 //   ando                 # Build and test (E2E tests run locally, skipped on server)
