@@ -65,6 +65,34 @@ public class GitOperations : OperationsBase
         public bool IsAvailable(string command) => inner.IsAvailable(command);
     }
 
+    internal const string InstallScript = """
+        set -eu
+        if command -v git >/dev/null 2>&1; then echo "git is already installed: $(git --version)"; exit 0; fi
+        if command -v apt-get >/dev/null 2>&1; then
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends git ca-certificates
+        elif command -v apk >/dev/null 2>&1; then
+          apk add --no-cache git
+        else
+          echo "Git.Install: unsupported image: neither apt-get nor apk was found. Use an image that includes git." >&2
+          exit 1
+        fi
+        command -v git >/dev/null 2>&1 || { echo "Git.Install: git was not installed." >&2; exit 1; }
+        git --version
+        """;
+
+    /// <summary>
+    /// Registers a step that installs git in the BUILD CONTAINER. Unlike every other Git operation,
+    /// which runs git on the host, this step runs inside the container, for commands there that need
+    /// git (for example tests that create real git repositories). Skips with an info log when git is
+    /// already on PATH. Otherwise installs with apt (`apt-get update &amp;&amp; apt-get install -y
+    /// --no-install-recommends git ca-certificates`) or apk (`apk add --no-cache git`); other images
+    /// fail with an "unsupported image" message. Logs `git --version`.
+    /// Usage: Git.Install();
+    /// </summary>
+    public void Install() =>
+        RegisterCommand("Git.Install", "bash", ["-c", InstallScript]);
+
     // Registers a git command that runs on the host (not in container).
     private void RegisterHostCommand(string stepName, Func<ArgumentBuilder> buildArgs, string? context = null)
     {

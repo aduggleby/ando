@@ -78,6 +78,10 @@ var distPath = Root / "dist";
 // Install .NET SDK
 Dotnet.SdkInstall();
 
+// The unit tests create real git repositories, so git must exist in the build container
+// (the default image has none, and --dind only brings it in as a docker.io recommendation).
+Git.Install();
+
 // Restore dependencies
 Dotnet.Restore(project);
 
