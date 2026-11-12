@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.162
+
+**2026-11-12**
+
+- Fix output paths in container commands: `Dotnet.Publish` `Output("out/web")`, `Nuget.Pack` `Output(...)` and `Ef.Script` outputs were resolved to absolute HOST paths (in a `--ref` run the temporary worktree, for example `/tmp/ando-ref-.../out/web`) and passed to commands running in the container, so the files never reached `/workspace` and later steps reading `out/web` found nothing. Every command argument that is an absolute path under the project root, the `--ref` worktree or the directory `ando` was run from is now translated to `/workspace/...`; relative and container-absolute paths are unchanged
+
 ## 0.9.161
 
 **2026-11-12**

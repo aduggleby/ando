@@ -31,14 +31,14 @@ Dotnet.Publish(App, o => o
 
 Each operation runs one `dotnet` command. Parts in brackets are only added when the matching option is set. Nothing is added for the configuration by default, so a build or publish without `WithConfiguration` uses the .NET default (Debug): **Release is not the default**.
 
-| Operation        | Command                                                                                                                                                                        |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Dotnet.Restore` | `dotnet restore <proj> [--no-cache] [-r <rid>]`                                                                                                                                |
-| `Dotnet.Build`   | `dotnet build <proj> [-c <cfg>] [--no-restore]`                                                                                                                                |
-| `Dotnet.Test`    | `dotnet test <proj> [-c <cfg>] [--no-restore] [--no-build] [--filter <f>]`                                                                                                     |
-| `Dotnet.Publish` | `dotnet publish <proj> [-c <cfg>] [-o <absolute out>] [--no-restore] [--no-build] [--self-contained \| --no-self-contained] [-r <rid>] [-p:PublishSingleFile=true] [--nologo]` |
+| Operation        | Command                                                                                                                                                                          |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Dotnet.Restore` | `dotnet restore <proj> [--no-cache] [-r <rid>]`                                                                                                                                  |
+| `Dotnet.Build`   | `dotnet build <proj> [-c <cfg>] [--no-restore]`                                                                                                                                  |
+| `Dotnet.Test`    | `dotnet test <proj> [-c <cfg>] [--no-restore] [--no-build] [--filter <f>]`                                                                                                       |
+| `Dotnet.Publish` | `dotnet publish <proj> [-c <cfg>] [-o /workspace/<out>] [--no-restore] [--no-build] [--self-contained \| --no-self-contained] [-r <rid>] [-p:PublishSingleFile=true] [--nologo]` |
 
-Output paths of `Dotnet.Publish` are made absolute. For example, `dotnet publish p -c Release -o out --nologo` is:
+`Dotnet.Publish` resolves `Output(...)` against the project root and runs `-o /workspace/<path>` in the build container. A relative path such as `out/web` ends up at `/workspace/out/web`, in normal and `--ref` runs, so later steps can read the relative `out/web`; a container-absolute path such as `/workspace/out/web` is kept. For example, `dotnet publish p -c Release -o out --nologo` is:
 
 ```csharp
 Dotnet.Publish(p, o => o.WithConfiguration(Configuration.Release).Output("out").WithNoLogo());
