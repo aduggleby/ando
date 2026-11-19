@@ -220,6 +220,12 @@ If A is too large for one drill, split G1 into its own release; it carries the m
 3. G4 `Host.Run`: deferred; build the narrower operations first.
 4. G7: child builds inherit the parent's `--ref` (and `--yes`) automatically; no `WithRef` for now.
 
+## Status
+
+- Release A shipped in 0.9.165 (G1, G2, G3, G5, G6.1, G9 `Ef.Script` `to`).
+- Releases B and C shipped in 0.9.166 (G6.2 `Ando.StepTree`, G7, `Ando.Confirm(Func<string>)`, G8). G7 adds no `WithRef`; children inherit the parent's ref.
+- Still deferred: G6.3 `Ando.AfterRun`, G4 `Host.Run`, G9 `Sql.*`, G10.
+
 ## Open questions for Mr. Ando (answered above, kept for context)
 
 1. Automatic per-container lock as a default (recommended), or only the opt-in `Ando.Lock`?
