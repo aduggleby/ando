@@ -18,6 +18,7 @@ public class RunFlagTests
     [InlineData("-f", "x.csando", "run", "--dind")]
     [InlineData("run", "positional")]
     [InlineData("run", "--no-env")]
+    [InlineData("run", "--dry-run", "--dry-run-output", "/tmp/tree.txt")]
     [InlineData("--no-env", "-p", "release")]
     public void FindUnknownRunFlag_AcceptedCommandLines_ReturnNull(params string[] args)
     {
@@ -36,6 +37,12 @@ public class RunFlagTests
         AndoCli.FindUnknownRunFlag(args).ShouldBe(expected);
         AndoCli.FindRunFlagError(args).ShouldBe($"Unknown option for run: {expected}");
     }
+
+    [Theory]
+    [InlineData("run", "--dry-run", "--dry-run-output")]
+    [InlineData("run", "--dry-run", "--dry-run-output", "--yes")]
+    public void FindRunFlagError_DryRunOutputWithoutAPath_IsAnError(params string[] args) =>
+        AndoCli.FindRunFlagError(args).ShouldBe("--dry-run-output needs a file path.");
 
     [Fact]
     public void FindRunFlagError_NoEnvWithReadEnv_IsAnError()

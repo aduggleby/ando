@@ -81,11 +81,19 @@ public class CommandOptions
 
     /// <summary>
     /// Whether to suppress output from the command.
-    /// When true, stdout/stderr are captured but not streamed through the logger,
-    /// and debug logging of the command itself is skipped.
+    /// When true, stdout is captured into the result but not streamed through the logger,
+    /// stderr is dropped (neither logged nor captured), and debug logging of the command itself is skipped.
     /// Useful for internal checks (e.g., `docker info`) where output is noise.
     /// </summary>
     public bool SuppressOutput { get; set; } = false;
+
+    /// <summary>
+    /// Whether to keep stdout out of the log only. Stdout is still captured into the result;
+    /// stderr is still logged, and the command itself is still debug-logged.
+    /// Used when stdout carries data that is read from the result (such as what-if JSON, which can
+    /// contain secret values) and stderr carries the diagnostics.
+    /// </summary>
+    public bool SuppressStdout { get; set; } = false;
 }
 
 /// <summary>

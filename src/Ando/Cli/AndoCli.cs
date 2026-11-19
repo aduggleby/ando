@@ -230,7 +230,7 @@ public class AndoCli : IDisposable
                 _logger.Error(flagError);
                 if (FindUnknownRunFlag(_args) != null)
                 {
-                    _logger.Error($"Valid options: {string.Join(", ", RunFlags.Concat(RunFlagsWithValue).Order())}");
+                    _logger.Error($"Valid options: {string.Join(", ", RunFlags.Concat(RunFlagsWithValue).Where(f => f != "--dry-run-output").Order())}");
                 }
                 return 1;
             }
@@ -305,7 +305,7 @@ public class AndoCli : IDisposable
     private static readonly string[] RunFlags =
         ["--read-env", "--no-env", "--no-color", "--cold", "--dind", "--yes", "--dry-run"];
     private static readonly string[] RunFlagsWithValue =
-        ["-f", "--file", "-p", "--profile", "--verbosity", "--image", "--ref", "--record-path-file"];
+        ["-f", "--file", "-p", "--profile", "--verbosity", "--image", "--ref", "--record-path-file", "--dry-run-output"];
 
     // Returns the first option in a run command line that run does not accept, or null.
     internal static string? FindUnknownRunFlag(string[] args)
@@ -335,6 +335,11 @@ public class AndoCli : IDisposable
         if (recordPathIndex >= 0 && (recordPathIndex + 1 >= args.Length || args[recordPathIndex + 1].StartsWith('-')))
         {
             return "--record-path-file needs a file path.";
+        }
+        var dryRunOutputIndex = Array.IndexOf(args, "--dry-run-output");
+        if (dryRunOutputIndex >= 0 && (dryRunOutputIndex + 1 >= args.Length || args[dryRunOutputIndex + 1].StartsWith("--")))
+        {
+            return "--dry-run-output needs a file path.";
         }
         return args.Contains("--no-env") && args.Contains("--read-env")
             ? "--no-env and --read-env cannot be used together."
@@ -426,6 +431,7 @@ public class AndoCli : IDisposable
             // Never print secret environment values (service principal secrets,
             // tokens, passwords) in console output, the build log or run records.
             SecretValues.AddFromEnvironment();
+            SecretValues.AddFromListedKeys();
 
             // Step 2: Load and compile the build script using Roslyn.
             // We load first to read Options.Image before creating the container.
@@ -492,11 +498,12 @@ public class AndoCli : IDisposable
             {
                 Console.WriteLine();
                 Console.WriteLine("Dry run: steps that would run (nothing is executed, no container is created):");
-                foreach (var line in StepTreePrinter.Render(context.StepRegistry.Root))
+                var treeLines = StepTreePrinter.Render(context.StepRegistry.Root);
+                foreach (var line in treeLines)
                 {
                     Console.WriteLine("  " + line);
                 }
-                return 0;
+                return WriteDryRunOutput(GetFlagValue("--dry-run-output"), invocationRoot, treeLines, _logger) ? 0 : 1;
             }
 
             // Step 2b: Pre-flight check for GitHub OAuth scopes.
@@ -637,10 +644,11 @@ public class AndoCli : IDisposable
             // Every run gets a private Azure CLI profile inside the container, so
             // az logins never persist in a warm container or leak between runs.
             // Removed when the run ends; leftovers of killed runs now (one run per repo container at a time).
+            // That includes ando-bicep-* secure parameter files a force-killed run did not delete.
             _azureConfigDir = $"/tmp/ando-azure-{Guid.NewGuid():N}";
             _containerIdForCleanup = container.Id;
             await RunInContainerQuietAsync(container.Id,
-                $"find /tmp -maxdepth 1 -name 'ando-azure-*' -exec rm -rf {{}} + ; mkdir -m 700 -p {_azureConfigDir}");
+                $"find /tmp -maxdepth 1 \\( -name 'ando-azure-*' -o -name 'ando-bicep-*' \\) -exec rm -rf {{}} + ; mkdir -m 700 -p {_azureConfigDir}");
             containerExecutor.DefaultEnvironment[Ando.Operations.AzureOperations.EnvAzureConfigDir] = _azureConfigDir;
 
             // Step 4: Execute the workflow.
@@ -780,6 +788,29 @@ public class AndoCli : IDisposable
         finally
         {
             Volatile.Write(ref _recordWriting, 0);
+        }
+    }
+
+    // Hidden --dry-run-output <file>: only the rendered tree lines (no banner, header or indent),
+    // joined with \n. Ando.StepTree reads this instead of parsing the console. A relative file is
+    // relative to the invocation directory.
+    // Returns false (after logging an error) when the file cannot be written, so the run exits with 1.
+    internal static bool WriteDryRunOutput(string? file, string baseDirectory, IReadOnlyList<string> lines, IBuildLogger logger)
+    {
+        if (file == null)
+        {
+            return true;
+        }
+
+        try
+        {
+            File.WriteAllText(Path.GetFullPath(file, baseDirectory), string.Join('\n', lines));
+            return true;
+        }
+        catch (Exception ex)
+        {
+            logger.Error($"Could not write the step tree to {file}: {ex.Message}");
+            return false;
         }
     }
 

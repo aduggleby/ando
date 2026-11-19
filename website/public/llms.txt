@@ -106,9 +106,9 @@ Unknown commands show an error with the help text (e.g., `ando foo` displays "Un
 - `--cold` - Use a fresh container and remove it when the run ends (also after a forced exit with a third Ctrl+C)
 - `--image <image>` - Use a custom Docker image
 - `--dind` - Mount Docker socket for Docker-in-Docker builds
-- `--ref <commit|tag>` - Build that commit instead of the working tree. ANDO checks it out into a temporary detached git worktree (under the system temp directory), evaluates the build script from there and copies only those files into the container. Env files (`.env.ando`), `Ando.CopyToContainer` host paths, artifact copies to the host and run records still use the directory you ran `ando` from. The worktree is removed when the run ends. `Git.Commit`, `Git.ShortCommit`, `Git.LastTag` and `Git.ChangedSince` refer to the checked-out commit, and `Git.RequireClean` always passes. The build container never contains `.git`, in `--ref` runs and normal runs alike (ANDO copies the project without it). So SourceLink, `git describe` and any git command inside the container do not work; ANDO's `Git.*` operations run on the host and do work. `Dotnet.Build`, `Dotnet.Publish`, `Dotnet.Test` (when it builds) and `Nuget.Pack` therefore pass `-p:SourceRevisionId=<full commit>` automatically (the value of `Git.Commit`, HEAD of the source root, the `--ref` commit with `--ref`), so `InformationalVersion` gets `+<sha>`. Outside a git repository nothing is added. Use `WithSourceRevision(sha)` to set it yourself.
+- `--ref <commit|tag>` - Build that commit instead of the working tree (`Ando.Build` child builds get the same `--ref` and run from the matching folder under the directory you ran from, and `Ando.StepTree` reads that commit). ANDO checks it out into a temporary detached git worktree (under the system temp directory), evaluates the build script from there and copies only those files into the container. Env files (`.env.ando`), `Ando.CopyToContainer` host paths, artifact copies to the host and run records still use the directory you ran `ando` from. The worktree is removed when the run ends. `Git.Commit`, `Git.ShortCommit`, `Git.LastTag` and `Git.ChangedSince` refer to the checked-out commit, and `Git.RequireClean` always passes. The build container never contains `.git`, in `--ref` runs and normal runs alike (ANDO copies the project without it). So SourceLink, `git describe` and any git command inside the container do not work; ANDO's `Git.*` operations run on the host and do work. `Dotnet.Build`, `Dotnet.Publish`, `Dotnet.Test` (when it builds) and `Nuget.Pack` therefore pass `-p:SourceRevisionId=<full commit>` automatically (the value of `Git.Commit`, HEAD of the source root, the `--ref` commit with `--ref`), so `InformationalVersion` gets `+<sha>`. Outside a git repository nothing is added. Use `WithSourceRevision(sha)` to set it yourself.
 - `--record-path-file <file>` - Write the absolute path of the run record (one line) to `<file>` (relative to the invocation directory, the folder of the build script). An old file at that path is deleted when the run starts, so an early exit, `--dry-run` or a failed record write never leaves a stale path; nothing is written if the record could not be written.
-- `--yes` - Accept every `Ando.Confirm` prompt. Without it, a run with no interactive console fails at the first `Ando.Confirm`.
+- `--yes` - Accept every `Ando.Confirm` prompt (also forwarded to `Ando.Build` child builds). Without it, a run with no interactive console fails at the first `Ando.Confirm`.
 - `--dry-run` - Evaluate the script and print the registered step tree (nested blocks, `on failure:` and `finally (runs last-registered first):` steps) without running any step or creating a container; exit code 0. `Ando.When` and `Ando.Defer` bodies show as one line because they run at execution time. `ando run` rejects unknown options, so a typo never starts a real run.
 
 ### Exit Codes and Run Locks
@@ -410,7 +410,7 @@ Full documentation: https://andobuild.com/hooks
 ## Key Facts
 
 - File: `build.csando` (C# code, no .cs extension)
-- Execution: All builds run in Docker containers. Operations register steps that run in the container, with these exceptions: `Git.*` operations and `Ando.Build` run on the host (`Ando.Build` starts a child `ando` build with its own container), and the evaluation-time members `Git.Commit`, `Git.ShortCommit`, `Git.CommitTime`, `Git.ChangedSince`, `Git.LastTag`, `Dotnet.ReadVersion`, `Docker.IsAvailable` and `Docfx.IsInstalled` are not steps at all (see "Evaluated when the script loads" under All Operations)
+- Execution: All builds run in Docker containers. Operations register steps that run in the container, with these exceptions: `Git.*` operations and `Ando.Build` and `Ando.StepTree` run on the host (`Ando.Build` starts a child `ando` build with its own container), and the evaluation-time members `Git.Commit`, `Git.ShortCommit`, `Git.CommitTime`, `Git.ChangedSince`, `Git.LastTag`, `Dotnet.ReadVersion`, `Docker.IsAvailable` and `Docfx.IsInstalled` are not steps at all (see "Evaluated when the script loads" under All Operations)
 - No `using` statements needed - namespaces are pre-imported
 - Operations register steps that execute in order, after the whole script has been evaluated
 - The image `mcr.microsoft.com/dotnet/sdk:10.0` (Ubuntu 24.04) has curl, tar, openssl, git and bash but not `zip` or `unzip`. `AppService.DeployFolder` installs zip itself and `Bun.Install` installs unzip.
@@ -667,7 +667,12 @@ Ando.Build(Directory("./website") / "deploy.csando");
 
 // With options
 Ando.Build(Directory("./api"), o => o.WithDind().ColdStart());
+
+// A variable that exists in the child process only
+Ando.Build(Directory("./website"), o => o.WithEnv("CLOUDFLARE_API_TOKEN", Env("CLOUDFLARE_API_TOKEN")));
 ```
+
+The child is the same CLI that runs the parent and inherits `--yes` and `--no-env`. With `--ref` the child gets the same `--ref` and runs from the matching folder under the directory you ran from (not the temporary worktree), so its artifacts, env file and run record stay in the project. The parent's run record gets `child record <path>` (the child's path relative to the directory you ran from, for example `child record website/build.csando`; ` #2`, ` #3` when the same path is built again) with the path of the child's run record.
 
 ### Full Example: .NET Tool with NuGet Publishing
 ```csharp
@@ -743,7 +748,7 @@ Plain C# control flow therefore runs in phase 1. `try`/`finally` around a step c
 | Run C# at execution time, then run the steps it registers | `Ando.Defer(body)` |
 | Run steps only if a runtime condition holds | `Ando.When(condition, then, otherwise?)` |
 | Fail the build if a runtime condition is false | `Ando.Require(condition, message)` |
-| Ask before continuing | `Ando.Confirm(message)` |
+| Ask before continuing | `Ando.Confirm(string \| Func<string>)` |
 | Record a value in the run record | `Ando.Report(key, string \| StepOutput \| Func<string>)` |
 
 Steps that return `StepOutput` or `CommandStep` can be read only at execution time. Reading `Value`, `ExitCode`, `StatusCode` or `Json(...)` before the step ran throws.
@@ -766,6 +771,8 @@ Steps that return `StepOutput` or `CommandStep` can be read only at execution ti
 - Ando.When(Func<bool> condition, Action then, Action? otherwise = null) - Chooses steps at execution time.
 - Ando.Require(Func<bool> condition, string message) - Fails with `message` if the condition is false at execution time.
 - Ando.Confirm(message) - Prompts `[y/N]`. Declining fails the build. `ando run --yes` accepts. Without `--yes` and without an interactive console the step fails.
+- Ando.Confirm(Func<string> message) - Same, with the message computed when the step runs. `--dry-run` shows `(decided at run time)`. Example: `Ando.Confirm(() => $"Swap {manifest.Version} into production?");`
+- Ando.StepTree(file, profiles = null) - Returns a CommandStep whose Value is the `--dry-run` tree of another script (one line per step, two spaces per level, `\n` line endings, secrets redacted). Runs on the host: starts the running CLI as `run --dry-run --no-env --no-color -f <file> [-p <profiles>]` (plus `--ref` when this run has one) from the directory you ran from, so no step of that script runs. A relative file is relative to that directory. A non-zero exit fails the step. WithTimeout (default Ando.CommandTimeout or 5 minutes), WithEnv and AllowFailure work. Example: `var tree = Ando.StepTree("deploy.csando", "eu"); Ando.Report("deploy tree", tree);`
 - Ando.Report(key, string) / Ando.Report(key, StepOutput) / Ando.Report(key, Func<string>) - Adds a value to the run record and logs it.
 - Ando.Cancelled - bool, true once the user pressed Ctrl+C. Read it at execution time (inside `Ando.When`, `Ando.Require`, `Ando.Defer`, `OnFailure` and `Finally` bodies); while the script is evaluated it is always false. Example: `.OnFailure(() => Ando.When(() => !Ando.Cancelled, () => AppService.SwapSlots(app, "staging", rg)))`.
 - Ando.CommandTimeout(TimeSpan) - Default timeout for command steps registered after this call (built-in default 5 minutes). Operations with a longer default of their own, such as AppService zip deploy, keep it.
@@ -941,12 +948,24 @@ Every run gets a private AZURE_CONFIG_DIR inside the build container (/tmp/ando-
 ### Bicep
 - Bicep.DeployToResourceGroup(rg, template, options?) - Deploy to resource group, returns BicepDeployment
 - Bicep.DeployToSubscription(location, template, options?) - Deploy at subscription scope, returns BicepDeployment
-- Bicep.WhatIf(rg, template, options?) - Preview deployment
+- Bicep.Validate(rg, template, options?) - `az deployment group validate`; a non-zero exit fails the step
+- Bicep.ValidateSubscription(location, template, options?) - `az deployment sub validate --location` (no --mode at subscription scope)
+- Bicep.WhatIf(rg, template, options?) - `az deployment group what-if --no-pretty-print`; returns BicepWhatIfResult
+- Bicep.WhatIfSubscription(location, template, options?) - `az deployment sub what-if --location`; returns BicepWhatIfResult
 - Bicep.Build(template, output?) - Compile Bicep to ARM JSON
 
 BicepDeployment objects provide typed access to deployment outputs:
 - deployment.Output("name") - Returns OutputRef that resolves at execution time
 - deployment.GetOutput("name") - Gets output value directly (call during step execution)
+
+BicepWhatIfResult (returned by WhatIf and WhatIfSubscription) is filled when the step runs; reading it earlier throws InvalidOperationException, so read it inside Ando.Require, Ando.Confirm(Func) or Ando.When:
+- Changes - list of changes: ResourceId, ChangeType (as az reports it: Create, Delete, Modify, NoChange, Ignore, Deploy, Unsupported), PropertyChanges (count)
+- Summary - for example "2 Create, 1 Modify, 30 NoChange"
+- HasChanges(params string[] types) - any change of these types; with no types, any change except NoChange and Ignore (only az's `changes`, not `potentialChanges`)
+- OfType(type) - the changes of one type
+- Json - raw az output
+The step logs the summary and one line per change that is not NoChange or Ignore. A what-if with status Failed or an error fails the step. az's raw JSON is not logged (it can echo parameter values).
+Example gate: `var plan = Bicep.WhatIf("rg", "main.bicep"); Ando.Require(() => !plan.HasChanges("Delete"), "The plan deletes resources."); Ando.Confirm(() => $"Deploy ({plan.Summary})?");`
 
 ### Cloudflare
 - Cloudflare.UseCredentials(apiToken, accountId?) - Not a step; call at evaluation. Every Cloudflare step registered after it gets these credentials as per-command environment variables (by name, never on argv) and the values are redacted. EnsureAuthenticated then does not prompt. accountId null means $CLOUDFLARE_ACCOUNT_ID as before. Example: `var cf = Secrets.EnvFile(".env.secrets", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"); Cloudflare.UseCredentials(cf["CLOUDFLARE_API_TOKEN"], cf["CLOUDFLARE_ACCOUNT_ID"]);`
@@ -1223,11 +1242,12 @@ Note: Annotated tags require a git identity (user.name/user.email). The ANDO CI 
 - WithHead(string) - Source branch
 - AsDraft() - Create as draft PR
 
-### Bicep.Deploy Options
+### Bicep Options (deploy, validate, what-if)
 - WithName(string) - Custom deployment name
-- WithParameterFile(string) - Path to .json or .bicepparam file
-- WithParameter(name, value) - Inline parameter
-- WithMode(DeploymentMode) - Incremental (default) or Complete
+- WithParameterFile(string) - Path to a .json or .bicepparam file. Call it repeatedly for .json files; each file becomes `--parameters @file` in call order, later files override earlier values. A .bicepparam file must be the only parameter file (az allows only inline KEY=VALUE next to it); combining it with another file or WithSecureParameter throws at registration
+- WithParameter(name, value) - Inline parameter, passed on the az command line (visible in process listings): non-secret values only
+- WithSecureParameter(name, value) - Secret parameter. Registered for redaction at the call. When the step runs, all secure parameters go into one temporary parameters file in the container (/tmp/ando-bicep-<guid>.json, mode 0600), passed as the last `--parameters @file` and deleted afterwards, also on failure. The value (and its JSON-escaped form) is never on a command line or in logs. Works for deploy, validate and what-if at both scopes, but not with a .bicepparam file
+- WithMode(DeploymentMode) - Incremental (default) or Complete. Complete works at resource group scope only; at subscription scope (DeployToSubscription, ValidateSubscription, WhatIfSubscription) it throws at registration because az has no --mode there
 - WithDeploymentSlot(string) - App Service slot
 
 ### Cloudflare.PagesDeploy Options
@@ -1263,6 +1283,7 @@ AppService.DeployZip is resilient to flaky Azure uploads: if the deploy command 
 - WithDind(bool) - Enable Docker-in-Docker
 - WithImage(string) - Override Docker image
 - WithProfile(string) - Activate profiles for child build (e.g., "publish" or "test,release")
+- WithEnv(string name, string value, bool secret = false) - Set an environment variable in the child process only (repeatable). The child forwards exactly these variables into its containers, not the keys it inherits from the parent (also with `--no-env`). Redacted in both builds when the name looks secret or `secret: true`
 
 ## Tips for Writing Build Scripts
 

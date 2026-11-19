@@ -21,6 +21,7 @@
 // - Child build appears as single grouped step in parent workflow
 // =============================================================================
 
+using System.Runtime.CompilerServices;
 using Ando.Logging;
 using Ando.Profiles;
 using Ando.References;
@@ -42,6 +43,18 @@ public class AndoOperations
     private readonly ArtifactOperations _artifactOperations;
     private readonly ProfileRegistry _profileRegistry;
     private readonly Func<Execution.ICommandExecutor> _executorFactory;
+
+    /// <summary>
+    /// Runs child CLI processes on the host. Separate from the build executor, which
+    /// is the container executor once Docker mode is active. Tests replace it.
+    /// </summary>
+    internal Func<Execution.ICommandExecutor>? HostExecutorFactory { get; set; }
+
+    /// <summary>How to start the running CLI for child builds and step trees. Tests replace it.</summary>
+    internal SelfInvocation Self { get; set; } = SelfInvocation.Current;
+
+    private Execution.ICommandExecutor CreateHostExecutor() =>
+        HostExecutorFactory?.Invoke() ?? new Execution.ProcessRunner(_logger);
 
     /// <summary>
     /// Creates a new AndoOperations instance.
@@ -143,13 +156,19 @@ public class AndoOperations
 
         _registry.Register($"Ando.Build", async () =>
         {
+            var session = _buildOptions.Session;
+
             // Apply options if provided.
             var options = new AndoBuildOptions();
             configure?.Invoke(options);
-            options.NoEnv = _buildOptions.Session.NoEnv;
+            options.NoEnv = session.NoEnv;
+            options.AssumeYes = session.AssumeYes;
+            options.Ref = session.Ref;
 
             // Translate container path to host path for spawning the child process.
-            var hostPath = _containerToHostPath(dirPath);
+            // With --ref the child runs from the matching folder under the invocation root.
+            var translatedPath = _containerToHostPath(dirPath);
+            var hostPath = MapChildHostPath(dirPath, translatedPath, session.Ref, session.InvocationRoot);
             _logger.Info($"Child build target (script path): {dirPath}");
             _logger.Info($"Child build translated path: {hostPath}");
 
@@ -171,94 +190,299 @@ public class AndoOperations
                 _logger.Debug($"Running child build in: {workingDirectory}");
             }
 
-            // Build CLI arguments from options.
-            var argsList = options.BuildArgs().ToList();
-
-            // If a specific build file was specified, add it to the arguments.
-            if (buildFileArg != null)
-            {
-                argsList.InsertRange(0, new[] { "-f", buildFileArg });
-            }
-
-            // Pass active profiles to child build, but only if not explicitly overridden.
-            // If WithProfile() was called, use that instead of inheriting from parent.
-            if (string.IsNullOrEmpty(options.Profile))
-            {
-                var activeProfiles = _profileRegistry.ActiveProfiles;
-                if (activeProfiles.Count > 0)
-                {
-                    argsList.Add("-p");
-                    argsList.Add(string.Join(",", activeProfiles));
-                }
-            }
-
-            var args = argsList.ToArray();
-
-            // Run ando on the host machine - it will create its own container.
-            // Using ProcessRunner directly since we need host execution.
-            // Interactive mode allows child builds to prompt for user input.
-            var runner = new Execution.ProcessRunner(_logger);
-
-            // Calculate the indent level for the child build.
-            // Read current level from env var (default 0), increment by 1.
-            var currentIndentStr = Environment.GetEnvironmentVariable(Logging.ConsoleLogger.IndentLevelEnvVar);
-            var currentIndent = int.TryParse(currentIndentStr, out var level) ? level : 0;
-            var childIndent = currentIndent + 1;
-
-            var commandOptions = new Execution.CommandOptions
-            {
-                WorkingDirectory = workingDirectory,
-                Interactive = true,
-                TimeoutMs = Execution.CommandOptions.NoTimeout
-            };
-
-            if (!Directory.Exists(workingDirectory))
-            {
-                _logger.Error($"Child build working directory does not exist: {workingDirectory}");
-                _logger.Error("This usually indicates an ANDO_HOST_ROOT/container path mapping issue.");
-                _logger.Error($"ANDO_HOST_ROOT={Environment.GetEnvironmentVariable("ANDO_HOST_ROOT") ?? "<not set>"}");
-            }
-
-            // Set indent level for child build output formatting.
-            commandOptions.Environment[Logging.ConsoleLogger.IndentLevelEnvVar] = childIndent.ToString();
-
-            // Pass DIND setting to child builds so they inherit the parent's DIND mode.
-            // This ensures child builds don't prompt for DIND when parent already enabled it.
-            var parentDind = Environment.GetEnvironmentVariable(DindChecker.DindEnvVar);
-            if (!string.IsNullOrEmpty(parentDind))
-            {
-                commandOptions.Environment[DindChecker.DindEnvVar] = parentDind;
-            }
-
-            // Child builds skip the named locks this run holds, so a shared helper does not block itself.
-            var heldLocks = _buildOptions.Session.Locks.HeldForChildren;
-            if (heldLocks.Length > 0)
-            {
-                commandOptions.Environment[Execution.RunLockSet.HeldLocksEnvVar] = heldLocks;
-            }
-
-            _logger.Info($"Spawning child build: ando {string.Join(" ", args)}");
-
+            // The child writes the path of its run record here; the folder is removed afterwards.
+            var tempDirectory = Directory.CreateTempSubdirectory("ando-child-").FullName;
             try
             {
-                var result = await runner.ExecuteAsync("ando", args, commandOptions);
-                if (!result.Success)
+                var recordPathFile = Path.Combine(tempDirectory, "record-path.txt");
+                options.RecordPathFile = recordPathFile;
+
+                // Build CLI arguments from options.
+                var argsList = options.BuildArgs().ToList();
+
+                // If a specific build file was specified, add it to the arguments.
+                if (buildFileArg != null)
                 {
-                    _logger.Error($"Child build failed (exit code {result.ExitCode}).");
+                    argsList.InsertRange(0, new[] { "-f", buildFileArg });
                 }
-                return result.Success;
+
+                // Pass active profiles to child build, but only if not explicitly overridden.
+                // If WithProfile() was called, use that instead of inheriting from parent.
+                if (string.IsNullOrEmpty(options.Profile))
+                {
+                    var activeProfiles = _profileRegistry.ActiveProfiles;
+                    if (activeProfiles.Count > 0)
+                    {
+                        argsList.Add("-p");
+                        argsList.Add(string.Join(",", activeProfiles));
+                    }
+                }
+
+                var args = Self.WithArgs(argsList);
+
+                // Run ando on the host machine - it will create its own container.
+                // Interactive mode allows child builds to prompt for user input.
+                var runner = CreateHostExecutor();
+
+                // Calculate the indent level for the child build.
+                // Read current level from env var (default 0), increment by 1.
+                var currentIndentStr = Environment.GetEnvironmentVariable(Logging.ConsoleLogger.IndentLevelEnvVar);
+                var currentIndent = int.TryParse(currentIndentStr, out var level) ? level : 0;
+                var childIndent = currentIndent + 1;
+
+                var commandOptions = new Execution.CommandOptions
+                {
+                    WorkingDirectory = workingDirectory,
+                    Interactive = true,
+                    TimeoutMs = Execution.CommandOptions.NoTimeout
+                };
+
+                if (!Directory.Exists(workingDirectory))
+                {
+                    _logger.Error($"Child build working directory does not exist: {workingDirectory}");
+                    _logger.Error("This usually indicates an ANDO_HOST_ROOT/container path mapping issue.");
+                    _logger.Error($"ANDO_HOST_ROOT={Environment.GetEnvironmentVariable("ANDO_HOST_ROOT") ?? "<not set>"}");
+                }
+
+                // WithEnv values exist in the child process only, never in this one.
+                foreach (var (key, value) in options.ChildEnvironment())
+                {
+                    commandOptions.Environment[key] = value;
+                }
+
+                // Set indent level for child build output formatting.
+                commandOptions.Environment[Logging.ConsoleLogger.IndentLevelEnvVar] = childIndent.ToString();
+
+                // Pass DIND setting to child builds so they inherit the parent's DIND mode.
+                // This ensures child builds don't prompt for DIND when parent already enabled it.
+                var parentDind = Environment.GetEnvironmentVariable(DindChecker.DindEnvVar);
+                if (!string.IsNullOrEmpty(parentDind))
+                {
+                    commandOptions.Environment[DindChecker.DindEnvVar] = parentDind;
+                }
+
+                // Child builds skip the named locks this run holds, so a shared helper does not block itself.
+                var heldLocks = session.Locks.HeldForChildren;
+                if (heldLocks.Length > 0)
+                {
+                    commandOptions.Environment[Execution.RunLockSet.HeldLocksEnvVar] = heldLocks;
+                }
+
+                _logger.Info($"Spawning child build: ando {string.Join(" ", args.Skip(Self.PrefixArgs.Length))}");
+
+                try
+                {
+                    var result = await runner.ExecuteAsync(Self.Command, args, commandOptions);
+                    LinkChildRecord(recordPathFile, ChildRecordLabel(hostPath, isFile, displayName));
+                    if (!result.Success)
+                    {
+                        _logger.Error($"Child build failed (exit code {result.ExitCode}).");
+                    }
+                    return result.Success;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Child build threw exception: {ex.Message}");
+                    if (ex.InnerException != null)
+                    {
+                        _logger.Error($"Inner: {ex.InnerException.Message}");
+                    }
+                    return false;
+                }
             }
-            catch (Exception ex)
+            finally
             {
-                _logger.Error($"Child build threw exception: {ex.Message}");
-                if (ex.InnerException != null)
-                {
-                    _logger.Error($"Inner: {ex.InnerException.Message}");
-                }
-                return false;
+                DeleteTempDirectory(tempDirectory);
             }
         }, displayName);
     }
+
+    /// <summary>
+    /// Where a child build runs on the host. Without --ref (or without an invocation root) that is the
+    /// translated path. With --ref the parent builds a temporary worktree, so the child runs from the
+    /// matching folder under the invocation root instead: the same path relative to /workspace.
+    /// Its artifacts, env file and run record then land in the project and are not deleted with the worktree.
+    /// </summary>
+    internal static string MapChildHostPath(string containerPath, string translatedPath, string? gitRef, string? invocationRoot)
+    {
+        if (string.IsNullOrEmpty(gitRef) || string.IsNullOrEmpty(invocationRoot))
+        {
+            return translatedPath;
+        }
+
+        const string workspace = "/workspace";
+        string relative;
+        if (containerPath == workspace || containerPath.StartsWith(workspace + "/", StringComparison.Ordinal))
+        {
+            relative = containerPath[workspace.Length..].TrimStart('/');
+        }
+        else if (!Path.IsPathRooted(containerPath))
+        {
+            relative = containerPath;
+        }
+        else
+        {
+            return translatedPath;
+        }
+
+        return Path.GetFullPath(Path.Combine(invocationRoot, relative));
+    }
+
+    // The child's path relative to the invocation root (website/build.csando), so two children with the
+    // same folder name do not share a report key. A directory means its build.csando.
+    private string ChildRecordLabel(string hostPath, bool isFile, string displayName)
+    {
+        var root = _buildOptions.Session.InvocationRoot;
+        if (string.IsNullOrEmpty(root))
+        {
+            return displayName;
+        }
+
+        var script = isFile ? hostPath : Path.Combine(hostPath, "build.csando");
+        var relative = Path.GetRelativePath(root, script).Replace('\\', '/');
+        return relative.StartsWith("../", StringComparison.Ordinal) || Path.IsPathRooted(relative) ? displayName : relative;
+    }
+
+    // Adds the child's run record to this run's record when the child wrote its path.
+    // The same label twice in one run gets " #2", " #3", ...
+    private void LinkChildRecord(string recordPathFile, string label)
+    {
+        try
+        {
+            if (!File.Exists(recordPathFile))
+            {
+                return;
+            }
+
+            var path = File.ReadAllText(recordPathFile).Trim();
+            if (path.Length > 0)
+            {
+                var reports = _buildOptions.Session.Reports;
+                var key = $"child record {label}";
+                for (var n = 2; reports.Any(r => r.Key == key); n++)
+                {
+                    key = $"child record {label} #{n}";
+                }
+                reports.Add(new KeyValuePair<string, string>(key, path));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.Debug($"Could not read the child record path: {ex.Message}");
+        }
+    }
+
+    private static void DeleteTempDirectory(string path)
+    {
+        try
+        {
+            Directory.Delete(path, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Best effort: a leftover temp folder is harmless.
+        }
+    }
+
+    /// <summary>
+    /// Registers a step that returns the `--dry-run` step tree of another script as its Value
+    /// (one line per step, indented two spaces per level, `\n` line endings, secrets redacted).
+    /// It starts the running CLI on the host (`run --dry-run -f file`), so nothing in that script
+    /// executes, and a failing script fails this step. Under --ref the child reads the same commit
+    /// from the invocation root. WithTimeout, WithEnv and AllowFailure are honored.
+    /// Usage: var tree = Ando.StepTree("deploy.csando", profiles: "eu");
+    /// </summary>
+    /// <param name="file">The script; a relative path is relative to the directory ANDO was run from.</param>
+    /// <param name="profiles">Profiles to activate, comma-separated.</param>
+    public CommandStep StepTree(string file, string? profiles = null)
+    {
+        var step = new CommandStep("Ando.StepTree", _registry.DefaultCommandTimeoutMs);
+        var context = string.IsNullOrEmpty(profiles) ? file : $"{file} -p {profiles}";
+
+        _registry.Register("Ando.StepTree", async () =>
+        {
+            var session = _buildOptions.Session;
+            var tempDirectory = Directory.CreateTempSubdirectory("ando-steptree-").FullName;
+            try
+            {
+                var treeFile = Path.Combine(tempDirectory, "tree.txt");
+                var args = Self.WithArgs(StepTreeArgs(session.ResolveHostPath(file), profiles, session.Ref, treeFile));
+
+                var options = new Execution.CommandOptions
+                {
+                    WorkingDirectory = session.ResolveHostPath("."),
+                    TimeoutMs = step.TimeoutMs,
+                    // The child prints a banner and a tree; the tree is read from the file.
+                    SuppressOutput = true
+                };
+                foreach (var (key, value) in step.Environment)
+                {
+                    options.Environment[key] = value;
+                }
+
+                var result = await CreateHostExecutor().ExecuteAsync(Self.Command, args, options);
+                if (result.Success && File.Exists(treeFile))
+                {
+                    step.Set(NormalizeTree(File.ReadAllText(treeFile)));
+                    return true;
+                }
+
+                step.Set(null, result.Success ? 1 : result.ExitCode);
+
+                if (result.Error?.Contains("timed out", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    throw new TimeoutException(result.Error);
+                }
+
+                if (step.FailureAllowed)
+                {
+                    _logger.Warning($"    Step tree of {file} failed (exit code {result.ExitCode}, allowed).");
+                    return true;
+                }
+
+                _logger.Error(result.Success
+                    ? $"    Step tree of {file} was not written."
+                    : $"    Step tree of {file} failed (exit code {result.ExitCode}).");
+                foreach (var line in Tail(result.Output, 20))
+                {
+                    _logger.Error($"    {line}");
+                }
+                return false;
+            }
+            finally
+            {
+                DeleteTempDirectory(tempDirectory);
+            }
+        }, context);
+
+        return step;
+    }
+
+    /// <summary>The CLI arguments for `ando run --dry-run` of <paramref name="file"/>, writing the tree to <paramref name="treeFile"/>.</summary>
+    internal static string[] StepTreeArgs(string file, string? profiles, string? gitRef, string treeFile)
+    {
+        var args = new List<string> { "run", "--dry-run", "--no-env", "--no-color", "-f", file };
+        if (!string.IsNullOrEmpty(profiles))
+        {
+            args.Add("-p");
+            args.Add(profiles);
+        }
+        if (!string.IsNullOrEmpty(gitRef))
+        {
+            args.Add("--ref");
+            args.Add(gitRef);
+        }
+        args.Add("--dry-run-output");
+        args.Add(treeFile);
+        return args.ToArray();
+    }
+
+    /// <summary>Normalizes the tree text: `\n` line endings, no trailing blank lines.</summary>
+    internal static string NormalizeTree(string text) =>
+        text.Replace("\r\n", "\n").Replace('\r', '\n').TrimEnd('\n');
+
+    private static IEnumerable<string> Tail(string? text, int count) =>
+        (text ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).TakeLast(count);
 
     // =========================================================================
     // Step model: blocks, finally, deferred steps, gates and reports.
@@ -386,10 +610,21 @@ public class AndoOperations
     /// with no interactive console fails at this step.
     /// Usage: Ando.Confirm("Swap EU into production?");
     /// </summary>
-    public void Confirm(string message)
+    [OverloadResolutionPriority(1)]
+    public void Confirm(string message) => RegisterConfirm(() => message, message);
+
+    /// <summary>
+    /// Like <see cref="Confirm(string)"/>, but the message is computed when the step runs
+    /// (for example from a step's output). `--dry-run` shows "decided at run time".
+    /// Usage: Ando.Confirm(() => $"Swap {version.Value} into production?");
+    /// </summary>
+    public void Confirm(Func<string> message) => RegisterConfirm(message, "decided at run time");
+
+    private void RegisterConfirm(Func<string> messageFactory, string context)
     {
         _registry.Register("Ando.Confirm", () =>
         {
+            var message = messageFactory();
             if (_buildOptions.Session.AssumeYes)
             {
                 _logger.Info($"{message} yes (--yes)");
@@ -410,7 +645,7 @@ public class AndoOperations
                 _logger.Error("Not confirmed.");
             }
             return Task.FromResult(accepted);
-        }, message);
+        }, context);
     }
 
     /// <summary>

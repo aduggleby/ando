@@ -28,6 +28,20 @@ public class ProcessRunnerTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_SuppressStdout_CapturesStdoutButOnlyLogsStderr()
+    {
+        var runner = new ProcessRunner(_logger);
+
+        var result = await runner.ExecuteAsync("sh", new[] { "-c", "echo json-line; echo diagnostic >&2" },
+            new CommandOptions { SuppressStdout = true });
+
+        Assert.True(result.Success);
+        Assert.Equal("json-line", result.Output);
+        Assert.DoesNotContain("json-line", _logger.InfoMessages);
+        Assert.Contains("diagnostic", _logger.InfoMessages);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_CommandNotFound_ReturnsFailure()
     {
         var runner = new ProcessRunner(_logger);

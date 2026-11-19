@@ -33,18 +33,37 @@ Ando.Build(Directory("./website") / "deploy.csando");
 
 // Child build with Docker-in-Docker enabled
 Ando.Build(Directory("./integration-tests"), o => o.WithDind());
+
+// Child build with a variable that exists in the child process only
+Ando.Build(Directory("./website"), o => o.WithEnv("CLOUDFLARE_API_TOKEN", Env("CLOUDFLARE_API_TOKEN")));
+```
+
+The child is the same CLI that runs the parent, so `./ando-dev` starts a source build and not the `ando` on PATH. A child inherits `--yes` and `--no-env`. When the parent runs with `--ref`, the child gets the same `--ref` and runs from the matching folder under the directory you ran from, not under the temporary worktree. Its artifacts, env file and run record then stay in the project. Without `--ref`, nothing changes.
+
+`WithEnv(name, value, secret = false)` sets an environment variable in the child process only, never in the parent's. It can be repeated. When you use it, the child forwards exactly those variables into its containers instead of the variable names it inherits from the parent. This also holds with `--no-env`. The value is redacted in both builds when the name looks secret (TOKEN, PASSWORD, KEY and similar) or you pass `secret: true`.
+
+After the child exits, the parent's run record gets an entry `child record <path>` (the child's path relative to the directory you ran from, for example `child record website/build.csando`; ` #2`, ` #3` when the same path is built again) with the path of the child's run record. It is missing when the child wrote no record.
+
+## Step tree of another script
+
+`Ando.StepTree(file, profiles)` returns the `--dry-run` tree of another script as the step's `Value`: one line per step, two spaces of indent per level, `\n` line endings, secrets redacted. It starts the running CLI on the host with `run --dry-run --no-env --no-color -f <file>` (plus `-p <profiles>`, and `--ref` when this run has one), from the directory you ran from, so the script's steps never run. A relative `file` is relative to that directory. A non-zero exit fails the step. It returns a `CommandStep`, so `WithTimeout`, `WithEnv` and `AllowFailure` work. Read the value at execution time.
+
+```csharp
+var tree = Ando.StepTree("deploy.csando", "eu");
+Ando.Report("deploy tree", tree);
 ```
 
 ## Options Reference
 
 ### Build Options
 
-| Option                  | Description                                                                                                                                                                            |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WithVerbosity(string)` | Set output verbosity level. Values: "Quiet" (errors only), "Minimal" (warnings and errors), "Normal" (default), "Detailed" (debug output).                                             |
-| `ColdStart(bool)`       | Force a fresh container for this build, ignoring any warm container cache. Use when you need a clean environment or are debugging container state issues.                              |
-| `WithDind(bool)`        | Enable Docker-in-Docker mode. Required when the child build needs to run Docker commands (e.g., building images, running docker-compose). Mounts the Docker socket into the container. |
-| `WithImage(string)`     | Override the Docker image for this child build. Use when the child build requires different tools than the parent (e.g., Node.js build in a .NET project).                             |
+| Option                          | Description                                                                                                                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `WithVerbosity(string)`         | Set output verbosity level. Values: "Quiet" (errors only), "Minimal" (warnings and errors), "Normal" (default), "Detailed" (debug output).                                                 |
+| `ColdStart(bool)`               | Force a fresh container for this build, ignoring any warm container cache. Use when you need a clean environment or are debugging container state issues.                                  |
+| `WithDind(bool)`                | Enable Docker-in-Docker mode. Required when the child build needs to run Docker commands (e.g., building images, running docker-compose). Mounts the Docker socket into the container.     |
+| `WithImage(string)`             | Override the Docker image for this child build. Use when the child build requires different tools than the parent (e.g., Node.js build in a .NET project).                                 |
+| `WithEnv(string, string, bool)` | Set an environment variable in the child process only (repeatable). The child forwards exactly these variables into its containers. Redacted when the name looks secret or `secret: true`. |
 
 ## Step model
 
@@ -57,7 +76,7 @@ Steps register while the script is evaluated and run afterwards, in order, stopp
 | Run C# at execution time, then the steps it registers          | `Ando.Defer(body)`                                       |
 | Run steps only if a runtime condition holds                    | `Ando.When(condition, then, otherwise?)`                 |
 | Fail the build if a runtime condition is false                 | `Ando.Require(condition, message)`                       |
-| Ask before continuing                                          | `Ando.Confirm(message)`                                  |
+| Ask before continuing                                          | `Ando.Confirm(string \| Func<string>)`                   |
 | Record a value in the run record                               | `Ando.Report(key, string \| StepOutput \| Func<string>)` |
 | Default timeout for command steps                              | `Ando.CommandTimeout(TimeSpan)`                          |
 | Tell a Ctrl+C from a failure in `OnFailure`/`Finally`          | `Ando.Cancelled` (read at execution time)                |

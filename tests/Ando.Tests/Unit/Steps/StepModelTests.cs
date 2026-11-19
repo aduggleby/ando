@@ -504,6 +504,59 @@ public class StepModelTests
         _logger.InfoMessages.ShouldContain(m => m.Contains("Swap into production?") && m.Contains("--yes"));
     }
 
+    [Fact]
+    public async Task Confirm_Func_IsEvaluatedWhenTheStepRuns()
+    {
+        var ando = CreateAndo();
+        _options.Session.AssumeYes = true;
+        var version = "early";
+        ando.Confirm(() => $"Swap {version}?");
+        version = "late";
+
+        _registry.Steps[0].Context.ShouldBe("decided at run time");
+        var result = await RunAsync();
+
+        result.Success.ShouldBeTrue();
+        _logger.InfoMessages.ShouldContain(m => m.Contains("Swap late?") && m.Contains("--yes"));
+    }
+
+    [Fact]
+    public void Confirm_String_KeepsItsStepNameAndContext()
+    {
+        CreateAndo().Confirm("Swap into production?");
+
+        _registry.Steps[0].Name.ShouldBe("Ando.Confirm");
+        _registry.Steps[0].Context.ShouldBe("Swap into production?");
+    }
+
+    [Fact]
+    public async Task Confirm_ScriptCompiles_ForExistingAndNewCallShapes()
+    {
+        var dir = Directory.CreateTempSubdirectory("ando-confirm-").FullName;
+        try
+        {
+            var path = Path.Combine(dir, "build.csando");
+            await File.WriteAllTextAsync(path, """
+                string Msg() => "from a method";
+                Ando.Confirm("plain");
+                Ando.Confirm(message: "named");
+                Ando.Confirm(null);
+                Ando.Confirm((string?)null);
+                Ando.Confirm(() => $"computed {1}");
+                Ando.Confirm(Msg);
+                Ando.Confirm(message: () => "named func");
+                """);
+
+            var errors = await new Ando.Scripting.ScriptHost(new TestLogger()).VerifyScriptAsync(path);
+
+            errors.ShouldBeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     [SkippableFact]
     public async Task Confirm_WithoutYesAndRedirectedInput_Fails()
     {

@@ -134,7 +134,7 @@ public abstract class CommandExecutorBase : ICommandExecutor
             }
             else
             {
-                if (!options.SuppressOutput)
+                if (!options.SuppressOutput && !options.SuppressStdout)
                     Logger.Info(e.Data);
                 outputBuilder.AppendLine(e.Data);
             }

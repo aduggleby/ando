@@ -66,10 +66,34 @@ public static class SecretValues
     {
         foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
         {
-            if (entry.Key is string name && IsSecretName(name))
+            if (entry.Key is string name && IsSecretName(name)
+                && !ControlVariables.Contains(name, StringComparer.Ordinal))
             {
                 Add(entry.Value as string);
             }
+        }
+    }
+
+    /// <summary>
+    /// Environment variable a parent build sets: names (one per line) whose values the child registers as secrets.
+    /// It is named REDACT_ENV_NAMES, not SECRET_*, so the name does not look secret itself.
+    /// </summary>
+    public const string SecretKeysEnvVar = "ANDO_REDACT_ENV_NAMES";
+
+    // ANDO's own control variables. Their values are names and lists, not secrets, and registering them
+    // would make the child print "[REDACTED]" for every variable name. Kept explicit: users may name
+    // real secrets ANDO_*.
+    private static readonly string[] ControlVariables =
+        [SecretKeysEnvVar, "ANDO_LOADED_ENV_KEYS", "ANDO_HELD_LOCKS"];
+
+    /// <summary>Adds the values of the variables named in <see cref="SecretKeysEnvVar"/>.</summary>
+    public static void AddFromListedKeys()
+    {
+        var list = Environment.GetEnvironmentVariable(SecretKeysEnvVar);
+        if (string.IsNullOrWhiteSpace(list)) return;
+        foreach (var name in list.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            Add(Environment.GetEnvironmentVariable(name));
         }
     }
 

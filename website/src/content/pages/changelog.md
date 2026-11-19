@@ -3,6 +3,21 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.166
+
+**2026-11-19**
+
+- Add `Ando.StepTree(file, profiles)`, a step whose value is the `--dry-run` step tree of another script (run on the host with the same `--ref`), so a run can check that a deploy profile still has its safety steps before it tags a release
+- **Behavior change:** under `ando run --ref`, `Ando.Build` child builds now run from the project folder with the same `--ref`, instead of inside the temporary worktree. They build the same commit, and their artifacts, env file and run record stay in the project. `--yes` is now forwarded to child builds
+- **Behavior change:** child builds start the same ANDO CLI as the parent (for example the source build of `./ando-dev`), not the `ando` found on PATH
+- Add `WithEnv(name, value, secret)` to `Ando.Build`: the variable goes only to that child, and the child forwards only these keys into its containers. Secret-looking names and `secret: true` values are redacted in parent and child. The child's run record path is added to the parent's run record
+- Add `Ando.Confirm(() => ...)`, whose message is computed when the step runs
+- **Behavior change:** `Bicep.WhatIf` now runs `az deployment group what-if` and returns a result a script can gate on: `Changes`, `Summary`, `HasChanges("Delete")`, `OfType(...)` and the raw `Json`. It logs a summary and one line per change instead of az's full output. Add `Bicep.WhatIfSubscription`
+- Add `Bicep.Validate` and `Bicep.ValidateSubscription`
+- **Behavior change:** `WithParameterFile` can be called more than once; every file is passed in order. A `.bicepparam` file cannot be combined with another file or a secure parameter (az does not allow it), and this now fails when the script loads
+- Add `WithSecureParameter(name, value)`: the value goes to a 0600 parameters file in the container and never appears on a command line or in the log. The file is removed after the command, and at the start of the next run if a run was killed
+- `WithMode(DeploymentMode.Complete)` at subscription scope now fails when the script loads instead of passing a `--mode` that az rejects
+
 ## 0.9.165
 
 **2026-11-19**

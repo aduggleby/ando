@@ -247,15 +247,18 @@ public class BicepOperationsTests
     }
 
     [Fact]
-    public async Task WhatIf_IncludesWhatIfFlag()
+    public async Task WhatIf_UsesWhatIfCommand_NotCreateWithFlag()
     {
+        _executor.SimulatedOutput = """{"status":"Succeeded","changes":[]}""";
         var bicep = CreateBicep();
         bicep.WhatIf("test-rg", "./main.bicep");
 
         await _registry.Steps[0].Execute();
 
         var cmd = _executor.LastCommand!;
-        Assert.Contains("--what-if", cmd.Args);
+        Assert.DoesNotContain("--what-if", cmd.Args);
+        Assert.Contains("what-if", cmd.Args);
+        Assert.Contains("--no-pretty-print", cmd.Args);
     }
 
     [Fact]
