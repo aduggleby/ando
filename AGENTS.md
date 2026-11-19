@@ -76,6 +76,9 @@ dotnet ef migrations has-pending-model-changes -p src/Ando.Server/Ando.Server.cs
   the default `shared` keeps fixed names/ports and leaves containers running for inspection.
 - `build.csando` always runs the server unit tests; with Docker it also runs the integration tests and both E2E
   variants (skipped on Ando.Server unless `-p e2e`). The `publish` profile fails if Docker is unavailable.
+- Publish with `./ando-dev run -p publish --dind --read-env` (ANDO from source), not the installed `ando`:
+  `build.csando` uses the newest operations (for example `Git.Install` since 0.9.163), and an older
+  globally installed CLI fails to compile it before anything runs.
 
 ## Commit & Pull Request Guidelines
 
