@@ -96,6 +96,13 @@ public class ClaudePermissionChecker
     /// </summary>
     private ClaudePermissionResult PromptForPermission(string commandName, string projectRoot)
     {
+        // Without a terminal nobody can answer (and a pty test run would block on ReadKey).
+        if (!EnvironmentHelper.IsInteractive())
+        {
+            _logger.Error($"The '{commandName}' command needs permission to run Claude CLI. Set allowClaude:true in ando.config to allow it without a prompt.");
+            return ClaudePermissionResult.Denied;
+        }
+
         Console.WriteLine();
         _logger.Warning($"The '{commandName}' command uses Claude CLI for AI-powered features.");
         _logger.Warning("");

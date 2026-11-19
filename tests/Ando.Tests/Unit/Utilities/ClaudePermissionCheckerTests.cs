@@ -70,6 +70,17 @@ public class ClaudePermissionCheckerTests : IDisposable
         _logger.DebugMessages.ShouldContain(m => m.Contains("ando.config"));
     }
 
+    [Fact]
+    public void CheckAndPrompt_WithoutTerminal_ReturnsDeniedAndLogsError()
+    {
+        var checker = new ClaudePermissionChecker(_logger);
+
+        var result = checker.CheckAndPrompt(_tempDir, "commit");
+
+        result.ShouldBe(ClaudePermissionResult.Denied);
+        _logger.ErrorMessages.ShouldContain(m => m.Contains("allowClaude"));
+    }
+
     [Theory]
     [InlineData(ClaudePermissionResult.AllowedThisRun, true)]
     [InlineData(ClaudePermissionResult.AllowedAndSaved, true)]

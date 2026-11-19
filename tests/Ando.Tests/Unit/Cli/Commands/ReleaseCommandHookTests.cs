@@ -108,6 +108,19 @@ public class ReleaseCommandHookTests : IDisposable
         _logger.InfoMessages.ShouldContain(m => m.Contains(HookMarker));
     }
 
+    [Fact]
+    public async Task ExecuteAsync_WithoutAllAndWithoutTerminal_FailsWithExitCode1()
+    {
+        SetupReleaseProject();
+        SetupGitState();
+
+        var command = new ReleaseCommand(_runner, _logger);
+        var result = await command.ExecuteAsync(all: false, commandName: "release");
+
+        result.ShouldBe(1);
+        _logger.ErrorMessages.ShouldContain(m => m.Contains("--all"));
+    }
+
     /// <summary>
     /// Resets Spectre.Console's cached IAnsiConsole so it uses the current Console.Out.
     /// The IAnsiConsole is created eagerly to avoid a circular Lazy reference:

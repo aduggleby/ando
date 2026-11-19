@@ -145,6 +145,13 @@ public class ReleaseCommand
             }
             else
             {
+                // The checklist needs a terminal; without one nobody can answer it.
+                if (!EnvironmentHelper.IsInteractive())
+                {
+                    _logger.Error($"{title} needs an interactive terminal for the step checklist. Pass --all to run every step without it.");
+                    return 1;
+                }
+
                 var result = ShowChecklist(steps, version, bumpType, config);
                 if (result == null)
                 {
@@ -238,6 +245,13 @@ public class ReleaseCommand
         var newVersion = CalculateNextVersion(currentVersion, bumpType, config);
         AnsiConsole.MarkupLine($"[bold]Version bump:[/] {currentVersion} → {newVersion} [dim]({bumpType.ToString().ToLower()})[/]");
         AnsiConsole.WriteLine();
+
+        // The key-driven checklist needs a terminal; without one (or in a pty test run) it would block or throw.
+        if (!EnvironmentHelper.IsInteractive())
+        {
+            AnsiConsole.MarkupLine("[yellow]No interactive terminal: pass --all to run every step without the checklist.[/]");
+            return null;
+        }
 
         // Use custom selection UI that supports Escape to cancel.
         return ShowCustomSelection(steps);

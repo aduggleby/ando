@@ -67,6 +67,11 @@ public static class EnvironmentHelper
         return string.IsNullOrEmpty(value) ? defaultValue : value;
     }
 
+    /// <summary>Whether prompting is possible. Tests set this to false so a pty never blocks on ReadLine.</summary>
+    internal static Func<bool> IsInteractive { get; set; } = DefaultIsInteractive;
+
+    private static bool DefaultIsInteractive() => !Console.IsInputRedirected && Environment.UserInteractive;
+
     /// <summary>
     /// Gets a required environment variable, prompting the user if not set.
     /// After prompting, sets the environment variable for the current process
@@ -87,7 +92,7 @@ public static class EnvironmentHelper
 
         // Check if we're in a non-interactive environment (CI/server).
         // Console.IsInputRedirected is true when stdin is not a terminal.
-        if (Console.IsInputRedirected || !Environment.UserInteractive)
+        if (!IsInteractive())
         {
             throw new InvalidOperationException(
                 $"Environment variable '{name}' ({description}) is required but not set. " +

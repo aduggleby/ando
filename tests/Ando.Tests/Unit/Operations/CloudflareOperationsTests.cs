@@ -23,6 +23,7 @@ using Ando.Workflow;
 namespace Ando.Tests.Unit.Operations;
 
 [Trait("Category", "Unit")]
+[Collection("SecretValues")] // shares CLOUDFLARE_* env vars with CloudflareCredentialsTests
 public class CloudflareOperationsTests : IDisposable
 {
     private readonly StepRegistry _registry = new();
