@@ -55,6 +55,17 @@ public class RunRecordWriterTests : IDisposable
     }
 
     [Fact]
+    public void Build_ArtifactCopyFailed_RecordSaysSuccessFalse()
+    {
+        var session = new RunSession { ArtifactCopyFailed = true };
+
+        var record = RunRecordWriter.Build("build.csando", _root, [], session,
+            new WorkflowResult { Success = true }, Started, "1.0.0");
+
+        Assert.Equal(false, record["success"]);
+    }
+
+    [Fact]
     public void TryWrite_CreatesTimestampedFileAndGitignore()
     {
         var path = Write(new RunSession());

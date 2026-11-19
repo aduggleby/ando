@@ -3,6 +3,22 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.165
+
+**2026-11-19**
+
+- **Behavior change:** every `ando run` now takes a lock on its build container before it touches it (before `--cold` removes a container and before the per-run Azure profile is set up). A second run of the same script in the same folder fails at once with the new exit code 9 instead of logging the first run out of Azure mid-deploy. `--dry-run` takes no lock. Lock files live in `~/.ando/locks` (`ANDO_LOCK_DIR` overrides it)
+- Add `Ando.Lock(name)`, a named lock taken when the script loads and held until the run ends, for example one release at a time across scripts. Child builds started with `Ando.Build` inherit the parent's named locks. A held lock exits with code 9
+- **Behavior change:** a failed artifact copy at the end of a run (refused destination, a destination that cannot be removed, a failed `docker cp`) now fails the run with exit code 1 and an `artifact-copy-failed` entry in the run record. Before, it only logged and the run exited 0
+- Add `Ando.CopyToHost(containerPath, hostPath)`, a step that copies files from the build container to the host in order with the other steps, so later steps can use them
+- Add `ando run --record-path-file <file>`, which writes the path of the run record to a file, so wrapper scripts no longer read it from the log
+- Add `Git.PushTag(name)`, which pushes one tag, and `Git.RemoteTags(pattern)`, which lists the tags on the remote. `Git.Tag` accepts a message computed at run time (`WithMessage(() => ...)`), and `Git.ChangedFiles` accepts a ref computed at run time
+- `Ef.Script` takes a `toMigration`, and an options form (`o => o.From(...).To(...)`) takes migrations computed at run time
+- Add `Secrets.UserSecrets(idOrProject)`, which reads dotnet user-secrets on the host, and `Secrets.EnvFile(file, keys...)`, which reads only the named keys from an env file. Their values are redacted from all output and are not forwarded to every container command. `Secrets.EnvFile` refuses a file in the repository that is not gitignored
+- Add `Cloudflare.UseCredentials(apiToken, accountId)`, which passes the Cloudflare token to later Cloudflare steps per command instead of through the environment of every command
+- `Env(name)` now redacts values whose names look secret, and `Env(name, secret: true)` redacts any value. Each line of a multi-line secret is redacted on its own. `--dry-run` output is now redacted
+- `ando release` and `ando ship` without a terminal and without `--all` now fail with a message to pass `--all` instead of failing while reading a key
+
 ## 0.9.164
 
 **2026-11-12**

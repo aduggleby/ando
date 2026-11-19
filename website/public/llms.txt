@@ -107,8 +107,19 @@ Unknown commands show an error with the help text (e.g., `ando foo` displays "Un
 - `--image <image>` - Use a custom Docker image
 - `--dind` - Mount Docker socket for Docker-in-Docker builds
 - `--ref <commit|tag>` - Build that commit instead of the working tree. ANDO checks it out into a temporary detached git worktree (under the system temp directory), evaluates the build script from there and copies only those files into the container. Env files (`.env.ando`), `Ando.CopyToContainer` host paths, artifact copies to the host and run records still use the directory you ran `ando` from. The worktree is removed when the run ends. `Git.Commit`, `Git.ShortCommit`, `Git.LastTag` and `Git.ChangedSince` refer to the checked-out commit, and `Git.RequireClean` always passes. The build container never contains `.git`, in `--ref` runs and normal runs alike (ANDO copies the project without it). So SourceLink, `git describe` and any git command inside the container do not work; ANDO's `Git.*` operations run on the host and do work. `Dotnet.Build`, `Dotnet.Publish`, `Dotnet.Test` (when it builds) and `Nuget.Pack` therefore pass `-p:SourceRevisionId=<full commit>` automatically (the value of `Git.Commit`, HEAD of the source root, the `--ref` commit with `--ref`), so `InformationalVersion` gets `+<sha>`. Outside a git repository nothing is added. Use `WithSourceRevision(sha)` to set it yourself.
+- `--record-path-file <file>` - Write the absolute path of the run record (one line) to `<file>` (relative to the invocation directory, the folder of the build script). An old file at that path is deleted when the run starts, so an early exit, `--dry-run` or a failed record write never leaves a stale path; nothing is written if the record could not be written.
 - `--yes` - Accept every `Ando.Confirm` prompt. Without it, a run with no interactive console fails at the first `Ando.Confirm`.
 - `--dry-run` - Evaluate the script and print the registered step tree (nested blocks, `on failure:` and `finally (runs last-registered first):` steps) without running any step or creating a container; exit code 0. `Ando.When` and `Ando.Defer` bodies show as one line because they run at execution time. `ando run` rejects unknown options, so a typo never starts a real run.
+
+### Exit Codes and Run Locks
+
+`ando run` exit codes: 0 success, 1 failure (including a failed artifact copy), 2 build script not found, 6 `.env.ando` not gitignored (declined), 7 GitHub OAuth scope check failed, 8 DIND check cancelled, 3 Docker not available, 4 profile validation failed, 5 generic or script error, 9 another ando run holds the container lock or an `Ando.Lock` name, 130 interrupted with Ctrl+C.
+
+Each run automatically takes an exclusive lock on its build container (`~/.ando/locks/container-<container-name>.lock`) before it removes the container (`--cold`) or clears its Azure profile; a second run of the same script fails at once with exit code 9 and names the container. Set `ANDO_LOCK_DIR` to use another lock folder (the test suite does). `--dry-run` takes no lock; the OS releases the lock when the process ends. A lock folder that cannot be used only logs a warning for the container lock. `Ando.Lock("name")` adds a named lock (`name-<name>.lock`).
+
+### Artifact Copy Failures
+
+`Ando.CopyArtifactsToHost` and `Ando.CopyZippedArtifactsToHost` copy after the last step. If a copy fails (refused destination, destination that cannot be deleted, failed `docker cp`), the error is logged, the run exits with 1 and the run record has `"success": false` and an `artifact-copy-failed` entry under `reports`. Earlier versions only logged a warning and exited 0. To copy in step order and fail that step, use `Ando.CopyToHost`.
 
 ### Run Record
 
@@ -356,6 +367,8 @@ ANDO supports pre-build and post-build hooks - `.csando` scripts that run automa
 | `Log` | Logging: `Log.Info()`, `Log.Warning()`, `Log.Error()` |
 | `Shell` | Execute commands (hooks only): `await Shell.RunAsync("cmd", "args")` |
 | `Env(name)` | Get environment variable |
+| `Secrets.UserSecrets(idOrProjectPath)` | Read a .NET user secrets store on the host at evaluation; values redacted |
+| `Secrets.EnvFile(path, keys...)` | Read named keys from a dotenv file (use `.env.secrets`, not the auto-loaded `.env.ando`); not exported by this call; values redacted |
 | `Directory(path)` | Create directory reference |
 
 **Important:** `Shell` is a hooks-only API. It is not a global in `build.csando` build scripts.
@@ -425,7 +438,7 @@ var release = DefineProfile("release");
 
 The `Env()` function gets environment variables. Its signature is:
 ```
-string? Env(string name, bool required = true)
+string? Env(string name, bool required = true, bool secret = false)
 ```
 
 Three usage patterns:
@@ -440,9 +453,28 @@ var optional = Env("OPTIONAL_VAR", required: false);
 var lang = Env("SITE_LANG", required: false) ?? "en";
 ```
 
+The value is registered for redaction when the name looks secret (`*_TOKEN`, `*_SECRET`, `*_PASSWORD`, `*_KEY` ...) or when `secret: true` is passed.
+
 **Important:** The second parameter is `required:` (a bool), NOT a default value. `Env("NAME", "default")` will NOT compile — use `Env("NAME", required: false) ?? "default"` instead.
 
 There is no `SetEnv()` function. Environment variables must be set externally via `.env.ando` files, the OS environment, or CI/CD configuration.
+
+### Secrets
+
+Secrets are redacted by value (console, `build.csando.log`, run records, `--dry-run` trees; values under 6 characters are never redacted). UserSecrets values are registered for redaction when the script reads them (indexer or `TryGet`), so read config through `Secrets` only if it is secret; each line of a multi-line value is also redacted on its own. Both `Secrets` members run on the host while the script is evaluated (not steps) and return a read-only set: `set["Key"]` throws an error naming the missing key (never a value); `set.TryGet(key, out value)` returns false instead.
+
+```csharp
+// .NET user secrets: ~/.microsoft/usersecrets/<id>/secrets.json (Windows: %APPDATA%\Microsoft\UserSecrets\<id>\secrets.json). No dotnet call.
+// Argument: the UserSecretsId, or a .csproj (or a folder with exactly one) to read it from. Nested JSON is flattened with ':'.
+var sp = Secrets.UserSecrets("simplesign365-dev");
+var clientSecret = sp["Deploy:Azure:ClientSecret"];
+
+// Named keys from a dotenv file. Use a separate file (.env.secrets): .env.ando / .env is still loaded and forwarded to every
+// container command unless the run uses --no-env (a warning is logged when Secrets.EnvFile reads it). A file in a git repo that is
+// not gitignored fails at evaluation. This call itself does NOT set the values in the process environment.
+var cf = Secrets.EnvFile(".env.secrets", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID");
+Cloudflare.UseCredentials(cf["CLOUDFLARE_API_TOKEN"], cf["CLOUDFLARE_ACCOUNT_ID"]);
+```
 
 ### Two Path Types: BuildPath vs DirectoryRef
 
@@ -738,6 +770,8 @@ Steps that return `StepOutput` or `CommandStep` can be read only at execution ti
 - Ando.Cancelled - bool, true once the user pressed Ctrl+C. Read it at execution time (inside `Ando.When`, `Ando.Require`, `Ando.Defer`, `OnFailure` and `Finally` bodies); while the script is evaluated it is always false. Example: `.OnFailure(() => Ando.When(() => !Ando.Cancelled, () => AppService.SwapSlots(app, "staging", rg)))`.
 - Ando.CommandTimeout(TimeSpan) - Default timeout for command steps registered after this call (built-in default 5 minutes). Operations with a longer default of their own, such as AppService zip deploy, keep it.
 - Ando.CopyToContainer(hostPath, containerPath) - Copies a host file or directory into the build container. Relative host paths are relative to the directory you ran `ando` from (also with `--ref`), so gitignored files can be used. Relative container paths are relative to /workspace. A directory replaces an existing directory at the target.
+- Ando.CopyToHost(containerPath, hostPath) - Mirror of `Ando.CopyToContainer`: copies a file or directory from the build container to the host as a step, in step order. Relative host paths are relative to the directory you ran `ando` from (also with `--ref`); relative container paths to /workspace. The existing destination is deleted first; the project folder and its parents are refused. Any error fails the step. Example: `Ando.CopyToHost("artifacts/manifest.json", "artifacts/manifest.json");`
+- Ando.Lock(name) - Takes a named lock while the script is evaluated and holds it until the run ends (not a step; absent from --dry-run, which takes no lock). Another run holding it fails the run with exit code 9. The same name twice (or names mapping to the same lock file, `a/b` and `a_b`) is a no-op; child builds skip names their parent holds. Call it at the top level of the script: inside `Ando.Defer` a held lock fails that step (exit 1). Listed in the run record as `lock <name>`. Example: `Ando.Lock("release");`
 - Ando.InvocationRoot - Host directory `ando` was run from (string). Use it to read local files during evaluation, also with `--ref`.
 - Ando.SourceRoot - Host directory of the source tree being built (string): the temporary worktree with `--ref`, otherwise the project directory.
 - Ando.WriteManifest(directory, version, commit) - Step that writes `manifest.json` into a container directory with the version, commit, and size and SHA-256 of every file.
@@ -849,10 +883,10 @@ Bare globals, NOT members of the Ando object (write `Env("X")`, never `Ando.Env(
 
 ### Ando
 - Ando.UseImage(image) - Set the Docker image for the build container
-- Ando.CopyArtifactsToHost(containerPath, hostPath) - Copy files from container to host after build
+- Ando.CopyArtifactsToHost(containerPath, hostPath) - Copy files from container to host after build. A failed copy now makes the run exit 1 (run record `success: false`, `artifact-copy-failed` report).
 - Ando.CopyZippedArtifactsToHost(containerPath, hostPath) - Create archive and copy from container to host. Supports .tar.gz (default) and .zip. If hostPath is a directory, creates artifacts.tar.gz.
 - Ando.Build(directory, options?) - Run a nested build in a subdirectory (new container, isolated context). Its step runs ON THE HOST and starts a separate child `ando` build process, which creates its own container: the exception to "steps run in the container".
-- Ando.Block, Ando.Finally, Ando.Defer, Ando.When, Ando.Require, Ando.Cancelled, Ando.Confirm, Ando.Report, Ando.CommandTimeout, Ando.CopyToContainer, Ando.InvocationRoot, Ando.SourceRoot, Ando.WriteManifest, Ando.ImportArtifacts - Step model, gates and artifact import; see "Step model and deployment gates"
+- Ando.Block, Ando.Finally, Ando.Defer, Ando.When, Ando.Require, Ando.Cancelled, Ando.Confirm, Ando.Report, Ando.CommandTimeout, Ando.CopyToContainer, Ando.CopyToHost, Ando.Lock, Ando.InvocationRoot, Ando.SourceRoot, Ando.WriteManifest, Ando.ImportArtifacts - Step model, gates and artifact import; see "Step model and deployment gates"
 
 ### Tool installation
 Six installers put a tool into the build container (skipped when already present). Page: https://andobuild.com/tools.md
@@ -880,7 +914,7 @@ Six installers put a tool into the build container (skipped when already present
 - Ef.DbContextFrom(project, contextName?) - Reference a DbContext
 - Ef.DatabaseUpdate(context, connectionString?) - Apply pending migrations
 - Ef.DatabaseUpdate(context, outputRef) - Apply migrations with connection from deployment output
-- Ef.Script(context, outputPath) - Generate SQL migration script
+- Ef.Script(context, outputPath, fromMigration?, toMigration?) - Generate an idempotent SQL migration script. `from`/`to` are positional `dotnet ef` arguments; with `to` set and no `from`, `0` (empty database) is passed as the start. Options form: `Ef.Script(context, outputPath, o => o.From(() => applied.Value).To(() => latest.Value))`; `From`/`To` take a string or a `Func<string?>` that resolves when the step runs (null or empty means not set).
 
 ### Npm
 - Npm.Install(directory) - Run npm install. Uses the standard 5-minute command timeout.
@@ -915,6 +949,7 @@ BicepDeployment objects provide typed access to deployment outputs:
 - deployment.GetOutput("name") - Gets output value directly (call during step execution)
 
 ### Cloudflare
+- Cloudflare.UseCredentials(apiToken, accountId?) - Not a step; call at evaluation. Every Cloudflare step registered after it gets these credentials as per-command environment variables (by name, never on argv) and the values are redacted. EnsureAuthenticated then does not prompt. accountId null means $CLOUDFLARE_ACCOUNT_ID as before. Example: `var cf = Secrets.EnvFile(".env.secrets", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"); Cloudflare.UseCredentials(cf["CLOUDFLARE_API_TOKEN"], cf["CLOUDFLARE_ACCOUNT_ID"]);`
 - Cloudflare.EnsureAuthenticated() - Verify the Cloudflare API token with Cloudflare's token verification endpoint
 - Cloudflare.EnsurePagesProject(projectName) - Only VERIFIES that the credentials can read an existing Pages project (creates nothing; fails if the project does not exist). PagesDeploy registers it automatically, so call it yourself only to fail early. To create a project use PagesCreateProject.
 - Cloudflare.PagesDeploy(directory, projectName, options?) - Deploy to Pages; automatically verifies project access first
@@ -1040,9 +1075,11 @@ PlaywrightTestOptions:
 To run the suite once per database, give each variant an npm script that sets an env var (for example `"test:postgres": "E2E_DB_PROVIDER=postgres playwright test"`) and call `Playwright.Test(dir, o => { o.UseNpmScript = true; o.NpmScriptName = "test:postgres"; })`.
 
 ### Git
-- Git.Tag(tagName, options?) - Create a git tag (annotated by default)
+- Git.Tag(tagName, options?) - Create a git tag (annotated by default). `o.WithMessage(string)` or `o.WithMessage(Func<string>)`; the function runs when the step runs, so it can read earlier step Values.
 - Git.Install() - Step "Git.Install". Runs IN THE BUILD CONTAINER (unlike the other Git operations, which run on the host). Skips with an info log if `git` is on PATH; otherwise `apt-get update && apt-get install -y --no-install-recommends git ca-certificates` (apt) or `apk add --no-cache git` (apk); any other image fails with "unsupported image". Logs `git --version`. Use before container commands that need git, e.g. tests creating git repositories. Example: `Git.Install();`
 - Git.Push(options?) - Push the current branch to the remote. Does not push tags (use Git.PushTags).
+- Git.PushTag(tagName, remote?) - Step "Git.PushTag". Pushes only `refs/tags/<tagName>`; fails if the tag does not exist locally. Other tags are not pushed. Example: `Git.PushTag($"v{version}");`
+- Git.RemoteTags(pattern = "*", remote = "origin") - Step "Git.RemoteTags" (context = pattern): `git ls-remote --tags --refs <remote> refs/tags/<pattern>`. Returns a CommandStep whose Value is the newline-separated tag names without `refs/tags/`. Example: `var remote = Git.RemoteTags("v*");`
 - Git.PushTags(remote?) - Push tags (not the branch; use Git.Push) to the remote, skipping tags that already exist remotely (default: origin). Tags are pushed individually.
 
 Evaluated when the script loads (on the host, NOT steps; absent from --dry-run, they run before the container exists and do not see changes made by earlier steps):
@@ -1058,7 +1095,8 @@ Git.Commit, ShortCommit, CommitTime, RequireClean, ChangedSince and LastTag run 
 Step variants (these ARE steps: they run on the host in the source root, the --ref worktree when set, in order with the other steps like Git.Tag/Git.Push, and appear in --dry-run). Each returns a CommandStep whose Value is the trimmed stdout; read it at execution time (Ando.When, Ando.Defer, Ando.Report, Func<> overloads), not at the top level of the script:
 - Git.RevParse(string rev = "HEAD", bool shortSha = false) - Step "Git.RevParse": `git rev-parse [--short] <rev>`. Example: `var sha = Git.RevParse(shortSha: true);` Eager counterparts: Git.Commit, Git.ShortCommit. Honors the CommandStep methods WithTimeout, WithEnv, Quiet and AllowFailure; do not use InDirectory (it resolves to a container path, but git runs on the host).
 - Git.LatestTag(string pattern = "*") - Step "Git.LatestTag": `git describe --tags --abbrev=0 --match <pattern> HEAD`. If no tag matches, Value is empty and the build continues (allowed failure). Example: `var t = Git.LatestTag("v*");` Eager counterpart: Git.LastTag. Ignores all the CommandStep fluent methods.
-- Git.ChangedFiles(string sinceRef, params string[] paths) - Step "Git.ChangedFiles": `git diff --name-only <sinceRef> HEAD -- <paths>`. Value is a newline-separated list, empty when nothing changed; an unknown ref fails the step. Example: `var c = Git.ChangedFiles(t.Value, "src/Worker"); Ando.When(() => c.Value != "", () => Log.Info("Worker changed"));` Eager counterpart: Git.ChangedSince. Honors the CommandStep methods WithTimeout, WithEnv, Quiet and AllowFailure; do not use InDirectory (it resolves to a container path, but git runs on the host).
+- Git.ChangedFiles(Func<string> sinceRef, params string[] paths) - Same step, but the ref is resolved when the step runs (can use an earlier step Value); an empty resolved ref fails the step with a clear "sinceRef is empty" error. Example: `var c = Git.ChangedFiles(() => t.Value, "src/Worker"); Ando.When(() => c.Value != "", () => Log.Info("Worker changed"));` No context in --dry-run.
+- Git.ChangedFiles(string sinceRef, params string[] paths) - Step "Git.ChangedFiles": `git diff --name-only <sinceRef> HEAD -- <paths>`. Value is a newline-separated list, empty when nothing changed; an unknown ref fails the step. Example: `var c = Git.ChangedFiles("v1.0.0", "src/Worker");` Eager counterpart: Git.ChangedSince. Honors the CommandStep methods WithTimeout, WithEnv, Quiet and AllowFailure; do not use InDirectory (it resolves to a container path, but git runs on the host).
 
 ### Shell
 - Shell.Run(command, params string[] args) - Escape hatch for one-off commands that have no ANDO operation; prefer a first-party operation when one exists. Run a command in the build container. Arguments are passed as a list, with no shell parsing. Fails on non-zero exit unless `AllowFailure()`. Returns a CommandStep.
@@ -1157,7 +1195,7 @@ Activate with CLI: `ando -p release` or `ando -p publish,release`
 - WithoutLoad() - Disable loading image into local docker (useful when only pushing)
 
 ### Git.Tag Options
-- WithMessage(string) - Tag message for annotated tags
+- WithMessage(string) / WithMessage(Func<string>) - Tag message for annotated tags (the function runs when the step runs)
 - AsLightweight() - Create lightweight tag instead of annotated
 - WithSkipIfExists() - Skip if tag exists (warn instead of fail)
 

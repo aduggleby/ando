@@ -230,6 +230,13 @@ public class AndoOperations
                 commandOptions.Environment[DindChecker.DindEnvVar] = parentDind;
             }
 
+            // Child builds skip the named locks this run holds, so a shared helper does not block itself.
+            var heldLocks = _buildOptions.Session.Locks.HeldForChildren;
+            if (heldLocks.Length > 0)
+            {
+                commandOptions.Environment[Execution.RunLockSet.HeldLocksEnvVar] = heldLocks;
+            }
+
             _logger.Info($"Spawning child build: ando {string.Join(" ", args)}");
 
             try
@@ -509,6 +516,59 @@ public class AndoOperations
 
         logger.Info($"    Copied {source} -> {target}");
         return true;
+    }
+
+    /// <summary>
+    /// Copies a file or directory from the build container to the host, in step order.
+    /// Relative host paths are relative to the directory ANDO was run from (also with --ref).
+    /// An existing destination is deleted first; the project folder and its parents are refused.
+    /// Any failure fails the step. The mirror of Ando.CopyToContainer.
+    /// Usage: Ando.CopyToHost("artifacts/manifest.json", "artifacts/manifest.json");
+    /// </summary>
+    public void CopyToHost(string containerPath, string hostPath)
+    {
+        _registry.Register("Ando.CopyToHost",
+            () => CopyToHostAsync(_buildOptions.Session, containerPath, hostPath, _logger),
+            $"{containerPath} -> {hostPath}");
+    }
+
+    internal static async Task<bool> CopyToHostAsync(
+        RunSession session, string containerPath, string hostPath, IBuildLogger logger)
+    {
+        if (session.ContainerId == null)
+        {
+            logger.Error("No build container: CopyToHost only works during `ando run`.");
+            return false;
+        }
+
+        var root = session.InvocationRoot ?? session.SourceRoot ?? Environment.CurrentDirectory;
+        return await ArtifactOperations.CopyOneAsync(session.ContainerId, root,
+            Ando.Context.ContainerPaths.Resolve(containerPath), hostPath, logger, session.DockerRunner);
+    }
+
+    /// <summary>
+    /// Takes a named lock now, while the script is evaluated, and holds it until the run
+    /// ends (it is not a step, so it does not appear in --dry-run). Fails the run with
+    /// exit code 9 when another run holds it. A name a parent build already holds, or one
+    /// taken twice in this run, is a no-op. --dry-run takes no lock. The run record lists
+    /// the lock as "lock &lt;name&gt;". Call it at the top level of the script: inside
+    /// Ando.Defer it runs at execution time, where a held lock fails that step (exit 1, not 9).
+    /// Names that sanitize to the same lock file (a/b and a_b) are one lock.
+    /// Usage: Ando.Lock("release");
+    /// </summary>
+    public void Lock(string name)
+    {
+        var session = _buildOptions.Session;
+        if (session.DryRun)
+        {
+            return;
+        }
+
+        if (session.Locks.AcquireNamed(name))
+        {
+            session.Reports.Add(new KeyValuePair<string, string>($"lock {name}", "held"));
+            _logger.Info($"Lock: {name}");
+        }
     }
 
     // Runs a docker command on the host (tests replace it through the session).

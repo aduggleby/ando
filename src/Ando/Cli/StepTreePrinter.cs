@@ -12,6 +12,7 @@
 // - Finally steps are listed in execution order (last registered first)
 // =============================================================================
 
+using Ando.Logging;
 using Ando.Operations;
 using Ando.Steps;
 
@@ -29,7 +30,8 @@ public static class StepTreePrinter
     {
         var lines = new List<string>();
         RenderScope(root, 0, lines);
-        return lines;
+        // A secret can end up in a step context (for example the first line of a Shell.Bash script).
+        return lines.Select(SecretValues.Redact).ToList();
     }
 
     private static void RenderScope(StepScope scope, int depth, List<string> lines)

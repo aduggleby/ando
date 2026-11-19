@@ -171,6 +171,22 @@ Ando.CopyArtifactsToHost("artifacts", "./artifacts");
 Ando.CopyToContainer(".run/seal-1.pem", ".run/seal-1.pem");
 ```
 
+## Copying from the container in step order
+
+`Ando.CopyToHost(containerPath, hostPath)` is the mirror of `Ando.CopyToContainer`: it copies a file or directory from the build container to the host as a step, in order with the other steps. Relative host paths are relative to the directory ANDO was run from (also with `--ref`). The existing destination is deleted first, and the project folder and its parents are refused. Any error fails the step. `Ando.CopyArtifactsToHost` copies after the last step instead; a failed copy there makes the run exit with 1.
+
+```csharp
+Ando.CopyToHost("artifacts/manifest.json", "artifacts/manifest.json");
+```
+
+## Locks
+
+Each run takes a lock on its build container, so a second run of the same script fails at once with exit code 9 (see [Run locks](/cli#run-locks)). `Ando.Lock("name")` takes a named lock while the script is evaluated and holds it until the run ends, for work that must not overlap, such as a release. It is not a step, so it is not in `--dry-run` output, and `--dry-run` takes no lock. Call it at the top level of the script: inside `Ando.Defer` it runs at execution time, where a held lock fails that step (exit code 1, not 9). Names that map to the same lock file (`a/b` and `a_b`) are one lock. Child builds skip the names their parent holds. The run record lists it as `lock <name>`.
+
+```csharp
+Ando.Lock("release");
+```
+
 ## Run record
 
 Every `ando run` writes `.ando/runs/<utc-time>.json` in the directory you ran from. It lists the steps that ran, including steps inside blocks and on-failure and finally steps, with `depth`, `cleanup`, start and end time, result and error, plus the values added with `Ando.Report`. `.ando/runs/` has its own `.gitignore`. Secret values are redacted: environment variables whose names contain SECRET, PASSWORD, TOKEN, KEY and similar words are replaced with `[REDACTED]` in console output, the build log and run records.

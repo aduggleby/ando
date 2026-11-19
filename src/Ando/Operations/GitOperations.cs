@@ -278,7 +278,30 @@ public class GitOperations : OperationsBase
     /// </summary>
     /// <param name="sinceRef">Commit, tag or branch to compare against.</param>
     /// <param name="paths">Optional paths to limit the comparison; none means the whole repository.</param>
-    public CommandStep ChangedFiles(string sinceRef, params string[] paths)
+    public CommandStep ChangedFiles(string sinceRef, params string[] paths) =>
+        ShellCommandOperations.RegisterCommandStep(Registry, Logger, () => _hostExecutor, "Git.ChangedFiles", "git",
+            () => DiffArgs(sinceRef, paths), sinceRef);
+
+    /// <summary>
+    /// Same as <see cref="ChangedFiles(string, string[])"/>, but <paramref name="sinceRef"/> is resolved
+    /// when the step runs, so it can use a value produced by an earlier step (for example
+    /// `() => remote.Value`). The step has no context in the step tree because the ref is not known yet.
+    /// Usage: var changed = Git.ChangedFiles(() => last.Value, "src/Worker");
+    /// </summary>
+    public CommandStep ChangedFiles(Func<string> sinceRef, params string[] paths) =>
+        ShellCommandOperations.RegisterCommandStep(Registry, Logger, () => _hostExecutor, "Git.ChangedFiles", "git",
+            () =>
+            {
+                var resolved = sinceRef();
+                if (string.IsNullOrWhiteSpace(resolved))
+                {
+                    throw new InvalidOperationException(
+                        "Git.ChangedFiles: sinceRef is empty (the step that should provide it returned no value).");
+                }
+                return DiffArgs(resolved, paths);
+            }, null);
+
+    private static string[] DiffArgs(string sinceRef, string[] paths)
     {
         var args = new List<string> { "diff", "--name-only", sinceRef, "HEAD" };
         if (paths.Length > 0)
@@ -286,8 +309,29 @@ public class GitOperations : OperationsBase
             args.Add("--");
             args.AddRange(paths);
         }
-        return QueryStep("Git.ChangedFiles", sinceRef, [.. args]);
+        return [.. args];
     }
+
+    /// <summary>
+    /// Registers a step that lists the tags on a remote that match <paramref name="pattern"/>
+    /// (`git ls-remote --tags --refs &lt;remote&gt; refs/tags/&lt;pattern&gt;`); Value is the newline-separated
+    /// tag names without `refs/tags/`, empty when none match. Runs as a step on the host. WithTimeout,
+    /// WithEnv, Quiet and AllowFailure are honored.
+    /// Usage: var remote = Git.RemoteTags("v*");
+    /// </summary>
+    /// <param name="pattern">Glob the tag must match (default "*").</param>
+    /// <param name="remote">Remote to query (default "origin").</param>
+    public CommandStep RemoteTags(string pattern = "*", string remote = "origin") =>
+        ShellCommandOperations.RegisterCommandStep(Registry, Logger, () => _hostExecutor, "Git.RemoteTags", "git",
+            () => ["ls-remote", "--tags", "--refs", remote, $"refs/tags/{pattern}"], pattern,
+            transformOutput: ParseRemoteTags);
+
+    // Each line is "<sha>\trefs/tags/<name>"; keep the names.
+    internal static string ParseRemoteTags(string output) => string.Join('\n', output
+        .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Select(line => line.Split('\t', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        .Where(parts => parts.Length == 2 && parts[1].StartsWith("refs/tags/", StringComparison.Ordinal))
+        .Select(parts => parts[1]["refs/tags/".Length..]));
 
     private string RunGit(params string[] args)
     {
@@ -348,7 +392,7 @@ public class GitOperations : OperationsBase
                 .Add("tag")
                 .AddFlag(options.Annotated, "-a")
                 .Add(tagName)
-                .AddIf(options.Annotated, "-m", options.Message ?? tagName)
+                .AddIf(options.Annotated, "-m", options.MessageFactory?.Invoke() ?? options.Message ?? tagName)
                 .Build();
 
             var result = await _hostExecutor.ExecuteAsync("git", args);
@@ -372,6 +416,29 @@ public class GitOperations : OperationsBase
                 .AddIfNotNull(options.Branch)
                 .AddFlag(options.SetUpstream, "-u")
                 .AddFlag(options.Force, "--force"));
+    }
+
+    /// <summary>
+    /// Pushes one tag (`git push &lt;remote&gt; refs/tags/&lt;tagName&gt;`) and nothing else. Fails when the tag
+    /// does not exist locally. Unlike <see cref="PushTags"/>, other local tags are not pushed.
+    /// Usage: Git.PushTag($"v{version}");
+    /// </summary>
+    /// <param name="tagName">The tag to push.</param>
+    /// <param name="remote">The remote to push to (default: origin).</param>
+    public void PushTag(string tagName, string remote = "origin")
+    {
+        Registry.Register("Git.PushTag", async () =>
+        {
+            var exists = await _hostExecutor.ExecuteAsync("git", ["rev-parse", "-q", "--verify", $"refs/tags/{tagName}"]);
+            if (!exists.Success)
+            {
+                Logger.Error($"    Tag '{tagName}' does not exist locally.");
+                return false;
+            }
+
+            var result = await _hostExecutor.ExecuteAsync("git", ["push", remote, $"refs/tags/{tagName}"]);
+            return result.Success;
+        }, tagName);
     }
 
     /// <summary>
@@ -452,10 +519,24 @@ public class GitTagOptions
     /// <summary>Skip creating the tag if it already exists (instead of failing).</summary>
     public bool SkipIfExists { get; set; }
 
+    /// <summary>Resolved when the tag step runs; takes precedence over <see cref="Message"/>.</summary>
+    internal Func<string>? MessageFactory { get; set; }
+
     /// <summary>Sets the tag message.</summary>
     public GitTagOptions WithMessage(string message)
     {
         Message = message;
+        MessageFactory = null;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the tag message, resolved when the Git.Tag step runs, so it can read the Value of an
+    /// earlier step. Usage: o.WithMessage(() => $"v1\n\nsha256: {hash.Value}")
+    /// </summary>
+    public GitTagOptions WithMessage(Func<string> message)
+    {
+        MessageFactory = message;
         return this;
     }
 

@@ -30,20 +30,21 @@ Listed in the order of `ando help`. Commands marked **AI** need Claude and are n
 
 ## Run Options
 
-| Flag                       | Description                                                                                                                      |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `-f, --file <file>`        | Use a specific build file instead of build.csando.                                                                               |
-| `-p, --profile <profiles>` | Activate build profiles (comma-separated).                                                                                       |
-| `--read-env`               | Load environment file without prompting.                                                                                         |
-| `--no-env`                 | Do not load the environment file for this run, even with `readEnv: true` in `ando.config`. Cannot be combined with `--read-env`. |
-| `--verbosity <level>`      | Set output verbosity (quiet\|minimal\|normal\|detailed).                                                                         |
-| `--no-color`               | Disable colored output.                                                                                                          |
-| `--cold`                   | Use a fresh container and remove it when the run ends.                                                                           |
-| `--image <image>`          | Use a custom Docker image.                                                                                                       |
-| `--dind`                   | Mount Docker socket for Docker-in-Docker builds.                                                                                 |
-| `--ref <commit\|tag>`      | Build that commit from a clean temporary checkout instead of the working tree.                                                   |
-| `--yes`                    | Accept every `Ando.Confirm` prompt.                                                                                              |
-| `--dry-run`                | Evaluate the script and print the step tree without running anything.                                                            |
+| Flag                        | Description                                                                                                                                                                                                                                                                                                                                  |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-f, --file <file>`         | Use a specific build file instead of build.csando.                                                                                                                                                                                                                                                                                           |
+| `-p, --profile <profiles>`  | Activate build profiles (comma-separated).                                                                                                                                                                                                                                                                                                   |
+| `--read-env`                | Load environment file without prompting.                                                                                                                                                                                                                                                                                                     |
+| `--no-env`                  | Do not load the environment file for this run, even with `readEnv: true` in `ando.config`. Cannot be combined with `--read-env`.                                                                                                                                                                                                             |
+| `--verbosity <level>`       | Set output verbosity (quiet\|minimal\|normal\|detailed).                                                                                                                                                                                                                                                                                     |
+| `--no-color`                | Disable colored output.                                                                                                                                                                                                                                                                                                                      |
+| `--cold`                    | Use a fresh container and remove it when the run ends.                                                                                                                                                                                                                                                                                       |
+| `--image <image>`           | Use a custom Docker image.                                                                                                                                                                                                                                                                                                                   |
+| `--dind`                    | Mount Docker socket for Docker-in-Docker builds.                                                                                                                                                                                                                                                                                             |
+| `--ref <commit\|tag>`       | Build that commit from a clean temporary checkout instead of the working tree.                                                                                                                                                                                                                                                               |
+| `--yes`                     | Accept every `Ando.Confirm` prompt.                                                                                                                                                                                                                                                                                                          |
+| `--dry-run`                 | Evaluate the script and print the step tree without running anything.                                                                                                                                                                                                                                                                        |
+| `--record-path-file <file>` | Write the absolute path of the run record (one line) to `<file>`, relative to the invocation directory (the folder of the build script). An existing file at that path is deleted when the run starts, so a failed run, an early exit or `--dry-run` never leaves an old path behind; nothing is written if the record could not be written. |
 
 ### Building a specific commit (`--ref`)
 
@@ -68,6 +69,32 @@ The build container never contains `.git`, in `--ref` runs and normal runs alike
 ### Previewing a run (`--dry-run`)
 
 `ando run -p deploy --dry-run` evaluates the build script (profiles and environment files apply as usual) and prints the registered steps, with nested `Ando.Block` steps indented, their `on failure:` steps and the `finally (runs last-registered first):` steps. Nothing is executed and no container is created or started; the exit code is 0. The bodies of `Ando.When` and `Ando.Defer` are C# that only runs during the build, so each shows as one line. `ando run` rejects options it does not know, so a typo such as `--dry-rn` fails instead of starting a real run.
+
+### Exit codes
+
+| Code | Meaning                                                                |
+| ---- | ---------------------------------------------------------------------- |
+| 0    | Success.                                                               |
+| 1    | The build workflow failed (a step failed, or an artifact copy failed). |
+| 2    | Build script not found or invalid file.                                |
+| 3    | Docker is not available.                                               |
+| 4    | Profile validation failed (an undefined profile was requested).        |
+| 5    | Generic error (script compile errors, exceptions).                     |
+| 6    | `.env.ando` is not gitignored and you declined to continue.            |
+| 7    | GitHub OAuth scope check failed.                                       |
+| 8    | Docker-in-Docker check cancelled.                                      |
+| 9    | Another run holds the container lock or an `Ando.Lock` name.           |
+| 130  | Interrupted with Ctrl+C.                                               |
+
+### Run locks
+
+Only one run can use a build container at a time. A run takes an exclusive lock on `~/.ando/locks/container-<container-name>.lock` (`Ando.Lock` names use `name-<name>.lock`) before it removes the container (`--cold`) or clears its Azure profile; a second run of the same script fails at once with exit code 9 and names the container. The container name comes from the folder and the script, so a `--ref` run and a plain run of the same script exclude each other, and so does a child build that runs the same script from the same folder as its parent. Set `ANDO_LOCK_DIR` to use another lock folder (the test suite does). `--dry-run` takes no lock. The operating system releases the lock when the process ends, even after a crash. Builds on the ANDO server run in their own containers and are not affected.
+
+`Ando.Lock("name")` adds a named lock, for example so only one release runs at a time (see [`Ando.Lock`](/providers/ando#lock)).
+
+### Artifact copy failures
+
+`Ando.CopyArtifactsToHost` and `Ando.CopyZippedArtifactsToHost` copy after the last step. If a copy fails (a refused destination, a destination that cannot be deleted, a failed `docker cp`), the error is logged, the run exits with 1 and the run record has `"success": false` and an `artifact-copy-failed` entry under `reports`. Earlier versions logged a warning and exited with 0. To copy in step order and fail that step, use [`Ando.CopyToHost`](/providers/ando#copytohost).
 
 ### Run records
 

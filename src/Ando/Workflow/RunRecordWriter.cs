@@ -111,7 +111,7 @@ public static class RunRecordWriter
             ["startedAt"] = startedAt,
             ["endedAt"] = startedAt + result.Duration,
             ["durationSeconds"] = Math.Round(result.Duration.TotalSeconds, 1),
-            ["success"] = result.Success,
+            ["success"] = result.Success && !session.ArtifactCopyFailed,
             ["cancelled"] = result.WasCancelled,
             ["aborted"] = result.Aborted,
             ["steps"] = result.StepResults.Select(step => new Dictionary<string, object?>

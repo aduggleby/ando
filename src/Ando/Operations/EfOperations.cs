@@ -18,6 +18,7 @@
 // - --idempotent flag used for migration scripts to support re-running
 // =============================================================================
 
+using System.Runtime.CompilerServices;
 using Ando.Context;
 using Ando.Execution;
 using Ando.Logging;
@@ -82,14 +83,65 @@ public class EfOperations(StepRegistry registry, IBuildLogger logger, Func<IComm
     /// <param name="context">DbContext reference.</param>
     /// <param name="outputFile">Path for the output SQL file.</param>
     /// <param name="fromMigration">Optional starting migration (for partial scripts).</param>
-    public void Script(EfContextRef context, BuildPath outputFile, string? fromMigration = null)
+    /// <param name="toMigration">Optional last migration to include. Without a from migration, "0" (the empty database) is used as the start.</param>
+    [OverloadResolutionPriority(1)] // keeps Script(ctx, path, null) unambiguous against the options form
+    public void Script(EfContextRef context, BuildPath outputFile, string? fromMigration = null, string? toMigration = null) =>
+        Script(context, outputFile, o => o.From(fromMigration).To(toMigration));
+
+    /// <summary>
+    /// Same as the string overload, but the migrations can be resolved when the step runs, so they can use
+    /// the Value of an earlier step. A null or empty value means "not set".
+    /// Usage: Ef.Script(ctx, out, o => o.From(() => applied.Value).To(() => latest.Value));
+    /// </summary>
+    public void Script(EfContextRef context, BuildPath outputFile, Action<EfScriptOptions> configure)
     {
+        var options = new EfScriptOptions();
+        configure(options);
         RegisterCommand("Ef.Script", "dotnet",
-            () => new ArgumentBuilder()
-                .Add("ef", "migrations", "script", "--project", context.Project.Path, "-o", outputFile.Value, "--idempotent")
-                .AddIf(context.ContextName != "default", "--context", context.ContextName)
-                .AddIfNotNull(fromMigration),
+            () =>
+            {
+                var from = options.FromMigration();
+                var to = options.ToMigration();
+                var hasTo = !string.IsNullOrEmpty(to);
+                // `dotnet ef migrations script [from] [to]` is positional: "0" means the empty database.
+                var args = new ArgumentBuilder()
+                    .Add("ef", "migrations", "script", "--project", context.Project.Path, "-o", outputFile.Value, "--idempotent")
+                    .AddIf(context.ContextName != "default", "--context", context.ContextName);
+                if (!string.IsNullOrEmpty(from))
+                {
+                    args.Add(from);
+                }
+                else if (hasTo)
+                {
+                    args.Add("0");
+                }
+                if (hasTo)
+                {
+                    args.Add(to!);
+                }
+                return args;
+            },
             context.ToString());
     }
+}
 
+/// <summary>Start and end migration of Ef.Script, each fixed or resolved when the step runs.</summary>
+public sealed class EfScriptOptions
+{
+    internal Func<string?> FromMigration { get; private set; } = () => null;
+    internal Func<string?> ToMigration { get; private set; } = () => null;
+
+    /// <summary>Starts the script after this migration.</summary>
+    [OverloadResolutionPriority(1)]
+    public EfScriptOptions From(string? migration) { FromMigration = () => migration; return this; }
+
+    /// <summary>Starts the script after the migration returned when the step runs.</summary>
+    public EfScriptOptions From(Func<string?> migration) { FromMigration = migration; return this; }
+
+    /// <summary>Ends the script at this migration.</summary>
+    [OverloadResolutionPriority(1)]
+    public EfScriptOptions To(string? migration) { ToMigration = () => migration; return this; }
+
+    /// <summary>Ends the script at the migration returned when the step runs.</summary>
+    public EfScriptOptions To(Func<string?> migration) { ToMigration = migration; return this; }
 }

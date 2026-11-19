@@ -17,6 +17,9 @@ Git.PushTags();
 // Custom tag with message
 Git.Tag("v1.0.0", o => o.WithMessage("Release notes here"));
 
+// Message resolved when the step runs (can read earlier step values)
+Git.Tag("v1.0.0", o => o.WithMessage(() => $"v1.0.0\n\nsha256: {hash.Value}"));
+
 // Lightweight tag (not annotated)
 Git.Tag("my-tag", o => o.AsLightweight());
 ```
@@ -46,11 +49,12 @@ if (release) {
 
 ### Git.Tag Options
 
-| Option                | Description                                                                                                                                               |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WithMessage(string)` | Set the tag message for annotated tags. Appears when viewing the tag with `git show`.                                                                     |
-| `AsLightweight()`     | Create a lightweight tag instead of an annotated tag. Lightweight tags are just pointers to commits without metadata. Use for temporary or local markers. |
-| `WithSkipIfExists()`  | Skip tag creation if the tag already exists. Shows a warning instead of failing. Useful in CI where builds may be re-run.                                 |
+| Option                      | Description                                                                                                                                               |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WithMessage(string)`       | Set the tag message for annotated tags. Appears when viewing the tag with `git show`.                                                                     |
+| `WithMessage(Func<string>)` | Same, but the function runs when the `Git.Tag` step runs, so the message can use the `Value` of an earlier step.                                          |
+| `AsLightweight()`           | Create a lightweight tag instead of an annotated tag. Lightweight tags are just pointers to commits without metadata. Use for temporary or local markers. |
+| `WithSkipIfExists()`        | Skip tag creation if the tag already exists. Shows a warning instead of failing. Useful in CI where builds may be re-run.                                 |
 
 ### Git.Push Options
 
@@ -70,6 +74,22 @@ Both are separate steps and neither does the other's job:
 | `Git.PushTags()` | Tags only, one at a time, skipping tags that already exist on the remote. The branch is not pushed. | You created a tag with `Git.Tag()` and want it on the remote.        |
 
 A release usually calls `Git.Tag(...)`, `Git.Push()` and then `Git.PushTags()`.
+
+### PushTag and RemoteTags
+
+| Operation                                          | What it does                                                                                                                                                |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Git.PushTag(tagName, remote = "origin")`          | Pushes only `refs/tags/<tagName>`. Fails when the tag does not exist locally. Other local tags are not pushed. Step context is the tag name.                |
+| `Git.RemoteTags(pattern = "*", remote = "origin")` | A step: `git ls-remote --tags --refs <remote> refs/tags/<pattern>`. `Value` is the newline-separated tag names without `refs/tags/`, empty when none match. |
+
+```csharp
+Git.Tag($"v{version}");
+Git.PushTag($"v{version}");
+
+var remote = Git.RemoteTags("v*");
+// Pick the previous tag in your own C#, since ordering tags is release policy:
+Ando.Defer(() => Log.Info($"Remote tags: {remote.Value.Replace('\n', ' ')}"));
+```
 
 ## Evaluated when the script loads (not steps)
 
@@ -102,11 +122,12 @@ if (last != null && Git.ChangedSince(last, "src/Worker", "services/signing"))
 
 These three are **steps**. They run on the host in the source root (the `--ref` worktree when set), in order with the other steps like `Git.Tag` and `Git.Push`, so they appear in `--dry-run` and see what earlier steps did. Each returns a `CommandStep` whose `Value` is the trimmed stdout; read it at execution time (`Ando.When`, `Ando.Defer`, `Ando.Report` or a `Func<>` overload), not at the top level of the script.
 
-| Step                                                       | Runs                                                                                                                                               | Eager counterpart               |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| `Git.RevParse(string rev = "HEAD", bool shortSha = false)` | `git rev-parse [--short] <rev>`                                                                                                                    | `Git.Commit`, `Git.ShortCommit` |
-| `Git.LatestTag(string pattern = "*")`                      | `git describe --tags --abbrev=0 --match <pattern> HEAD`. If no tag matches, `Value` is empty and the build continues.                              | `Git.LastTag()`                 |
-| `Git.ChangedFiles(string sinceRef, params string[] paths)` | `git diff --name-only <sinceRef> HEAD -- <paths>`. `Value` is a newline-separated list, empty when nothing changed. An unknown ref fails the step. | `Git.ChangedSince()`            |
+| Step                                                             | Runs                                                                                                                                                                                                       | Eager counterpart               |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `Git.RevParse(string rev = "HEAD", bool shortSha = false)`       | `git rev-parse [--short] <rev>`                                                                                                                                                                            | `Git.Commit`, `Git.ShortCommit` |
+| `Git.LatestTag(string pattern = "*")`                            | `git describe --tags --abbrev=0 --match <pattern> HEAD`. If no tag matches, `Value` is empty and the build continues.                                                                                      | `Git.LastTag()`                 |
+| `Git.ChangedFiles(string sinceRef, params string[] paths)`       | `git diff --name-only <sinceRef> HEAD -- <paths>`. `Value` is a newline-separated list, empty when nothing changed. An unknown ref fails the step.                                                         | `Git.ChangedSince()`            |
+| `Git.ChangedFiles(Func<string> sinceRef, params string[] paths)` | Same, but the ref is resolved when the step runs, so it can use `Value` of an earlier step. The step has no context in `--dry-run`. An empty resolved ref fails the step with a "sinceRef is empty" error. | `Git.ChangedSince()`            |
 
 Of the `CommandStep` fluent methods, `Git.RevParse` and `Git.ChangedFiles` honor `WithTimeout`, `WithEnv`, `Quiet` and `AllowFailure`. Do not use `InDirectory` on them: it resolves to a container path, but git runs on the host. `Git.LatestTag` ignores all the fluent methods.
 
@@ -115,7 +136,7 @@ Use the eager members when you need the value while the script is evaluated (to 
 ```csharp
 var sha = Git.RevParse(shortSha: true);
 var t = Git.LatestTag("v*");
-var c = Git.ChangedFiles(t.Value, "src/Worker");
+var c = Git.ChangedFiles(() => t.Value, "src/Worker");
 
 Ando.When(() => c.Value != "", () => Log.Info($"Worker changed since {t.Value}, building {sha.Value}"));
 ```

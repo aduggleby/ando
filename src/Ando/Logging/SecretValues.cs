@@ -30,10 +30,21 @@ public static class SecretValues
     /// <summary>Adds a secret value.</summary>
     public static void Add(string? value)
     {
-        if (string.IsNullOrEmpty(value) || value.Length < MinLength) return;
+        if (string.IsNullOrEmpty(value)) return;
         lock (Lock)
         {
-            Values.Add(value);
+            if (value.Length >= MinLength) Values.Add(value);
+
+            // A multi-line value (a PEM key) is also redacted line by line, so a single
+            // line printed on its own does not leak.
+            if (value.Contains('\n'))
+            {
+                foreach (var line in value.Split('\n'))
+                {
+                    var trimmed = line.TrimEnd('\r');
+                    if (trimmed.Length >= MinLength && !string.IsNullOrWhiteSpace(trimmed)) Values.Add(trimmed);
+                }
+            }
         }
     }
 

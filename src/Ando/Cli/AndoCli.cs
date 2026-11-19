@@ -29,6 +29,7 @@
 // - 6: .env.ando not gitignored (user declined to continue)
 // - 7: GitHub OAuth scope check failed (user declined to re-authenticate)
 // - 8: DIND check cancelled (user pressed Escape)
+// - 9: Another ando run holds the container lock or an Ando.Lock name
 // =============================================================================
 
 using System.Reflection;
@@ -224,6 +225,8 @@ public class AndoCli : IDisposable
             var flagError = FindRunFlagError(_args);
             if (flagError != null)
             {
+                // An old path file must not survive a run that never started either.
+                DeleteStalePathFile(GetFlagValue("--record-path-file"), Environment.CurrentDirectory);
                 _logger.Error(flagError);
                 if (FindUnknownRunFlag(_args) != null)
                 {
@@ -302,7 +305,7 @@ public class AndoCli : IDisposable
     private static readonly string[] RunFlags =
         ["--read-env", "--no-env", "--no-color", "--cold", "--dind", "--yes", "--dry-run"];
     private static readonly string[] RunFlagsWithValue =
-        ["-f", "--file", "-p", "--profile", "--verbosity", "--image", "--ref"];
+        ["-f", "--file", "-p", "--profile", "--verbosity", "--image", "--ref", "--record-path-file"];
 
     // Returns the first option in a run command line that run does not accept, or null.
     internal static string? FindUnknownRunFlag(string[] args)
@@ -328,6 +331,11 @@ public class AndoCli : IDisposable
     {
         var unknown = FindUnknownRunFlag(args);
         if (unknown != null) return $"Unknown option for run: {unknown}";
+        var recordPathIndex = Array.IndexOf(args, "--record-path-file");
+        if (recordPathIndex >= 0 && (recordPathIndex + 1 >= args.Length || args[recordPathIndex + 1].StartsWith('-')))
+        {
+            return "--record-path-file needs a file path.";
+        }
         return args.Contains("--no-env") && args.Contains("--read-env")
             ? "--no-env and --read-env cannot be used together."
             : null;
@@ -342,6 +350,13 @@ public class AndoCli : IDisposable
     {
         try
         {
+            // A path file from an earlier run must never survive this one: early exits,
+            // --dry-run and failed record writes would otherwise leave a stale path behind.
+            var customBuildFile = GetBuildFileArgument();
+            DeleteStalePathFile(GetFlagValue("--record-path-file"), customBuildFile != null
+                ? Path.GetDirectoryName(Path.GetFullPath(customBuildFile)) ?? Environment.CurrentDirectory
+                : Environment.CurrentDirectory);
+
             // Step 1: Find the build script in the current directory.
             // Unlike tools that search parent directories, ANDO requires
             // build.csando to be in the current working directory for clarity.
@@ -431,6 +446,8 @@ public class AndoCli : IDisposable
                 ctx.Options.Session.AssumeYes = HasFlag("--yes");
                 ctx.Options.Session.NoEnv = HasFlag("--no-env");
                 ctx.Options.Session.Ref = _refWorktree?.Commit;
+                ctx.Options.Session.DryRun = HasFlag("--dry-run");
+                _runLocks = ctx.Options.Session.Locks;
             };
 
             // With --ref, evaluate the script inside the worktree so relative file
@@ -561,6 +578,15 @@ public class AndoCli : IDisposable
                 _refWorktree != null ? invocationScriptPath : scriptPath);
             _logger.Info($"Container: {containerName}");
 
+            // One run per container: a second run would delete the first run's Azure
+            // profile and --cold would remove its container. Taken before either.
+            var runLocks = context.Options.Session.Locks;
+            runLocks.AcquireContainer(containerName);
+            if (runLocks.LastWarning != null)
+            {
+                _logger.Warning(runLocks.LastWarning);
+            }
+
             // In DinD mode, ProjectRoot is the HOST path (for Docker volume mounts)
             // but LocalProjectRoot is the actual path inside this container (for file ops like tar).
             var containerConfig = new ContainerConfig
@@ -644,12 +670,22 @@ public class AndoCli : IDisposable
             // This copies any files registered via Artifacts.CopyToHost().
             // Step 5b: the run record (.ando/runs/<time>.json) is written after the
             // copy so it lists where each artifact went, and also when the copy throws.
+            var artifactsCopied = true;
             try
             {
                 if (result.Success)
                 {
-                    await context.CopyArtifactsToHostAsync();
+                    artifactsCopied = await context.CopyArtifactsToHostAsync();
                 }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // The record is written next and must not say success after a thrown copy;
+                // a failed copy exits 1 (as documented), not the generic 5.
+                _logger.Error($"Artifact copy failed: {ex.Message}");
+                context.Options.Session.ArtifactCopyFailed = true;
+                context.Options.Session.Reports.Add(new("artifact-copy-failed", "copy threw an exception"));
+                artifactsCopied = false;
             }
             finally
             {
@@ -657,7 +693,12 @@ public class AndoCli : IDisposable
                     result, startedAt);
             }
 
-            return result.Success ? 0 : 1;
+            return result.Success && artifactsCopied ? 0 : 1;
+        }
+        catch (RunLockHeldException ex)
+        {
+            _logger.Error(ex.Message);
+            return 9;
         }
         catch (FileNotFoundException ex)
         {
@@ -711,6 +752,7 @@ public class AndoCli : IDisposable
     private Action? _writeAbortedRecord;
     private int _recordWriting;
     private bool _recordWritten;
+    private RunLockSet? _runLocks;
 
     // Writes the run record once: the forced-exit path and the normal path never write
     // at the same time, and a failed write leaves the other path free to try.
@@ -726,13 +768,56 @@ public class AndoCli : IDisposable
         {
             if (!_recordWritten)
             {
-                _recordWritten = RunRecordWriter.TryWrite(
-                    invocationRoot, scriptPath, profiles, session, result, startedAt, Version, _logger) != null;
+                var recordPath = RunRecordWriter.TryWrite(
+                    invocationRoot, scriptPath, profiles, session, result, startedAt, Version, _logger);
+                _recordWritten = recordPath != null;
+                if (recordPath != null)
+                {
+                    WriteRecordPathFile(GetFlagValue("--record-path-file"), invocationRoot, recordPath, _logger);
+                }
             }
         }
         finally
         {
             Volatile.Write(ref _recordWriting, 0);
+        }
+    }
+
+    // Removes the --record-path-file target of an earlier run (relative to the invocation directory).
+    internal static void DeleteStalePathFile(string? file, string baseDirectory)
+    {
+        if (file == null)
+        {
+            return;
+        }
+
+        try
+        {
+            File.Delete(Path.GetFullPath(file, baseDirectory));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Best effort: the record path is written (or the warning logged) later.
+        }
+    }
+
+    // --record-path-file <file>: the absolute path of the run record, one line, so wrappers
+    // need not scrape the log. A relative file is relative to the invocation directory
+    // (the folder of the build script, where the run record goes).
+    internal static void WriteRecordPathFile(string? file, string baseDirectory, string recordPath, IBuildLogger logger)
+    {
+        if (file == null)
+        {
+            return;
+        }
+
+        try
+        {
+            File.WriteAllText(Path.GetFullPath(file, baseDirectory), Path.GetFullPath(recordPath, baseDirectory) + "\n");
+        }
+        catch (Exception ex)
+        {
+            logger.Warning($"Could not write the record path to {file}: {ex.Message}");
         }
     }
 
@@ -806,6 +891,9 @@ public class AndoCli : IDisposable
         {
             await worktree.DisposeAsync();
         }
+
+        // Last, so no other run can take the container while it is being cleaned up.
+        Interlocked.Exchange(ref _runLocks, null)?.Dispose();
     }
 
     private async Task RunInContainerQuietAsync(string containerId, string script, int timeoutMs = 60_000)
@@ -1112,6 +1200,8 @@ public class AndoCli : IDisposable
         Console.WriteLine("  --image <image>     Use custom Docker image instead of default/script-defined");
         Console.WriteLine("  --dind              Mount Docker socket for Docker-in-Docker operations");
         Console.WriteLine("  --ref <commit|tag>  Build that commit from a clean temporary checkout, not the working tree");
+        Console.WriteLine("  --record-path-file <file>");
+        Console.WriteLine("                      Write the absolute path of the run record to <file> (relative to the invocation directory)");
         Console.WriteLine("  --yes               Accept every Ando.Confirm prompt (for non-interactive runs)");
         Console.WriteLine("  --dry-run           Evaluate the script and print the step tree without running anything");
         Console.WriteLine("                      (unknown options are rejected, so a typo never starts a real run)");
@@ -1205,6 +1295,7 @@ public class AndoCli : IDisposable
         Console.WriteLine("  6  .env.ando not gitignored (user declined to continue)");
         Console.WriteLine("  7  GitHub OAuth scope check failed");
         Console.WriteLine("  8  DIND check cancelled (user pressed Escape)");
+        Console.WriteLine("  9  Another ando run holds the container lock or an Ando.Lock name");
         Console.WriteLine();
         Console.WriteLine("Environment Files:");
         Console.WriteLine("  ANDO checks for .env.ando (preferred) or .env in the project root.");
@@ -1311,35 +1402,10 @@ public class AndoCli : IDisposable
         if (!Directory.Exists(gitDir))
             return true; // Not a git repo, skip check.
 
-        // Use git check-ignore to verify .env.ando is gitignored.
-        // Exit code 0 = file is ignored, non-zero = file is not ignored.
-        try
-        {
-            var processInfo = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "git",
-                Arguments = "check-ignore -q .env.ando",
-                WorkingDirectory = rootPath,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using var process = System.Diagnostics.Process.Start(processInfo);
-            if (process == null)
-                return true; // Can't run git, skip check.
-
-            process.WaitForExit(5000); // 5 second timeout
-
-            if (process.ExitCode == 0)
-                return true; // File is gitignored, safe to continue.
-        }
-        catch
-        {
-            // Git not available or other error, skip check.
+        // Exit code 0 = file is ignored; null = git unavailable, skip the check.
+        var ignored = GitIgnoreCheck.CheckIgnore(rootPath, ".env.ando");
+        if (ignored is null or 0)
             return true;
-        }
 
         // File exists but is NOT gitignored - warn the user.
         _logger.Warning("WARNING: .env.ando file is not gitignored!");
@@ -1525,52 +1591,5 @@ public class AndoCli : IDisposable
     // - Inline comments: KEY=value # comment
     // - Quoted values (single or double quotes) - hash inside quotes is preserved
     // - Empty lines are ignored
-    internal static Dictionary<string, string> ParseEnvFile(string path)
-    {
-        var result = new Dictionary<string, string>();
-
-        foreach (var line in File.ReadAllLines(path))
-        {
-            var trimmed = line.Trim();
-
-            // Skip empty lines and comments.
-            if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith('#'))
-                continue;
-
-            // Handle 'export KEY=VALUE' syntax (common in shell scripts).
-            if (trimmed.StartsWith("export ", StringComparison.OrdinalIgnoreCase))
-                trimmed = trimmed[7..].TrimStart();
-
-            // Find the first = sign.
-            var equalsIndex = trimmed.IndexOf('=');
-            if (equalsIndex <= 0)
-                continue;
-
-            var key = trimmed[..equalsIndex].Trim();
-            var value = trimmed[(equalsIndex + 1)..].Trim();
-
-            // Check if value is quoted.
-            var isQuoted = (value.StartsWith('"') && value.EndsWith('"')) ||
-                          (value.StartsWith('\'') && value.EndsWith('\''));
-
-            if (isQuoted)
-            {
-                // Remove surrounding quotes, preserve content including any # characters.
-                value = value[1..^1];
-            }
-            else
-            {
-                // For unquoted values, strip inline comments.
-                var commentIndex = value.IndexOf('#');
-                if (commentIndex > 0)
-                {
-                    value = value[..commentIndex].TrimEnd();
-                }
-            }
-
-            result[key] = value;
-        }
-
-        return result;
-    }
+    internal static Dictionary<string, string> ParseEnvFile(string path) => EnvFileParser.Parse(path);
 }

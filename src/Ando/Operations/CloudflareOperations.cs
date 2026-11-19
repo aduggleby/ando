@@ -59,11 +59,48 @@ public class CloudflareOperations : OperationsBase
     private string? _apiToken;
     private string? _accountId;
     private string? _zoneId;
+    private bool _explicitToken;
+    private bool _explicitAccountId;
     private readonly HashSet<string> _registeredPagesProjectChecks = new(StringComparer.OrdinalIgnoreCase);
 
     public CloudflareOperations(StepRegistry registry, IBuildLogger logger, Func<ICommandExecutor> executorFactory)
         : base(registry, logger, executorFactory)
     {
+    }
+
+    /// <summary>
+    /// Uses these credentials for every Cloudflare step registered after this call, instead of
+    /// $CLOUDFLARE_API_TOKEN and $CLOUDFLARE_ACCOUNT_ID from the environment. They are passed to each
+    /// command as per-command environment variables (by name, never on the command line) and the
+    /// token and account ID are registered for redaction. EnsureAuthenticated and the other Cloudflare
+    /// operations then neither prompt nor read the environment for the values given here. Call it at
+    /// evaluation, before the other Cloudflare operations. Without it, behavior is unchanged.
+    /// Usage: var cf = Secrets.EnvFile(".env.secrets", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID");
+    ///        Cloudflare.UseCredentials(cf["CLOUDFLARE_API_TOKEN"], cf["CLOUDFLARE_ACCOUNT_ID"]);
+    /// </summary>
+    /// <param name="apiToken">The Cloudflare API token.</param>
+    /// <param name="accountId">The account ID. When null, $CLOUDFLARE_ACCOUNT_ID is used as before.</param>
+    public void UseCredentials(string apiToken, string? accountId = null)
+    {
+        if (string.IsNullOrWhiteSpace(apiToken))
+        {
+            throw new ArgumentException("Cloudflare API token must be provided.", nameof(apiToken));
+        }
+
+        _apiToken = apiToken;
+        _explicitToken = true;
+        SecretValues.Add(apiToken);
+        if (!string.IsNullOrWhiteSpace(accountId))
+        {
+            _accountId = accountId;
+            _explicitAccountId = true;
+            SecretValues.Add(accountId);
+        }
+        else if (_explicitAccountId)
+        {
+            _accountId = null;
+            _explicitAccountId = false;
+        }
     }
 
     /// <summary>
@@ -74,8 +111,14 @@ public class CloudflareOperations : OperationsBase
     {
         // Get credentials from environment or prompt user interactively.
         // Capture values so they can be passed to the container.
-        _apiToken = EnvironmentHelper.GetRequiredOrPrompt(EnvApiToken, "Cloudflare API Token", isSecret: true);
-        _accountId = EnvironmentHelper.GetRequiredOrPrompt(EnvAccountId, "Cloudflare Account ID");
+        if (!_explicitToken)
+        {
+            _apiToken = EnvironmentHelper.GetRequiredOrPrompt(EnvApiToken, "Cloudflare API Token", isSecret: true);
+        }
+        if (!_explicitAccountId)
+        {
+            _accountId = EnvironmentHelper.GetRequiredOrPrompt(EnvAccountId, "Cloudflare Account ID");
+        }
 
         // Keep this check on Cloudflare's token verification endpoint instead of
         // replacing it with `wrangler whoami`.

@@ -35,27 +35,32 @@ Ef.Script(db, Root / "artifacts" / "migration.sql");
 
 Creates a reference to an EF Core DbContext for use in other operations.
 
-| Parameter | Description |
-|-----------|-------------|
-| `project` | ProjectRef pointing to the project containing the DbContext. |
+| Parameter     | Description                                                                                                     |
+| ------------- | --------------------------------------------------------------------------------------------------------------- |
+| `project`     | ProjectRef pointing to the project containing the DbContext.                                                    |
 | `contextName` | Name of the DbContext class (e.g., "AppDbContext"). If the project has only one DbContext, this can be omitted. |
 
 ### Ef.DatabaseUpdate
 
 Applies all pending migrations to the database.
 
-| Parameter | Description |
-|-----------|-------------|
-| `context` | DbContext reference from `Ef.DbContextFrom()`. |
+| Parameter          | Description                                                                                                 |
+| ------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `context`          | DbContext reference from `Ef.DbContextFrom()`.                                                              |
 | `connectionString` | Optional connection string. If not provided, uses the connection string from the DbContext's configuration. |
 
 ### Ef.Script
 
 Generates an idempotent SQL script for all migrations.
 
-| Parameter | Description |
-|-----------|-------------|
-| `context` | DbContext reference from `Ef.DbContextFrom()`. |
-| `outputFile` | Path where the SQL script will be written. |
-| `fromMigration` | Optional starting migration. Only generates SQL for migrations after this point. |
+| Parameter       | Description                                                                                                                                                                                                                                         |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `context`       | DbContext reference from `Ef.DbContextFrom()`.                                                                                                                                                                                                      |
+| `outputFile`    | Path where the SQL script will be written.                                                                                                                                                                                                          |
+| `fromMigration` | Optional starting migration. Only generates SQL for migrations after this point. Also available as `o.From(string)` / `o.From(Func<string?>)` in the options form below (the function runs when the step runs; null or empty means not set).        |
+| `toMigration`   | Optional last migration to include. Also `o.To(string)` / `o.To(Func<string?>)`. With `toMigration` set and no `fromMigration`, ANDO passes `0` (the empty database) as the start, because `dotnet ef migrations script [from] [to]` is positional. |
 
+```csharp
+Ef.Script(db, Root / "up-to-orders.sql", toMigration: "AddOrders");
+Ef.Script(db, Root / "delta.sql", o => o.From(() => applied.Value).To(() => latest.Value));
+```

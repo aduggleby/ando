@@ -14,10 +14,11 @@ These names are available in every `build.csando` script without a prefix or imp
 | `Temp`            | `BuildPath`       | Temporary directory (`.ando/tmp`). Supports the `/` operator.      |
 | `Directory()`     | function          | Creates a `DirectoryRef`.                                          |
 | `Env()`           | function          | Reads an environment variable.                                     |
+| `Secrets`         | operations object | `Secrets.UserSecrets`, `Secrets.EnvFile`. See [Secrets](#secrets). |
 | `DefineProfile()` | function          | Defines a build profile and returns a `Profile`.                   |
 | `Log`             | operations object | `Log.Info`, `Log.Warning`, `Log.Error`, `Log.Debug`.               |
 
-The other globals are the operation objects, one per provider: `Ando`, `AppService`, `Archive`, `Azure`, `Bicep`, `Bun`, `Cloudflare`, `Docfx`, `Docker`, `Dotnet`, `Ef`, `Files`, `Functions`, `Git`, `GitHub`, `Http`, `Node`, `Npm`, `Nuget`, `Playwright` and `Shell`.
+The other globals are the operation objects, one per provider: `Ando`, `AppService`, `Archive`, `Azure`, `Bicep`, `Bun`, `Cloudflare`, `Docfx`, `Docker`, `Dotnet`, `Ef`, `Files`, `Functions`, `Git`, `GitHub`, `Http`, `Node`, `Npm`, `Nuget`, `Playwright`, `Secrets` and `Shell`.
 
 Globals are evaluated while the script loads. `Env()`, `Directory()`, `DefineProfile()`, `Root` and `Temp` do not register steps. `Log.*` calls are steps: they print when their turn in the step order comes.
 
@@ -36,6 +37,7 @@ var cache = Temp / "build-cache";
 // Access environment variables (global function, not Ando.Env)
 var dbUrl = Env("DATABASE_URL");
 var apiKey = Env("API_KEY", required: false);
+var accountId = Env("ACCOUNT_ID", secret: true); // redact a value whose name does not look secret
 var lang = Env("SITE_LANG", required: false) ?? "en";
 
 // Use regular C# variables for custom values
@@ -61,6 +63,24 @@ var lang = Env("SITE_LANG", required: false) ?? "en";
 ```
 
 There is no `SetEnv()` function. Set environment variables via `.env.ando` files, OS environment, or CI/CD configuration.
+
+## Secrets
+
+Secrets are redacted **by value**: once a value is registered, ANDO replaces it with `[REDACTED]` in console output, `build.csando.log`, run records and `--dry-run` step trees. Values shorter than 6 characters are never redacted.
+
+- `Env(name)` registers the value when the name looks secret (`*_TOKEN`, `*_SECRET`, `*_PASSWORD`, `*_KEY` and similar). Pass `secret: true` to register any other value: `Env("CLOUDFLARE_ACCOUNT_ID", secret: true)`.
+- `Secrets.UserSecrets(idOrProjectPath)` reads a .NET user secrets store (`~/.microsoft/usersecrets/<id>/secrets.json`, or `%APPDATA%\Microsoft\UserSecrets\<id>\secrets.json` on Windows) on the host while the script is evaluated, without calling `dotnet`. Pass the `UserSecretsId`, or a `.csproj` (or a folder holding exactly one) to read it from. Nested JSON objects are flattened with `:`. A value is registered for redaction when the script reads it (indexer or `TryGet`), so read config through `Secrets` only if it is secret: a plain value such as `Region` is not redacted unless it was read this way. Each line of a multi-line value (a PEM key) is also redacted on its own.
+- `Secrets.EnvFile(path, keys...)` reads the named keys from a dotenv file. The values are registered for redaction. This call does **not** set them in the process environment or forward them to container commands; pass them to the operation that needs them. Use a separate file such as `.env.secrets`: `.env.ando` (or `.env`) is still loaded and forwarded to every container command by the normal env loading unless the run uses `--no-env`, and reading it here logs a warning that its keys are forwarded anyway. A file inside a git repository that is not gitignored fails at evaluation. A missing key fails at evaluation.
+
+Both return a read-only set. Its indexer throws an error naming the missing key (never a value), and `TryGet(key, out value)` returns false instead.
+
+```csharp
+var sp = Secrets.UserSecrets("simplesign365-dev");
+var secret = sp["Deploy:Azure:ClientSecret"];
+
+var cf = Secrets.EnvFile(".env.secrets", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID");
+Cloudflare.UseCredentials(cf["CLOUDFLARE_API_TOKEN"], cf["CLOUDFLARE_ACCOUNT_ID"]);
+```
 
 ## BuildPath vs DirectoryRef
 

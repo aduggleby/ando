@@ -111,6 +111,9 @@ public class BuildOperations
     /// <summary>File operations in the build container (Files.Copy).</summary>
     public FilesOperations Files { get; }
 
+    /// <summary>Secret sources (Secrets.UserSecrets, Secrets.EnvFile).</summary>
+    public SecretsOperations Secrets { get; }
+
     /// <summary>
     /// Creates all operation instances.
     /// </summary>
@@ -163,6 +166,7 @@ public class BuildOperations
         Bun = new BunOperations(registry, logger, executorFactory);
         Archive = new ArchiveOperations(registry, logger, executorFactory);
         Files = new FilesOperations(registry, logger, executorFactory);
+        Secrets = new SecretsOperations(buildOptions.Session, logger: logger);
 
         // Legacy backward compatibility wrapper.
 #pragma warning disable CS0618 // Suppress obsolete warning for internal initialization

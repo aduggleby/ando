@@ -56,6 +56,15 @@ public class RunSession
     /// <summary>Whether the run used --no-env; forwarded to Ando.Build child builds.</summary>
     public bool NoEnv { get; set; }
 
+    /// <summary>Whether this is a --dry-run: Ando.Lock takes no lock then.</summary>
+    public bool DryRun { get; set; }
+
+    /// <summary>The locks this run holds (container lock and Ando.Lock names); released when the run ends.</summary>
+    public RunLockSet Locks { get; set; } = new();
+
+    /// <summary>Set when an end-of-run artifact copy failed; the run record then says success: false.</summary>
+    public bool ArtifactCopyFailed { get; set; }
+
     /// <summary>The commit being built when running with --ref (full SHA).</summary>
     public string? Ref { get; set; }
 

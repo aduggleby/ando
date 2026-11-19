@@ -60,7 +60,21 @@ public class ShellCommandOperations(StepRegistry registry, IBuildLogger logger, 
         string command,
         string[] args,
         string? context,
-        int? defaultTimeoutMs = null)
+        int? defaultTimeoutMs = null) =>
+        RegisterCommandStep(registry, logger, executorFactory, stepName, command, () => args, context, defaultTimeoutMs);
+
+    // Same, but the arguments are resolved when the step runs and the captured output
+    // can be transformed before it becomes the step's Value.
+    internal static CommandStep RegisterCommandStep(
+        StepRegistry registry,
+        IBuildLogger logger,
+        Func<ICommandExecutor> executorFactory,
+        string stepName,
+        string command,
+        Func<string[]> args,
+        string? context,
+        int? defaultTimeoutMs = null,
+        Func<string, string>? transformOutput = null)
     {
         var step = new CommandStep(stepName, defaultTimeoutMs ?? registry.DefaultCommandTimeoutMs);
 
@@ -79,8 +93,8 @@ public class ShellCommandOperations(StepRegistry registry, IBuildLogger logger, 
                 options.Environment[key] = value;
             }
 
-            var result = await executorFactory().ExecuteAsync(command, args, options);
-            step.Set(result.Output, result.ExitCode);
+            var result = await executorFactory().ExecuteAsync(command, args(), options);
+            step.Set(result.Success && transformOutput != null ? transformOutput(result.Output ?? "") : result.Output, result.ExitCode);
 
             if (result.Success)
             {

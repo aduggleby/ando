@@ -387,4 +387,13 @@ public class GitEvalTimeTests : IDisposable
 
         (await _registry.Steps[0].Execute()).ShouldBeFalse();
     }
+
+    [Fact]
+    public async Task ChangedFiles_DeferredEmptyRef_FailsWithClearMessage()
+    {
+        CreateGit().ChangedFiles(() => "");
+
+        var ex = await Should.ThrowAsync<InvalidOperationException>(() => _registry.Steps[0].Execute());
+        ex.Message.ShouldContain("sinceRef is empty");
+    }
 }

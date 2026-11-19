@@ -189,12 +189,13 @@ public class BuildContext
     /// Copies registered artifacts from the container to the host.
     /// Called after successful build completion.
     /// </summary>
-    public async Task CopyArtifactsToHostAsync()
+    /// <returns>False when any copy failed; the run record then lists "artifact-copy-failed".</returns>
+    public async Task<bool> CopyArtifactsToHostAsync()
     {
         if (_dockerManager == null || _containerId == null || _hostRootPath == null)
         {
             Logger.Debug("No Docker manager configured - skipping artifact copy");
-            return;
+            return true;
         }
 
         // Use the host root path for copying artifacts back to the host filesystem.
@@ -204,18 +205,28 @@ public class BuildContext
         var artifactsRoot = Options.Session.Ref != null && Options.Session.InvocationRoot != null
             ? Options.Session.InvocationRoot
             : _hostRootPath;
-        await Artifacts.CopyToHostAsync(_containerId, artifactsRoot, Logger);
-        await Artifacts.CopyZippedToHostAsync(_containerId, artifactsRoot, Logger);
+        var failed = await Artifacts.CopyToHostAsync(_containerId, artifactsRoot, Logger, Options.Session.DockerRunner);
+        failed.AddRange(await Artifacts.CopyZippedToHostAsync(_containerId, artifactsRoot, Logger));
 
         // List each copy in the run record so the resolved host path is visible.
         foreach (var (containerPath, hostPath) in Artifacts.Artifacts.Select(a => (a.ContainerPath, a.HostPath))
                      .Concat(Artifacts.ZippedArtifacts.Select(a => (a.ContainerPath, a.HostPath))))
         {
             var resolved = ArtifactOperations.ResolveHostPath(artifactsRoot, hostPath);
-            if (!ArtifactOperations.IsProjectRootOrAncestor(artifactsRoot, resolved))
+            if (!failed.Contains(containerPath) && !ArtifactOperations.IsProjectRootOrAncestor(artifactsRoot, resolved))
             {
                 Options.Session.Reports.Add(new KeyValuePair<string, string>($"artifact {resolved}", containerPath));
             }
         }
+
+        if (failed.Count > 0)
+        {
+            Logger.Error($"Artifact copy failed for {failed.Count} artifact(s); the run fails.");
+            Options.Session.ArtifactCopyFailed = true;
+            Options.Session.Reports.Add(new KeyValuePair<string, string>(
+                "artifact-copy-failed", string.Join(", ", failed)));
+        }
+
+        return failed.Count == 0;
     }
 }

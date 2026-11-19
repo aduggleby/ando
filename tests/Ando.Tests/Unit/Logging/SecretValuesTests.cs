@@ -32,6 +32,16 @@ public class SecretValuesTests : IDisposable
     }
 
     [Fact]
+    public void Add_MultiLineValue_SkipsWhitespaceOnlyLinesAndTrimsCarriageReturns()
+    {
+        SecretValues.Add("line-one-secret\r\n          \r\nline-two-secret\r\n");
+
+        SecretValues.Redact("a line-one-secret b").ShouldBe("a [REDACTED] b");
+        SecretValues.Redact("x line-two-secret\r y").ShouldBe("x [REDACTED]\r y");
+        SecretValues.Redact("pad          pad").ShouldBe("pad          pad");
+    }
+
+    [Fact]
     public void Redact_ReplacesEveryOccurrence()
     {
         SecretValues.Add("s3cr3t-value");

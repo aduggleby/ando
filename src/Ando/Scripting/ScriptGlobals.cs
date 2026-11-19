@@ -24,6 +24,7 @@
 // =============================================================================
 
 using Ando.Context;
+using Ando.Logging;
 using Ando.Operations;
 using Ando.Profiles;
 using Ando.References;
@@ -181,6 +182,13 @@ public class ScriptGlobals
     public FilesOperations Files { get; }
 
     /// <summary>
+    /// Secret sources read on the host at evaluation time; values are redacted from all output.
+    /// Usage: var sp = Secrets.UserSecrets("my-app-dev"); var token = sp["Deploy:Token"];
+    /// Usage: var cf = Secrets.EnvFile(".env.secrets", "CLOUDFLARE_API_TOKEN");
+    /// </summary>
+    public SecretsOperations Secrets { get; }
+
+    /// <summary>
     /// Creates a directory reference from a path.
     /// Usage: var frontend = Directory("./frontend");
     /// Usage: var current = Directory(); // defaults to "."
@@ -208,10 +216,15 @@ public class ScriptGlobals
     /// </summary>
     /// <param name="name">Environment variable name.</param>
     /// <param name="required">If true (default), throws when variable is not set. If false, returns null.</param>
+    /// <param name="secret">If true, the value is redacted from all output even when the name does not look secret. Names such as *_TOKEN or *_SECRET are always redacted.</param>
     /// <returns>The environment variable value, or null if not set and required is false.</returns>
-    public string? Env(string name, bool required = true)
+    public string? Env(string name, bool required = true, bool secret = false)
     {
         var value = Environment.GetEnvironmentVariable(name);
+        if (secret || SecretValues.IsSecretName(name))
+        {
+            SecretValues.Add(value);
+        }
 
         if (required && string.IsNullOrEmpty(value))
         {
@@ -247,6 +260,7 @@ public class ScriptGlobals
         Bun = buildContext.Operations.Bun;
         Archive = buildContext.Operations.Archive;
         Files = buildContext.Operations.Files;
+        Secrets = buildContext.Operations.Secrets;
         _profileRegistry = buildContext.ProfileRegistry;
 
         // Legacy backward compatibility.

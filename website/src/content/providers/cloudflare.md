@@ -22,6 +22,18 @@ When running locally without environment variables set, `Cloudflare.EnsureAuthen
 
 `Cloudflare.EnsureAuthenticated()` verifies the API token with Cloudflare's token verification endpoint. `Cloudflare.PagesDeploy()` also registers `Cloudflare.EnsurePagesProject(projectName)` automatically, which checks that the same token can read the target Pages project before Wrangler starts the deployment.
 
+### UseCredentials
+
+`Cloudflare.UseCredentials(apiToken, accountId = null)` gives every Cloudflare step registered **after** it explicit credentials, so the token does not have to be exported to the whole build. Call it at evaluation, before the other Cloudflare operations. The values reach each command as per-command environment variables (by name, never on the command line) and are registered for redaction. `EnsureAuthenticated()` does not prompt for values given here. When `accountId` is null, `CLOUDFLARE_ACCOUNT_ID` is read as before. Without the call, nothing changes.
+
+```csharp
+var cf = Secrets.EnvFile(".env.secrets", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID");
+Cloudflare.UseCredentials(cf["CLOUDFLARE_API_TOKEN"], cf["CLOUDFLARE_ACCOUNT_ID"]);
+Cloudflare.PagesDeploy(Directory("./dist"), "my-site");
+```
+
+Keep the credentials in a separate file such as `.env.secrets` (gitignored): `.env.ando` is still loaded and forwarded to every container command unless the run uses `--no-env`. See [Secrets](/providers/globals#secrets) for `Secrets.EnvFile` and `Secrets.UserSecrets`.
+
 ### EnsurePagesProject vs PagesCreateProject
 
 | Operation                                      | What it does                                                                                                                                                                                                | Use it when                                                                                                     |

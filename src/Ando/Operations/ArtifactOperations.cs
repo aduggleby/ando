@@ -25,6 +25,7 @@
 // =============================================================================
 
 using System.Diagnostics;
+using Ando.Execution;
 using Ando.Logging;
 
 namespace Ando.Operations;
@@ -134,79 +135,109 @@ public class ArtifactOperations
     /// Since the workspace is not mounted (files are copied in for isolation),
     /// all artifacts must be copied back to the host via 'docker cp'.
     /// </remarks>
-    internal async Task CopyToHostAsync(string containerId, string projectRoot, IBuildLogger logger)
+    /// <returns>The container paths that could not be copied (empty when all succeeded).</returns>
+    internal async Task<List<string>> CopyToHostAsync(
+        string containerId, string projectRoot, IBuildLogger logger,
+        Func<string[], Task<CommandResult>>? dockerRunner = null)
     {
+        var failed = new List<string>();
         if (_artifacts.Count == 0)
         {
             logger.Debug("No artifacts registered for copying");
-            return;
+            return failed;
         }
 
         logger.Info($"Copying {_artifacts.Count} artifact(s) from container:");
 
         foreach (var artifact in _artifacts)
         {
-            // Resolve host path relative to project root if not absolute.
-            var hostPath = ResolveHostPath(projectRoot, artifact.HostPath);
-
-            // Never wipe the project or a folder that contains it (e.g. "." or "..").
-            if (IsProjectRootOrAncestor(projectRoot, hostPath))
+            if (!await CopyOneAsync(containerId, projectRoot, artifact.ContainerPath, artifact.HostPath, logger, dockerRunner))
             {
-                logger.Error($"  Refusing to copy {artifact.ContainerPath} to {hostPath}: it is the project folder or contains it, and would be deleted first.");
-                continue;
+                failed.Add(artifact.ContainerPath);
             }
+        }
 
+        return failed;
+    }
+
+    /// <summary>
+    /// Copies one file or directory from the container to the host: resolves the host path
+    /// against <paramref name="projectRoot"/>, refuses the project folder and its parents,
+    /// deletes the destination first (docker cp would copy INTO an existing directory).
+    /// Every failure is logged as an error and returns false.
+    /// </summary>
+    internal static async Task<bool> CopyOneAsync(
+        string containerId, string projectRoot, string containerPath, string hostPathSetting,
+        IBuildLogger logger, Func<string[], Task<CommandResult>>? dockerRunner = null)
+    {
+        // Resolve host path relative to project root if not absolute.
+        var hostPath = ResolveHostPath(projectRoot, hostPathSetting);
+
+        // Never wipe the project or a folder that contains it (e.g. "." or "..").
+        if (IsProjectRootOrAncestor(projectRoot, hostPath))
+        {
+            logger.Error($"  Refusing to copy {containerPath} to {hostPath}: it is the project folder or contains it, and would be deleted first.");
+            return false;
+        }
+
+        try
+        {
             // Ensure parent directory exists.
             var hostDir = Path.GetDirectoryName(hostPath);
             if (!string.IsNullOrEmpty(hostDir))
             {
                 Directory.CreateDirectory(hostDir);
             }
+        }
+        catch (Exception ex)
+        {
+            logger.Error($"  Could not create the destination folder for {hostPath}: {ex.Message}");
+            return false;
+        }
 
+        try
+        {
             // Remove existing destination to ensure clean copy.
-            // docker cp behavior: if dest exists as directory, it copies INTO it (creating dest/source-name)
-            // We want to REPLACE the destination, not copy into it.
-            try
+            if (Directory.Exists(hostPath))
             {
-                if (Directory.Exists(hostPath))
-                {
-                    DeleteDirectoryRecursive(hostPath);
-                }
-                else if (File.Exists(hostPath))
-                {
-                    ClearReadOnlyAndDelete(hostPath);
-                }
+                DeleteDirectoryRecursive(hostPath);
             }
-            catch (Exception ex)
+            else if (File.Exists(hostPath))
             {
-                logger.Warning($"  Could not remove existing destination: {ex.Message}");
-                // Continue anyway - docker cp might still work or give a better error
-            }
-
-            logger.Info($"  {artifact.ContainerPath} -> {hostPath}");
-
-            var success = await CopyFromContainerAsync(containerId, artifact.ContainerPath, hostPath, logger);
-            if (success)
-            {
-                logger.Debug($"  Successfully copied: {artifact.ContainerPath}");
-            }
-            else
-            {
-                logger.Warning($"  Failed to copy: {artifact.ContainerPath}");
+                ClearReadOnlyAndDelete(hostPath);
             }
         }
+        catch (Exception ex)
+        {
+            logger.Error($"  Could not remove existing destination {hostPath}: {ex.Message}");
+            return false;
+        }
+
+        logger.Info($"  {containerPath} -> {hostPath}");
+
+        var (success, error) = await CopyFromContainerWithErrorAsync(containerId, containerPath, hostPath, logger, dockerRunner);
+        if (!success)
+        {
+            logger.Error($"  Failed to copy {containerPath}: docker cp failed: {error}");
+            return false;
+        }
+
+        logger.Debug($"  Successfully copied: {containerPath}");
+        return true;
     }
 
     /// <summary>
     /// Copies all registered zipped artifacts from the container to the host.
     /// For each artifact: zips in container, copies zip to host, extracts, removes zip.
     /// </summary>
-    internal async Task CopyZippedToHostAsync(string containerId, string projectRoot, IBuildLogger logger)
+    /// <returns>The container paths that could not be copied (empty when all succeeded).</returns>
+    internal async Task<List<string>> CopyZippedToHostAsync(string containerId, string projectRoot, IBuildLogger logger)
     {
+        var failed = new List<string>();
         if (_zippedArtifacts.Count == 0)
         {
             logger.Debug("No zipped artifacts registered for copying");
-            return;
+            return failed;
         }
 
         logger.Info($"Copying {_zippedArtifacts.Count} zipped artifact(s) from container:");
@@ -220,19 +251,29 @@ public class ArtifactOperations
             if (IsProjectRootOrAncestor(projectRoot, hostPath))
             {
                 logger.Error($"  Refusing to copy {artifact.ContainerPath} to {hostPath}: it is the project folder or contains it, and would be deleted first.");
+                failed.Add(artifact.ContainerPath);
                 continue;
             }
 
-            // Ensure parent directory exists.
-            var hostDir = Path.GetDirectoryName(hostPath);
-            if (!string.IsNullOrEmpty(hostDir))
-            {
-                Directory.CreateDirectory(hostDir);
-            }
-
-            // Remove existing destination to ensure clean copy.
             try
             {
+                // Ensure parent directory exists.
+                var hostDir = Path.GetDirectoryName(hostPath);
+                if (!string.IsNullOrEmpty(hostDir))
+                {
+                    Directory.CreateDirectory(hostDir);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.Error($"  Could not create the destination folder for {hostPath}: {ex.Message}");
+                failed.Add(artifact.ContainerPath);
+                continue;
+            }
+
+            try
+            {
+                // Remove existing destination to ensure clean copy.
                 if (Directory.Exists(hostPath))
                 {
                     DeleteDirectoryRecursive(hostPath);
@@ -244,7 +285,9 @@ public class ArtifactOperations
             }
             catch (Exception ex)
             {
-                logger.Warning($"  Could not remove existing destination: {ex.Message}");
+                logger.Error($"  Could not remove existing destination {hostPath}: {ex.Message}");
+                failed.Add(artifact.ContainerPath);
+                continue;
             }
 
             // Determine actual output path for logging.
@@ -260,9 +303,12 @@ public class ArtifactOperations
             }
             else
             {
-                logger.Warning($"  Failed to copy: {artifact.ContainerPath}");
+                logger.Error($"  Failed to copy: {artifact.ContainerPath}");
+                failed.Add(artifact.ContainerPath);
             }
         }
+
+        return failed;
     }
 
     // Creates archive in container and copies to host as a single file.
@@ -336,14 +382,14 @@ public class ArtifactOperations
                 catch (UnauthorizedAccessException)
                 {
                     // File might be owned by root from previous docker cp.
-                    logger.Warning($"    Cannot remove existing file (permission denied): {finalHostPath}");
-                    logger.Warning($"    File may be owned by root. Try: sudo rm -f \"{finalHostPath}\"");
+                    logger.Error($"    Cannot remove existing file (permission denied): {finalHostPath}");
+                    logger.Error($"    File may be owned by root. Try: sudo rm -f \"{finalHostPath}\"");
                     return false;
                 }
                 catch (Exception ex)
                 {
-                    logger.Warning($"    Could not remove existing file: {ex.Message}");
-                    // Continue anyway - docker cp might give a more useful error
+                    logger.Error($"    Could not remove existing file: {ex.Message}");
+                    return false;
                 }
             }
 
@@ -352,7 +398,7 @@ public class ArtifactOperations
             var (copySuccess, copyError) = await CopyFromContainerWithErrorAsync(containerId, containerArchivePath, finalHostPath, logger);
             if (!copySuccess)
             {
-                logger.Warning($"    docker cp failed: {copyError}");
+                logger.Error($"    docker cp failed: {copyError}");
                 return false;
             }
 
@@ -368,7 +414,7 @@ public class ArtifactOperations
         }
         catch (Exception ex)
         {
-            logger.Debug($"Zipped copy failed: {ex.Message}");
+            logger.Error($"    Zipped copy failed: {ex.Message}");
 
             // Clean up on failure.
             try { await RemoveFileInContainerAsync(containerId, containerArchivePath, logger); } catch { }
@@ -416,7 +462,7 @@ public class ArtifactOperations
 
         if (process.ExitCode != 0)
         {
-            logger.Warning($"    tar command failed: {error.Trim()}");
+            logger.Error($"    tar command failed: {error.Trim()}");
             return false;
         }
 
@@ -462,7 +508,7 @@ public class ArtifactOperations
 
         if (process.ExitCode != 0)
         {
-            logger.Warning($"    zip command failed: {error.Trim()}");
+            logger.Error($"    zip command failed: {error.Trim()}");
             return false;
         }
 
@@ -492,51 +538,20 @@ public class ArtifactOperations
         }
     }
 
-    // Executes 'docker cp' to copy files from container to host.
-    private static async Task<bool> CopyFromContainerAsync(
-        string containerId,
-        string containerPath,
-        string hostPath,
-        IBuildLogger logger)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "docker",
-            ArgumentList = { "cp", $"{containerId}:{containerPath}", hostPath },
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true,
-        };
-
-        logger.Debug($"Executing: docker cp {containerId}:{containerPath} {hostPath}");
-
-        using var process = Process.Start(startInfo);
-        if (process == null)
-        {
-            logger.Error("Failed to start docker cp process");
-            return false;
-        }
-
-        var error = await process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-
-        if (process.ExitCode != 0)
-        {
-            logger.Debug($"docker cp failed: {error}");
-            return false;
-        }
-
-        return true;
-    }
-
     // Executes 'docker cp' and returns both success status and error message.
     private static async Task<(bool Success, string Error)> CopyFromContainerWithErrorAsync(
         string containerId,
         string containerPath,
         string hostPath,
-        IBuildLogger logger)
+        IBuildLogger logger,
+        Func<string[], Task<CommandResult>>? dockerRunner = null)
     {
+        if (dockerRunner != null)
+        {
+            var result = await dockerRunner(["cp", $"{containerId}:{containerPath}", hostPath]);
+            return (result.Success, (result.Error ?? result.Output ?? "").Trim());
+        }
+
         var startInfo = new ProcessStartInfo
         {
             FileName = "docker",

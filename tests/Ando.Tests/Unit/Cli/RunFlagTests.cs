@@ -45,3 +45,76 @@ public class RunFlagTests
             .ShouldBe("--no-env and --read-env cannot be used together.");
     }
 }
+
+[Trait("Category", "Unit")]
+public class RecordPathFileTests : IDisposable
+{
+    private readonly string _dir = Directory.CreateTempSubdirectory("ando-recordpath-").FullName;
+
+    public void Dispose() => Directory.Delete(_dir, recursive: true);
+
+    [Fact]
+    public void RecordPathFile_TakesAValue_AndIsAccepted()
+    {
+        AndoCli.FindUnknownRunFlag(["run", "--record-path-file", "path.txt", "--dry-run"]).ShouldBeNull();
+        AndoCli.FindRunFlagError(["run", "--record-path-file", "path.txt"]).ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("run", "--record-path-file")]
+    [InlineData("run", "--record-path-file", "--dry-run")]
+    public void RecordPathFile_WithoutValue_IsAnError(params string[] args)
+    {
+        AndoCli.FindRunFlagError(args).ShouldBe("--record-path-file needs a file path.");
+    }
+
+    [Fact]
+    public void WriteRecordPathFile_WritesTheAbsolutePathAsOneLine()
+    {
+        var file = Path.Combine(_dir, "path.txt");
+        var record = Path.Combine(_dir, ".ando", "runs", "x.json");
+
+        AndoCli.WriteRecordPathFile(file, _dir, record, new Ando.Tests.TestFixtures.TestLogger());
+
+        File.ReadAllText(file).ShouldBe(record + "\n");
+    }
+
+    [Fact]
+    public void WriteRecordPathFile_RelativeFileIsRelativeToTheInvocationDirectory()
+    {
+        AndoCli.WriteRecordPathFile("rel.txt", _dir, "runs/x.json", new Ando.Tests.TestFixtures.TestLogger());
+
+        File.ReadAllText(Path.Combine(_dir, "rel.txt")).ShouldBe(Path.Combine(_dir, "runs", "x.json") + "\n");
+    }
+
+    [Fact]
+    public void DeleteStalePathFile_RemovesAnOldPath_AndIgnoresMissingOrUnset()
+    {
+        var file = Path.Combine(_dir, "path.txt");
+        File.WriteAllText(file, "old\n");
+
+        AndoCli.DeleteStalePathFile("path.txt", _dir);
+        File.Exists(file).ShouldBeFalse();
+
+        AndoCli.DeleteStalePathFile("path.txt", _dir);
+        AndoCli.DeleteStalePathFile(null, _dir);
+    }
+
+    [Fact]
+    public void WriteRecordPathFile_NoOptionCreatesNothing()
+    {
+        AndoCli.WriteRecordPathFile(null, _dir, "x.json", new Ando.Tests.TestFixtures.TestLogger());
+
+        Directory.GetFiles(_dir).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void WriteRecordPathFile_UnwritableFile_WarnsOnly()
+    {
+        var logger = new Ando.Tests.TestFixtures.TestLogger();
+
+        AndoCli.WriteRecordPathFile("missing-dir/p.txt", _dir, "x.json", logger);
+
+        logger.WarningMessages.ShouldContain(m => m.Contains("Could not write the record path"));
+    }
+}
