@@ -103,8 +103,13 @@ Ando.When(
 
 ## Running a script on a VM
 
-`Azure.Vm.RunCommand(resourceGroup, vmName, script, TimeSpan? timeout = null)` runs a shell script as root on a Linux VM with `az vm run-command invoke`. `az vm run-command` exits 0 even when the script fails, so ANDO wraps the script, reads its exit code and fails the step if the script exited non-zero. It returns a `StepOutput` whose `Value` is the script's stdout. The default timeout is 30 minutes.
+`Azure.Vm.RunCommand(resourceGroup, vmName, script, TimeSpan? timeout = null, bool exitOnError = false)` runs a shell script as root on a Linux VM with `az vm run-command invoke`. `az vm run-command` exits 0 even when the script fails, so ANDO wraps the script, reads its exit code and fails the step if the script exited non-zero. It returns a `StepOutput` whose `Value` is the script's stdout. The default timeout is 30 minutes.
+
+**By default only the last command's exit code counts.** The script runs without `set -e`, so a command that fails in the middle passes silently when a later command succeeds. Pass `exitOnError: true` (the script then starts with `set -e`) or end commands with `|| exit 1`. With `set -e` a failing simple command ends the script, but failures inside pipelines (except the last command), `&&`/`||` lists and `if` conditions do not; add `set -o pipefail` (bash) for pipelines.
 
 ```csharp
 Azure.Vm.RunCommand("rg-eu", "docs-vm", "/usr/local/sbin/update-worker pkg.tar.gz", TimeSpan.FromMinutes(10));
+
+// Stop at the first failing command
+Azure.Vm.RunCommand("rg-eu", "docs-vm", "systemctl stop app\ncp -r new/ /srv/app\nsystemctl start app", exitOnError: true);
 ```

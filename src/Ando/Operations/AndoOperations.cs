@@ -163,6 +163,7 @@ public class AndoOperations
             configure?.Invoke(options);
             options.NoEnv = session.NoEnv;
             options.AssumeYes = session.AssumeYes;
+            options.NoColor = session.NoColor;
             options.Ref = session.Ref;
 
             // Translate container path to host path for spawning the child process.

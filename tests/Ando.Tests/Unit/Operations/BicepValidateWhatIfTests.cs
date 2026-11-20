@@ -288,13 +288,164 @@ public class BicepValidateWhatIfTests
         plan.Changes.Count.ShouldBe(2);
     }
 
-    [Fact]
-    public async Task DeployAndValidate_DoNotSuppressStdout()
+    [Theory]
+    [InlineData("validate")]
+    [InlineData("validateSub")]
+    public async Task Validate_SuppressesStdoutLogging_AndLogsOneLine(string kind)
     {
+        _executor.SimulatedOutput = "{\"properties\":{\"provisioningState\":\"Succeeded\"}}";
+        if (kind == "validate") Bicep().Validate("rg", "t.bicep"); else Bicep().ValidateSubscription("l", "t.bicep");
+
+        (await _registry.Steps[0].Execute()).ShouldBeTrue();
+
+        Az().Options!.SuppressStdout.ShouldBeTrue();
+        _logger.InfoMessages.ShouldContain("Validation succeeded");
+    }
+
+    [Fact]
+    public async Task Validate_ErrorInJson_FailsAndLogsMessage()
+    {
+        _executor.SimulatedOutput = "{\"error\":{\"code\":\"InvalidTemplate\",\"message\":\"bad template\"}}";
         Bicep().Validate("rg", "t.bicep");
+
+        (await _registry.Steps[0].Execute()).ShouldBeFalse();
+        _logger.ErrorMessages.ShouldContain(m => m.Contains("bad template"));
+    }
+
+    [Fact]
+    public async Task Validate_ErrorDetails_AreLoggedIncludingOneNestedLevel()
+    {
+        _executor.SimulatedOutput = """
+            {"error":{"code":"InvalidTemplateDeployment","message":"top",
+              "details":[{"message":"first detail","details":[{"message":"nested detail"}]},{"code":"x"}]}}
+            """;
+        Bicep().Validate("rg", "t.bicep");
+
+        (await _registry.Steps[0].Execute()).ShouldBeFalse();
+        _logger.ErrorMessages.ShouldContain(m => m.Contains("top"));
+        _logger.ErrorMessages.ShouldContain(m => m.Contains("first detail"));
+        _logger.ErrorMessages.ShouldContain(m => m.Contains("nested detail"));
+    }
+
+    [Fact]
+    public async Task Validate_ProvisioningStateNotSucceeded_Fails()
+    {
+        _executor.SimulatedOutput = "{\"properties\":{\"provisioningState\":\"Failed\"}}";
+        Bicep().Validate("rg", "t.bicep");
+
+        (await _registry.Steps[0].Execute()).ShouldBeFalse();
+        _logger.ErrorMessages.ShouldContain(m => m.Contains("provisioning state Failed"));
+        _logger.InfoMessages.ShouldNotContain("Validation succeeded");
+    }
+
+    [Fact]
+    public async Task Validate_NonJsonOutput_IsTreatedAsSuccess()
+    {
+        _executor.SimulatedOutput = "WARNING: something is deprecated";
+        Bicep().Validate("rg", "t.bicep");
+
+        (await _registry.Steps[0].Execute()).ShouldBeTrue();
+        _logger.InfoMessages.ShouldContain("Validation succeeded");
+    }
+
+    [Fact]
+    public async Task Deploy_DoesNotSuppressStdout()
+    {
+        Bicep().DeployToResourceGroup("rg", "t.bicep");
         await _registry.Steps[0].Execute();
 
         (Az().Options?.SuppressStdout ?? false).ShouldBeFalse();
+    }
+
+    // ---- Runtime (Func) parameters ----
+
+    [Fact]
+    public async Task FuncParameter_IsResolvedWhenTheStepRuns_AndGoesOnArgv()
+    {
+        var value = "early";
+        Bicep().Validate("rg", "t.bicep", o => o.WithParameter("k", () => value));
+        value = "late";
+        await _registry.Steps[0].Execute();
+
+        Joined(Az()).ShouldContain("--parameters k=late");
+    }
+
+    [Fact]
+    public async Task FuncSecureParameter_IsRedactedBeforeAnyCommand_AndWrittenToFile()
+    {
+        const string secret = "runtime-secret-\"value\"-12345";
+        Bicep().DeployToResourceGroup("rg", "t.bicep", o => o.WithSecureParameter("key", () => secret));
+
+        SecretValues.Redact(secret).ShouldBe(secret); // not resolved yet
+        _executor.SimulatedOutput = "{}";
+        (await _registry.Steps[0].Execute()).ShouldBeTrue();
+
+        SecretValues.Redact(secret).ShouldNotContain("12345");
+        // The JSON-escaped form alone, as az would echo it, must be registered too.
+        SecretValues.Redact("x " + JsonSerializer.Serialize(secret)[1..^1] + " y").ShouldNotContain("12345");
+        var write = _executor.ExecutedCommands[0];
+        using var doc = JsonDocument.Parse(write.Options!.Environment[EnvName]);
+        doc.RootElement.GetProperty("parameters").GetProperty("key").GetProperty("value").GetString().ShouldBe(secret);
+        foreach (var c in _executor.ExecutedCommands) c.Args.ShouldAllBe(a => !a.Contains("runtime-secret"));
+    }
+
+    // Asserts, on every command, that the secret is already redacted, then delegates.
+    private sealed class RedactionCheckingExecutor(ICommandExecutor inner, string secret) : ICommandExecutor
+    {
+        public int Calls { get; private set; }
+
+        public Task<CommandResult> ExecuteAsync(string command, string[] args, CommandOptions? options = null)
+        {
+            Calls++;
+            SecretValues.Redact(secret).ShouldNotContain(secret);
+            return inner.ExecuteAsync(command, args, options);
+        }
+
+        public bool IsAvailable(string command) => inner.IsAvailable(command);
+    }
+
+    [Fact]
+    public async Task FuncSecureParameter_IsRedactedBeforeTheFirstCommandRuns()
+    {
+        const string secret = "ordering-secret-\"value\"-98765";
+        var checking = new RedactionCheckingExecutor(_executor, secret);
+        new BicepOperations(_registry, _logger, () => checking)
+            .DeployToResourceGroup("rg", "t.bicep", o => o.WithSecureParameter("key", () => secret));
+        _executor.SimulatedOutput = "{}";
+
+        SecretValues.Redact(secret).ShouldBe(secret);
+        (await _registry.Steps[0].Execute()).ShouldBeTrue();
+
+        checking.Calls.ShouldBeGreaterThan(1); // the file write and az, at least
+    }
+
+    [Fact]
+    public void FuncSecureParameter_WithBicepParam_Throws() =>
+        Should.Throw<InvalidOperationException>(() =>
+            Bicep().Validate("rg", "t.bicep", o => o.WithParameterFile("a.bicepparam").WithSecureParameter("k", () => "v")));
+
+    [Fact]
+    public async Task ScriptCompiles_WithNullArguments_AndFuncOverloads()
+    {
+        var dir = Directory.CreateTempSubdirectory("ando-bicepfunc-").FullName;
+        try
+        {
+            var path = Path.Combine(dir, "build.csando");
+            await File.WriteAllTextAsync(path, """
+                var key = Azure.Vm.RunCommand("rg", "vm", "true");
+                Bicep.Validate("rg", "t.bicep", o => o.WithParameter("a", null).WithSecureParameter("b", null));
+                Bicep.Validate("rg", "t.bicep", o => o.WithParameter("a", () => key.Value).WithSecureParameter("b", () => key.Value));
+                Bicep.Validate("rg", "t.bicep", o => o.WithParameter("a", "x").WithSecureParameter("b", "y"));
+                """);
+
+            var errors = await new Ando.Scripting.ScriptHost(new TestLogger()).VerifyScriptAsync(path);
+
+            errors.ShouldBeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     [Fact]

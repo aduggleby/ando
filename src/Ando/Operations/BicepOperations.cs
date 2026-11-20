@@ -84,8 +84,8 @@ public class BicepOperations(StepRegistry registry, IBuildLogger logger, Func<IC
     /// <param name="configure">Optional configuration for deployment options.</param>
     public void Validate(string resourceGroup, string templateFile, Action<BicepDeployOptions>? configure = null) =>
         RegisterAz("Bicep.Validate", ["deployment", "group", "validate", "--resource-group", resourceGroup],
-            templateFile, configure, subscription: false, suffix: [], context: resourceGroup,
-            handle: result => result.Success);
+            templateFile, configure, subscription: false, suffix: [], context: resourceGroup, quietStdout: true,
+            handle: result => LoadValidation("Bicep.Validate", result));
 
     /// <summary>
     /// Registers a step that validates a Bicep template at subscription scope
@@ -96,8 +96,8 @@ public class BicepOperations(StepRegistry registry, IBuildLogger logger, Func<IC
     /// <param name="configure">Optional configuration for deployment options.</param>
     public void ValidateSubscription(string location, string templateFile, Action<BicepDeployOptions>? configure = null) =>
         RegisterAz("Bicep.ValidateSubscription", ["deployment", "sub", "validate", "--location", location],
-            templateFile, configure, subscription: true, suffix: [], context: location,
-            handle: result => result.Success);
+            templateFile, configure, subscription: true, suffix: [], context: location, quietStdout: true,
+            handle: result => LoadValidation("Bicep.ValidateSubscription", result));
 
     /// <summary>
     /// Registers a step to preview what would be deployed (what-if analysis).
@@ -164,7 +164,7 @@ public class BicepOperations(StepRegistry registry, IBuildLogger logger, Func<IC
     /// secure parameters file, mode. Later --parameters override earlier ones in az.
     /// </summary>
     private static ArgumentBuilder BuildDeploymentArgs(string templateFile, BicepDeployOptions options,
-        string? secureParameterFile, bool includeMode)
+        IReadOnlyDictionary<string, string> parameters, string? secureParameterFile, bool includeMode)
     {
         var args = new ArgumentBuilder()
             .Add("--template-file", templateFile)
@@ -176,7 +176,7 @@ public class BicepOperations(StepRegistry registry, IBuildLogger logger, Func<IC
         }
 
         // Inline parameters (non-secret: they are on the command line)
-        foreach (var param in options.Parameters)
+        foreach (var param in parameters)
         {
             args.Add("--parameters", $"{param.Key}={param.Value}");
         }
@@ -214,17 +214,32 @@ public class BicepOperations(StepRegistry registry, IBuildLogger logger, Func<IC
         configure?.Invoke(options);
         ValidateOptions(stepName, options, subscription);
         var includeMode = !subscription;
-        // quietStdout keeps az's stdout (what-if JSON, which can echo secret values) out of the log;
-        // it is still captured into the result, and stderr is still logged.
+        // quietStdout keeps az's stdout (what-if and validate JSON, which can echo secret and parameter
+        // values) out of the log; it is still captured into the result, and stderr is still logged.
         var commandOptions = quietStdout ? new CommandOptions { SuppressStdout = true } : null;
 
         Registry.Register(stepName, async () =>
         {
+            // Func values are resolved now, so a StepOutput from an earlier step can be read.
+            // Secure ones are registered for redaction before any command runs.
+            var parameters = new Dictionary<string, string>(options.Parameters);
+            foreach (var (name, factory) in options.ParameterFactories)
+            {
+                parameters[name] = factory();
+            }
+            var secureParameters = new Dictionary<string, string>(options.SecureParameters);
+            foreach (var (name, factory) in options.SecureParameterFactories)
+            {
+                var value = factory();
+                BicepDeployOptions.RegisterSecret(value);
+                secureParameters[name] = value;
+            }
+
             string? secureFile = null;
-            if (options.SecureParameters.Count > 0)
+            if (secureParameters.Count > 0)
             {
                 secureFile = $"/tmp/ando-bicep-{Guid.NewGuid():N}.json";
-                if (!await WriteSecureParametersAsync(secureFile, options.SecureParameters))
+                if (!await WriteSecureParametersAsync(secureFile, secureParameters))
                 {
                     await DeleteSecureParametersAsync(secureFile);
                     return false;
@@ -236,7 +251,7 @@ public class BicepOperations(StepRegistry registry, IBuildLogger logger, Func<IC
                 string[] args =
                 [
                     .. scopeArgs,
-                    .. BuildDeploymentArgs(templateFile, options, secureFile, includeMode).Build(),
+                    .. BuildDeploymentArgs(templateFile, options, parameters, secureFile, includeMode).Build(),
                     .. suffix,
                 ];
                 var result = await ExecutorFactory().ExecuteAsync("az", args, commandOptions);
@@ -268,7 +283,7 @@ public class BicepOperations(StepRegistry registry, IBuildLogger logger, Func<IC
             throw new InvalidOperationException(
                 $"{stepName}: a .bicepparam file cannot be combined with another parameter file; az allows only inline KEY=VALUE parameters next to it.");
         }
-        if (bicepParam && options.SecureParameters.Count > 0)
+        if (bicepParam && (options.SecureParameters.Count > 0 || options.SecureParameterFactories.Count > 0))
         {
             throw new InvalidOperationException(
                 $"{stepName}: WithSecureParameter cannot be combined with a .bicepparam file; az allows only inline KEY=VALUE parameters next to it. " +
@@ -312,6 +327,78 @@ public class BicepOperations(StepRegistry registry, IBuildLogger logger, Func<IC
         if (!result.Success)
         {
             Logger.Warning($"Could not delete the secure parameters file {path} in the build container.");
+        }
+    }
+
+    // Validate prints the whole deployment JSON, parameter values included, so stdout is not logged;
+    // read the outcome from it instead.
+    private bool LoadValidation(string stepName, CommandResult result)
+    {
+        if (!result.Success) return false;
+
+        string? errorMessage = null;
+        var details = new List<string>();
+        try
+        {
+            using var doc = JsonDocument.Parse(result.Output ?? "");
+            var root = doc.RootElement;
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                if (root.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object)
+                {
+                    errorMessage = error.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String
+                        ? m.GetString() : error.TryGetProperty("code", out var c) ? c.ToString() : "validation error";
+                    AddDetails(error, details);
+                }
+                else if (root.TryGetProperty("properties", out var props) && props.ValueKind == JsonValueKind.Object
+                    && props.TryGetProperty("error", out var perr) && perr.ValueKind == JsonValueKind.Object)
+                {
+                    errorMessage = perr.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String
+                        ? m.GetString() : "validation error";
+                    AddDetails(perr, details);
+                }
+                else if (root.TryGetProperty("properties", out props) && props.ValueKind == JsonValueKind.Object
+                    && props.TryGetProperty("provisioningState", out var state) && state.ValueKind == JsonValueKind.String
+                    && state.GetString() is { } s && !s.Equals("Succeeded", StringComparison.OrdinalIgnoreCase))
+                {
+                    errorMessage = $"provisioning state {s}";
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Not JSON (for example a warning text): az exited 0, so treat it as valid.
+        }
+
+        if (errorMessage != null)
+        {
+            Logger.Error($"{stepName} failed: {errorMessage}");
+            foreach (var detail in details) Logger.Error($"    {detail}");
+            return false;
+        }
+
+        Logger.Info("Validation succeeded");
+        return true;
+    }
+
+    // error.details[] holds the individual validation failures; take their messages and one nested level.
+    private static void AddDetails(JsonElement error, List<string> messages)
+    {
+        if (!error.TryGetProperty("details", out var details) || details.ValueKind != JsonValueKind.Array) return;
+        foreach (var detail in details.EnumerateArray())
+        {
+            if (detail.ValueKind != JsonValueKind.Object) continue;
+            if (detail.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String)
+                messages.Add(m.GetString()!);
+            if (detail.TryGetProperty("details", out var nested) && nested.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var inner in nested.EnumerateArray())
+                {
+                    if (inner.ValueKind == JsonValueKind.Object && inner.TryGetProperty("message", out var im)
+                        && im.ValueKind == JsonValueKind.String)
+                        messages.Add(im.GetString()!);
+                }
+            }
         }
     }
 

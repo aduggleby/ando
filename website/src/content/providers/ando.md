@@ -46,7 +46,7 @@ After the child exits, the parent's run record gets an entry `child record <path
 
 ## Step tree of another script
 
-`Ando.StepTree(file, profiles)` returns the `--dry-run` tree of another script as the step's `Value`: one line per step, two spaces of indent per level, `\n` line endings, secrets redacted. It starts the running CLI on the host with `run --dry-run --no-env --no-color -f <file>` (plus `-p <profiles>`, and `--ref` when this run has one), from the directory you ran from, so the script's steps never run. A relative `file` is relative to that directory. A non-zero exit fails the step. It returns a `CommandStep`, so `WithTimeout`, `WithEnv` and `AllowFailure` work. Read the value at execution time.
+`Ando.StepTree(file, profiles)` returns the `--dry-run` tree of another script as the step's `Value`: one line per step, two spaces of indent per level, `\n` line endings, secrets redacted. It starts the running CLI on the host with `run --dry-run --no-env --no-color -f <file>` (plus `-p <profiles>`, and `--ref` when this run has one), from the directory you ran from, so the script's steps never run. A relative `file` is relative to that directory. A non-zero exit fails the step. It returns a `CommandStep`, so `WithTimeout`, `WithEnv` and `AllowFailure` work. The dry-run child inherits the parent's whole process environment (plus any `WithEnv` values). This is unlike `Ando.Build` with `WithEnv`, whose containers get only the `WithEnv` keys. Read the value at execution time.
 
 ```csharp
 var tree = Ando.StepTree("deploy.csando", "eu");
@@ -200,7 +200,7 @@ Ando.CopyToHost("artifacts/manifest.json", "artifacts/manifest.json");
 
 ## Locks
 
-Each run takes a lock on its build container, so a second run of the same script fails at once with exit code 9 (see [Run locks](/cli#run-locks)). `Ando.Lock("name")` takes a named lock while the script is evaluated and holds it until the run ends, for work that must not overlap, such as a release. It is not a step, so it is not in `--dry-run` output, and `--dry-run` takes no lock. Call it at the top level of the script: inside `Ando.Defer` it runs at execution time, where a held lock fails that step (exit code 1, not 9). Names that map to the same lock file (`a/b` and `a_b`) are one lock. Child builds skip the names their parent holds. The run record lists it as `lock <name>`.
+Each run takes a lock on its build container, so a second run of the same script fails at once with exit code 9 (see [Run locks](/cli#run-locks)). `Ando.Lock("name")` takes a named lock while the script is evaluated and holds it until the run ends, for work that must not overlap, such as a release. It is not a step, so it is not in `--dry-run` output, and `--dry-run` takes no lock. Call it at the top level of the script: inside `Ando.Defer` it runs at execution time, where a held lock fails that step (exit code 1, not 9). Names that map to the same lock file (`a/b` and `a_b`) are one lock. Child builds skip the names their parent holds. The run record lists it as `lock <name>`. It uses its own lock files under `~/.ando/locks` (`name-<name>.lock`), so it does not exclude other tools or scripts that `flock` a different file on the same target. Use one locking mechanism per target.
 
 ```csharp
 Ando.Lock("release");

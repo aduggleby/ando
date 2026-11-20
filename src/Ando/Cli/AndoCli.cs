@@ -451,6 +451,7 @@ public class AndoCli : IDisposable
                 ctx.Options.Session.SourceRoot = defaultHostRoot;
                 ctx.Options.Session.AssumeYes = HasFlag("--yes");
                 ctx.Options.Session.NoEnv = HasFlag("--no-env");
+                ctx.Options.Session.NoColor = HasFlag("--no-color");
                 ctx.Options.Session.Ref = _refWorktree?.Commit;
                 ctx.Options.Session.DryRun = HasFlag("--dry-run");
                 _runLocks = ctx.Options.Session.Locks;

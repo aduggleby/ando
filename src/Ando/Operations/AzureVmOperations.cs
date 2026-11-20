@@ -33,13 +33,21 @@ public class AzureVmOperations(StepRegistry registry, IBuildLogger logger, Func<
     /// Runs a shell script on a Linux VM with `az vm run-command invoke` and
     /// fails the step when the script exits non-zero. The returned output's
     /// Value is the script's stdout (without ANDO's exit-code marker).
+    /// <para><b>Only the last command's exit code counts by default.</b> The script runs without <c>set -e</c>, so a
+    /// command that fails in the middle passes silently when a later command succeeds. Pass
+    /// <c>exitOnError: true</c> (starts the script with <c>set -e</c>) or end commands with <c>|| exit 1</c>.
+    /// With <c>set -e</c> a failing simple command ends the script, but failures inside pipelines (except the last
+    /// command), <c>&amp;&amp;</c>/<c>||</c> lists and <c>if</c> conditions do not; add <c>set -o pipefail</c> (bash) for pipelines.</para>
     /// Usage: Azure.Vm.RunCommand("rg-eu", "docs-vm", "/usr/local/sbin/update-worker pkg.tar.gz");
     /// </summary>
     /// <param name="resourceGroup">Resource group of the VM.</param>
     /// <param name="vmName">VM name.</param>
     /// <param name="script">Shell script run as root on the VM.</param>
     /// <param name="timeout">Step timeout (default 30 minutes).</param>
-    public StepOutput RunCommand(string resourceGroup, string vmName, string script, TimeSpan? timeout = null)
+    /// <param name="exitOnError">When true, the script starts with <c>set -e</c>, so a failing simple command ends it
+    /// with that command's exit code (pipelines, <c>&amp;&amp;</c>/<c>||</c> lists and <c>if</c> conditions are exempt). Default false.</param>
+    public StepOutput RunCommand(string resourceGroup, string vmName, string script, TimeSpan? timeout = null,
+        bool exitOnError = false)
     {
         var output = new StepOutput("Azure.Vm.RunCommand");
         var timeoutMs = (int)(timeout ?? TimeSpan.FromMinutes(30)).TotalMilliseconds;
@@ -52,7 +60,7 @@ public class AzureVmOperations(StepRegistry registry, IBuildLogger logger, Func<
                 "--resource-group", resourceGroup,
                 "--name", vmName,
                 "--command-id", "RunShellScript",
-                "--scripts", WrapScript(script),
+                "--scripts", WrapScript(script, exitOnError),
                 "--output", "json"
             ], new CommandOptions { SuppressOutput = true, TimeoutMs = timeoutMs });
 
@@ -93,8 +101,10 @@ public class AzureVmOperations(StepRegistry registry, IBuildLogger logger, Func<
 
     // Runs the script in a subshell so `exit` inside it still reaches the marker,
     // and starts the marker on a new line even when stdout has no trailing newline.
-    internal static string WrapScript(string script) =>
-        $"(\n{script}\n)\n__ando_rc=$?\necho\necho \"{ExitMarker}$__ando_rc\"";
+    // With exitOnError the subshell starts with `set -e`; the default stays without it so existing
+    // scripts behave as before.
+    internal static string WrapScript(string script, bool exitOnError = false) =>
+        $"(\n{(exitOnError ? "set -e\n" : "")}{script}\n)\n__ando_rc=$?\necho\necho \"{ExitMarker}$__ando_rc\"";
 
     // Parses run-command JSON: value[0].message is
     // "Enable succeeded: \n[stdout]\n...\n[stderr]\n...".

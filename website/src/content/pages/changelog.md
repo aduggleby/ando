@@ -3,6 +3,16 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.167
+
+**2026-11-20**
+
+- `Bicep.Validate` and `Bicep.ValidateSubscription` no longer print az's deployment JSON, which includes every parameter value. They log `Validation succeeded`, or the error message from the JSON when validation fails
+- Add `WithParameter(name, Func<string>)` and `WithSecureParameter(name, Func<string>)` to the Bicep options: the value is resolved when the step runs, so it can come from a `StepOutput` (`o.WithSecureParameter("key", () => sshKey.Value)` with `var sshKey = Azure.Cli("vm", "show", ...).Quiet();`). A secure value is registered for redaction as soon as the Bicep step resolves it, before any command runs; the step that produced it may already have logged it, so keep that step quiet (`Azure.Cli(...).Quiet()` does; `Azure.Vm.RunCommand` cannot be quieted), and goes into the 0600 parameters file; the inline form goes on the command line and is for non-secret values only
+- `Ando.Build` child builds now inherit `--no-color` from the parent run
+- Add `exitOnError` to `Azure.Vm.RunCommand` (default `false`): when `true`, the script starts with `set -e`. By default the script still runs without it, so only the last command's exit code counts; use `exitOnError: true` or `|| exit 1` to stop at a failing command in the middle (`set -e` ignores failures inside pipelines, `&&`/`||` lists and `if` conditions)
+- Docs: `Ando.StepTree`'s dry-run child inherits the parent's whole process environment (unlike `Ando.Build` with `WithEnv`), and `Ando.Lock` uses its own lock files, so it does not exclude other tools that `flock` a different file
+
 ## 0.9.166
 
 **2026-11-19**

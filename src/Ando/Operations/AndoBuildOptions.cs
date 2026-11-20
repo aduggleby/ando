@@ -137,6 +137,9 @@ public class AndoBuildOptions
     /// <summary>Set from the parent run: it used --yes, so the child accepts Ando.Confirm prompts too.</summary>
     internal bool AssumeYes { get; set; }
 
+    /// <summary>Set from the parent run: it used --no-color, so the child prints without color too.</summary>
+    internal bool NoColor { get; set; }
+
     /// <summary>Where the child writes its run record path (--record-path-file).</summary>
     internal string? RecordPathFile { get; set; }
 
@@ -156,6 +159,11 @@ public class AndoBuildOptions
         if (AssumeYes)
         {
             args.Add("--yes");
+        }
+
+        if (NoColor)
+        {
+            args.Add("--no-color");
         }
 
         if (!string.IsNullOrEmpty(Ref))

@@ -13,6 +13,8 @@
 // - Deployment outputs are always captured to the returned BicepDeployment object
 // =============================================================================
 
+using System.Runtime.CompilerServices;
+
 namespace Ando.Operations;
 
 /// <summary>
@@ -48,6 +50,12 @@ public class BicepDeployOptions
 
     /// <summary>Secure parameters, written to a temporary parameters file inside the container.</summary>
     internal Dictionary<string, string> SecureParameters { get; } = [];
+
+    /// <summary>Inline parameters resolved when the step runs. They go on the az command line.</summary>
+    internal Dictionary<string, Func<string>> ParameterFactories { get; } = [];
+
+    /// <summary>Secure parameters resolved when the step runs; registered as secrets at that point.</summary>
+    internal Dictionary<string, Func<string>> SecureParameterFactories { get; } = [];
 
     /// <summary>Deployment mode (Incremental or Complete).</summary>
     internal DeploymentMode Mode { get; private set; } = DeploymentMode.Incremental;
@@ -89,9 +97,26 @@ public class BicepDeployOptions
     /// </summary>
     /// <param name="name">Parameter name.</param>
     /// <param name="value">Parameter value.</param>
+    [OverloadResolutionPriority(1)] // keeps WithParameter("x", null) unambiguous against the Func form
     public BicepDeployOptions WithParameter(string name, string value)
     {
         Parameters[name] = value;
+        ParameterFactories.Remove(name);
+        return this;
+    }
+
+    /// <summary>
+    /// Adds an inline parameter whose value is resolved when the step runs, so it can read a
+    /// <see cref="Ando.Steps.StepOutput"/>: <c>o.WithParameter("key", () => sshKey.Value)</c>.
+    /// Like the string form, the value goes on the az command line: use it for non-secret values only;
+    /// use <see cref="WithSecureParameter(string, Func{string})"/> for secrets.
+    /// </summary>
+    /// <param name="name">Parameter name.</param>
+    /// <param name="value">Called when the step runs.</param>
+    public BicepDeployOptions WithParameter(string name, Func<string> value)
+    {
+        ParameterFactories[name] = value;
+        Parameters.Remove(name);
         return this;
     }
 
@@ -106,7 +131,37 @@ public class BicepDeployOptions
     /// </summary>
     /// <param name="name">Parameter name.</param>
     /// <param name="value">Parameter value.</param>
+    [OverloadResolutionPriority(1)] // keeps WithSecureParameter("x", null) unambiguous against the Func form
     public BicepDeployOptions WithSecureParameter(string name, string value)
+    {
+        RegisterSecret(value);
+        SecureParameters[name] = value;
+        SecureParameterFactories.Remove(name);
+        return this;
+    }
+
+    /// <summary>
+    /// Adds a secret parameter whose value is resolved when the step runs, so it can read a
+    /// <see cref="Ando.Steps.StepOutput"/>: <c>o.WithSecureParameter("key", () => sshKey.Value)</c>, where
+    /// <c>var sshKey = Azure.Cli("vm", "show", ...).Quiet();</c>.
+    /// Redaction starts only when the Bicep step resolves the value, so the step that produced it may already have
+    /// logged it: keep that step quiet. <c>Azure.Cli(...).Quiet()</c> does; <c>Azure.Vm.RunCommand</c> logs every
+    /// stdout line and cannot be quieted.
+    /// The value is registered for redaction (with its JSON-escaped forms) as soon as it is resolved, before any
+    /// command runs, and then handled like <see cref="WithSecureParameter(string, string)"/>: it goes into the
+    /// 0600 parameters file and never on a command line. It cannot be combined with a <c>.bicepparam</c> file either.
+    /// </summary>
+    /// <param name="name">Parameter name.</param>
+    /// <param name="value">Called when the step runs.</param>
+    public BicepDeployOptions WithSecureParameter(string name, Func<string> value)
+    {
+        SecureParameterFactories[name] = value;
+        SecureParameters.Remove(name);
+        return this;
+    }
+
+    /// <summary>Registers a secret and the forms az may print it in (JSON-escaped) for redaction.</summary>
+    internal static void RegisterSecret(string value)
     {
         Ando.Logging.SecretValues.Add(value);
         // az may print the value JSON-escaped (quotes, backslashes), so register those forms too.
@@ -116,8 +171,6 @@ public class BicepDeployOptions
             var escaped = json[1..^1];
             if (escaped != value) Ando.Logging.SecretValues.Add(escaped);
         }
-        SecureParameters[name] = value;
-        return this;
     }
 
     /// <summary>

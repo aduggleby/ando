@@ -56,6 +56,9 @@ public class RunSession
     /// <summary>Whether the run used --no-env; forwarded to Ando.Build child builds.</summary>
     public bool NoEnv { get; set; }
 
+    /// <summary>Whether the run used --no-color; forwarded to Ando.Build child builds.</summary>
+    public bool NoColor { get; set; }
+
     /// <summary>Whether this is a --dry-run: Ando.Lock takes no lock then.</summary>
     public bool DryRun { get; set; }
 

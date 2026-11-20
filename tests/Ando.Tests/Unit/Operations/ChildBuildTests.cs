@@ -95,6 +95,20 @@ public class ChildBuildTests : IDisposable
         Value(call, "--ref").ShouldBe("0123456789abcdef");
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Build_ForwardsNoColorOnlyWhenTheParentUsedIt(bool noColor)
+    {
+        _buildOptions.Session.NoColor = noColor;
+        var executor = Succeeding();
+
+        Create(executor).Build(new DirectoryRef("./website"));
+        (await _registry.Steps[0].Execute()).ShouldBeTrue();
+
+        executor.Calls.Single().HasArg("--no-color").ShouldBe(noColor);
+    }
+
     [Fact]
     public async Task Build_WithoutRef_KeepsTranslatedPathAndDoesNotForwardRefOrYes()
     {

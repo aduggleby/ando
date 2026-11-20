@@ -201,6 +201,13 @@ public class AndoBuildOptionsTests
     }
 
     [Fact]
+    public void BuildArgs_IncludesNoColor_WhenParentUsedNoColor()
+    {
+        Assert.DoesNotContain("--no-color", new AndoBuildOptions().BuildArgs());
+        Assert.Contains("--no-color", new AndoBuildOptions { NoColor = true }.BuildArgs());
+    }
+
+    [Fact]
     public void WithProfile_SetsProfile()
     {
         var options = new AndoBuildOptions();

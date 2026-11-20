@@ -41,6 +41,14 @@ public class AzureVmOperationsTests
     }
 
     [Fact]
+    public void WrapScript_ExitOnError_StartsSubshellWithSetE()
+    {
+        AzureVmOperations.WrapScript("false\ntrue", exitOnError: true)
+            .ShouldBe("(\nset -e\nfalse\ntrue\n)\n__ando_rc=$?\necho\necho \"__ANDO_EXIT_CODE=$__ando_rc\"");
+        AzureVmOperations.WrapScript("true").ShouldNotContain("set -e");
+    }
+
+    [Fact]
     public void ParseResult_StdoutWithoutTrailingNewline_StillFindsMarker()
     {
         // printf hello: the wrapper's extra echo puts the marker on its own line.
@@ -107,6 +115,23 @@ public class AzureVmOperationsTests
 
         exitCode.ShouldBe(5);
         stdout.ShouldBe("plain");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunCommand_ExitOnError_PutsSetEIntoTheScriptsArgument(bool exitOnError)
+    {
+        _executor.SimulatedOutput = RunCommandJson(Message("ok\n__ANDO_EXIT_CODE=0"));
+        new AzureVmOperations(_registry, _logger, () => _executor)
+            .RunCommand("rg-eu", "docs-vm", "false\ntrue", exitOnError: exitOnError);
+
+        (await _registry.Steps[0].Execute()).ShouldBeTrue();
+
+        var args = _executor.ExecutedCommands.ShouldHaveSingleItem().Args;
+        var script = args[Array.IndexOf(args, "--scripts") + 1];
+        script.ShouldBe(AzureVmOperations.WrapScript("false\ntrue", exitOnError));
+        script.Contains("set -e").ShouldBe(exitOnError);
     }
 
     [Fact]
