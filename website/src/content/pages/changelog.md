@@ -9,8 +9,8 @@ description: Release history and changelog for ANDO.
 
 - **Behavior change:** `--ref` worktrees, the project tar copied into the build container and staged `GitHub.CreateRelease` assets now go to a disk-backed scratch folder, `$XDG_CACHE_HOME/ando/tmp` (else `~/.cache/ando/tmp`), instead of the system temp folder. A full `/tmp` (often a small shared tmpfs) made `--ref` runs fail. Set `ANDO_TMPDIR` to an absolute path to use another folder (a relative value is ignored); `TMPDIR` is ignored for these files
 - When `--ref` cannot create its worktree, the error now includes git's message (for example `No space left on device`) and the free space of the scratch folder's disk
-- Every run now removes what killed runs left in the scratch folder: `--ref` worktrees whose lock file no running ando holds (each worktree has one), and `ando-project-*` and `ando-release-*` entries older than a day. A system temp folder such as `/tmp` is never swept
-- Every run warns, without failing, when ANDO's files in the scratch folder take more than 20 GB or its disk has less than 5 GB free
+- Every run now removes what killed runs left in the scratch folder: `--ref` worktrees whose lock file no running ando holds (each worktree has one), and project tars and release folders older than a day. Only names ANDO generates are touched, so look-alike folders in a shared `ANDO_TMPDIR` (such as `ando-release-tools`) stay, and a system temp folder such as `/tmp` is never swept
+- Every run warns, without failing, when ANDO's files in the scratch folder take more than 20 GB or its disk has less than 5 GB free; an unreadable scratch folder no longer fails the run
 
 ## 0.9.167
 
