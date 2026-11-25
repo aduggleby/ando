@@ -83,6 +83,27 @@ public class StepTreePrinterTests
         ran.ShouldBeFalse();
     }
 
+    [Fact]
+    public void Render_Require_IsMarkedCheckedAtRunTimeWithoutEvaluatingTheCondition()
+    {
+        var ando = CreateAndo();
+        var evaluated = false;
+        ando.Require(() => evaluated = true, "Database has pending migrations");
+        ando.Block("eu", () => ando.Require(() => true, "Slot is healthy"));
+
+        var lines = StepTreePrinter.Render(_registry.Root);
+
+        lines.ShouldBe(
+        [
+            "Ando.Require (Database has pending migrations) (checked at run time)",
+            "Block: eu",
+            "  Ando.Require (Slot is healthy) (checked at run time)"
+        ]);
+        evaluated.ShouldBeFalse();
+        // Real-run logs keep the plain display name.
+        _registry.Steps[0].DisplayName.ShouldBe("Ando.Require (Database has pending migrations)");
+    }
+
     [Theory]
     [InlineData("run", "-p", "release", "--dry-run", "--yes", "--ref", "v1", "--read-env")]
     [InlineData("-f", "x.csando", "--verbosity", "detailed", "--no-color", "--cold", "--dind", "--image", "img")]

@@ -11,6 +11,8 @@ description: Release history and changelog for ANDO.
 - Add `ando hook check [file...]`: compiles hook scripts against the hook API without running them and prints `OK` or the compile errors per file (exit code 1 on errors, 2 for a missing file). Without files it checks every hook ANDO would run, in `./scripts/` and the project root
 - `ando run -f` and `ando verify -f` now refuse a hook script (`ando-pre.csando`, `ando-post-<cmd>.csando`, ...) with exit code 2 and point to `ando hook check`, instead of compiling it as a build script with misleading errors
 - When a hook exists in `./scripts/` and in the project root, ANDO now warns that the root file is ignored
+- **Behavior change:** the `--dry-run` step tree (and `Ando.StepTree` values) now shows `Ando.Require` as `Ando.Require (message) (checked at run time)`, so the message no longer reads like a failure. Committed trees that contain `Ando.Require` lines need updating. Other lines are unchanged
+- Docs: a dry run runs the script's top-level code, so processes a script starts itself (for example through `ProcessStartInfo`) really run
 
 ## 0.9.168
 

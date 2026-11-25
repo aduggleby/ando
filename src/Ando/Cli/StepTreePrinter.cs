@@ -6,6 +6,8 @@
 // The script is evaluated and its steps registered as usual, but nothing runs.
 // The tree shows what would run, in order. Bodies of Ando.When and Ando.Defer
 // are C# that only runs at execution time, so they appear as a single line.
+// Ando.Require shows its failure message as context; "(checked at run time)"
+// is appended so the line does not read like a failure.
 //
 // Design Decisions:
 // - Pure function from StepScope to lines, so it is unit-testable
@@ -79,7 +81,9 @@ public static class StepTreePrinter
             return;
         }
 
-        lines.Add(Pad(depth) + step.DisplayName);
+        // Only the dry-run tree gets the marker; DisplayName also feeds real-run logs.
+        lines.Add(Pad(depth) + step.DisplayName
+            + (step.Name == "Ando.Require" ? " (checked at run time)" : ""));
         foreach (var child in step.ChildScopes)
         {
             RenderScope(child, depth + 1, lines);

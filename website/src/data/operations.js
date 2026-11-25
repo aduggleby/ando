@@ -187,7 +187,7 @@ export const operations = [
     group: "Ando",
     name: "Ando.Require",
     summary: "Fails the build if a condition is false at execution time.",
-    desc: "Fails the build with the message if the condition is false at execution time.",
+    desc: "Fails the build with the message if the condition is false at execution time. <code>--dry-run</code> shows it as <code>Ando.Require (message) (checked at run time)</code>; the condition is not evaluated.",
     examples: [
       'var pending = Shell.Bash("./scripts/pending-migrations.sh");\nAndo.Require(() => pending.Value == "", "Database has pending migrations");',
     ],
