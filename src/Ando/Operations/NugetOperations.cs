@@ -71,8 +71,12 @@ public class NugetOperations : OperationsBase
         // The key is captured so it can be passed to push commands.
         _apiKey = EnvironmentHelper.GetRequiredOrPrompt(EnvApiKey, "NuGet API Key", isSecret: true);
 
-        // Log success (without revealing the key).
-        Logger.Info("NuGet API key configured.");
+        // Log success (without revealing the key). A dry run without the key
+        // got a placeholder and reports it in its end-of-run warning instead.
+        if (DryRunEnvironment.Current?.MissingNames.Contains(EnvApiKey) != true)
+        {
+            Logger.Info("NuGet API key configured.");
+        }
     }
 
     /// <summary>

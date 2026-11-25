@@ -62,6 +62,13 @@ public class RunSession
     /// <summary>Whether this is a --dry-run: Ando.Lock takes no lock then.</summary>
     public bool DryRun { get; set; }
 
+    /// <summary>
+    /// Set for a --dry-run (except the hidden --dry-run-output mode used by Ando.StepTree):
+    /// missing required environment variables read while the script is evaluated get a
+    /// placeholder and are recorded here instead of failing. Null means real-run behavior.
+    /// </summary>
+    public Ando.Utilities.DryRunEnvironment? DryRunEnvironment { get; set; }
+
     /// <summary>The locks this run holds (container lock and Ando.Lock names); released when the run ends.</summary>
     public RunLockSet Locks { get; set; } = new();
 

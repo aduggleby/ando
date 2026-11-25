@@ -390,7 +390,9 @@ public class AndoOperations
     /// (one line per step, indented two spaces per level, `\n` line endings, secrets redacted).
     /// It starts the running CLI on the host (`run --dry-run -f file`), so nothing in that script
     /// executes, and a failing script fails this step. Under --ref the child reads the same commit
-    /// from the invocation root. WithTimeout, WithEnv and AllowFailure are honored.
+    /// from the invocation root. WithTimeout, WithEnv and AllowFailure are honored. Unlike a plain
+    /// --dry-run, the child uses no placeholders for missing required environment variables, so a
+    /// missing variable fails this step and the tree never contains placeholders.
     /// Usage: var tree = Ando.StepTree("deploy.csando", profiles: "eu");
     /// </summary>
     /// <param name="file">The script; a relative path is relative to the directory ANDO was run from.</param>

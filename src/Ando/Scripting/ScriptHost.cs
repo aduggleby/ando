@@ -117,8 +117,14 @@ public class ScriptHost(IBuildLogger logger)
             //
             // Use Create(...).RunAsync(...) rather than the static RunAsync(...)
             // helper; this ensures the globals type is consistently applied.
+            //
+            // A dry run publishes its placeholder tracker to this async flow, so
+            // Env(...) and EnvironmentHelper see it while the script is evaluated.
             var script = CSharpScript.Create(scriptContent, options, typeof(ScriptGlobals));
-            await script.RunAsync(globals);
+            using (Ando.Utilities.DryRunEnvironment.Activate(context.Options.Session.DryRunEnvironment))
+            {
+                await script.RunAsync(globals);
+            }
         }
         catch (CompilationErrorException ex)
         {

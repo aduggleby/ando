@@ -467,6 +467,14 @@ public class AndoCli : IDisposable
                 ctx.Options.Session.NoColor = HasFlag("--no-color");
                 ctx.Options.Session.Ref = _refWorktree?.Commit;
                 ctx.Options.Session.DryRun = HasFlag("--dry-run");
+                // A dry run uses placeholders for missing required environment variables.
+                // Not with the hidden --dry-run-output (Ando.StepTree): a compared tree must
+                // never contain placeholders, so a missing variable still fails that child.
+                if (HasFlag("--dry-run") && GetFlagValue("--dry-run-output") == null)
+                {
+                    _dryRunEnvironment = new DryRunEnvironment();
+                    ctx.Options.Session.DryRunEnvironment = _dryRunEnvironment;
+                }
                 _runLocks = ctx.Options.Session.Locks;
             };
 
@@ -517,6 +525,7 @@ public class AndoCli : IDisposable
                 {
                     Console.WriteLine("  " + line);
                 }
+                LogDryRunPlaceholderWarning();
                 return WriteDryRunOutput(GetFlagValue("--dry-run-output"), invocationRoot, treeLines, _logger) ? 0 : 1;
             }
 
@@ -757,6 +766,8 @@ public class AndoCli : IDisposable
             {
                 _logger.Error(ex.StackTrace ?? "");
             }
+            // A placeholder can be the reason (for example int.Parse(Env("PORT"))).
+            LogDryRunPlaceholderWarning();
             return 5;
         }
         finally
@@ -775,6 +786,18 @@ public class AndoCli : IDisposable
     private int _recordWriting;
     private bool _recordWritten;
     private RunLockSet? _runLocks;
+    private DryRunEnvironment? _dryRunEnvironment;
+
+    // Prints the one warning that lists the required environment variables a dry run
+    // replaced with placeholders (names only). Does nothing for real runs.
+    private void LogDryRunPlaceholderWarning()
+    {
+        if (_dryRunEnvironment?.FormatWarning() is { } warning)
+        {
+            Console.WriteLine();
+            _logger.Warning(warning);
+        }
+    }
 
     // Writes the run record once: the forced-exit path and the normal path never write
     // at the same time, and a failed write leaves the other path free to try.
@@ -1251,6 +1274,7 @@ public class AndoCli : IDisposable
         Console.WriteLine("  --yes               Accept every Ando.Confirm prompt (for non-interactive runs)");
         Console.WriteLine("  --dry-run           Evaluate the script and print the step tree without running anything");
         Console.WriteLine("                      (unknown options are rejected, so a typo never starts a real run)");
+        Console.WriteLine("                      Missing required env vars become <NAME> placeholders, listed in one warning");
         Console.WriteLine();
         Console.WriteLine("Release Options:");
         Console.WriteLine("  patch               Bump patch version (default): 1.0.0 -> 1.0.1");

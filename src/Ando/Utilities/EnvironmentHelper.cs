@@ -18,6 +18,11 @@
 // - Child processes inherit the variable, but it is NOT persisted to the shell
 // - When the process exits, prompted values are lost
 // - This is intentional: credentials should not be stored automatically
+//
+// Dry runs (GetRequired, GetRequiredOrPrompt):
+// - While a --dry-run evaluates its script, DryRunEnvironment.Current is set and
+//   a missing variable returns a placeholder ("<NAME>") instead of throwing or
+//   prompting; the name is recorded for the end-of-run warning
 // =============================================================================
 
 namespace Ando.Utilities;
@@ -33,10 +38,15 @@ public static class EnvironmentHelper
     /// </summary>
     /// <param name="name">Environment variable name.</param>
     /// <param name="description">Optional description for clearer error messages.</param>
-    /// <exception cref="InvalidOperationException">Thrown when the variable is not set.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the variable is not set (outside a dry run).</exception>
+    /// <remarks>During a --dry-run a missing variable returns a "&lt;NAME&gt;" placeholder instead.</remarks>
     public static string GetRequired(string name, string? description = null)
     {
         var value = Environment.GetEnvironmentVariable(name);
+        if (string.IsNullOrEmpty(value) && DryRunEnvironment.Current is { } dryRun)
+        {
+            return dryRun.RecordMissing(name);
+        }
         if (string.IsNullOrEmpty(value))
         {
             var message = description != null
@@ -77,6 +87,7 @@ public static class EnvironmentHelper
     /// After prompting, sets the environment variable for the current process
     /// so subsequent calls and child processes can use it.
     /// In non-interactive mode (CI/server), throws an exception instead of prompting.
+    /// During a --dry-run a missing variable returns a "&lt;NAME&gt;" placeholder and never prompts.
     /// </summary>
     /// <param name="name">Environment variable name.</param>
     /// <param name="description">Description shown in the prompt.</param>
@@ -88,6 +99,13 @@ public static class EnvironmentHelper
         if (!string.IsNullOrEmpty(value))
         {
             return value;
+        }
+
+        // A dry run never prompts: record the name and use a placeholder.
+        // The placeholder is not written to the process environment.
+        if (DryRunEnvironment.Current is { } dryRun)
+        {
+            return dryRun.RecordMissing(name);
         }
 
         // Check if we're in a non-interactive environment (CI/server).

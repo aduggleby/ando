@@ -211,6 +211,8 @@ public class ScriptGlobals
     /// <summary>
     /// Gets an environment variable value.
     /// By default, throws if the variable is not set. Pass required: false to return null instead.
+    /// During `ando run --dry-run` a missing required variable returns the placeholder "&lt;NAME&gt;"
+    /// and is listed in one warning after the step tree.
     /// Usage: var apiKey = Env("API_KEY");
     /// Usage: var optional = Env("OPTIONAL_VAR", required: false);
     /// </summary>
@@ -228,6 +230,12 @@ public class ScriptGlobals
 
         if (required && string.IsNullOrEmpty(value))
         {
+            // A dry run prints the step tree without secrets: use a placeholder and
+            // report the name once after the tree instead of failing here.
+            if (global::Ando.Utilities.DryRunEnvironment.Current is { } dryRun)
+            {
+                return dryRun.RecordMissing(name);
+            }
             throw new InvalidOperationException($"Required environment variable '{name}' is not set.");
         }
 

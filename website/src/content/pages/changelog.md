@@ -3,6 +3,12 @@ title: Changelog
 description: Release history and changelog for ANDO.
 ---
 
+## 0.9.169
+
+**2026-11-25**
+
+- `ando run --dry-run` no longer needs secrets: a missing required environment variable (`Env("NAME")`, or the credentials read by `Cloudflare.EnsureAuthenticated`, `Nuget.EnsureAuthenticated`, `Azure.LoginWithServicePrincipal` and similar) returns the placeholder `<NAME>` instead of failing or prompting, and after the step tree one warning lists the names (never values). The exit code stays 0. Real runs are unchanged. `Ando.StepTree` children stay strict, so a compared tree never contains placeholders
+
 ## 0.9.168
 
 **2026-11-25**
