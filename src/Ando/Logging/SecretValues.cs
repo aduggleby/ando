@@ -31,6 +31,8 @@ public static class SecretValues
     public static void Add(string? value)
     {
         if (string.IsNullOrEmpty(value)) return;
+        // A dry-run placeholder ("<NAME>") is not a secret; redacting it would hide it in the tree.
+        if (Ando.Utilities.DryRunEnvironment.IsAnyPlaceholder(value)) return;
         lock (Lock)
         {
             if (value.Length >= MinLength) Values.Add(value);

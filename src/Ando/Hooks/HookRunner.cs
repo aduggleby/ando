@@ -102,17 +102,41 @@ public class HookRunner
     /// <param name="ShadowedPath">Full path of the ignored root file, or null.</param>
     public sealed record HookLocation(string Path, string? ShadowedPath);
 
-    // Hook file names: ando-pre, ando-post, ando-pre-<cmd>, ando-post-<cmd> (.csando).
-    private static readonly System.Text.RegularExpressions.Regex HookFileNamePattern =
-        new(@"^ando-(pre|post)(-[a-z0-9][a-z0-9-]*)?\.csando$",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+    /// <summary>The commands that run hooks (keep in sync with the RunHooksAsync callers).</summary>
+    public static readonly IReadOnlyList<string> HookCommands = ["bump", "commit", "docs", "release", "ship"];
+
+    // Every hook file name HookRunner can run: ando-pre, ando-post and ando-{pre,post}-{command}.
+    private static readonly HashSet<string> HookFileNames = new(
+        new[] { "ando-pre", "ando-post" }
+            .Concat(HookCommands.SelectMany(c => new[] { $"ando-pre-{c}", $"ando-post-{c}" }))
+            .Select(name => name + ".csando"),
+        StringComparer.Ordinal);
 
     /// <summary>
-    /// Whether <paramref name="path"/> has a hook script file name
-    /// (ando-pre.csando, ando-post.csando, ando-pre-&lt;cmd&gt;.csando, ando-post-&lt;cmd&gt;.csando).
+    /// Whether <paramref name="path"/> has a file name HookRunner runs: ando-pre.csando, ando-post.csando,
+    /// or ando-pre-/ando-post-&lt;command&gt;.csando for bump, commit, docs, release and ship.
+    /// Case-sensitive, like the lookup. Other ando-pre-*/ando-post-* names are ordinary files.
     /// </summary>
     public static bool IsHookFileName(string path) =>
-        HookFileNamePattern.IsMatch(System.IO.Path.GetFileName(path));
+        HookFileNames.Contains(System.IO.Path.GetFileName(path));
+
+    /// <summary>
+    /// Files in ./scripts/ or the project root named ando-pre-*.csando or ando-post-*.csando that
+    /// HookRunner never runs (no such command), sorted by path. `ando hook check` warns about them.
+    /// </summary>
+    public static IReadOnlyList<string> FindUnusedHookLikeFiles(string projectRoot)
+    {
+        IEnumerable<string> Files(string directory, string pattern) => Directory.Exists(directory)
+            ? Directory.EnumerateFiles(directory, pattern)
+            : [];
+
+        return new[] { System.IO.Path.Combine(projectRoot, "scripts"), projectRoot }
+            .SelectMany(d => Files(d, "ando-pre-*.csando").Concat(Files(d, "ando-post-*.csando")))
+            .Where(path => !IsHookFileName(path))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+    }
 
     /// <summary>
     /// Finds <paramref name="hookName"/> (without extension) in ./scripts/ first, then the project root.

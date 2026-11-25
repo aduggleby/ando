@@ -806,13 +806,14 @@ public class AndoCli : IDisposable
     private DryRunEnvironment? _dryRunEnvironment;
 
     // Prints the one warning that lists the required environment variables a dry run
-    // replaced with placeholders (names only). Does nothing for real runs.
+    // replaced with placeholders (names only). Does nothing for real runs. Written like the
+    // tree (Console.WriteLine), so it shows with the tree at every --verbosity.
     private void LogDryRunPlaceholderWarning()
     {
         if (_dryRunEnvironment?.FormatWarning() is { } warning)
         {
             Console.WriteLine();
-            _logger.Warning(warning);
+            Console.WriteLine(SecretValues.Redact(warning));
         }
     }
 
@@ -1286,7 +1287,7 @@ public class AndoCli : IDisposable
         Console.WriteLine("  clean             Remove artifacts, temp files, and containers");
         Console.WriteLine("  hook check [file...]");
         Console.WriteLine("                    Compile hook scripts (ando-pre.csando, ...) without running them;");
-        Console.WriteLine("                    no files: every hook in ./scripts/ and the project root");
+        Console.WriteLine("                    no files: every hook ANDO runs, in ./scripts/ and the project root");
         Console.WriteLine("  help, -h, --help  Show this help");
         Console.WriteLine("  -v, --version     Show version number");
         Console.WriteLine();

@@ -13,7 +13,8 @@
 // - Without files it checks every hook HookRunner would run in the current
 //   directory (./scripts/ first, then the root). A root file shadowed by the
 //   scripts/ file of the same name is reported as ignored, not compiled,
-//   because it never runs
+//   because it never runs. ando-pre-*/ando-post-* files for commands that run
+//   no hooks (for example ando-pre-run.csando) are warned about, not compiled
 // - Exit codes: 0 all hooks compile (or none found), 1 a hook has compile
 //   errors, 2 a named file does not exist or the arguments are wrong
 // =============================================================================
@@ -64,6 +65,12 @@ public class HookCommand(IBuildLogger logger)
     private async Task<int> CheckDiscoveredAsync(string projectRoot)
     {
         var hooks = HookRunner.Discover(projectRoot);
+        foreach (var unused in HookRunner.FindUnusedHookLikeFiles(projectRoot))
+        {
+            logger.Warning($"{Path.GetRelativePath(projectRoot, unused)} never runs as a hook " +
+                           $"(hooks run only for {string.Join(", ", HookRunner.HookCommands)}); it was not checked.");
+        }
+
         if (hooks.Count == 0)
         {
             logger.Info($"No hook scripts found in {Path.Combine(projectRoot, "scripts")} or {projectRoot}.");
@@ -100,7 +107,8 @@ public class HookCommand(IBuildLogger logger)
 
             if (!HookRunner.IsHookFileName(path))
             {
-                logger.Warning($"{file} is not named like a hook (ando-pre.csando, ando-post-<command>.csando, ...), so ANDO never runs it as one.");
+                logger.Warning($"{file} is not a hook file name (ando-pre.csando, ando-post.csando, ando-pre-<command>.csando, " +
+                               $"ando-post-<command>.csando with command {string.Join(", ", HookRunner.HookCommands)}), so ANDO never runs it as one.");
             }
 
             failed |= !await CheckOneAsync(path, file);

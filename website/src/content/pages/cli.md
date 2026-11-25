@@ -390,14 +390,14 @@ Steps are contextually enabled/disabled based on repository state. Hooks use the
 
 ## Hooks
 
-ANDO supports pre-build and post-build hooks that run before and after CLI commands. Hooks are `.csando` scripts that execute on the host machine.
+ANDO supports hooks that run before and after the `bump`, `commit`, `docs`, `release` and `ship` commands (`run`, `verify`, `clean` and `hook check` run none). Hooks are `.csando` scripts that execute on the host machine.
 
-| Hook                     | When it runs            |
-| ------------------------ | ----------------------- |
-| `ando-pre.csando`        | Before ANY command      |
-| `ando-pre-{cmd}.csando`  | Before specific command |
-| `ando-post-{cmd}.csando` | After specific command  |
-| `ando-post.csando`       | After ANY command       |
+| Hook                     | When it runs              |
+| ------------------------ | ------------------------- |
+| `ando-pre.csando`        | Before every hook command |
+| `ando-pre-{cmd}.csando`  | Before that command       |
+| `ando-post-{cmd}.csando` | After that command        |
+| `ando-post.csando`       | After every hook command  |
 
 **Quick example:**
 
@@ -407,7 +407,7 @@ var result = await Shell.RunAsync("dotnet", "test", "--no-build");
 if (result.ExitCode != 0) throw new Exception("Tests failed");
 ```
 
-**Checking hooks:** `ando hook check [file...]` compiles hook scripts against the hook API without running them and prints `OK` or the compile errors per file (exit code 0 when all compile, 1 on compile errors, 2 when a named file is missing). Without files it checks every hook ANDO would run in the current directory, in `./scripts/` and the project root. A root hook shadowed by `scripts/` with the same name never runs: ANDO warns about it when hooks run, and `hook check` reports it without compiling it. Hooks use a different API than build scripts, so `ando run -f ando-pre.csando` (and `ando verify -f`) refuse a hook file name with exit code 2 and point to `ando hook check`.
+**Checking hooks:** `ando hook check [file...]` compiles hook scripts against the hook API without running them and prints `OK` or the compile errors per file (exit code 0 when all compile, 1 on compile errors, 2 when a named file is missing). Without files it checks every hook ANDO runs in the current directory, in `./scripts/` and the project root. A root hook shadowed by `scripts/` with the same name never runs: ANDO warns about it when hooks run, and `hook check` reports it without compiling it. It also warns, without compiling, about `ando-pre-*`/`ando-post-*` files for commands that run no hooks (such as `ando-pre-run.csando`). Hooks use a different API than build scripts, so `ando run -f` and `ando verify -f` refuse the file names ANDO runs as hooks (`ando-pre.csando`, `ando-post.csando` and `ando-pre-`/`ando-post-<command>.csando` for bump, commit, docs, release and ship; case-sensitive) with exit code 2 and point to `ando hook check`. Other names, such as `ando-post-deploy.csando`, are ordinary build scripts.
 
 👉 **[See full Hooks documentation](/hooks)** for file locations, available APIs, environment variables, and more examples.
 
@@ -481,10 +481,10 @@ ANDO prompts before loading environment files (unless `--read-env` flag or `read
 
 | File                     | Description                     |
 | ------------------------ | ------------------------------- |
-| `ando-pre.csando`        | Runs before any command.        |
+| `ando-pre.csando`        | Runs before any hook command.   |
 | `ando-pre-{cmd}.csando`  | Runs before a specific command. |
 | `ando-post-{cmd}.csando` | Runs after a specific command.  |
-| `ando-post.csando`       | Runs after any command.         |
+| `ando-post.csando`       | Runs after any hook command.    |
 
 Hook scripts are searched in `./scripts/` first, then `./`.
 

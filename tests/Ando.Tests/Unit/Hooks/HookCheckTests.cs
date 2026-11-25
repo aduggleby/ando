@@ -50,7 +50,12 @@ public class HookCheckTests : IDisposable
     [InlineData("ando-post.csando", true)]
     [InlineData("ando-pre-bump.csando", true)]
     [InlineData("scripts/ando-post-release.csando", true)]
-    [InlineData("/abs/path/ANDO-PRE-RUN.csando", true)]
+    [InlineData("/abs/path/ando-post-ship.csando", true)]
+    [InlineData("ando-pre-commit.csando", true)]
+    [InlineData("ando-post-docs.csando", true)]
+    [InlineData("ANDO-PRE.csando", false)] // the lookup is case-sensitive
+    [InlineData("ando-pre-run.csando", false)] // run executes no hooks
+    [InlineData("ando-post-deploy.csando", false)]
     [InlineData("build.csando", false)]
     [InlineData("ando-pre.cs", false)]
     [InlineData("ando-prepare.csando", false)]
@@ -139,6 +144,22 @@ public class HookCheckTests : IDisposable
     }
 
     [Fact]
+    public async Task CheckAll_HookLikeFileForCommandWithoutHooks_WarnsAndIsNotCompiled()
+    {
+        Write("scripts/ando-pre-run.csando", BuildScriptApi);
+        Write("ando-post-deploy.csando", BuildScriptApi);
+        Write("ando-pre.csando", ValidHook);
+
+        var exit = await new HookCommand(_logger).ExecuteAsync(["check"], _root);
+
+        exit.ShouldBe(0);
+        _logger.InfoMessages.Count(m => m.StartsWith("OK")).ShouldBe(1);
+        _logger.WarningMessages.ShouldContain(m =>
+            m.Contains(Path.Combine("scripts", "ando-pre-run.csando")) && m.Contains("never runs as a hook"));
+        _logger.WarningMessages.ShouldContain(m => m.Contains("ando-post-deploy.csando") && m.Contains("never runs as a hook"));
+    }
+
+    [Fact]
     public async Task CheckAll_BrokenActiveHook_ReturnsOne()
     {
         Write("ando-post.csando", BuildScriptApi);
@@ -171,15 +192,15 @@ public class HookCheckTests : IDisposable
     [Fact]
     public async Task RunHooks_ShadowedRootHook_LogsWarningAndRunsScriptsVersion()
     {
-        Write("scripts/ando-pre-bump.csando", "Log.Info(\"scripts\");");
-        Write("ando-pre-bump.csando", "Log.Info(\"root\");");
+        Write("scripts/ando-pre-bump.csando", "Log.Info(\"MARKER-SCRIPTS-HOOK\");");
+        Write("ando-pre-bump.csando", "Log.Info(\"MARKER-ROOT-HOOK\");");
 
         await new HookRunner(_root, _logger).RunHooksAsync(HookRunner.HookType.Pre, "bump", new HookContext { Command = "bump" });
 
         _logger.WarningMessages.ShouldContain(m =>
             m.Contains("Hook ando-pre-bump.csando in the project root is ignored") && m.Contains("scripts"));
-        _logger.InfoMessages.ShouldContain(m => m.Contains("scripts"));
-        _logger.InfoMessages.ShouldNotContain(m => m.Contains("root"));
+        _logger.InfoMessages.ShouldContain(m => m.Contains("MARKER-SCRIPTS-HOOK"));
+        _logger.InfoMessages.ShouldNotContain(m => m.Contains("MARKER-ROOT-HOOK"));
     }
 
     [Fact]
@@ -209,6 +230,8 @@ public class HookCheckTests : IDisposable
     [InlineData(null)]
     [InlineData("build.csando")]
     [InlineData("deploy.csando")]
+    [InlineData("ando-post-deploy.csando")]
+    [InlineData("scripts/ando-pre-run.csando")]
     public void HookScriptError_BuildScript_ReturnsNull(string? file) =>
         AndoCli.HookScriptError(file, "run").ShouldBeNull();
 }

@@ -213,7 +213,9 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
         // placeholders for the missing values (listed in the end-of-run warning).
         if (mustUseServicePrincipal && DryRunEnvironment.Current != null)
         {
-            LoginWithServicePrincipal(resolvedClientId, resolvedClientSecret, resolvedTenantId);
+            // Set-but-empty values count as missing, so they get placeholders too.
+            LoginWithServicePrincipal(NullIfEmpty(resolvedClientId), NullIfEmpty(resolvedClientSecret),
+                NullIfEmpty(resolvedTenantId));
             return;
         }
 
@@ -233,6 +235,8 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
         Logger.Info("Azure: No service principal credentials; the build will log in interactively (device code)");
         RegisterInteractiveLogin();
     }
+
+    private static string? NullIfEmpty(string? value) => string.IsNullOrEmpty(value) ? null : value;
 
     // Treats "1", "true", "yes", "on" (case-insensitive) as true; everything else false.
     private static bool IsTruthy(string? value)
@@ -312,8 +316,7 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
             ? null
             : clientSecret ?? EnvironmentHelper.GetRequired(EnvClientSecret, "Azure Client Secret");
         var resolvedTenantId = tenantId ?? EnvironmentHelper.GetRequired(EnvTenantId, "Azure Tenant ID");
-        // A dry-run placeholder is not a secret; keep it out of the redaction list.
-        if (resolvedClientSecret != null && !DryRunEnvironment.IsPlaceholder(EnvClientSecret, resolvedClientSecret))
+        if (resolvedClientSecret != null)
         {
             SecretValues.Add(resolvedClientSecret);
         }

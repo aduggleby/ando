@@ -18,7 +18,8 @@
 //   tests never see each other's state.
 // - Current is null outside a dry run, so real runs take the old code path.
 // - Only names are recorded, never values. Placeholders are never written to
-//   the process environment or to the secret redaction list.
+//   the process environment, and SecretValues.Add ignores them (one central
+//   check), so they show in the tree instead of ***.
 // =============================================================================
 
 namespace Ando.Utilities;
@@ -60,6 +61,13 @@ public sealed class DryRunEnvironment
     /// </summary>
     public static bool IsPlaceholder(string name, string? value) =>
         Current is { } tracker && value == Placeholder(name) && tracker.MissingNames.Contains(name);
+
+    /// <summary>
+    /// Whether <paramref name="value"/> is a placeholder this dry run returned for any missing variable.
+    /// SecretValues uses it so placeholders are never redacted.
+    /// </summary>
+    public static bool IsAnyPlaceholder(string? value) =>
+        Current is { } tracker && value is ['<', .. var name, '>'] && tracker.MissingNames.Contains(name);
 
     /// <summary>Records <paramref name="name"/> as missing and returns its placeholder.</summary>
     public string RecordMissing(string name)

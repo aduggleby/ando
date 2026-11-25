@@ -442,6 +442,16 @@ public class AzureOperationsTests
             // The placeholder is not a secret and must not be redacted.
             Ando.Logging.SecretValues.Redact("<AZURE_CLIENT_SECRET>").ShouldBe("<AZURE_CLIENT_SECRET>");
 
+            // Set-but-empty values count as missing too.
+            Environment.SetEnvironmentVariable("AZURE_CLIENT_ID", "");
+            var emptyTracker = new Ando.Utilities.DryRunEnvironment();
+            using (Ando.Utilities.DryRunEnvironment.Activate(emptyTracker))
+            {
+                CreateAzure().EnsureAuthenticated(clientSecret: "", requireServicePrincipal: true);
+            }
+            emptyTracker.MissingNames.ShouldBe(["AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_TENANT_ID"]);
+            Environment.SetEnvironmentVariable("AZURE_CLIENT_ID", null);
+
             // Outside the dry run the same calls still fail.
             Should.Throw<InvalidOperationException>(() => CreateAzure().EnsureAuthenticated(requireServicePrincipal: true));
             Should.Throw<InvalidOperationException>(() => CreateAzure().SetSubscription());

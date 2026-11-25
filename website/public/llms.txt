@@ -352,8 +352,8 @@ ANDO supports pre-build and post-build hooks - `.csando` scripts that run automa
 **Hook Types:**
 | Hook | When It Runs |
 |------|--------------|
-| `ando-pre.csando` | Before **every** command |
-| `ando-post.csando` | After **every** command |
+| `ando-pre.csando` | Before **every** hook command (bump, commit, docs, release, ship; `run`, `verify` and `clean` run no hooks) |
+| `ando-post.csando` | After **every** hook command |
 | `ando-pre-{cmd}.csando` | Before a **specific** command |
 | `ando-post-{cmd}.csando` | After a **specific** command |
 
@@ -363,7 +363,7 @@ ANDO supports pre-build and post-build hooks - `.csando` scripts that run automa
 
 When both exist the root file never runs; ANDO warns and names it.
 
-**Checking hooks:** `ando hook check [file...]` compiles hooks against the hook API (HookGlobals) without running them; prints `OK` or compile errors per file; exit 0 all compile, 1 compile errors, 2 named file missing. No files: every hook ANDO would run in the current directory (`./scripts/` and root; a shadowed root file is reported, not compiled). `ando run -f <hook>` and `ando verify -f <hook>` (file named `ando-pre.csando`, `ando-post.csando`, `ando-pre-<cmd>.csando`, `ando-post-<cmd>.csando`) fail with exit 2 and point to `ando hook check`.
+**Checking hooks:** `ando hook check [file...]` compiles hooks against the hook API (HookGlobals) without running them; prints `OK` or compile errors per file; exit 0 all compile, 1 compile errors, 2 named file missing. No files: every hook ANDO runs in the current directory (`./scripts/` and root; a shadowed root file is reported, not compiled; `ando-pre-*`/`ando-post-*` files for commands without hooks, e.g. `ando-pre-run.csando`, get a warning and are not compiled). `ando run -f` and `ando verify -f` on a hook file name (exactly `ando-pre.csando`, `ando-post.csando`, `ando-pre-<cmd>.csando` or `ando-post-<cmd>.csando` with cmd bump, commit, docs, release or ship; case-sensitive) fail with exit 2 and point to `ando hook check`; other names such as `ando-post-deploy.csando` are ordinary build scripts.
 
 **Hook API:**
 | Global | Description |

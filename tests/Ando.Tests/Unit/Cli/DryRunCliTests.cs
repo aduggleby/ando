@@ -107,6 +107,60 @@ public class DryRunCliTests : IDisposable
     }
 
     [Fact]
+    public async Task RealRun_MissingRequiredEnv_FailsAtLoadWithoutPlaceholders()
+    {
+        // Fails while the script loads, before Docker is needed.
+        var name = UniqueName();
+        var script = WriteScript("build.csando", $"var x = Env(\"{name}\");");
+
+        var (exitCode, output) = await RunCli("run", "--no-env", "--no-color", "-f", script);
+
+        exitCode.ShouldBe(5);
+        output.ShouldContain($"Required environment variable '{name}' is not set.");
+        output.ShouldNotContain("placeholders were used");
+    }
+
+    [Fact]
+    public async Task DryRun_QuietVerbosity_StillPrintsWarning()
+    {
+        var name = UniqueName();
+        var script = WriteScript("build.csando", $"var x = Env(\"{name}\"); Shell.Run(\"echo\", x!);");
+
+        var (exitCode, output) = await RunCli("run", "--dry-run", "--no-env", "--no-color", "--verbosity", "quiet", "-f", script);
+
+        exitCode.ShouldBe(0);
+        output.ShouldContain($"placeholders were used: {name}.");
+    }
+
+    [Fact]
+    public async Task DryRun_PlaceholderPassedAsSecretChildEnv_IsNotRedacted()
+    {
+        // Short name: step contexts are truncated in the tree.
+        var name = "T" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant() + "_TOKEN";
+        var script = WriteScript("build.csando",
+            $"var token = Env(\"{name}\")!;\n" +
+            $"Ando.Build(Directory(\"./child\"), o => o.WithEnv(\"{name}\", token));\n" +
+            "Shell.Bash($\"echo {token}\");\n");
+
+        var (exitCode, output) = await RunCli("run", "--dry-run", "--no-env", "--no-color", "-f", script);
+
+        exitCode.ShouldBe(0);
+        output.ShouldContain($"Shell.Bash (echo <{name}>)");
+        output.ShouldNotContain("***");
+    }
+
+    [Fact]
+    public async Task Run_NonHookAndoPrefixedFile_IsNotRefused()
+    {
+        var script = WriteScript("ando-post-deploy.csando", "Shell.Run(\"echo\", \"deploy\");");
+
+        var (exitCode, output) = await RunCli("run", "--dry-run", "--no-env", "--no-color", "-f", script);
+
+        exitCode.ShouldBe(0);
+        output.ShouldNotContain("is a hook script");
+    }
+
+    [Fact]
     public async Task Run_HookFile_FailsFastWithExitTwoAndPointsToHookCheck()
     {
         var hook = WriteScript("ando-pre.csando", "Log.Info(\"hook\");");

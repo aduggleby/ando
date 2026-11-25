@@ -6,7 +6,7 @@ toc: true
 
 ## Overview
 
-ANDO hooks are `.csando` scripts that run automatically before and after CLI commands. They execute on the host machine (not in Docker) and are useful for:
+ANDO hooks are `.csando` scripts that run automatically before and after the `bump`, `commit`, `docs`, `release` and `ship` commands. Other commands (`run`, `verify`, `clean`, `hook check`) run no hooks. They execute on the host machine (not in Docker) and are useful for:
 
 - **Pre-build cleanup** - Remove temporary files, conflict files, or stale artifacts
 - **Validation** - Run tests or checks before allowing a command to proceed
@@ -18,8 +18,8 @@ ANDO hooks are `.csando` scripts that run automatically before and after CLI com
 
 | Hook | When It Runs |
 |------|--------------|
-| `ando-pre.csando` | Before **every** command |
-| `ando-post.csando` | After **every** command |
+| `ando-pre.csando` | Before **every** hook command (bump, commit, docs, release, ship) |
+| `ando-post.csando` | After **every** hook command |
 | `ando-pre-{cmd}.csando` | Before a **specific** command |
 | `ando-post-{cmd}.csando` | After a **specific** command |
 
@@ -44,9 +44,9 @@ When both exist, the root file never runs. ANDO logs a warning that names the ig
 my-project/
 ├── build.csando
 ├── scripts/
-│   ├── ando-pre.csando           # Before every command
-│   ├── ando-post.csando          # After every command
-│   ├── ando-pre-run.csando       # Before 'ando run'
+│   ├── ando-pre.csando           # Before every hook command
+│   ├── ando-post.csando          # After every hook command
+│   ├── ando-pre-commit.csando    # Before 'ando commit'
 │   ├── ando-post-release.csando  # After 'ando release'
 │   └── ando-pre-bump.csando      # Before 'ando bump'
 └── src/
@@ -122,20 +122,19 @@ Use these command names in hook filenames:
 
 | Command | Hook Names |
 |---------|------------|
-| `ando` or `ando run` | `ando-pre-run.csando`, `ando-post-run.csando` |
 | `ando commit` | `ando-pre-commit.csando`, `ando-post-commit.csando` |
 | `ando bump` | `ando-pre-bump.csando`, `ando-post-bump.csando` |
 | `ando docs` | `ando-pre-docs.csando`, `ando-post-docs.csando` |
 | `ando release` | `ando-pre-release.csando`, `ando-post-release.csando` |
 | `ando ship` | `ando-pre-ship.csando`, `ando-post-ship.csando` |
-| `ando clean` | `ando-pre-clean.csando`, `ando-post-clean.csando` |
-| `ando verify` | `ando-pre-verify.csando`, `ando-post-verify.csando` |
+
+Only these commands run hooks. `ando run`, `ando verify` and `ando clean` run none, so files such as `ando-pre-run.csando` never run (`ando hook check` warns about them), and `ando run -f` treats them as ordinary build scripts.
 
 ## Examples
 
 ### Pre-Build Cleanup
 
-Remove temporary files before every build:
+Remove temporary files before every hook command:
 
 ```csharp
 // scripts/ando-pre.csando
@@ -253,10 +252,10 @@ Only run for specific commands:
 ```csharp
 // scripts/ando-pre.csando
 
-var command = Env("ANDO_COMMAND", required: false) ?? "run";
+var command = Env("ANDO_COMMAND", required: false) ?? "";
 
-// Only clean before 'run', not 'verify' or 'clean'
-if (command != "run") return;
+// Only clean before 'release', not 'commit', 'bump', 'docs' or 'ship'
+if (command != "release") return;
 
 // Cleanup logic here...
 ```
