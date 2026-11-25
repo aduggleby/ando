@@ -48,7 +48,9 @@ Listed in the order of `ando help`. Commands marked **AI** need Claude and are n
 
 ### Building a specific commit (`--ref`)
 
-`ando run --ref v1.4.0` builds exactly that commit. ANDO checks it out into a temporary detached git worktree under the system temp directory, evaluates the build script from there, and copies only those files into the container. Edits in your working tree cannot change what is built. The worktree is removed when the run ends.
+`ando run --ref v1.4.0` builds exactly that commit. ANDO checks it out into a temporary detached git worktree in its scratch folder, evaluates the build script from there, and copies only those files into the container. Edits in your working tree cannot change what is built. The worktree is removed when the run ends.
+
+The scratch folder holds `--ref` worktrees, the project tar copied into the build container and staged release assets. It is `$XDG_CACHE_HOME/ando/tmp`, else `~/.cache/ando/tmp`, so it is disk-backed even where `/tmp` is a small shared tmpfs. Set `ANDO_TMPDIR` to use another folder (`TMPDIR` is ignored for these files, since it often points into `/tmp`). Each worktree has a lock file its run holds; a `--ref` run removes worktrees whose lock is free, which are leftovers of killed runs. If the worktree cannot be created, the error shows git's message and the free disk space. Every run warns, without failing, when the scratch folder holds more than 20 GB or its disk has less than 5 GB free.
 
 What still uses the directory you ran `ando` from:
 

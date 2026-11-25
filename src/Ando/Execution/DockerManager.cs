@@ -529,8 +529,9 @@ public class DockerManager
 
         // Create a temporary tar archive excluding unwanted directories.
         // Using tar is much faster than individual docker cp calls.
-        var tarPath = Path.Combine(Path.GetTempPath(), $"ando-project-{Guid.NewGuid():N}.tar");
-        var gitFileListPath = Path.Combine(Path.GetTempPath(), $"ando-project-files-{Guid.NewGuid():N}.lst");
+        var scratch = HostScratch.Root();
+        var tarPath = Path.Combine(scratch, $"ando-project-{Guid.NewGuid():N}.tar");
+        var gitFileListPath = Path.Combine(scratch, $"ando-project-files-{Guid.NewGuid():N}.lst");
 
         try
         {

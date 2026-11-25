@@ -123,6 +123,7 @@ public abstract class CommandExecutorBase : ICommandExecutor
 
         // Capture stdout for commands that need to process output (e.g., Azure deployments).
         var outputBuilder = new System.Text.StringBuilder();
+        var errorBuilder = new System.Text.StringBuilder();
 
         // Stream stdout lines to the logger as they arrive.
         // When SuppressOutput is true, capture output but don't log it.
@@ -153,6 +154,8 @@ public abstract class CommandExecutorBase : ICommandExecutor
             {
                 if (!options.SuppressOutput)
                     Logger.Info(e.Data);
+                if (options.CaptureStderr)
+                    lock (errorBuilder) errorBuilder.AppendLine(e.Data);
             }
         };
 
@@ -206,9 +209,11 @@ public abstract class CommandExecutorBase : ICommandExecutor
             }
 
             var output = outputBuilder.ToString().TrimEnd();
+            string? error;
+            lock (errorBuilder) error = errorBuilder.ToString().TrimEnd();
             return process.ExitCode == 0
                 ? CommandResult.Ok(output)
-                : CommandResult.Failed(process.ExitCode, output: output);
+                : CommandResult.Failed(process.ExitCode, string.IsNullOrEmpty(error) ? null : error, output);
         }
         catch (Exception ex)
         {

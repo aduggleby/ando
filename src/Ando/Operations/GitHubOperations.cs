@@ -214,7 +214,7 @@ public class GitHubOperations(
                 // Upload files one at a time for better reliability.
                 // Files with the same name are renamed based on their parent directory.
                 var uploadedCount = 0;
-                var tempDir = Path.Combine(Path.GetTempPath(), $"ando-release-{Guid.NewGuid():N}");
+                var tempDir = Path.Combine(Ando.Execution.HostScratch.Root(), $"ando-release-{Guid.NewGuid():N}");
                 Directory.CreateDirectory(tempDir);
 
                 try

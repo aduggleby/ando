@@ -94,6 +94,13 @@ public class CommandOptions
     /// contain secret values) and stderr carries the diagnostics.
     /// </summary>
     public bool SuppressStdout { get; set; } = false;
+
+    /// <summary>
+    /// Whether to capture stderr. When true and the command fails, the captured stderr
+    /// becomes <see cref="CommandResult.Error"/>, also with <see cref="SuppressOutput"/>.
+    /// Off by default because callers match "timed out" in Error to detect timeouts.
+    /// </summary>
+    public bool CaptureStderr { get; set; } = false;
 }
 
 /// <summary>

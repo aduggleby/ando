@@ -397,6 +397,14 @@ public class AndoCli : IDisposable
             var invocationRoot = Path.GetDirectoryName(scriptPath) ?? Environment.CurrentDirectory;
             var invocationScriptPath = scriptPath;
 
+            // Warn (never fail) when the host scratch folder for worktrees and the
+            // project tar grows too big or its disk runs low.
+            var scratchRoot = HostScratch.Root();
+            if (!HostScratch.IsSystemTemp(scratchRoot) && HostScratch.CheckUsage(scratchRoot) is { } scratchWarning)
+            {
+                _logger.Warning(scratchWarning);
+            }
+
             var gitRef = GetFlagValue("--ref");
             if (gitRef != null)
             {

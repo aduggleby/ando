@@ -4,10 +4,15 @@
 // Summary: A temporary, detached git worktree of the commit given with --ref.
 //
 // `ando run --ref <commit|tag>` builds exactly that commit: ANDO checks it out
-// into a new worktree under the system temp directory, evaluates the build
-// script from there and copies only those files into the container, so edits
-// in the shared working tree cannot change what is built. The worktree is
-// removed when the run ends.
+// into a new worktree in the host scratch folder (~/.cache/ando/tmp, or
+// ANDO_TMPDIR, see HostScratch), evaluates the build script from there and copies only those
+// files into the container, so edits in the shared working tree cannot change
+// what is built. The worktree is removed when the run ends.
+//
+// Each worktree has a sibling lock file (<name>.lock) that the run holds while
+// it lives. A run that was killed leaves its worktree behind; the next --ref run
+// removes every worktree whose lock it can take. Entries without a lock file are
+// never touched, and the system temp folder is never swept.
 // =============================================================================
 
 using Ando.Execution;
@@ -20,15 +25,19 @@ namespace Ando.Cli;
 /// </summary>
 public sealed class RefWorktree : IAsyncDisposable
 {
+    private const string Prefix = "ando-ref-";
+
     private readonly string _repoRoot;
     private readonly IBuildLogger _logger;
+    private readonly FileStream? _lock;
 
-    private RefWorktree(string repoRoot, string path, string commit, string scriptPath, IBuildLogger logger)
+    private RefWorktree(string repoRoot, string path, string commit, string scriptPath, FileStream? lockStream, IBuildLogger logger)
     {
         _repoRoot = repoRoot;
         Path = path;
         Commit = commit;
         ScriptPath = scriptPath;
+        _lock = lockStream;
         _logger = logger;
     }
 
@@ -45,54 +54,195 @@ public sealed class RefWorktree : IAsyncDisposable
     /// Resolves <paramref name="gitRef"/> in the repository containing
     /// <paramref name="scriptPath"/> and checks it out into a temporary worktree.
     /// </summary>
-    public static async Task<RefWorktree> CreateAsync(string scriptPath, string gitRef, IBuildLogger logger)
+    public static Task<RefWorktree> CreateAsync(string scriptPath, string gitRef, IBuildLogger logger) =>
+        CreateAsync(scriptPath, gitRef, logger, HostScratch.Root(), DirectoryName);
+
+    /// <summary>Like the public overload, with the scratch folder and directory name given (tests).</summary>
+    internal static async Task<RefWorktree> CreateAsync(
+        string scriptPath, string gitRef, IBuildLogger logger, string scratchRoot, Func<string, string> directoryName)
     {
         var scriptDirectory = System.IO.Path.GetDirectoryName(scriptPath) ?? Environment.CurrentDirectory;
 
-        var repoRoot = await GitAsync(logger, scriptDirectory, "rev-parse", "--show-toplevel")
+        var repoRoot = await GitOutputAsync(logger, scriptDirectory, "rev-parse", "--show-toplevel")
             ?? throw new InvalidOperationException($"--ref needs a git repository, but {scriptDirectory} is not in one.");
-        var commit = await GitAsync(logger, repoRoot, "rev-parse", "--verify", "--quiet", $"{gitRef}^{{commit}}")
+        var commit = await GitOutputAsync(logger, repoRoot, "rev-parse", "--verify", "--quiet", $"{gitRef}^{{commit}}")
             ?? throw new InvalidOperationException($"--ref {gitRef}: no such commit, tag or branch.");
 
         var relativeScript = System.IO.Path.GetRelativePath(repoRoot, scriptPath).Replace('\\', '/');
-        if (await GitAsync(logger, repoRoot, "cat-file", "-e", $"{commit}:{relativeScript}") == null)
+        if (await GitOutputAsync(logger, repoRoot, "cat-file", "-e", $"{commit}:{relativeScript}") == null)
         {
             throw new InvalidOperationException(
                 $"--ref {gitRef}: the build script {relativeScript} does not exist in that commit.");
         }
 
-        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), DirectoryName(commit));
-        if (await GitAsync(logger, repoRoot, "worktree", "add", "--detach", "--quiet", path, commit) == null)
+        Directory.CreateDirectory(scratchRoot);
+        await SweepStaleAsync(scratchRoot, repoRoot, logger);
+
+        var path = System.IO.Path.Combine(scratchRoot, directoryName(commit));
+        var lockStream = TryLock(path + ".lock");
+        var existedBefore = Directory.Exists(path);
+
+        var add = await GitAsync(logger, repoRoot, "worktree", "add", "--detach", "--quiet", path, commit);
+        if (!add.Success)
         {
-            throw new InvalidOperationException($"--ref {gitRef}: could not create a worktree at {path}.");
+            // Remove what this attempt left behind, never a directory that was already there.
+            if (!existedBefore)
+            {
+                TryDeleteDirectory(path);
+            }
+            await GitAsync(logger, repoRoot, "worktree", "prune");
+            lockStream?.Dispose();
+            TryDeleteFile(path + ".lock");
+            throw new InvalidOperationException(AddFailedMessage(gitRef, path, scratchRoot, add));
         }
 
         var worktreeScript = System.IO.Path.Combine(path, relativeScript);
-        return new RefWorktree(repoRoot, path, commit, worktreeScript, logger);
+        return new RefWorktree(repoRoot, path, commit, worktreeScript, lockStream, logger);
     }
 
     /// <summary>A short, unique worktree directory name for a commit.</summary>
-    internal static string DirectoryName(string commit) => $"ando-ref-{commit[..12]}-{Guid.NewGuid().ToString("N")[..8]}";
+    internal static string DirectoryName(string commit) => $"{Prefix}{commit[..12]}-{Guid.NewGuid().ToString("N")[..8]}";
+
+    /// <summary>
+    /// Removes stale worktrees in <paramref name="scratchRoot"/>: every ando-ref-*
+    /// entry whose lock file exists and is not held by a running ando. Then prunes
+    /// the worktree records of <paramref name="repoRoot"/>. Never sweeps the system
+    /// temp folder.
+    /// </summary>
+    internal static async Task SweepStaleAsync(string scratchRoot, string repoRoot, IBuildLogger logger)
+    {
+        if (HostScratch.IsSystemTemp(scratchRoot) || !Directory.Exists(scratchRoot))
+        {
+            return;
+        }
+
+        var removed = false;
+        foreach (var lockFile in Directory.EnumerateFiles(scratchRoot, Prefix + "*.lock"))
+        {
+            using var stream = TryLock(lockFile, quiet: true);
+            if (stream == null)
+            {
+                continue; // Held by a running ando, or unusable.
+            }
+
+            var dir = lockFile[..^".lock".Length];
+            if (Directory.Exists(dir) && !TryDeleteDirectory(dir))
+            {
+                logger.Warning($"Could not remove the stale --ref worktree {dir}.");
+                continue;
+            }
+            logger.Debug($"Removed the stale --ref worktree {dir}.");
+            stream.Dispose();
+            TryDeleteFile(lockFile);
+            removed = true;
+        }
+
+        if (removed)
+        {
+            await GitAsync(logger, repoRoot, "worktree", "prune");
+        }
+    }
 
     /// <summary>Removes the worktree.</summary>
     public async ValueTask DisposeAsync()
     {
-        if (await GitAsync(_logger, _repoRoot, "worktree", "remove", "--force", Path) == null)
+        var remove = await GitAsync(_logger, _repoRoot, "worktree", "remove", "--force", Path);
+        _lock?.Dispose();
+        if (!remove.Success)
         {
+            // The lock file stays, so the next --ref run removes the worktree.
             _logger.Warning($"Could not remove the --ref worktree {Path}. Remove it with: git worktree remove --force {Path}");
+            return;
+        }
+        TryDeleteFile(Path + ".lock");
+    }
+
+    private static string AddFailedMessage(string gitRef, string path, string scratchRoot, CommandResult result)
+    {
+        var detail = (result.Error ?? result.Output ?? "").Trim();
+        var message = $"--ref {gitRef}: could not create a worktree at {path}.";
+        if (detail.Length > 0)
+        {
+            message += $" git: {detail}";
+        }
+        var free = FreeSpace(scratchRoot);
+        if (free != null)
+        {
+            message += $" Free space in {scratchRoot}: {free}.";
+        }
+        return message + $" Set {HostScratch.EnvVar} to use another folder.";
+    }
+
+    // Free space of the file system holding the folder, or null when unknown.
+    internal static string? FreeSpace(string path)
+    {
+        try
+        {
+            return HostScratch.Gb(new DriveInfo(path).AvailableFreeSpace);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    // Opens and exclusively locks the file (created if missing), or returns null
+    // when another process holds it or it cannot be used.
+    private static FileStream? TryLock(string path, bool quiet = false)
+    {
+        try
+        {
+            return quiet && !File.Exists(path)
+                ? null
+                : new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static bool TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Harmless: a leftover lock file is cleaned up by the next sweep.
         }
     }
 
     // Runs git and returns trimmed stdout, or null when git fails.
-    private static async Task<string?> GitAsync(IBuildLogger logger, string workingDirectory, params string[] args)
+    private static async Task<string?> GitOutputAsync(IBuildLogger logger, string workingDirectory, params string[] args)
     {
-        var runner = new ProcessRunner(logger);
-        var result = await runner.ExecuteAsync("git", args, new CommandOptions
+        var result = await GitAsync(logger, workingDirectory, args);
+        return result.Success ? (result.Output ?? "").Trim() : null;
+    }
+
+    private static Task<CommandResult> GitAsync(IBuildLogger logger, string workingDirectory, params string[] args) =>
+        new ProcessRunner(logger).ExecuteAsync("git", args, new CommandOptions
         {
             WorkingDirectory = workingDirectory,
             SuppressOutput = true,
+            CaptureStderr = true,
             TimeoutMs = 120_000
         });
-        return result.Success ? (result.Output ?? "").Trim() : null;
-    }
 }
