@@ -397,12 +397,17 @@ public class AndoCli : IDisposable
             var invocationRoot = Path.GetDirectoryName(scriptPath) ?? Environment.CurrentDirectory;
             var invocationScriptPath = scriptPath;
 
-            // Warn (never fail) when the host scratch folder for worktrees and the
-            // project tar grows too big or its disk runs low.
+            // Clean up leftovers of killed runs in the host scratch folder, then warn
+            // (never fail) when ANDO's files there grow too big or its disk runs low.
             var scratchRoot = HostScratch.Root();
-            if (!HostScratch.IsSystemTemp(scratchRoot) && HostScratch.CheckUsage(scratchRoot) is { } scratchWarning)
+            if (!HostScratch.IsSystemTemp(scratchRoot))
             {
-                _logger.Warning(scratchWarning);
+                await RefWorktree.SweepStaleAsync(scratchRoot, repoRoot: null, _logger);
+                HostScratch.SweepOldFiles(scratchRoot);
+                if (HostScratch.CheckUsage(scratchRoot) is { } scratchWarning)
+                {
+                    _logger.Warning(scratchWarning);
+                }
             }
 
             var gitRef = GetFlagValue("--ref");
@@ -1240,6 +1245,7 @@ public class AndoCli : IDisposable
         Console.WriteLine("  --image <image>     Use custom Docker image instead of default/script-defined");
         Console.WriteLine("  --dind              Mount Docker socket for Docker-in-Docker operations");
         Console.WriteLine("  --ref <commit|tag>  Build that commit from a clean temporary checkout, not the working tree");
+        Console.WriteLine("                      (checked out under ~/.cache/ando/tmp; set ANDO_TMPDIR to an absolute path to change it)");
         Console.WriteLine("  --record-path-file <file>");
         Console.WriteLine("                      Write the absolute path of the run record to <file> (relative to the invocation directory)");
         Console.WriteLine("  --yes               Accept every Ando.Confirm prompt (for non-interactive runs)");

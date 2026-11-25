@@ -8,8 +8,9 @@
 // ~/.cache/ando/tmp), which is disk-backed, because /tmp is often a small tmpfs
 // shared with other tools and a full /tmp made --ref runs fail. ANDO_TMPDIR
 // overrides it. TMPDIR is ignored on purpose: it often points back into /tmp.
-// At the start of a run ANDO warns (without failing) when the folder holds more
-// than WarnSizeBytes or its disk has less than WarnFreeBytes left.
+// At the start of a run ANDO removes leftovers of killed runs and warns (without
+// failing) when its own entries there hold more
+// than WarnSizeBytes or the disk has less than WarnFreeBytes left.
 // =============================================================================
 
 namespace Ando.Execution;
@@ -56,7 +57,8 @@ public static class HostScratch
     /// </summary>
     internal static string? Resolve(string? envValue, string? xdgCacheHome, string? home)
     {
-        if (!string.IsNullOrWhiteSpace(envValue))
+        // A relative ANDO_TMPDIR is ignored: child builds run in other folders.
+        if (!string.IsNullOrWhiteSpace(envValue) && Path.IsPathRooted(envValue))
         {
             return Path.GetFullPath(envValue);
         }
@@ -77,8 +79,11 @@ public static class HostScratch
     /// <summary>Free disk space below which a run warns (5 GB).</summary>
     public const long WarnFreeBytes = 5L * 1024 * 1024 * 1024;
 
+    /// <summary>Name prefixes of the entries ANDO creates in the folder.</summary>
+    internal static readonly string[] EntryPrefixes = ["ando-ref-", "ando-project-", "ando-release-"];
+
     /// <summary>
-    /// A warning when <paramref name="root"/> holds more than <paramref name="maxBytes"/>
+    /// A warning when ANDO's entries in <paramref name="root"/> hold more than <paramref name="maxBytes"/>
     /// or its disk has less than <paramref name="minFreeBytes"/> free, otherwise null.
     /// Never throws; the run goes on either way.
     /// </summary>
@@ -86,12 +91,11 @@ public static class HostScratch
     {
         try
         {
-            var size = DirectorySize(root);
+            var size = AndoEntriesSize(root);
             if (size > maxBytes)
             {
-                return $"The ANDO scratch folder {root} holds {Gb(size)} (more than {Gb(maxBytes)}). " +
-                    "Leftovers of killed runs (ando-ref-*, ando-project-*, ando-release-*) can be removed when no ando run is active. " +
-                    $"Set {EnvVar} to use another folder.";
+                return $"ANDO's files in the scratch folder {root} (ando-ref-*, ando-project-*, ando-release-*) take {Gb(size)} (more than {Gb(maxBytes)}). " +
+                    $"Entries no running ando uses can be removed. Set {EnvVar} to use another folder.";
             }
             var free = new DriveInfo(root).AvailableFreeSpace;
             if (free < minFreeBytes)
@@ -108,20 +112,76 @@ public static class HostScratch
 
     internal static string Gb(long bytes) => $"{bytes / (1024.0 * 1024 * 1024):0.0} GB";
 
-    private static long DirectorySize(string root) =>
-        new DirectoryInfo(root)
-            .EnumerateFiles("*", new EnumerationOptions
-            {
-                RecurseSubdirectories = true,
-                IgnoreInaccessible = true,
-                AttributesToSkip = FileAttributes.ReparsePoint,
-            })
-            .Sum(f => f.Length);
+    // Total size of ANDO's top-level entries only, so a shared folder never gets
+    // walked or blamed for other tools' files.
+    private static long AndoEntriesSize(string root)
+    {
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+            AttributesToSkip = FileAttributes.ReparsePoint,
+        };
+        long total = 0;
+        foreach (var entry in new DirectoryInfo(root).EnumerateFileSystemInfos())
+        {
+            if (!IsAndoEntry(entry.Name)) continue;
+            total += entry is DirectoryInfo dir
+                ? dir.EnumerateFiles("*", options).Sum(f => f.Length)
+                : ((FileInfo)entry).Length;
+        }
+        return total;
+    }
 
-    /// <summary>True when <paramref name="path"/> is the system temp folder.</summary>
-    internal static bool IsSystemTemp(string path) =>
-        string.Equals(
-            Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)),
-            Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.GetTempPath())),
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    internal static bool IsAndoEntry(string name) => EntryPrefixes.Any(p => name.StartsWith(p, StringComparison.Ordinal));
+
+    /// <summary>
+    /// Removes ando-project-* and ando-release-* entries older than <paramref name="maxAge"/>
+    /// (default one day): leftovers of killed runs, since a live run deletes its own within
+    /// minutes. Never touches a system temp folder. Never throws.
+    /// </summary>
+    internal static void SweepOldFiles(string root, TimeSpan? maxAge = null)
+    {
+        if (IsSystemTemp(root)) return;
+        var cutoff = DateTime.UtcNow - (maxAge ?? TimeSpan.FromDays(1));
+        try
+        {
+            foreach (var entry in new DirectoryInfo(root).EnumerateFileSystemInfos())
+            {
+                if (!(entry.Name.StartsWith("ando-project-", StringComparison.Ordinal)
+                    || entry.Name.StartsWith("ando-release-", StringComparison.Ordinal))
+                    || entry.LastWriteTimeUtc > cutoff)
+                {
+                    continue;
+                }
+                try
+                {
+                    if (entry is DirectoryInfo dir) dir.Delete(recursive: true);
+                    else entry.Delete();
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // Try again next run.
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Folder missing or unreadable: nothing to sweep.
+        }
+    }
+
+    /// <summary>
+    /// True when <paramref name="path"/> is a system temp folder: the current
+    /// temp folder (which follows TMPDIR), /tmp, /var/tmp or /private/tmp.
+    /// </summary>
+    internal static bool IsSystemTemp(string path)
+    {
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var normalized = Normalize(path);
+        string[] temps = [Normalize(Path.GetTempPath()), "/tmp", "/var/tmp", "/private/tmp"];
+        return temps.Any(t => string.Equals(normalized, t, comparison));
+    }
+
+    private static string Normalize(string path) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
 }

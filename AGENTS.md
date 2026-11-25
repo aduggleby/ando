@@ -155,6 +155,7 @@ ANDO is a typed C# build system using Roslyn scripting. Build scripts (`build.cs
 - Prefer explicit first-party operations over sending users to `Shell.Run`/`Shell.Bash`: when a common task needs a shell escape hatch, add a typed operation instead. `Shell.Run`/`Shell.Bash` stay as the escape hatch for one-off commands.
 - Queries that are useful both at script load and in step order come as a pair: an eagerly evaluated member (e.g. `Git.Commit`, `Git.LastTag`, evaluated on the host when the script loads) and a step variant returning `CommandStep` (e.g. `Git.RevParse`, `Git.LatestTag`). Say which one it is in the XML docs.
 - `AppService.*` (`az webapp`) and `Functions.*` (`az functionapp`) share their step builders in `AzureSiteOperationsBase`; change behavior there so both stay in parity.
+- Large host-side temporary files (worktrees, tars, staged assets) go to `HostScratch.Root()` (`~/.cache/ando/tmp`, `ANDO_TMPDIR` overrides), never `Path.GetTempPath()`: `/tmp` is often a small shared tmpfs, and a full `/tmp` broke `--ref` runs. Name entries with an `ando-ref-`, `ando-project-` or `ando-release-` prefix so the per-run sweep and the size warning cover them. Host git calls whose failure is reported should set `CaptureStderr` so git's message reaches the user.
 
 ## Directory Structure
 

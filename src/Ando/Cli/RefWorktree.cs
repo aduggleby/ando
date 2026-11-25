@@ -10,9 +10,9 @@
 // what is built. The worktree is removed when the run ends.
 //
 // Each worktree has a sibling lock file (<name>.lock) that the run holds while
-// it lives. A run that was killed leaves its worktree behind; the next --ref run
+// it lives. A run that was killed leaves its worktree behind; the next run
 // removes every worktree whose lock it can take. Entries without a lock file are
-// never touched, and the system temp folder is never swept.
+// never touched, and a system temp folder (/tmp and the like) is never swept.
 // =============================================================================
 
 using Ando.Execution;
@@ -78,8 +78,20 @@ public sealed class RefWorktree : IAsyncDisposable
         Directory.CreateDirectory(scratchRoot);
         await SweepStaleAsync(scratchRoot, repoRoot, logger);
 
-        var path = System.IO.Path.Combine(scratchRoot, directoryName(commit));
-        var lockStream = TryLock(path + ".lock");
+        // Take the worktree's lock before creating it. A concurrent sweep can grab a
+        // just-created lock file for a moment; then try a new name instead of running unlocked.
+        string path = "";
+        FileStream? lockStream = null;
+        for (var attempt = 0; attempt < 3 && lockStream == null; attempt++)
+        {
+            path = System.IO.Path.Combine(scratchRoot, directoryName(commit));
+            lockStream = TryLock(path + ".lock");
+        }
+        if (lockStream == null)
+        {
+            throw new InvalidOperationException(
+                $"--ref {gitRef}: could not take the lock file {path}.lock in {scratchRoot}. Set {HostScratch.EnvVar} to use another folder.");
+        }
         var existedBefore = Directory.Exists(path);
 
         var add = await GitAsync(logger, repoRoot, "worktree", "add", "--detach", "--quiet", path, commit);
@@ -91,7 +103,7 @@ public sealed class RefWorktree : IAsyncDisposable
                 TryDeleteDirectory(path);
             }
             await GitAsync(logger, repoRoot, "worktree", "prune");
-            lockStream?.Dispose();
+            lockStream.Dispose();
             TryDeleteFile(path + ".lock");
             throw new InvalidOperationException(AddFailedMessage(gitRef, path, scratchRoot, add));
         }
@@ -106,10 +118,11 @@ public sealed class RefWorktree : IAsyncDisposable
     /// <summary>
     /// Removes stale worktrees in <paramref name="scratchRoot"/>: every ando-ref-*
     /// entry whose lock file exists and is not held by a running ando. Then prunes
-    /// the worktree records of <paramref name="repoRoot"/>. Never sweeps the system
-    /// temp folder.
+    /// the worktree records of <paramref name="repoRoot"/> when given. Never sweeps
+    /// a system temp folder. Every run calls it (without a repository); git also
+    /// prunes the records of removed worktrees by itself.
     /// </summary>
-    internal static async Task SweepStaleAsync(string scratchRoot, string repoRoot, IBuildLogger logger)
+    internal static async Task SweepStaleAsync(string scratchRoot, string? repoRoot, IBuildLogger logger)
     {
         if (HostScratch.IsSystemTemp(scratchRoot) || !Directory.Exists(scratchRoot))
         {
@@ -126,18 +139,21 @@ public sealed class RefWorktree : IAsyncDisposable
             }
 
             var dir = lockFile[..^".lock".Length];
-            if (Directory.Exists(dir) && !TryDeleteDirectory(dir))
+            if (Directory.Exists(dir))
             {
-                logger.Warning($"Could not remove the stale --ref worktree {dir}.");
-                continue;
+                if (!TryDeleteDirectory(dir))
+                {
+                    logger.Warning($"Could not remove the stale --ref worktree {dir}.");
+                    continue;
+                }
+                logger.Debug($"Removed the stale --ref worktree {dir}.");
+                removed = true;
             }
-            logger.Debug($"Removed the stale --ref worktree {dir}.");
             stream.Dispose();
             TryDeleteFile(lockFile);
-            removed = true;
         }
 
-        if (removed)
+        if (removed && repoRoot != null)
         {
             await GitAsync(logger, repoRoot, "worktree", "prune");
         }

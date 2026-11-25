@@ -75,7 +75,7 @@ public class RefWorktreeTests : IDisposable
             () => RefWorktree.CreateAsync(Script, "HEAD", _logger, _scratch, _ => name));
 
         ex.Message.ShouldContain($"could not create a worktree at {taken}");
-        ex.Message.ShouldContain("already exists");
+        ex.Message.ShouldContain(" git: "); // git's own stderr follows (wording depends on the locale)
         ex.Message.ShouldContain("ANDO_TMPDIR");
         File.Exists(Path.Combine(taken, "keep.txt")).ShouldBeTrue();
         File.Exists(taken + ".lock").ShouldBeFalse();
@@ -128,6 +128,7 @@ public class RefWorktreeTests : IDisposable
     [InlineData(null, "/xdg", "/home/u", "/xdg/ando/tmp")]
     [InlineData(null, null, "/home/u", "/home/u/.cache/ando/tmp")]
     [InlineData("  ", "relative", "/home/u", "/home/u/.cache/ando/tmp")]
+    [InlineData("relative/dir", null, "/home/u", "/home/u/.cache/ando/tmp")]
     [InlineData(null, null, "", null)]
     [InlineData(null, null, "relative", null)]
     public void HostScratch_Resolve(string? env, string? xdg, string? home, string? expected)
@@ -139,10 +140,46 @@ public class RefWorktreeTests : IDisposable
     [Fact]
     public void HostScratch_CheckUsage_WarnsWhenFolderIsTooBig()
     {
-        File.WriteAllBytes(Path.Combine(_root, "big.bin"), new byte[4096]);
+        File.WriteAllBytes(Path.Combine(_root, "ando-project-x.tar"), new byte[4096]);
 
-        HostScratch.CheckUsage(_root, maxBytes: 1024, minFreeBytes: 0)!.ShouldContain("holds");
+        HostScratch.CheckUsage(_root, maxBytes: 1024, minFreeBytes: 0)!.ShouldContain("take");
         HostScratch.CheckUsage(_root, maxBytes: long.MaxValue, minFreeBytes: 0).ShouldBeNull();
+    }
+
+    [Fact]
+    public void HostScratch_CheckUsage_IgnoresOtherToolsFiles()
+    {
+        File.WriteAllBytes(Path.Combine(_root, "someone-else.bin"), new byte[4096]);
+
+        HostScratch.CheckUsage(_root, maxBytes: 1024, minFreeBytes: 0).ShouldBeNull();
+    }
+
+    [Fact]
+    public void HostScratch_SweepOldFiles_RemovesOnlyOldAndoProjectAndReleaseEntries()
+    {
+        var oldTar = Path.Combine(_root, "ando-project-old.tar");
+        var oldRelease = Path.Combine(_root, "ando-release-old");
+        var newTar = Path.Combine(_root, "ando-project-new.tar");
+        var other = Path.Combine(_root, "other-old.bin");
+        var oldRef = Path.Combine(_root, "ando-ref-old");
+        File.WriteAllText(oldTar, "");
+        Directory.CreateDirectory(oldRelease);
+        File.WriteAllText(newTar, "");
+        File.WriteAllText(other, "");
+        Directory.CreateDirectory(oldRef);
+        var twoDaysAgo = DateTime.UtcNow.AddDays(-2);
+        File.SetLastWriteTimeUtc(oldTar, twoDaysAgo);
+        Directory.SetLastWriteTimeUtc(oldRelease, twoDaysAgo);
+        File.SetLastWriteTimeUtc(other, twoDaysAgo);
+        Directory.SetLastWriteTimeUtc(oldRef, twoDaysAgo);
+
+        HostScratch.SweepOldFiles(_root);
+
+        File.Exists(oldTar).ShouldBeFalse();
+        Directory.Exists(oldRelease).ShouldBeFalse();
+        File.Exists(newTar).ShouldBeTrue();
+        File.Exists(other).ShouldBeTrue();
+        Directory.Exists(oldRef).ShouldBeTrue(); // worktrees go by their lock, never by age
     }
 
     [Fact]
@@ -163,6 +200,37 @@ public class RefWorktreeTests : IDisposable
         HostScratch.IsSystemTemp(Path.GetTempPath()).ShouldBeTrue();
         HostScratch.IsSystemTemp(Path.TrimEndingDirectorySeparator(Path.GetTempPath())).ShouldBeTrue();
         HostScratch.IsSystemTemp(_scratch).ShouldBeFalse();
+        if (!OperatingSystem.IsWindows())
+        {
+            HostScratch.IsSystemTemp("/tmp/").ShouldBeTrue();
+            HostScratch.IsSystemTemp("/var/tmp").ShouldBeTrue();
+        }
+    }
+
+    [Fact]
+    public async Task Sweep_RemovesOrphanLockFile_WithoutRepository()
+    {
+        Directory.CreateDirectory(_scratch);
+        var orphan = Path.Combine(_scratch, "ando-ref-orphan.lock");
+        File.WriteAllText(orphan, "");
+
+        await RefWorktree.SweepStaleAsync(_scratch, repoRoot: null, _logger);
+
+        File.Exists(orphan).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task ProcessRunner_PutsStderrInError_OnlyWhenCaptureStderrIsSet()
+    {
+        var runner = new ProcessRunner(_logger);
+        string[] args = ["-c", "echo oops >&2; exit 3"];
+
+        var plain = await runner.ExecuteAsync("sh", args, new CommandOptions { SuppressOutput = true });
+        var captured = await runner.ExecuteAsync("sh", args, new CommandOptions { SuppressOutput = true, CaptureStderr = true });
+
+        plain.Error.ShouldBeNull();
+        captured.Error.ShouldBe("oops");
+        captured.ExitCode.ShouldBe(3);
     }
 
     [Fact]
