@@ -181,7 +181,7 @@ public class AndoCli : IDisposable
     // Known commands that ANDO supports.
     private static readonly HashSet<string> KnownCommands = new(StringComparer.OrdinalIgnoreCase)
     {
-        "run", "verify", "commit", "bump", "docs", "release", "ship", "clean", "help"
+        "run", "verify", "commit", "bump", "docs", "release", "ship", "clean", "hook", "help"
     };
 
     /// <summary>
@@ -287,6 +287,12 @@ public class AndoCli : IDisposable
             return await CleanCommandAsync();
         }
 
+        if (_args[0] == "hook")
+        {
+            PrintHeader();
+            return await new HookCommand(_logger).ExecuteAsync(_args[1..], Environment.CurrentDirectory);
+        }
+
         if (_args[0] == "--version" || _args[0] == "-v")
         {
             Console.WriteLine($"ando {Version}");
@@ -358,6 +364,15 @@ public class AndoCli : IDisposable
             // A path file from an earlier run must never survive this one: early exits,
             // --dry-run and failed record writes would otherwise leave a stale path behind.
             var customBuildFile = GetBuildFileArgument();
+
+            // A hook script compiled as a build script gives misleading errors; say what it is.
+            if (HookScriptError(customBuildFile, "run") is { } hookError)
+            {
+                DeleteStalePathFile(GetFlagValue("--record-path-file"), Environment.CurrentDirectory);
+                _logger.Error(hookError);
+                return 2;
+            }
+
             DeleteStalePathFile(GetFlagValue("--record-path-file"), customBuildFile != null
                 ? Path.GetDirectoryName(Path.GetFullPath(customBuildFile)) ?? Environment.CurrentDirectory
                 : Environment.CurrentDirectory);
@@ -828,6 +843,15 @@ public class AndoCli : IDisposable
         }
     }
 
+    // The error for `ando run|verify -f <hook>`: hook scripts (ando-pre.csando, ando-post-<cmd>.csando, ...)
+    // use the hook API, so compiling them as build scripts only produces misleading errors. Null for other files.
+    internal static string? HookScriptError(string? file, string command) =>
+        file != null && Hooks.HookRunner.IsHookFileName(file)
+            ? $"{Path.GetFileName(file)} is a hook script, not a build script: hooks use the hook API " +
+              $"(Root, Log, Shell, Env, Directory) and run around ando commands, so `ando {command}` cannot use it. " +
+              $"Check it with: ando hook check {file}"
+            : null;
+
     // Hidden --dry-run-output <file>: only the rendered tree lines (no banner, header or indent),
     // joined with \n. Ando.StepTree reads this instead of parsing the console. A relative file is
     // relative to the invocation directory.
@@ -986,6 +1010,12 @@ public class AndoCli : IDisposable
     // without executing it. Useful for CI validation and editor integration.
     private async Task<int> VerifyCommandAsync()
     {
+        if (HookScriptError(GetBuildFileArgument(), "verify") is { } hookError)
+        {
+            _logger.Error(hookError);
+            return 2;
+        }
+
         var scriptPath = FindBuildScript();
 
         if (scriptPath == null)
@@ -1252,6 +1282,9 @@ public class AndoCli : IDisposable
         Console.WriteLine("  release [type]    Interactive release workflow (patch|minor|major)");
         Console.WriteLine("  ship [type]       Ship without publish (commit, bump, docs, push)");
         Console.WriteLine("  clean             Remove artifacts, temp files, and containers");
+        Console.WriteLine("  hook check [file...]");
+        Console.WriteLine("                    Compile hook scripts (ando-pre.csando, ...) without running them;");
+        Console.WriteLine("                    no files: every hook in ./scripts/ and the project root");
         Console.WriteLine("  help, -h, --help  Show this help");
         Console.WriteLine("  -v, --version     Show version number");
         Console.WriteLine();
@@ -1337,6 +1370,11 @@ public class AndoCli : IDisposable
         Console.WriteLine("  --all               Remove all of the above");
         Console.WriteLine("  (no flags)          Default: remove artifacts and temp only");
         Console.WriteLine();
+        Console.WriteLine("Hook Check:");
+        Console.WriteLine("  Compiles hooks against the hook API (Root, Log, Shell, Env, Directory); runs nothing.");
+        Console.WriteLine("  A root hook shadowed by scripts/<same name> never runs: it is reported, not compiled.");
+        Console.WriteLine("  Exit code 0 when all compile, 1 on compile errors, 2 when a named file is missing.");
+        Console.WriteLine();
         Console.WriteLine("Examples:");
         Console.WriteLine("  ando                          Run build.csando in current directory");
         Console.WriteLine("  ando run -p release           Run with 'release' profile activated");
@@ -1354,11 +1392,12 @@ public class AndoCli : IDisposable
         Console.WriteLine("  ando ship minor --all         Ship with minor bump, skip checklist");
         Console.WriteLine("  ando clean                    Remove artifacts and temp files");
         Console.WriteLine("  ando clean --all              Remove everything including container");
+        Console.WriteLine("  ando hook check               Compile all hook scripts without running them");
         Console.WriteLine();
         Console.WriteLine("Exit Codes:");
         Console.WriteLine("  0  Success");
         Console.WriteLine("  1  Build workflow failed");
-        Console.WriteLine("  2  Script not found or invalid file");
+        Console.WriteLine("  2  Script not found or invalid file (also: -f names a hook script)");
         Console.WriteLine("  3  Docker not available");
         Console.WriteLine("  4  Profile validation failed (undefined profile requested)");
         Console.WriteLine("  5  Generic error (Roslyn errors, exceptions)");

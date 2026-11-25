@@ -37,6 +37,8 @@ ANDO searches for hooks in these locations (first found wins):
 1. `./scripts/ando-{hook}.csando`
 2. `./ando-{hook}.csando`
 
+When both exist, the root file never runs. ANDO logs a warning that names the ignored root file; delete it or merge it into the `scripts/` file.
+
 **Recommended structure:**
 ```
 my-project/
@@ -264,7 +266,7 @@ if (command != "run") return;
 - **Use `scripts/` directory** - Keeps hooks organized and separate from build scripts
 - **Handle errors gracefully** - Post-hooks should warn, not fail
 - **Check command type** - Use `ANDO_COMMAND` to run conditionally
-- **Test hooks** - Run `ando verify` to test pre-hooks without executing the build
+- **Check hooks** - Run `ando hook check` to compile every hook (or `ando hook check scripts/ando-pre.csando` for one) without running it. `ando verify` and `ando run --dry-run` check build scripts only and refuse hook files, because hooks use a different API
 - **Timeout** - Hooks have a 5-minute timeout to prevent hangs
 
 ## See Also

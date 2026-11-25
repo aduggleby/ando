@@ -3,7 +3,8 @@
 //
 // Summary: End-to-end `ando run --dry-run` checks through AndoCli: missing
 // required environment variables get placeholders and one warning, while the
-// hidden --dry-run-output mode (Ando.StepTree) stays strict.
+// hidden --dry-run-output mode (Ando.StepTree) stays strict. `run -f` on a
+// hook script fails fast.
 //
 // Design Decisions:
 // - Joins the ConsoleOutput collection because it redirects Console.Out.
@@ -91,6 +92,19 @@ public class DryRunCliTests : IDisposable
 
         exitCode.ShouldBe(5);
         output.ShouldContain($"placeholders were used: {name}.");
+    }
+
+    [Fact]
+    public async Task Run_HookFile_FailsFastWithExitTwoAndPointsToHookCheck()
+    {
+        var hook = WriteScript("ando-pre.csando", "Log.Info(\"hook\");");
+
+        var (exitCode, output) = await RunCli("run", "--dry-run", "--no-env", "--no-color", "-f", hook);
+
+        exitCode.ShouldBe(2);
+        output.ShouldContain("ando-pre.csando is a hook script, not a build script");
+        output.ShouldContain($"ando hook check {hook}");
+        output.ShouldNotContain("Dry run: steps");
     }
 
     private static int CountOccurrences(string text, string value)

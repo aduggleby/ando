@@ -16,6 +16,8 @@
 // Search Locations (first found wins):
 // 1. ./scripts/ando-{hook}.csando
 // 2. ./ando-{hook}.csando
+// A root file shadowed by the scripts/ file of the same name never runs; a
+// warning says so. `ando hook check` uses the same discovery (Discover).
 //
 // Design Decisions:
 // - Pre-hooks can abort the command by returning non-zero or throwing
@@ -84,14 +86,72 @@ public class HookRunner
     /// <returns>Full path to hook script, or null if not found.</returns>
     private string? FindHook(string hookName)
     {
-        var searchPaths = new[]
+        var location = Locate(_projectRoot, hookName);
+        if (location?.ShadowedPath != null)
         {
-            Path.Combine(_projectRoot, "scripts", $"{hookName}.csando"),
-            Path.Combine(_projectRoot, $"{hookName}.csando")
-        };
-
-        return searchPaths.FirstOrDefault(File.Exists);
+            _logger.Warning(ShadowWarning(location));
+        }
+        return location?.Path;
     }
+
+    /// <summary>
+    /// A hook script HookRunner would run, and the root file of the same name it
+    /// ignores because scripts/ takes precedence (null when there is none).
+    /// </summary>
+    /// <param name="Path">Full path of the hook that runs.</param>
+    /// <param name="ShadowedPath">Full path of the ignored root file, or null.</param>
+    public sealed record HookLocation(string Path, string? ShadowedPath);
+
+    // Hook file names: ando-pre, ando-post, ando-pre-<cmd>, ando-post-<cmd> (.csando).
+    private static readonly System.Text.RegularExpressions.Regex HookFileNamePattern =
+        new(@"^ando-(pre|post)(-[a-z0-9][a-z0-9-]*)?\.csando$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Whether <paramref name="path"/> has a hook script file name
+    /// (ando-pre.csando, ando-post.csando, ando-pre-&lt;cmd&gt;.csando, ando-post-&lt;cmd&gt;.csando).
+    /// </summary>
+    public static bool IsHookFileName(string path) =>
+        HookFileNamePattern.IsMatch(System.IO.Path.GetFileName(path));
+
+    /// <summary>
+    /// Finds <paramref name="hookName"/> (without extension) in ./scripts/ first, then the project root.
+    /// Returns null when neither exists.
+    /// </summary>
+    public static HookLocation? Locate(string projectRoot, string hookName)
+    {
+        var inScripts = System.IO.Path.Combine(projectRoot, "scripts", $"{hookName}.csando");
+        var inRoot = System.IO.Path.Combine(projectRoot, $"{hookName}.csando");
+        if (File.Exists(inScripts))
+        {
+            return new HookLocation(inScripts, File.Exists(inRoot) ? inRoot : null);
+        }
+        return File.Exists(inRoot) ? new HookLocation(inRoot, null) : null;
+    }
+
+    /// <summary>
+    /// Every hook script HookRunner would run in <paramref name="projectRoot"/> (both locations),
+    /// one entry per hook name, sorted by file name.
+    /// </summary>
+    public static IReadOnlyList<HookLocation> Discover(string projectRoot)
+    {
+        IEnumerable<string> HookFiles(string directory) => Directory.Exists(directory)
+            ? Directory.EnumerateFiles(directory, "ando-*.csando").Where(IsHookFileName)
+            : [];
+
+        return HookFiles(System.IO.Path.Combine(projectRoot, "scripts"))
+            .Concat(HookFiles(projectRoot))
+            .Select(path => System.IO.Path.GetFileNameWithoutExtension(path))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .Select(name => Locate(projectRoot, name)!)
+            .ToList();
+    }
+
+    /// <summary>The warning logged when a root hook is shadowed by the scripts/ file of the same name.</summary>
+    public static string ShadowWarning(HookLocation location) =>
+        $"Hook {System.IO.Path.GetFileName(location.ShadowedPath)} in the project root is ignored: " +
+        $"{location.Path} takes precedence. Delete or merge one of them.";
 
     /// <summary>
     /// Executes a single hook script.

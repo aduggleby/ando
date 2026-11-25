@@ -25,6 +25,7 @@ Listed in the order of `ando help`. Commands marked **AI** need Claude and are n
 | [`ando release`](#release-command) | **AI.** Interactive release workflow (commit, bump, docs, push, publish).                               |
 | [`ando ship`](#ship-command)       | **AI.** Ship workflow (release without publish).                                                        |
 | [`ando clean`](#clean-options)     | Remove artifacts, temp files, and containers.                                                           |
+| [`ando hook check`](#hooks)        | Compile hook scripts without running them.                                                              |
 | `ando help`, `-h`, `--help`        | Show available commands and options.                                                                    |
 | `ando -v`, `--version`             | Show the version number.                                                                                |
 
@@ -403,6 +404,8 @@ ANDO supports pre-build and post-build hooks that run before and after CLI comma
 var result = await Shell.RunAsync("dotnet", "test", "--no-build");
 if (result.ExitCode != 0) throw new Exception("Tests failed");
 ```
+
+**Checking hooks:** `ando hook check [file...]` compiles hook scripts against the hook API without running them and prints `OK` or the compile errors per file (exit code 0 when all compile, 1 on compile errors, 2 when a named file is missing). Without files it checks every hook ANDO would run in the current directory, in `./scripts/` and the project root. A root hook shadowed by `scripts/` with the same name never runs: ANDO warns about it when hooks run, and `hook check` reports it without compiling it. Hooks use a different API than build scripts, so `ando run -f ando-pre.csando` (and `ando verify -f`) refuse a hook file name with exit code 2 and point to `ando hook check`.
 
 👉 **[See full Hooks documentation](/hooks)** for file locations, available APIs, environment variables, and more examples.
 

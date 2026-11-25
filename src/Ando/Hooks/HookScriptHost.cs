@@ -13,6 +13,7 @@
 // - Sets environment variables from HookContext before execution
 // - Restores original environment variables after execution
 // - Has configurable timeout to prevent runaway hooks
+// - CheckAsync compiles with the same options and runs nothing (ando hook check)
 // =============================================================================
 
 using Microsoft.CodeAnalysis.CSharp.Scripting;
@@ -35,6 +36,42 @@ public class HookScriptHost
     {
         _projectRoot = projectRoot;
         _logger = logger;
+    }
+
+    // Roslyn options for hook scripts, shared by execution and `ando hook check`
+    // so a check compiles exactly what a hook run would compile.
+    private static ScriptOptions CreateScriptOptions() =>
+        ScriptOptions.Default
+            .WithReferences(
+                typeof(HookGlobals).Assembly,       // ANDO types
+                typeof(object).Assembly,           // mscorlib
+                typeof(Console).Assembly,          // System.Console
+                typeof(File).Assembly,             // System.IO
+                typeof(Task).Assembly,             // System.Threading.Tasks
+                typeof(Enumerable).Assembly)       // System.Linq
+            .WithImports(
+                "System",
+                "System.IO",
+                "System.Linq",
+                "System.Threading.Tasks",
+                "System.Collections.Generic",
+                "Ando.Context",
+                "Ando.Hooks",
+                "Ando.References");
+
+    /// <summary>
+    /// Compiles a hook script against the hook API (HookGlobals) without running it.
+    /// Returns the compile errors, empty when the hook compiles.
+    /// </summary>
+    /// <param name="hookPath">Path to the hook script.</param>
+    public static async Task<List<string>> CheckAsync(string hookPath)
+    {
+        var scriptContent = await File.ReadAllTextAsync(hookPath);
+        var script = CSharpScript.Create(scriptContent, CreateScriptOptions(), typeof(HookGlobals));
+        return script.Compile()
+            .Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
+            .Select(d => d.ToString())
+            .ToList();
     }
 
     /// <summary>
@@ -66,24 +103,7 @@ public class HookScriptHost
             var globals = new HookGlobals(_projectRoot, _logger);
             var scriptContent = await File.ReadAllTextAsync(hookPath);
 
-            // Configure Roslyn with required assemblies and namespace imports.
-            var options = ScriptOptions.Default
-                .WithReferences(
-                    typeof(HookGlobals).Assembly,       // ANDO types
-                    typeof(object).Assembly,           // mscorlib
-                    typeof(Console).Assembly,          // System.Console
-                    typeof(File).Assembly,             // System.IO
-                    typeof(Task).Assembly,             // System.Threading.Tasks
-                    typeof(Enumerable).Assembly)       // System.Linq
-                .WithImports(
-                    "System",
-                    "System.IO",
-                    "System.Linq",
-                    "System.Threading.Tasks",
-                    "System.Collections.Generic",
-                    "Ando.Context",
-                    "Ando.Hooks",
-                    "Ando.References");
+            var options = CreateScriptOptions();
 
             // Execute with timeout.
             using var cts = new CancellationTokenSource(timeoutMs);

@@ -8,6 +8,9 @@ description: Release history and changelog for ANDO.
 **2026-11-25**
 
 - `ando run --dry-run` no longer needs secrets: a missing required environment variable (`Env("NAME")`, or the credentials read by `Cloudflare.EnsureAuthenticated`, `Nuget.EnsureAuthenticated`, `Azure.LoginWithServicePrincipal` and similar) returns the placeholder `<NAME>` instead of failing or prompting, and after the step tree one warning lists the names (never values). The exit code stays 0. Real runs are unchanged. `Ando.StepTree` children stay strict, so a compared tree never contains placeholders
+- Add `ando hook check [file...]`: compiles hook scripts against the hook API without running them and prints `OK` or the compile errors per file (exit code 1 on errors, 2 for a missing file). Without files it checks every hook ANDO would run, in `./scripts/` and the project root
+- `ando run -f` and `ando verify -f` now refuse a hook script (`ando-pre.csando`, `ando-post-<cmd>.csando`, ...) with exit code 2 and point to `ando hook check`, instead of compiling it as a build script with misleading errors
+- When a hook exists in `./scripts/` and in the project root, ANDO now warns that the root file is ignored
 
 ## 0.9.168
 
