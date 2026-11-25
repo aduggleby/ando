@@ -73,7 +73,7 @@ public class NugetOperations : OperationsBase
 
         // Log success (without revealing the key). A dry run without the key
         // got a placeholder and reports it in its end-of-run warning instead.
-        if (DryRunEnvironment.Current?.MissingNames.Contains(EnvApiKey) != true)
+        if (!DryRunEnvironment.IsPlaceholder(EnvApiKey, _apiKey))
         {
             Logger.Info("NuGet API key configured.");
         }

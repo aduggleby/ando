@@ -209,6 +209,14 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
 
         // No service principal credentials. If one is required, fail fast rather
         // than silently using whoever is logged in to the Azure CLI.
+        // A dry run without the credentials registers the service principal login with
+        // placeholders for the missing values (listed in the end-of-run warning).
+        if (mustUseServicePrincipal && DryRunEnvironment.Current != null)
+        {
+            LoginWithServicePrincipal(resolvedClientId, resolvedClientSecret, resolvedTenantId);
+            return;
+        }
+
         if (mustUseServicePrincipal)
         {
             throw new InvalidOperationException(
@@ -304,7 +312,8 @@ public class AzureOperations(StepRegistry registry, IBuildLogger logger, Func<IC
             ? null
             : clientSecret ?? EnvironmentHelper.GetRequired(EnvClientSecret, "Azure Client Secret");
         var resolvedTenantId = tenantId ?? EnvironmentHelper.GetRequired(EnvTenantId, "Azure Tenant ID");
-        if (resolvedClientSecret != null)
+        // A dry-run placeholder is not a secret; keep it out of the redaction list.
+        if (resolvedClientSecret != null && !DryRunEnvironment.IsPlaceholder(EnvClientSecret, resolvedClientSecret))
         {
             SecretValues.Add(resolvedClientSecret);
         }

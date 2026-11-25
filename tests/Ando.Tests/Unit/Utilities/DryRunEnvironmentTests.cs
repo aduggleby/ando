@@ -8,6 +8,8 @@
 // Design Decisions:
 // - Variable names are unique per test (never set in the process), so these
 //   tests run in parallel without touching shared state.
+// - Azure and NuGet dry-run tests live in AzureOperationsTests and
+//   NugetOperationsTests, which own those fixed variable names.
 // - The Cloudflare test uses the fixed CLOUDFLARE_* names and joins the
 //   SecretValues collection with the other tests that change them.
 // =============================================================================
@@ -153,16 +155,39 @@ public class DryRunEnvironmentCloudflareTests : IDisposable
     private readonly string? _token = Environment.GetEnvironmentVariable("CLOUDFLARE_API_TOKEN");
     private readonly string? _account = Environment.GetEnvironmentVariable("CLOUDFLARE_ACCOUNT_ID");
 
+    private readonly string? _project = Environment.GetEnvironmentVariable("CLOUDFLARE_PROJECT_NAME");
+
     public DryRunEnvironmentCloudflareTests()
     {
         Environment.SetEnvironmentVariable("CLOUDFLARE_API_TOKEN", null);
         Environment.SetEnvironmentVariable("CLOUDFLARE_ACCOUNT_ID", null);
+        Environment.SetEnvironmentVariable("CLOUDFLARE_PROJECT_NAME", null);
     }
 
     public void Dispose()
     {
         Environment.SetEnvironmentVariable("CLOUDFLARE_API_TOKEN", _token);
         Environment.SetEnvironmentVariable("CLOUDFLARE_ACCOUNT_ID", _account);
+        Environment.SetEnvironmentVariable("CLOUDFLARE_PROJECT_NAME", _project);
+    }
+
+    [Fact]
+    public void PagesDeploy_InDryRunWithoutProjectName_UsesPlaceholder()
+    {
+        var registry = new StepRegistry();
+        var cf = new CloudflareOperations(registry, new TestLogger(), () => new MockExecutor());
+        var tracker = new DryRunEnvironment();
+
+        using (DryRunEnvironment.Activate(tracker))
+        {
+            cf.PagesDeploy(new Ando.References.DirectoryRef("./dist"), _ => { });
+        }
+
+        tracker.MissingNames.ShouldContain("CLOUDFLARE_PROJECT_NAME");
+        registry.Steps.ShouldContain(s => s.Name == "Cloudflare.Pages.Deploy" && s.Context == "<CLOUDFLARE_PROJECT_NAME>");
+        Should.Throw<InvalidOperationException>(() =>
+            new CloudflareOperations(new StepRegistry(), new TestLogger(), () => new MockExecutor())
+                .PagesDeploy(new Ando.References.DirectoryRef("./dist"), _ => { }));
     }
 
     [Fact]

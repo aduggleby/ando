@@ -419,4 +419,36 @@ public class AzureOperationsTests
         // The auto-install runs only when az is missing, so it cannot change a version pinned by Azure.InstallCli.
         Assert.StartsWith("set -eu; command -v az >/dev/null 2>&1 && exit 0;", Ando.Execution.ContainerExecutor.AzureCliInstallScript);
     }
+
+    [Fact]
+    public void DryRun_LoginWithServicePrincipalAndSetSubscription_UsePlaceholders()
+    {
+        var names = new[] { "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_TENANT_ID", "AZURE_SUBSCRIPTION_ID",
+            "AZURE_CLIENT_CERTIFICATE_PATH", "ANDO_REQUIRE_SERVICE_PRINCIPAL" };
+        var saved = names.ToDictionary(n => n, Environment.GetEnvironmentVariable);
+        foreach (var name in names) Environment.SetEnvironmentVariable(name, null);
+        try
+        {
+            var azure = CreateAzure();
+            var tracker = new Ando.Utilities.DryRunEnvironment();
+            using (Ando.Utilities.DryRunEnvironment.Activate(tracker))
+            {
+                azure.EnsureAuthenticated(requireServicePrincipal: true);
+                azure.SetSubscription();
+            }
+
+            tracker.MissingNames.ShouldBe(["AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_TENANT_ID", "AZURE_SUBSCRIPTION_ID"]);
+            _registry.Steps.Count.ShouldBe(2);
+            // The placeholder is not a secret and must not be redacted.
+            Ando.Logging.SecretValues.Redact("<AZURE_CLIENT_SECRET>").ShouldBe("<AZURE_CLIENT_SECRET>");
+
+            // Outside the dry run the same calls still fail.
+            Should.Throw<InvalidOperationException>(() => CreateAzure().EnsureAuthenticated(requireServicePrincipal: true));
+            Should.Throw<InvalidOperationException>(() => CreateAzure().SetSubscription());
+        }
+        finally
+        {
+            foreach (var (name, value) in saved) Environment.SetEnvironmentVariable(name, value);
+        }
+    }
 }

@@ -217,6 +217,10 @@ public class CloudflareOperations : OperationsBase
 
         // Resolve project name from options or environment.
         var projectName = options.ProjectName ?? Environment.GetEnvironmentVariable(EnvProjectName);
+        if (string.IsNullOrWhiteSpace(projectName) && DryRunEnvironment.Current is { } dryRun)
+        {
+            projectName = dryRun.RecordMissing(EnvProjectName);
+        }
         if (string.IsNullOrWhiteSpace(projectName))
         {
             throw new InvalidOperationException(

@@ -401,4 +401,28 @@ public class NugetOperationsTests
         (await Run(null)).ShouldBe($"dotnet pack a.csproj -p:SourceRevisionId={sha}");
         (await Run(o => o.WithoutSourceRevision())).ShouldBe("dotnet pack a.csproj");
     }
+
+    [Fact]
+    public void DryRun_EnsureAuthenticated_UsesPlaceholderWithoutSuccessMessage()
+    {
+        var saved = Environment.GetEnvironmentVariable("NUGET_API_KEY");
+        Environment.SetEnvironmentVariable("NUGET_API_KEY", null);
+        try
+        {
+            var tracker = new Ando.Utilities.DryRunEnvironment();
+            using (Ando.Utilities.DryRunEnvironment.Activate(tracker))
+            {
+                CreateNuget().EnsureAuthenticated();
+            }
+
+            tracker.MissingNames.ShouldBe(["NUGET_API_KEY"]);
+            _logger.InfoMessages.ShouldNotContain("NuGet API key configured.");
+            Environment.GetEnvironmentVariable("NUGET_API_KEY").ShouldBeNull();
+            Should.Throw<InvalidOperationException>(() => CreateNuget().EnsureAuthenticated());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("NUGET_API_KEY", saved);
+        }
+    }
 }

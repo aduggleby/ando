@@ -54,6 +54,13 @@ public sealed class DryRunEnvironment
     /// <summary>The placeholder returned for a missing variable, for example "&lt;API_KEY&gt;".</summary>
     public static string Placeholder(string name) => $"<{name}>";
 
+    /// <summary>
+    /// Whether <paramref name="value"/> is the placeholder this dry run returned for <paramref name="name"/>
+    /// (false outside a dry run, so a real value that looks like a placeholder is never mistaken for one).
+    /// </summary>
+    public static bool IsPlaceholder(string name, string? value) =>
+        Current is { } tracker && value == Placeholder(name) && tracker.MissingNames.Contains(name);
+
     /// <summary>Records <paramref name="name"/> as missing and returns its placeholder.</summary>
     public string RecordMissing(string name)
     {

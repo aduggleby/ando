@@ -749,6 +749,8 @@ public class AndoCli : IDisposable
         catch (FileNotFoundException ex)
         {
             _logger.Error(ex.Message);
+            // A placeholder used as a path (File.ReadAllText(Env("CONFIG"))) ends up here.
+            LogDryRunPlaceholderWarning();
             return 2;
         }
         catch (Exception ex) when (ex.Message.Contains("metadata reference") || ex.Message.Contains("assembly without location"))

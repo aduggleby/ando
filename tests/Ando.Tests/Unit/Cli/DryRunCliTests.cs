@@ -95,6 +95,18 @@ public class DryRunCliTests : IDisposable
     }
 
     [Fact]
+    public async Task DryRun_PlaceholderUsedAsPath_ExitsTwoAndStillNamesVariable()
+    {
+        var name = UniqueName();
+        var script = WriteScript("build.csando", $"var config = File.ReadAllText(Env(\"{name}\")!);");
+
+        var (exitCode, output) = await RunCli("run", "--dry-run", "--no-env", "--no-color", "-f", script);
+
+        exitCode.ShouldBe(2);
+        output.ShouldContain($"placeholders were used: {name}.");
+    }
+
+    [Fact]
     public async Task Run_HookFile_FailsFastWithExitTwoAndPointsToHookCheck()
     {
         var hook = WriteScript("ando-pre.csando", "Log.Info(\"hook\");");
