@@ -140,7 +140,7 @@ public class RefWorktreeTests : IDisposable
     [Fact]
     public void HostScratch_CheckUsage_WarnsWhenFolderIsTooBig()
     {
-        File.WriteAllBytes(Path.Combine(_root, "ando-project-x.tar"), new byte[4096]);
+        File.WriteAllBytes(Path.Combine(_root, "ando-project-0123456789abcdef0123456789abcdef.tar"), new byte[4096]);
 
         HostScratch.CheckUsage(_root, maxBytes: 1024, minFreeBytes: 0)!.ShouldContain("take");
         HostScratch.CheckUsage(_root, maxBytes: long.MaxValue, minFreeBytes: 0).ShouldBeNull();
@@ -157,20 +157,20 @@ public class RefWorktreeTests : IDisposable
     [Fact]
     public void HostScratch_SweepOldFiles_RemovesOnlyOldAndoProjectAndReleaseEntries()
     {
-        var oldTar = Path.Combine(_root, "ando-project-old.tar");
-        var oldRelease = Path.Combine(_root, "ando-release-old");
-        var newTar = Path.Combine(_root, "ando-project-new.tar");
-        var other = Path.Combine(_root, "other-old.bin");
-        var oldRef = Path.Combine(_root, "ando-ref-old");
+        var oldTar = Path.Combine(_root, "ando-project-0123456789abcdef0123456789abcdef.tar");
+        var oldRelease = Path.Combine(_root, "ando-release-0123456789abcdef0123456789abcdef");
+        var newTar = Path.Combine(_root, "ando-project-files-0123456789abcdef0123456789abcdef.lst");
+        var other = Path.Combine(_root, "ando-release-tools"); // look-alike, not ours
+        var oldRef = Path.Combine(_root, "ando-ref-0123456789ab-01234567");
         File.WriteAllText(oldTar, "");
         Directory.CreateDirectory(oldRelease);
         File.WriteAllText(newTar, "");
-        File.WriteAllText(other, "");
+        Directory.CreateDirectory(other);
         Directory.CreateDirectory(oldRef);
         var twoDaysAgo = DateTime.UtcNow.AddDays(-2);
         File.SetLastWriteTimeUtc(oldTar, twoDaysAgo);
         Directory.SetLastWriteTimeUtc(oldRelease, twoDaysAgo);
-        File.SetLastWriteTimeUtc(other, twoDaysAgo);
+        Directory.SetLastWriteTimeUtc(other, twoDaysAgo);
         Directory.SetLastWriteTimeUtc(oldRef, twoDaysAgo);
 
         HostScratch.SweepOldFiles(_root);
@@ -178,7 +178,7 @@ public class RefWorktreeTests : IDisposable
         File.Exists(oldTar).ShouldBeFalse();
         Directory.Exists(oldRelease).ShouldBeFalse();
         File.Exists(newTar).ShouldBeTrue();
-        File.Exists(other).ShouldBeTrue();
+        Directory.Exists(other).ShouldBeTrue();
         Directory.Exists(oldRef).ShouldBeTrue(); // worktrees go by their lock, never by age
     }
 
@@ -211,12 +211,26 @@ public class RefWorktreeTests : IDisposable
     public async Task Sweep_RemovesOrphanLockFile_WithoutRepository()
     {
         Directory.CreateDirectory(_scratch);
-        var orphan = Path.Combine(_scratch, "ando-ref-orphan.lock");
+        var orphan = Path.Combine(_scratch, "ando-ref-0123456789ab-01234567.lock");
         File.WriteAllText(orphan, "");
 
         await RefWorktree.SweepStaleAsync(_scratch, repoRoot: null, _logger);
 
         File.Exists(orphan).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Sweep_IgnoresLookAlikeNames()
+    {
+        Directory.CreateDirectory(_scratch);
+        var lookAlike = Path.Combine(_scratch, "ando-ref-notes");
+        Directory.CreateDirectory(lookAlike);
+        File.WriteAllText(lookAlike + ".lock", "");
+
+        await RefWorktree.SweepStaleAsync(_scratch, repoRoot: null, _logger);
+
+        Directory.Exists(lookAlike).ShouldBeTrue();
+        File.Exists(lookAlike + ".lock").ShouldBeTrue();
     }
 
     [Fact]

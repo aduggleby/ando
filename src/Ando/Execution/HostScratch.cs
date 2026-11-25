@@ -13,6 +13,8 @@
 // than WarnSizeBytes or the disk has less than WarnFreeBytes left.
 // =============================================================================
 
+using System.Text.RegularExpressions;
+
 namespace Ando.Execution;
 
 /// <summary>
@@ -79,8 +81,14 @@ public static class HostScratch
     /// <summary>Free disk space below which a run warns (5 GB).</summary>
     public const long WarnFreeBytes = 5L * 1024 * 1024 * 1024;
 
-    /// <summary>Name prefixes of the entries ANDO creates in the folder.</summary>
-    internal static readonly string[] EntryPrefixes = ["ando-ref-", "ando-project-", "ando-release-"];
+    // Exact names of the entries ANDO creates, so a shared ANDO_TMPDIR (even $HOME)
+    // never has someone else's "ando-release-tools" counted or deleted.
+    private static readonly Regex WorktreeName = new(@"^ando-ref-[0-9a-f]{12}-[0-9a-f]{8}(\.lock)?$", RegexOptions.CultureInvariant);
+    private static readonly Regex ProjectFileName = new(@"^ando-project-(files-)?[0-9a-f]{32}\.(tar|lst)$", RegexOptions.CultureInvariant);
+    private static readonly Regex ReleaseDirName = new(@"^ando-release-[0-9a-f]{32}$", RegexOptions.CultureInvariant);
+
+    /// <summary>True for a --ref worktree folder or its lock file name.</summary>
+    internal static bool IsWorktreeName(string name) => WorktreeName.IsMatch(name);
 
     /// <summary>
     /// A warning when ANDO's entries in <paramref name="root"/> hold more than <paramref name="maxBytes"/>
@@ -133,7 +141,8 @@ public static class HostScratch
         return total;
     }
 
-    internal static bool IsAndoEntry(string name) => EntryPrefixes.Any(p => name.StartsWith(p, StringComparison.Ordinal));
+    internal static bool IsAndoEntry(string name) =>
+        WorktreeName.IsMatch(name) || ProjectFileName.IsMatch(name) || ReleaseDirName.IsMatch(name);
 
     /// <summary>
     /// Removes ando-project-* and ando-release-* entries older than <paramref name="maxAge"/>
@@ -148,9 +157,10 @@ public static class HostScratch
         {
             foreach (var entry in new DirectoryInfo(root).EnumerateFileSystemInfos())
             {
-                if (!(entry.Name.StartsWith("ando-project-", StringComparison.Ordinal)
-                    || entry.Name.StartsWith("ando-release-", StringComparison.Ordinal))
-                    || entry.LastWriteTimeUtc > cutoff)
+                var ours = entry is DirectoryInfo
+                    ? ReleaseDirName.IsMatch(entry.Name)
+                    : ProjectFileName.IsMatch(entry.Name);
+                if (!ours || entry.LastWriteTimeUtc > cutoff)
                 {
                     continue;
                 }

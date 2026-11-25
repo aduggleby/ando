@@ -77,6 +77,8 @@ public sealed class RefWorktree : IAsyncDisposable
 
         Directory.CreateDirectory(scratchRoot);
         await SweepStaleAsync(scratchRoot, repoRoot, logger);
+        // The every-run sweep has no repository, so drop records of removed worktrees here.
+        await GitAsync(logger, repoRoot, "worktree", "prune");
 
         // Take the worktree's lock before creating it. A concurrent sweep can grab a
         // just-created lock file for a moment; then try a new name instead of running unlocked.
@@ -129,8 +131,20 @@ public sealed class RefWorktree : IAsyncDisposable
             return;
         }
 
+        string[] lockFiles;
+        try
+        {
+            lockFiles = Directory.GetFiles(scratchRoot, Prefix + "*.lock")
+                .Where(f => HostScratch.IsWorktreeName(System.IO.Path.GetFileName(f)))
+                .ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return; // Cleanup is best effort.
+        }
+
         var removed = false;
-        foreach (var lockFile in Directory.EnumerateFiles(scratchRoot, Prefix + "*.lock"))
+        foreach (var lockFile in lockFiles)
         {
             using var stream = TryLock(lockFile, quiet: true);
             if (stream == null)
@@ -143,7 +157,7 @@ public sealed class RefWorktree : IAsyncDisposable
             {
                 if (!TryDeleteDirectory(dir))
                 {
-                    logger.Warning($"Could not remove the stale --ref worktree {dir}.");
+                    logger.Debug($"Could not remove the stale --ref worktree {dir}.");
                     continue;
                 }
                 logger.Debug($"Removed the stale --ref worktree {dir}.");
